@@ -28,6 +28,9 @@ export interface Vendor {
   /** @nullable */
   clerkUserId?: string | null;
   createdAt: string;
+  stripeEnabled?: boolean;
+  paystackEnabled?: boolean;
+  defaultCurrency?: string;
 }
 
 export interface VendorInput {
