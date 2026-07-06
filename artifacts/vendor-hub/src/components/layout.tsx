@@ -42,9 +42,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
-            ACS
-          </div>
+          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
           <span className="font-bold text-lg">Awajimaa Connect Suite</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
@@ -58,9 +56,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3 border-b">
-          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
-            ACS
-          </div>
+          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
           <span className="font-bold text-base tracking-tight">Awajimaa Connect Suite</span>
         </div>
 

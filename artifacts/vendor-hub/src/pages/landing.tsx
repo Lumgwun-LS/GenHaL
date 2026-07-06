@@ -9,9 +9,7 @@ export default function LandingPage() {
       <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
-              ACS
-            </div>
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
             <span className="font-bold text-xl tracking-tight">Awajimaa Connect Suite</span>
           </div>
           <div className="flex items-center gap-4">
@@ -150,9 +148,7 @@ export default function LandingPage() {
       <footer className="border-t py-12 bg-card">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
-              ACS
-            </div>
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-6 h-6 rounded object-cover" />
             <span className="font-bold text-lg tracking-tight">Awajimaa Connect Suite</span>
           </div>
           <p className="text-sm text-muted-foreground">© 2025 Awajimaa Connect Suite. All rights reserved.</p>
