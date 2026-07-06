@@ -23,7 +23,7 @@ export default function Dashboard() {
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-        <p className="text-muted-foreground">Welcome to your VendorHub command center.</p>
+        <p className="text-muted-foreground">Welcome to your Awajimaa Connect Suite command center.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

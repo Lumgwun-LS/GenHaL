@@ -9,10 +9,10 @@ export default function LandingPage() {
       <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold">
-              VH
+            <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
+              ACS
             </div>
-            <span className="font-bold text-xl tracking-tight">VendorHub</span>
+            <span className="font-bold text-xl tracking-tight">Awajimaa Connect Suite</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/sign-in" className="text-sm font-medium hover:text-primary transition-colors">
@@ -35,7 +35,7 @@ export default function LandingPage() {
               Run your entire business from <span className="text-primary">one terminal.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-balance">
-              VendorHub replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit.
+              Awajimaa Connect Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 mb-16">
               <Link href="/sign-up" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
@@ -48,7 +48,7 @@ export default function LandingPage() {
             </div>
             
             <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border shadow-2xl relative">
-              <img src="/hero.png" alt="VendorHub Dashboard" className="object-cover w-full h-full" />
+              <img src="/hero.png" alt="Awajimaa Connect Suite Dashboard" className="object-cover w-full h-full" />
               <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent"></div>
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function LandingPage() {
               <div>
                 <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">Built for operators who hate switching tabs</h2>
                 <p className="text-lg text-muted-foreground mb-8">
-                  Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. VendorHub connects your data so an inventory update can automatically trigger a social post.
+                  Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awajimaa Connect Suite connects your data so an inventory update can automatically trigger a social post.
                 </p>
                 <ul className="space-y-4">
                   {[
@@ -138,12 +138,11 @@ export default function LandingPage() {
         <section className="py-24 bg-primary text-primary-foreground text-center px-4 relative overflow-hidden">
           <div className="container mx-auto max-w-3xl relative z-10">
             <h2 className="text-4xl font-bold mb-6">Ready to take command?</h2>
-            <p className="text-primary-foreground/80 text-xl mb-10">Join thousands of operators running their empires on VendorHub.</p>
+            <p className="text-primary-foreground/80 text-xl mb-10">Join thousands of operators running their empires on Awajimaa Connect Suite.</p>
             <Link href="/sign-up" className="inline-flex h-14 items-center justify-center rounded-md bg-background px-10 text-base font-bold text-foreground shadow-lg transition-colors hover:bg-background/90">
               Start Your Free Trial
             </Link>
           </div>
-          {/* Decorative background pattern */}
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
         </section>
       </main>
@@ -152,11 +151,11 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
-              VH
+              ACS
             </div>
-            <span className="font-bold text-lg tracking-tight">VendorHub</span>
+            <span className="font-bold text-lg tracking-tight">Awajimaa Connect Suite</span>
           </div>
-          <p className="text-sm text-muted-foreground">© 2024 VendorHub Inc. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground">© 2025 Awajimaa Connect Suite. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -187,7 +186,7 @@ function StatCard({ value, label }: { value: string, label: string }) {
   return (
     <div className="p-6 rounded-xl border bg-card">
       <div className="text-4xl font-extrabold tracking-tight text-primary mb-2">{value}</div>
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium text-muted-foreground">{value && label}</div>
     </div>
   )
 }

@@ -42,10 +42,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold">
-            V
+          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
+            ACS
           </div>
-          <span className="font-bold text-lg">VendorHub</span>
+          <span className="font-bold text-lg">Awajimaa Connect Suite</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
           {isMobileOpen ? <X /> : <Menu />}
@@ -58,10 +58,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3 border-b">
-          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold">
-            VH
+          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground font-bold text-xs">
+            ACS
           </div>
-          <span className="font-bold text-xl tracking-tight">VendorHub</span>
+          <span className="font-bold text-base tracking-tight">Awajimaa Connect Suite</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
