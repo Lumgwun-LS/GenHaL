@@ -2,18 +2,15 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { resolveStripeKey } from "../../lib/vendor-keys";
 
 const router = Router();
-
-function getStripeClient(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
-  return new Stripe(key);
-}
 
 /**
  * POST /payments/stripe/checkout
  * Creates a Stripe Checkout Session and returns the hosted URL.
+ * Uses the vendor's own Stripe key if configured and tier-eligible;
+ * falls back to the platform key otherwise.
  *
  * Body: { orderId, vendorId, amount, currency, customerEmail, successUrl, cancelUrl }
  */
@@ -43,12 +40,20 @@ router.post("/payments/stripe/checkout", async (req, res): Promise<void> => {
     return;
   }
 
-  // Verify vendor exists and has Stripe enabled
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   if (!vendor.stripeEnabled) { res.status(403).json({ error: "Stripe is not enabled for this vendor" }); return; }
 
-  const stripe = getStripeClient();
+  let stripeKey: string;
+  try {
+    stripeKey = await resolveStripeKey(vendorId, vendor);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(503).json({ error: msg });
+    return;
+  }
+
+  const stripe = new Stripe(stripeKey);
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
@@ -59,7 +64,7 @@ router.post("/payments/stripe/checkout", async (req, res): Promise<void> => {
         quantity: 1,
         price_data: {
           currency: currency.toLowerCase(),
-          unit_amount: Math.round(amount * 100), // cents
+          unit_amount: Math.round(amount * 100),
           product_data: {
             name: description ?? `Order #${orderId ?? ""}`,
           },
@@ -74,7 +79,6 @@ router.post("/payments/stripe/checkout", async (req, res): Promise<void> => {
     },
   });
 
-  // Record payment row as pending
   const [payment] = await db.insert(paymentsTable).values({
     orderId: orderId ?? null,
     vendorId,
@@ -96,8 +100,6 @@ router.post("/payments/stripe/checkout", async (req, res): Promise<void> => {
  */
 router.post(
   "/payments/stripe/webhook",
-  // Raw body is required for signature verification.
-  // The app mounts this route before express.json() using the rawBody middleware.
   async (req, res): Promise<void> => {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
@@ -110,11 +112,12 @@ router.post(
 
     let event: Stripe.Event;
     try {
-      const stripe = getStripeClient();
-      // req.body is raw Buffer when this route is mounted before express.json()
+      // Use the platform webhook secret — vendor-specific webhooks are future work
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
       event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-    } catch (err: any) {
-      res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ error: `Webhook signature verification failed: ${msg}` });
       return;
     }
 
@@ -123,13 +126,11 @@ router.post(
       const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
       const vendorId = session.metadata?.vendorId ? parseInt(session.metadata.vendorId) : null;
 
-      // Update payment row
       await db
         .update(paymentsTable)
         .set({ status: "paid", updatedAt: new Date() })
         .where(eq(paymentsTable.providerReference, session.id));
 
-      // Update order payment status
       if (orderId) {
         await db
           .update(ordersTable)

@@ -1,6 +1,7 @@
 import { useGetVendor, useListSocialAccounts, useListOrders, getGetVendorQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { useState, useEffect } from "react";
+import VendorPaymentAccounts from "@/components/vendor-payment-accounts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -235,6 +236,8 @@ export default function VendorDetail() {
               </TableBody>
             </Table>
           </Card>
+
+          <VendorPaymentAccounts vendorId={id} />
         </div>
       </div>
     </div>

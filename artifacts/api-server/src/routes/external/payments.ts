@@ -3,11 +3,13 @@
  *
  * POST /external/payments/initialize
  *   Auto-selects Stripe or Paystack based on the currency field in the request.
- *   Currencies handled by Paystack: NGN, GHS, ZAR, KES, USD (Africa-routed).
+ *   Currencies handled by Paystack: NGN, GHS, ZAR, KES.
  *   Everything else routes to Stripe.
  *
- *   The caller must provide currency explicitly; if absent the vendor's
- *   defaultCurrency is used.
+ *   Key resolution order:
+ *     1. Vendor's own key (if tier-eligible and test-passed)
+ *     2. Platform key from environment
+ *     3. 503 if neither is available
  */
 
 import { Router } from "express";
@@ -16,14 +18,18 @@ import { eq } from "drizzle-orm";
 import { requireExternalAuth } from "../../middlewares/requireExternalAuth";
 import Stripe from "stripe";
 import crypto from "crypto";
+import { resolveStripeKey, resolvePaystackKey } from "../../lib/vendor-keys";
 
 const router = Router();
 router.use(requireExternalAuth);
 
-// Currencies natively supported by Paystack
 const PAYSTACK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "KES"]);
+const PAYSTACK_BASE = "https://api.paystack.co";
 
-function selectProvider(currency: string, vendor: { stripeEnabled: boolean; paystackEnabled: boolean }): "stripe" | "paystack" | null {
+function selectProvider(
+  currency: string,
+  vendor: { stripeEnabled: boolean; paystackEnabled: boolean },
+): "stripe" | "paystack" | null {
   const wantsPaystack = PAYSTACK_CURRENCIES.has(currency.toUpperCase());
   if (wantsPaystack && vendor.paystackEnabled) return "paystack";
   if (vendor.stripeEnabled) return "stripe";
@@ -66,13 +72,21 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
   const provider = selectProvider(currency, vendor);
 
   if (!provider) {
-    res.status(503).json({ error: "No payment gateway is enabled for this vendor. Contact the vendor admin." });
+    res.status(503).json({
+      error: "No payment gateway is enabled for this vendor. Contact the vendor admin.",
+    });
     return;
   }
 
   if (provider === "stripe") {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) { res.status(503).json({ error: "Stripe is not configured on the server" }); return; }
+    let stripeKey: string;
+    try {
+      stripeKey = await resolveStripeKey(vendorId, vendor);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(503).json({ error: msg });
+      return;
+    }
 
     const stripe = new Stripe(stripeKey);
     const session = await stripe.checkout.sessions.create({
@@ -111,12 +125,19 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
     return;
   }
 
-  // Paystack
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackKey) { res.status(503).json({ error: "Paystack is not configured on the server" }); return; }
+  // ── Paystack ──────────────────────────────────────────────────────────────
   if (!email) { res.status(400).json({ error: "email is required for Paystack payments" }); return; }
 
-  const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+  let paystackKey: string;
+  try {
+    paystackKey = await resolvePaystackKey(vendorId, vendor);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(503).json({ error: msg });
+    return;
+  }
+
+  const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${paystackKey}`,

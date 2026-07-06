@@ -22,6 +22,9 @@ export const vendorsTable = pgTable("vendors", {
   stripeEnabled: boolean("stripe_enabled").notNull().default(false),
   paystackEnabled: boolean("paystack_enabled").notNull().default(false),
   defaultCurrency: text("default_currency").notNull().default("USD"),
+  // Subscription & verification — controls which premium features are unlocked
+  subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise
+  verificationLevel: text("verification_level").notNull().default("unverified"), // unverified|basic|verified|premium
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

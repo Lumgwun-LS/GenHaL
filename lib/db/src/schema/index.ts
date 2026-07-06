@@ -11,3 +11,4 @@ export * from "./sms-campaigns";
 export * from "./external-api-keys";
 export * from "./external-user-sessions";
 export * from "./payments";
+export * from "./vendor-payment-credentials";

@@ -11,6 +11,17 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 
+// ─── Credential encryption startup guard ─────────────────────────────────────
+if (!process.env.PAYMENT_CREDS_ENCRYPTION_KEY || process.env.PAYMENT_CREDS_ENCRYPTION_KEY.length !== 64) {
+  if (process.env.NODE_ENV === "production") {
+    console.error("FATAL: PAYMENT_CREDS_ENCRYPTION_KEY must be a 64-char hex string. Per-vendor payment keys cannot be used.");
+    process.exit(1);
+  } else {
+    console.warn("[vendor-keys] WARNING: PAYMENT_CREDS_ENCRYPTION_KEY not set. Per-vendor payment credential routes will throw at runtime.");
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Payment gateway startup guard ───────────────────────────────────────────
 const hasStripe = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
 const hasPaystack = Boolean(process.env.PAYSTACK_SECRET_KEY && process.env.PAYSTACK_WEBHOOK_SECRET);

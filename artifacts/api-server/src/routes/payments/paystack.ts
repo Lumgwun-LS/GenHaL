@@ -2,20 +2,17 @@ import { Router } from "express";
 import crypto from "crypto";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { resolvePaystackKey } from "../../lib/vendor-keys";
 
 const router = Router();
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
-function getPaystackKey(): string {
-  const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) throw new Error("PAYSTACK_SECRET_KEY is not configured");
-  return key;
-}
-
 /**
  * POST /payments/paystack/initialize
  * Initializes a Paystack transaction and returns the authorization URL.
+ * Uses the vendor's own Paystack key if configured and tier-eligible;
+ * falls back to the platform key otherwise.
  *
  * Body: { orderId, vendorId, amount, currency, email, callbackUrl }
  */
@@ -43,14 +40,19 @@ router.post("/payments/paystack/initialize", async (req, res): Promise<void> => 
     return;
   }
 
-  // Verify vendor exists and has Paystack enabled
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   if (!vendor.paystackEnabled) { res.status(403).json({ error: "Paystack is not enabled for this vendor" }); return; }
 
-  const secretKey = getPaystackKey();
+  let secretKey: string;
+  try {
+    secretKey = await resolvePaystackKey(vendorId, vendor);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(503).json({ error: msg });
+    return;
+  }
 
-  // Paystack amounts are in kobo (NGN) or lowest denomination
   const amountInKobo = Math.round(amount * 100);
 
   const response = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
@@ -85,7 +87,6 @@ router.post("/payments/paystack/initialize", async (req, res): Promise<void> => 
 
   const { authorization_url, reference } = data.data;
 
-  // Record payment row as pending
   const [payment] = await db.insert(paymentsTable).values({
     orderId: orderId ?? null,
     vendorId,
@@ -113,7 +114,6 @@ router.post(
       return;
     }
 
-    // req.body is raw Buffer when mounted before express.json()
     const rawBody = req.body as Buffer;
     const hash = crypto
       .createHmac("sha512", webhookSecret)
@@ -135,13 +135,11 @@ router.post(
       const { reference, metadata } = event.data;
       const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
-      // Update payment row
       await db
         .update(paymentsTable)
         .set({ status: "paid", updatedAt: new Date() })
         .where(eq(paymentsTable.providerReference, reference));
 
-      // Update order payment status
       if (orderId) {
         await db
           .update(ordersTable)

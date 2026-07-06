@@ -15,6 +15,7 @@ import apiKeysRouter from "./api-keys";
 import paymentsRouter from "./payments/index";
 import paymentsWebhooksRouter from "./payments/webhooks";
 import externalRouter from "./external/index";
+import vendorPaymentCredentialsRouter from "./vendor-payment-credentials";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -44,5 +45,6 @@ router.use(smsCampaignsRouter);
 router.use(analyticsRouter);
 router.use(apiKeysRouter);
 router.use(paymentsRouter);
+router.use(vendorPaymentCredentialsRouter);
 
 export default router;

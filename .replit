@@ -21,3 +21,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+PAYMENT_CREDS_ENCRYPTION_KEY = "7c22693e3b2512f1852b12bdd4a2a8f5343fdb7a830046509b21be9abd62b8ac"
