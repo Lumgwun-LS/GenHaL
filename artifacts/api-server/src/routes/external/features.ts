@@ -73,8 +73,8 @@ router.post("/social/posts", requireFeature("social"), async (req, res) => {
     .insert(postsTable)
     .values({
       vendorId,
-      content,
-      platforms: JSON.stringify(platforms),
+      caption: content,
+      platforms,
       status: scheduledAt ? "scheduled" : "draft",
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
     })
@@ -114,7 +114,7 @@ router.post("/leads", requireFeature("leads"), async (req, res) => {
       phone: phone ?? null,
       source: source ?? "awajimaa-app",
       status: "new",
-      score: "0",
+      score: 0,
       notes: notes ?? null,
     })
     .returning();
