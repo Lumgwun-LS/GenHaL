@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw } from "lucide-react";
+import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -44,6 +44,29 @@ type PaymentsResponse = {
   payments: Payment[];
   summary: PaymentsSummary;
 };
+
+type WebhookEvent = {
+  id: number;
+  provider: string;
+  eventType: string;
+  eventId: string;
+  reference: string | null;
+  processedAt: string | null;
+  receivedAt: string;
+};
+
+type WebhookEventsResponse = {
+  events: WebhookEvent[];
+  total: number;
+};
+
+async function fetchWebhookEvents(provider?: string): Promise<WebhookEventsResponse> {
+  const qs = new URLSearchParams({ limit: "200" });
+  if (provider && provider !== "all") qs.set("provider", provider);
+  const res = await fetch(`${BASE_URL}/api/payments/webhook-events?${qs}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch webhook events");
+  return res.json();
+}
 
 async function fetchPayments(params: { vendorId?: string; provider?: string; status?: string }): Promise<PaymentsResponse> {
   const qs = new URLSearchParams();
@@ -86,11 +109,17 @@ async function refundPayment(id: number): Promise<void> {
 export default function Payments() {
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [webhookProviderFilter, setWebhookProviderFilter] = useState<string>("all");
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["payments", providerFilter, statusFilter],
     queryFn: () => fetchPayments({ provider: providerFilter, status: statusFilter }),
+  });
+
+  const { data: webhookData, isLoading: webhookLoading } = useQuery({
+    queryKey: ["webhook-events", webhookProviderFilter],
+    queryFn: () => fetchWebhookEvents(webhookProviderFilter),
   });
 
   const refundMutation = useMutation({
@@ -303,6 +332,90 @@ export default function Payments() {
                         <RotateCcw className="w-3 h-3" />
                         {refundMutation.isPending && refundMutation.variables === p.id ? "Refunding…" : "Refund"}
                       </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+      {/* Webhook Events */}
+      <Card>
+        <div className="p-4 border-b flex gap-3 items-center justify-between flex-wrap">
+          <div className="flex items-center gap-2">
+            <Webhook className="w-4 h-4 text-muted-foreground" />
+            <span className="font-semibold text-base">Webhook Events</span>
+            {webhookData && (
+              <span className="text-xs text-muted-foreground">({webhookData.total} shown)</span>
+            )}
+          </div>
+          <Select value={webhookProviderFilter} onValueChange={setWebhookProviderFilter}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All providers</SelectItem>
+              <SelectItem value="stripe">Stripe</SelectItem>
+              <SelectItem value="paystack">Paystack</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Provider</TableHead>
+              <TableHead>Event Type</TableHead>
+              <TableHead>Reference</TableHead>
+              <TableHead>Received</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {webhookLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8">Loading webhook events…</TableCell>
+              </TableRow>
+            ) : webhookData?.events?.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <Webhook className="w-8 h-8" />
+                    <span>No webhook events recorded yet.</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              webhookData?.events?.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell>
+                    <Badge variant="outline" className={providerBadge(e.provider)}>
+                      {e.provider}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{e.eventType}</TableCell>
+                  <TableCell className="font-mono text-xs max-w-[160px] truncate" title={e.reference ?? undefined}>
+                    {e.reference ? (
+                      <span className="flex items-center gap-1">
+                        <Copy className="w-3 h-3 text-muted-foreground shrink-0" />
+                        {e.reference}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {format(new Date(e.receivedAt), "MMM d, yyyy HH:mm:ss")}
+                  </TableCell>
+                  <TableCell>
+                    {e.processedAt ? (
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Processed
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1">
+                        <Copy className="w-3 h-3" /> Duplicate / Skipped
+                      </Badge>
                     )}
                   </TableCell>
                 </TableRow>
