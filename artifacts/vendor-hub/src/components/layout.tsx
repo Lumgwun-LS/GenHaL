@@ -11,6 +11,7 @@ import {
   Target, 
   Mail, 
   MessageSquare,
+  CreditCard,
   Menu,
   X
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { href: "/leads", label: "Leads", icon: Target },
   { href: "/email-campaigns", label: "Email", icon: Mail },
   { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
+  { href: "/payments", label: "Payments", icon: CreditCard },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -18,6 +18,10 @@ export const vendorsTable = pgTable("vendors", {
   awajimaaUserId: text("awajimaa_user_id").unique(),
   awajimaaUserType: text("awajimaa_user_type"),  // state|hospital|emergency|business|individual
   externalSource: text("external_source").notNull().default("vendorhub"),
+  // Payment gateway settings — admin-configurable per vendor
+  stripeEnabled: boolean("stripe_enabled").notNull().default(false),
+  paystackEnabled: boolean("paystack_enabled").notNull().default(false),
+  defaultCurrency: text("default_currency").notNull().default("USD"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

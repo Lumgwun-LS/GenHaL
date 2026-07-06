@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -10,6 +10,33 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+
+// ─── Payment gateway startup guard ───────────────────────────────────────────
+const hasStripe = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+const hasPaystack = Boolean(process.env.PAYSTACK_SECRET_KEY && process.env.PAYSTACK_WEBHOOK_SECRET);
+
+if (!hasStripe && !hasPaystack) {
+  const msg =
+    "No payment gateway configured. " +
+    "Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET and/or " +
+    "PAYSTACK_SECRET_KEY + PAYSTACK_WEBHOOK_SECRET.";
+  if (process.env.NODE_ENV === "production") {
+    // Hard crash in production — a payment platform with no gateways is broken.
+    console.error(`FATAL: ${msg}`);
+    process.exit(1);
+  } else {
+    // In development, warn loudly but keep running so the rest of the API is usable.
+    console.warn(`[payments] WARNING: ${msg} Payment routes will return 503 until keys are set.`);
+  }
+} else {
+  if (!hasStripe) {
+    console.warn("[payments] Stripe not configured (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET missing) — Stripe payments disabled.");
+  }
+  if (!hasPaystack) {
+    console.warn("[payments] Paystack not configured (PAYSTACK_SECRET_KEY / PAYSTACK_WEBHOOK_SECRET missing) — Paystack payments disabled.");
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const app: Express = express();
 
@@ -54,6 +81,14 @@ app.use(
     },
   }),
 );
+
+// ─── Webhook routes need raw body for signature verification ─────────────────
+// These must be mounted BEFORE express.json() so the raw Buffer is preserved.
+app.use(
+  ["/api/payments/stripe/webhook", "/api/payments/paystack/webhook", "/api/external/payments/webhook"],
+  express.raw({ type: "application/json" }),
+);
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

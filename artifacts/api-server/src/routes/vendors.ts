@@ -15,6 +15,31 @@ import {
   GetVendorStatsResponse,
 } from "@workspace/api-zod";
 
+type PaymentSettingsBody = {
+  stripeEnabled?: boolean;
+  paystackEnabled?: boolean;
+  defaultCurrency?: string;
+};
+
+function parsePaymentSettings(body: unknown): { data: PaymentSettingsBody } | { error: string } {
+  if (typeof body !== "object" || body === null) return { error: "Request body must be an object" };
+  const b = body as Record<string, unknown>;
+  const out: PaymentSettingsBody = {};
+  if ("stripeEnabled" in b) {
+    if (typeof b.stripeEnabled !== "boolean") return { error: "stripeEnabled must be a boolean" };
+    out.stripeEnabled = b.stripeEnabled;
+  }
+  if ("paystackEnabled" in b) {
+    if (typeof b.paystackEnabled !== "boolean") return { error: "paystackEnabled must be a boolean" };
+    out.paystackEnabled = b.paystackEnabled;
+  }
+  if ("defaultCurrency" in b) {
+    if (typeof b.defaultCurrency !== "string" || b.defaultCurrency.length !== 3) return { error: "defaultCurrency must be a 3-letter currency code" };
+    out.defaultCurrency = b.defaultCurrency.toUpperCase();
+  }
+  return { data: out };
+}
+
 const router: IRouter = Router();
 
 router.get("/vendors/stats", async (req, res): Promise<void> => {
@@ -86,6 +111,33 @@ router.delete("/vendors/:id", async (req, res): Promise<void> => {
   const [vendor] = await db.delete(vendorsTable).where(eq(vendorsTable.id, params.data.id)).returning();
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   res.sendStatus(204);
+});
+
+/**
+ * PATCH /vendors/:id/payment-settings
+ * Admin-only: toggle Stripe/Paystack per vendor, set default currency.
+ */
+router.patch("/vendors/:id/payment-settings", async (req, res): Promise<void> => {
+  const params = GetVendorParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const parsed = parsePaymentSettings(req.body);
+  if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
+
+  const [vendor] = await db
+    .update(vendorsTable)
+    .set({ ...parsed.data, updatedAt: new Date() })
+    .where(eq(vendorsTable.id, params.data.id))
+    .returning();
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  res.json({
+    id: vendor.id,
+    stripeEnabled: vendor.stripeEnabled,
+    paystackEnabled: vendor.paystackEnabled,
+    defaultCurrency: vendor.defaultCurrency,
+  });
 });
 
 export default router;

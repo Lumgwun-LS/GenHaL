@@ -10,6 +10,8 @@ export const ordersTable = pgTable("orders", {
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
   status: text("status").notNull().default("pending"),
+  paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | paid | failed | refunded
+  currency: text("currency").notNull().default("USD"),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   notes: text("notes"),
   shippingAddress: text("shipping_address"),
