@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy } from "lucide-react";
+import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy, XCircle, Clock } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -52,6 +52,7 @@ type WebhookEvent = {
   eventId: string;
   reference: string | null;
   processedAt: string | null;
+  errorMessage: string | null;
   receivedAt: string;
 };
 
@@ -412,9 +413,15 @@ export default function Payments() {
                       <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Processed
                       </Badge>
+                    ) : e.errorMessage ? (
+                      <span title={e.errorMessage}>
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 gap-1 cursor-help">
+                          <XCircle className="w-3 h-3" /> Failed
+                        </Badge>
+                      </span>
                     ) : (
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1">
-                        <Copy className="w-3 h-3" /> Duplicate / Skipped
+                        <Clock className="w-3 h-3" /> Pending
                       </Badge>
                     )}
                   </TableCell>

@@ -11,7 +11,8 @@ export const webhookEventsTable = pgTable(
     eventId: text("event_id").notNull(), // provider-supplied idempotency key
     reference: text("reference"), // payment reference / session ID (for quick lookup)
     rawPayload: jsonb("raw_payload").notNull(),
-    processedAt: timestamp("processed_at", { withTimezone: true }), // null = skipped / duplicate
+    processedAt: timestamp("processed_at", { withTimezone: true }), // null = not yet processed or failed
+    errorMessage: text("error_message"), // set when business logic throws; null = no error
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("webhook_events_event_id_unique").on(t.eventId)],
