@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { DollarSign, CreditCard, TrendingUp, AlertCircle } from "lucide-react";
+import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -71,13 +72,32 @@ function providerBadge(provider: string) {
   return "bg-muted text-muted-foreground";
 }
 
+async function refundPayment(id: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/payments/${id}/refund`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "Refund failed");
+  }
+}
+
 export default function Payments() {
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["payments", providerFilter, statusFilter],
     queryFn: () => fetchPayments({ provider: providerFilter, status: statusFilter }),
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: refundPayment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+    },
   });
 
   // Build chart data: revenue by day
@@ -224,16 +244,17 @@ export default function Payments() {
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Amount</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">Loading payments...</TableCell>
+                <TableCell colSpan={8} className="text-center py-8">Loading payments...</TableCell>
               </TableRow>
             ) : data?.payments?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <AlertCircle className="w-8 h-8" />
                     <span>No payments yet.</span>
@@ -265,6 +286,24 @@ export default function Payments() {
                   </TableCell>
                   <TableCell className="text-right font-bold">
                     {p.currency} {p.amount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {p.status === "paid" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                        disabled={refundMutation.isPending && refundMutation.variables === p.id}
+                        onClick={() => {
+                          if (window.confirm(`Refund payment #${p.id} (${p.currency} ${p.amount.toFixed(2)})? This cannot be undone.`)) {
+                            refundMutation.mutate(p.id);
+                          }
+                        }}
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        {refundMutation.isPending && refundMutation.variables === p.id ? "Refunding…" : "Refund"}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
