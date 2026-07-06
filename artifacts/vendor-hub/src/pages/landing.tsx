@@ -145,13 +145,96 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t py-12 bg-card">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-6 h-6 rounded object-cover" />
-            <span className="font-bold text-lg tracking-tight">Awajimaa Connect Suite</span>
+      <footer className="border-t bg-card">
+        {/* Main footer grid */}
+        <div className="container mx-auto px-4 py-14 grid grid-cols-1 md:grid-cols-3 gap-10">
+          {/* Brand */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
+              <span className="font-bold text-base tracking-tight">Awajimaa Connect Suite</span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+              The all-in-one business command centre for vendors, agencies, and multi-brand operators — built for the modern African and global market.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">© 2025 Awajimaa Connect Suite. All rights reserved.</p>
+
+          {/* Our Products */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Our Products</h4>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <span className="block font-medium text-foreground">Awajimaa Connect Suite</span>
+                <span className="text-muted-foreground text-xs">Multi-vendor business management platform</span>
+              </li>
+              <li>
+                <a
+                  href="https://www.awajimaaschools.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <span className="block font-medium text-foreground group-hover:text-primary transition-colors">Awajimaa Schools</span>
+                  <span className="text-muted-foreground text-xs">Education Management Platform</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.awajimaahosting.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <span className="block font-medium text-foreground group-hover:text-primary transition-colors">Awajimaa Hosting</span>
+                  <span className="text-muted-foreground text-xs">Reliable cloud hosting services</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Company */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Company</h4>
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="font-medium text-foreground">Lumgwun Solutions</p>
+                <a
+                  href="https://www.lumgwunsolutions.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  www.lumgwunsolutions.com
+                </a>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Awajimaa Group</p>
+                <p className="text-xs text-muted-foreground">Technology · Education · Infrastructure</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="border-t">
+          <div className="container mx-auto px-4 py-5 flex flex-col md:flex-row justify-between items-center gap-2 text-xs text-muted-foreground">
+            <p>
+              © {new Date().getFullYear()} Awajimaa Connect Suite. All rights reserved.
+            </p>
+            <p>
+              A product of{" "}
+              <a
+                href="https://www.lumgwunsolutions.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground font-medium hover:text-primary transition-colors"
+              >
+                Lumgwun Solutions
+              </a>
+              {" "}and the{" "}
+              <span className="text-foreground font-medium">Awajimaa Group</span>.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
