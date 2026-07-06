@@ -7,8 +7,8 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
@@ -75,6 +75,22 @@ router.get("/admin/vendors", async (req, res): Promise<void> => {
   });
 
   res.json(enriched);
+});
+
+// ─── GET /admin/birthday-logs ─────────────────────────────────────────────────
+
+router.get("/admin/birthday-logs", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const logs = await db
+    .select()
+    .from(birthdayMessageLogsTable)
+    .orderBy(desc(birthdayMessageLogsTable.sentAt))
+    .limit(200);
+
+  res.json(logs);
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -25,6 +25,8 @@ export const vendorsTable = pgTable("vendors", {
   // Subscription & verification — controls which premium features are unlocked
   subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise
   verificationLevel: text("verification_level").notNull().default("unverified"), // unverified|basic|verified|premium
+  // Birthday — used for automated birthday greetings
+  dateOfBirth: date("date_of_birth"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc } from "drizzle-orm";
 import { db, vendorsTable } from "@workspace/db";
+import { getAuth } from "@clerk/express";
 import {
   ListVendorsQueryParams,
   CreateVendorBody,
@@ -98,6 +99,21 @@ router.get("/vendors/:id", async (req, res): Promise<void> => {
 router.patch("/vendors/:id", async (req, res): Promise<void> => {
   const params = UpdateVendorParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  // Only the vendor owner or a platform admin may update vendor profile data
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [existing] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+  if (existing.clerkUserId !== userId && !isAdmin) {
+    res.status(403).json({ error: "You do not have permission to update this vendor." });
+    return;
+  }
+
   const parsed = UpdateVendorBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [vendor] = await db.update(vendorsTable).set(parsed.data).where(eq(vendorsTable.id, params.data.id)).returning();

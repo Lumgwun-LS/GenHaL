@@ -38,6 +38,7 @@ export const ListVendorsResponseItem = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -112,6 +113,7 @@ export const GetVendorResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -135,7 +137,8 @@ export const UpdateVendorBody = zod.object({
   "address": zod.string().optional(),
   "logoUrl": zod.string().optional(),
   "description": zod.string().optional(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "dateOfBirth": zod.string().nullish()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -150,6 +153,7 @@ export const UpdateVendorResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),

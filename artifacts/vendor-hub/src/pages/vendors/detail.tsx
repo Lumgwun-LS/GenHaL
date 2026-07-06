@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -33,6 +34,7 @@ export default function VendorDetail() {
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [paystackEnabled, setPaystackEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -40,8 +42,31 @@ export default function VendorDetail() {
       setStripeEnabled(vendor.stripeEnabled ?? false);
       setPaystackEnabled(vendor.paystackEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
+      setDateOfBirth(vendor.dateOfBirth ?? "");
     }
   }, [vendor]);
+
+  async function handleSaveDateOfBirth() {
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/vendors/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ dateOfBirth: dateOfBirth || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(err.error ?? "Failed to save date of birth");
+        return;
+      }
+      toast.success("Date of birth saved");
+    } catch {
+      toast.error("Network error — could not save date of birth");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleSavePaymentSettings() {
     setSaving(true);
@@ -119,6 +144,24 @@ export default function VendorDetail() {
                   {vendor.description}
                 </div>
               )}
+              <div className="pt-4 border-t mt-4 space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Cake className="w-4 h-4 text-muted-foreground" />
+                  Date of Birth
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="text-sm"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleSaveDateOfBirth} disabled={saving}>
+                    Save
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Used to send a birthday greeting automatically.</p>
+              </div>
             </CardContent>
           </Card>
 
