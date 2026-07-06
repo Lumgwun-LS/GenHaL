@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, paymentsTable, ordersTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import stripeRouter from "./stripe";
@@ -96,6 +96,25 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
 
   console.info(`[payments] refund issued — id=${paymentId} provider=${payment.provider} reference=${payment.providerReference}`);
   res.json({ success: true, paymentId, status: "refunded" });
+});
+
+/**
+ * GET /payments/webhook-events
+ * List recent webhook events for debugging. Supports ?provider=&limit= query params.
+ */
+router.get("/payments/webhook-events", async (req, res): Promise<void> => {
+  const { provider, limit } = req.query as { provider?: string; limit?: string };
+  const take = Math.min(parseInt(limit ?? "100") || 100, 500);
+
+  let events = await db
+    .select()
+    .from(webhookEventsTable)
+    .orderBy(desc(webhookEventsTable.receivedAt))
+    .limit(take);
+
+  if (provider) events = events.filter((e) => e.provider === provider);
+
+  res.json({ events, total: events.length });
 });
 
 /**

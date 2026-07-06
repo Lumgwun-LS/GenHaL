@@ -6,10 +6,42 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { db, paymentsTable, ordersTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router = Router();
+
+/**
+ * Persist a webhook event and return whether this event is a duplicate.
+ * Returns true if already processed (caller should skip business logic).
+ */
+async function logWebhookEvent(opts: {
+  provider: string;
+  eventType: string;
+  eventId: string;
+  reference: string | null;
+  rawPayload: unknown;
+}): Promise<boolean> {
+  try {
+    await db.insert(webhookEventsTable).values({
+      provider: opts.provider,
+      eventType: opts.eventType,
+      eventId: opts.eventId,
+      reference: opts.reference,
+      rawPayload: opts.rawPayload as Record<string, unknown>,
+      processedAt: new Date(),
+    });
+    return false; // new event — proceed
+  } catch (err: unknown) {
+    // Unique constraint violation on event_id = duplicate
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("webhook_events_event_id_unique") || msg.includes("unique")) {
+      console.warn(`[webhook] duplicate event skipped — id=${opts.eventId}`);
+      return true; // duplicate — skip
+    }
+    throw err; // unexpected error — rethrow
+  }
+}
 
 /**
  * POST /payments/stripe/webhook
@@ -42,8 +74,19 @@ router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
     return;
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
+  const session = event.type === "checkout.session.completed"
+    ? (event.data.object as Stripe.Checkout.Session)
+    : null;
+
+  const isDuplicate = await logWebhookEvent({
+    provider: "stripe",
+    eventType: event.type,
+    eventId: event.id,
+    reference: session?.id ?? null,
+    rawPayload: event,
+  });
+
+  if (!isDuplicate && event.type === "checkout.session.completed" && session) {
     const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
 
     await db
@@ -87,10 +130,23 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
 
   const event = JSON.parse(rawBody.toString()) as {
     event: string;
-    data: { reference: string; metadata?: { orderId?: string } };
+    data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
   };
 
-  if (event.event === "charge.success") {
+  // Paystack uses numeric event IDs; fall back to reference+type as composite key
+  const eventId = event.data.id
+    ? `paystack-${event.data.id}`
+    : `paystack-${event.event}-${event.data.reference}`;
+
+  const isDuplicate = await logWebhookEvent({
+    provider: "paystack",
+    eventType: event.event,
+    eventId,
+    reference: event.data.reference,
+    rawPayload: event,
+  });
+
+  if (!isDuplicate && event.event === "charge.success") {
     const { reference, metadata } = event.data;
     const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
