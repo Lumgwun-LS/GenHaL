@@ -8,3 +8,5 @@ export * from "./orders";
 export * from "./leads";
 export * from "./email-campaigns";
 export * from "./sms-campaigns";
+export * from "./external-api-keys";
+export * from "./external-user-sessions";
