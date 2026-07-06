@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { UserButton, useUser } from "@clerk/react";
+import { UserButton } from "@clerk/react";
 import { 
   LayoutDashboard, 
   Users, 
@@ -13,11 +13,13 @@ import {
   MessageSquare,
   CreditCard,
   Menu,
-  X
+  X,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -36,6 +38,7 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const isAdmin = useIsAdmin();
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -77,6 +80,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          {isAdmin && (
+            <>
+              <div className="px-3 pt-4 pb-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Platform</p>
+              </div>
+              <Link
+                href="/admin"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  location === "/admin"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                onClick={() => setIsMobileOpen(false)}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Admin Panel
+              </Link>
+            </>
+          )}
         </nav>
 
         <div className="p-4 border-t flex items-center gap-3">
