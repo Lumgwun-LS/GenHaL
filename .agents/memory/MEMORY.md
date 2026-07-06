@@ -1,0 +1,3 @@
+- [VendorHub stack decisions](vendorhub-stack.md) — multivendor platform: React+Vite frontend, Express API, Drizzle+Postgres, Clerk auth, all routes auth-gated via requireAuth middleware.
+- [Drizzle numeric/timestamp types](drizzle-type-coercions.md) — numeric columns need string coercion and timestamp columns need Date objects before Drizzle insert/update.
+- [DB package build requirement](db-build-requirement.md) — @workspace/db must be rebuilt (tsc) after schema changes or dist/schema/index.d.ts stays stale and api-server typecheck breaks.

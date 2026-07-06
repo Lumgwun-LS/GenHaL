@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "VendorHub"
+version = "1.0.0"
+id = "artifacts/vendor-hub"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22220
+
+[services.development]
+run = "pnpm --filter @workspace/vendor-hub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vendor-hub", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/vendor-hub/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22220"
+BASE_PATH = "/"

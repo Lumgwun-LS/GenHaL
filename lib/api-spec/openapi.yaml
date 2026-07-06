@@ -3,13 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: VendorHub - Multivendor Social Media, Sales & Inventory Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: vendors
+    description: Vendor management
+  - name: social-accounts
+    description: Connected social media accounts
+  - name: posts
+    description: Social media posts
+  - name: ai
+    description: AI content generation
+  - name: products
+    description: Product & inventory management
+  - name: inventory
+    description: Inventory transactions
+  - name: orders
+    description: Sales orders
+  - name: leads
+    description: Lead management & scraping
+  - name: email-campaigns
+    description: Email marketing campaigns
+  - name: sms-campaigns
+    description: SMS marketing campaigns
+  - name: analytics
+    description: Dashboard analytics
+
 paths:
   /healthz:
     get:
@@ -24,6 +47,1106 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── VENDORS ──────────────────────────────────────────────────────────────
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List all vendors
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: industry
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vendor"
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      summary: Create a vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInput"
+      responses:
+        "201":
+          description: Created vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  /vendors/stats:
+    get:
+      operationId: getVendorStats
+      tags: [vendors]
+      summary: Get vendor stats
+      responses:
+        "200":
+          description: Vendor statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorStats"
+
+  /vendors/{id}:
+    get:
+      operationId: getVendor
+      tags: [vendors]
+      summary: Get a vendor by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateVendor
+      tags: [vendors]
+      summary: Update a vendor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorUpdate"
+      responses:
+        "200":
+          description: Updated vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+    delete:
+      operationId: deleteVendor
+      tags: [vendors]
+      summary: Delete a vendor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── SOCIAL ACCOUNTS ──────────────────────────────────────────────────────
+  /social-accounts:
+    get:
+      operationId: listSocialAccounts
+      tags: [social-accounts]
+      summary: List connected social accounts
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of social accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SocialAccount"
+    post:
+      operationId: createSocialAccount
+      tags: [social-accounts]
+      summary: Connect a social media account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialAccountInput"
+      responses:
+        "201":
+          description: Connected account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialAccount"
+
+  /social-accounts/{id}:
+    get:
+      operationId: getSocialAccount
+      tags: [social-accounts]
+      summary: Get a social account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Social account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialAccount"
+    delete:
+      operationId: deleteSocialAccount
+      tags: [social-accounts]
+      summary: Disconnect a social account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Disconnected
+
+  # ─── POSTS ────────────────────────────────────────────────────────────────
+  /posts:
+    get:
+      operationId: listPosts
+      tags: [posts]
+      summary: List posts
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: platform
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+    post:
+      operationId: createPost
+      tags: [posts]
+      summary: Create a post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostInput"
+      responses:
+        "201":
+          description: Created post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/scheduled:
+    get:
+      operationId: listScheduledPosts
+      tags: [posts]
+      summary: Get upcoming scheduled posts
+      responses:
+        "200":
+          description: Scheduled posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+
+  /posts/{id}:
+    get:
+      operationId: getPost
+      tags: [posts]
+      summary: Get a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+    patch:
+      operationId: updatePost
+      tags: [posts]
+      summary: Update a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostUpdate"
+      responses:
+        "200":
+          description: Updated post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+    delete:
+      operationId: deletePost
+      tags: [posts]
+      summary: Delete a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /posts/{id}/publish:
+    post:
+      operationId: publishPost
+      tags: [posts]
+      summary: Publish a post immediately
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Published post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  # ─── AI CONTENT ───────────────────────────────────────────────────────────
+  /ai/generate-image:
+    post:
+      operationId: generateAiImage
+      tags: [ai]
+      summary: Generate an AI image for a post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiImageRequest"
+      responses:
+        "200":
+          description: Generated image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneration"
+
+  /ai/generate-caption:
+    post:
+      operationId: generateAiCaption
+      tags: [ai]
+      summary: Generate AI caption/copy for a post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCaptionRequest"
+      responses:
+        "200":
+          description: Generated caption
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneration"
+
+  /ai/generations:
+    get:
+      operationId: listAiGenerations
+      tags: [ai]
+      summary: List AI generation history
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of AI generations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiGeneration"
+
+  # ─── PRODUCTS ─────────────────────────────────────────────────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/low-stock:
+    get:
+      operationId: listLowStockProducts
+      tags: [products]
+      summary: List products with low stock
+      responses:
+        "200":
+          description: Low stock products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── INVENTORY ────────────────────────────────────────────────────────────
+  /inventory/transactions:
+    get:
+      operationId: listInventoryTransactions
+      tags: [inventory]
+      summary: List inventory transactions
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: integer
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryTransaction"
+    post:
+      operationId: createInventoryTransaction
+      tags: [inventory]
+      summary: Record inventory transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryTransactionInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryTransaction"
+
+  /inventory/summary:
+    get:
+      operationId: getInventorySummary
+      tags: [inventory]
+      summary: Get inventory summary stats
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventorySummary"
+
+  # ─── ORDERS ───────────────────────────────────────────────────────────────
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List sales orders
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a sales order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/summary:
+    get:
+      operationId: getOrdersSummary
+      tags: [orders]
+      summary: Sales summary & revenue stats
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersSummary"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # ─── LEADS ────────────────────────────────────────────────────────────────
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List leads
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: industry
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Manually create a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadInput"
+      responses:
+        "201":
+          description: Created lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /leads/scrape:
+    post:
+      operationId: scrapeLeads
+      tags: [leads]
+      summary: Trigger AI lead scraping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadScrapeRequest"
+      responses:
+        "200":
+          description: Scraped leads result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadScrapeResult"
+
+  /leads/stats:
+    get:
+      operationId: getLeadsStats
+      tags: [leads]
+      summary: Get lead funnel stats
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsStats"
+
+  /leads/{id}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Get a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadUpdate"
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      summary: Delete a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────
+  /email-campaigns:
+    get:
+      operationId: listEmailCampaigns
+      tags: [email-campaigns]
+      summary: List email campaigns
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of email campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailCampaign"
+    post:
+      operationId: createEmailCampaign
+      tags: [email-campaigns]
+      summary: Create an email campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCampaignInput"
+      responses:
+        "201":
+          description: Created campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCampaign"
+
+  /email-campaigns/stats:
+    get:
+      operationId: getEmailCampaignStats
+      tags: [email-campaigns]
+      summary: Get email campaign stats
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email campaign stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCampaignStats"
+
+  /email-campaigns/{id}:
+    get:
+      operationId: getEmailCampaign
+      tags: [email-campaigns]
+      summary: Get an email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCampaign"
+    patch:
+      operationId: updateEmailCampaign
+      tags: [email-campaigns]
+      summary: Update an email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCampaignUpdate"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailCampaign"
+
+  /email-campaigns/{id}/send:
+    post:
+      operationId: sendEmailCampaign
+      tags: [email-campaigns]
+      summary: Send an email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSendResult"
+
+  # ─── SMS CAMPAIGNS ────────────────────────────────────────────────────────
+  /sms-campaigns:
+    get:
+      operationId: listSmsCampaigns
+      tags: [sms-campaigns]
+      summary: List SMS campaigns
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of SMS campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SmsCampaign"
+    post:
+      operationId: createSmsCampaign
+      tags: [sms-campaigns]
+      summary: Create an SMS campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsCampaignInput"
+      responses:
+        "201":
+          description: Created campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaign"
+
+  /sms-campaigns/{id}:
+    get:
+      operationId: getSmsCampaign
+      tags: [sms-campaigns]
+      summary: Get an SMS campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SMS campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaign"
+    patch:
+      operationId: updateSmsCampaign
+      tags: [sms-campaigns]
+      summary: Update an SMS campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsCampaignUpdate"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaign"
+
+  /sms-campaigns/{id}/send:
+    post:
+      operationId: sendSmsCampaign
+      tags: [sms-campaigns]
+      summary: Send an SMS campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSendResult"
+
+  # ─── ANALYTICS ────────────────────────────────────────────────────────────
+  /analytics/overview:
+    get:
+      operationId: getAnalyticsOverview
+      tags: [analytics]
+      summary: Platform-wide dashboard overview
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsOverview"
+
+  /analytics/sales:
+    get:
+      operationId: getSalesAnalytics
+      tags: [analytics]
+      summary: Sales trends by period
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesAnalytics"
+
+  /analytics/social:
+    get:
+      operationId: getSocialAnalytics
+      tags: [analytics]
+      summary: Social media performance analytics
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Social analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialAnalytics"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1157,944 @@ components:
       required:
         - status
 
+    # ─── VENDOR ─────────────────────────────────────────────────────────────
+    Vendor:
+      type: object
+      required: [id, name, industry, status, email, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        industry:
+          type: string
+        status:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        clerkUserId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    VendorInput:
+      type: object
+      required: [name, industry, email]
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        website:
+          type: string
+        address:
+          type: string
+        logoUrl:
+          type: string
+        description:
+          type: string
+
+    VendorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        website:
+          type: string
+        address:
+          type: string
+        logoUrl:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+
+    VendorStats:
+      type: object
+      required: [totalVendors, activeVendors, industries, recentSignups]
+      properties:
+        totalVendors:
+          type: integer
+        activeVendors:
+          type: integer
+        industries:
+          type: array
+          items:
+            type: object
+            required: [industry, count]
+            properties:
+              industry:
+                type: string
+              count:
+                type: integer
+        recentSignups:
+          type: integer
+
+    # ─── SOCIAL ACCOUNT ─────────────────────────────────────────────────────
+    SocialAccount:
+      type: object
+      required: [id, vendorId, platform, accountName, status, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        platform:
+          type: string
+        accountName:
+          type: string
+        accountId:
+          type: ["string", "null"]
+        profileUrl:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+        followersCount:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    SocialAccountInput:
+      type: object
+      required: [vendorId, platform, accountName]
+      properties:
+        vendorId:
+          type: integer
+        platform:
+          type: string
+        accountName:
+          type: string
+        accountId:
+          type: string
+        profileUrl:
+          type: string
+        avatarUrl:
+          type: string
+        followersCount:
+          type: integer
+
+    # ─── POST ───────────────────────────────────────────────────────────────
+    Post:
+      type: object
+      required: [id, vendorId, caption, platforms, status, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        caption:
+          type: string
+        platforms:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        mediaType:
+          type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
+        publishedAt:
+          type: ["string", "null"]
+        hashtags:
+          type: ["string", "null"]
+        aiGenerated:
+          type: boolean
+        engagementData:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PostInput:
+      type: object
+      required: [vendorId, caption, platforms]
+      properties:
+        vendorId:
+          type: integer
+        caption:
+          type: string
+        platforms:
+          type: array
+          items:
+            type: string
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        mediaType:
+          type: string
+        scheduledAt:
+          type: string
+        hashtags:
+          type: string
+        aiGenerated:
+          type: boolean
+
+    PostUpdate:
+      type: object
+      properties:
+        caption:
+          type: string
+        platforms:
+          type: array
+          items:
+            type: string
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        scheduledAt:
+          type: string
+        hashtags:
+          type: string
+        status:
+          type: string
+
+    # ─── AI ─────────────────────────────────────────────────────────────────
+    AiGeneration:
+      type: object
+      required: [id, vendorId, type, prompt, status, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        type:
+          type: string
+        prompt:
+          type: string
+        result:
+          type: ["string", "null"]
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    AiImageRequest:
+      type: object
+      required: [vendorId, prompt]
+      properties:
+        vendorId:
+          type: integer
+        prompt:
+          type: string
+        style:
+          type: string
+        industry:
+          type: string
+
+    AiCaptionRequest:
+      type: object
+      required: [vendorId, topic, platform]
+      properties:
+        vendorId:
+          type: integer
+        topic:
+          type: string
+        platform:
+          type: string
+        tone:
+          type: string
+        includeHashtags:
+          type: boolean
+        includeEmoji:
+          type: boolean
+
+    # ─── PRODUCT ────────────────────────────────────────────────────────────
+    Product:
+      type: object
+      required: [id, vendorId, name, sku, price, stockQuantity, category, status, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        description:
+          type: ["string", "null"]
+        price:
+          type: number
+        costPrice:
+          type: ["number", "null"]
+        stockQuantity:
+          type: integer
+        lowStockThreshold:
+          type: integer
+        category:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+        unit:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ProductInput:
+      type: object
+      required: [vendorId, name, sku, price, stockQuantity, category]
+      properties:
+        vendorId:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        costPrice:
+          type: number
+        stockQuantity:
+          type: integer
+        lowStockThreshold:
+          type: integer
+        category:
+          type: string
+        imageUrl:
+          type: string
+        unit:
+          type: string
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        costPrice:
+          type: number
+        stockQuantity:
+          type: integer
+        lowStockThreshold:
+          type: integer
+        category:
+          type: string
+        imageUrl:
+          type: string
+        status:
+          type: string
+        unit:
+          type: string
+
+    # ─── INVENTORY ──────────────────────────────────────────────────────────
+    InventoryTransaction:
+      type: object
+      required: [id, productId, vendorId, type, quantity, createdAt]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        vendorId:
+          type: integer
+        type:
+          type: string
+        quantity:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        reference:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    InventoryTransactionInput:
+      type: object
+      required: [productId, vendorId, type, quantity]
+      properties:
+        productId:
+          type: integer
+        vendorId:
+          type: integer
+        type:
+          type: string
+        quantity:
+          type: integer
+        notes:
+          type: string
+        reference:
+          type: string
+
+    InventorySummary:
+      type: object
+      required: [totalProducts, totalValue, lowStockCount, outOfStockCount, categories]
+      properties:
+        totalProducts:
+          type: integer
+        totalValue:
+          type: number
+        lowStockCount:
+          type: integer
+        outOfStockCount:
+          type: integer
+        categories:
+          type: array
+          items:
+            type: object
+            required: [category, count, value]
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+              value:
+                type: number
+
+    # ─── ORDER ──────────────────────────────────────────────────────────────
+    Order:
+      type: object
+      required: [id, vendorId, customerName, customerEmail, status, totalAmount, items, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: ["string", "null"]
+        status:
+          type: string
+        totalAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+        shippingAddress:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        createdAt:
+          type: string
+
+    OrderItem:
+      type: object
+      required: [id, productId, productName, quantity, unitPrice, totalPrice]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+
+    OrderInput:
+      type: object
+      required: [vendorId, customerName, customerEmail, items]
+      properties:
+        vendorId:
+          type: integer
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: string
+        notes:
+          type: string
+        shippingAddress:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, quantity, unitPrice]
+            properties:
+              productId:
+                type: integer
+              quantity:
+                type: integer
+              unitPrice:
+                type: number
+
+    OrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        notes:
+          type: string
+        shippingAddress:
+          type: string
+
+    OrdersSummary:
+      type: object
+      required: [totalOrders, totalRevenue, pendingOrders, completedOrders, revenueByPeriod]
+      properties:
+        totalOrders:
+          type: integer
+        totalRevenue:
+          type: number
+        pendingOrders:
+          type: integer
+        completedOrders:
+          type: integer
+        revenueByPeriod:
+          type: array
+          items:
+            type: object
+            required: [period, revenue, orders]
+            properties:
+              period:
+                type: string
+              revenue:
+                type: number
+              orders:
+                type: integer
+
+    # ─── LEAD ───────────────────────────────────────────────────────────────
+    Lead:
+      type: object
+      required: [id, vendorId, name, status, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        company:
+          type: ["string", "null"]
+        industry:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        status:
+          type: string
+        source:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        score:
+          type: ["integer", "null"]
+        linkedinUrl:
+          type: ["string", "null"]
+        websiteUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    LeadInput:
+      type: object
+      required: [vendorId, name]
+      properties:
+        vendorId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        company:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+        source:
+          type: string
+        notes:
+          type: string
+        linkedinUrl:
+          type: string
+        websiteUrl:
+          type: string
+
+    LeadUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        company:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+        score:
+          type: integer
+
+    LeadScrapeRequest:
+      type: object
+      required: [vendorId, targetIndustry, targetLocation]
+      properties:
+        vendorId:
+          type: integer
+        targetIndustry:
+          type: string
+        targetLocation:
+          type: string
+        businessType:
+          type: string
+        keywords:
+          type: string
+        maxResults:
+          type: integer
+
+    LeadScrapeResult:
+      type: object
+      required: [found, imported, leads]
+      properties:
+        found:
+          type: integer
+        imported:
+          type: integer
+        leads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lead"
+
+    LeadsStats:
+      type: object
+      required: [totalLeads, newLeads, qualifiedLeads, convertedLeads, byStatus, bySource]
+      properties:
+        totalLeads:
+          type: integer
+        newLeads:
+          type: integer
+        qualifiedLeads:
+          type: integer
+        convertedLeads:
+          type: integer
+        byStatus:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+        bySource:
+          type: array
+          items:
+            type: object
+            required: [source, count]
+            properties:
+              source:
+                type: string
+              count:
+                type: integer
+
+    # ─── EMAIL CAMPAIGN ─────────────────────────────────────────────────────
+    EmailCampaign:
+      type: object
+      required: [id, vendorId, name, subject, body, status, recipientCount, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+        recipientCount:
+          type: integer
+        sentCount:
+          type: integer
+        openCount:
+          type: integer
+        clickCount:
+          type: integer
+        targetAudience:
+          type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
+        sentAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    EmailCampaignInput:
+      type: object
+      required: [vendorId, name, subject, body]
+      properties:
+        vendorId:
+          type: integer
+        name:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        targetAudience:
+          type: string
+        scheduledAt:
+          type: string
+        recipientCount:
+          type: integer
+
+    EmailCampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        targetAudience:
+          type: string
+        scheduledAt:
+          type: string
+        status:
+          type: string
+
+    EmailCampaignStats:
+      type: object
+      required: [totalCampaigns, totalSent, avgOpenRate, avgClickRate, recentCampaigns]
+      properties:
+        totalCampaigns:
+          type: integer
+        totalSent:
+          type: integer
+        avgOpenRate:
+          type: number
+        avgClickRate:
+          type: number
+        recentCampaigns:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmailCampaign"
+
+    CampaignSendResult:
+      type: object
+      required: [sent, failed, message]
+      properties:
+        sent:
+          type: integer
+        failed:
+          type: integer
+        message:
+          type: string
+
+    # ─── SMS CAMPAIGN ───────────────────────────────────────────────────────
+    SmsCampaign:
+      type: object
+      required: [id, vendorId, name, message, status, recipientCount, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        recipientCount:
+          type: integer
+        sentCount:
+          type: integer
+        targetAudience:
+          type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
+        sentAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    SmsCampaignInput:
+      type: object
+      required: [vendorId, name, message]
+      properties:
+        vendorId:
+          type: integer
+        name:
+          type: string
+        message:
+          type: string
+        targetAudience:
+          type: string
+        scheduledAt:
+          type: string
+        recipientCount:
+          type: integer
+
+    SmsCampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+        targetAudience:
+          type: string
+        scheduledAt:
+          type: string
+        status:
+          type: string
+
+    # ─── ANALYTICS ──────────────────────────────────────────────────────────
+    AnalyticsOverview:
+      type: object
+      required: [totalVendors, totalRevenue, totalOrders, totalLeads, totalPosts, pendingOrders, lowStockAlerts, recentActivity]
+      properties:
+        totalVendors:
+          type: integer
+        totalRevenue:
+          type: number
+        totalOrders:
+          type: integer
+        totalLeads:
+          type: integer
+        totalPosts:
+          type: integer
+        pendingOrders:
+          type: integer
+        lowStockAlerts:
+          type: integer
+        recentActivity:
+          type: array
+          items:
+            type: object
+            required: [type, description, timestamp]
+            properties:
+              type:
+                type: string
+              description:
+                type: string
+              timestamp:
+                type: string
+
+    SalesAnalytics:
+      type: object
+      required: [revenueByDay, topProducts, revenueByVendor, conversionRate]
+      properties:
+        revenueByDay:
+          type: array
+          items:
+            type: object
+            required: [date, revenue, orders]
+            properties:
+              date:
+                type: string
+              revenue:
+                type: number
+              orders:
+                type: integer
+        topProducts:
+          type: array
+          items:
+            type: object
+            required: [productId, name, revenue, unitsSold]
+            properties:
+              productId:
+                type: integer
+              name:
+                type: string
+              revenue:
+                type: number
+              unitsSold:
+                type: integer
+        revenueByVendor:
+          type: array
+          items:
+            type: object
+            required: [vendorId, vendorName, revenue]
+            properties:
+              vendorId:
+                type: integer
+              vendorName:
+                type: string
+              revenue:
+                type: number
+        conversionRate:
+          type: number
+
+    SocialAnalytics:
+      type: object
+      required: [postsByPlatform, postsByStatus, recentPosts, totalEngagement]
+      properties:
+        postsByPlatform:
+          type: array
+          items:
+            type: object
+            required: [platform, count]
+            properties:
+              platform:
+                type: string
+              count:
+                type: integer
+        postsByStatus:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+        recentPosts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Post"
+        totalEngagement:
+          type: integer
