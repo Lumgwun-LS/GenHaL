@@ -27,6 +27,8 @@ import EmailCampaignEditor from "@/pages/email-campaigns/detail";
 import SmsCampaigns from "@/pages/sms-campaigns";
 import Payments from "@/pages/payments";
 import AdminPanel from "@/pages/admin";
+import VoiceCampaigns from "@/pages/voice-campaigns/index";
+import VoiceCampaignDetail from "@/pages/voice-campaigns/detail";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -185,6 +187,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/email-campaigns/:id" component={() => <AuthenticatedRoute component={EmailCampaignEditor} />} />
           <Route path="/sms-campaigns" component={() => <AuthenticatedRoute component={SmsCampaigns} />} />
           <Route path="/payments" component={() => <AuthenticatedRoute component={Payments} />} />
+          <Route path="/voice-campaigns" component={() => <AuthenticatedRoute component={VoiceCampaigns} />} />
+          <Route path="/voice-campaigns/:id" component={() => <AuthenticatedRoute component={VoiceCampaignDetail} />} />
           <Route path="/admin" component={() => <AuthenticatedRoute component={AdminPanel} />} />
           
           <Route path="/:rest*">

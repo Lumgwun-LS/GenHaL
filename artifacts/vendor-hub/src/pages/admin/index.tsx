@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed } from "lucide-react";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
 
@@ -171,6 +171,30 @@ async function fetchBirthdayLogs(): Promise<BirthdayLog[]> {
   return res.json() as Promise<BirthdayLog[]>;
 }
 
+type VoiceCallLog = {
+  id: number;
+  vendorId: number | null;
+  campaignId: number | null;
+  phone: string;
+  purpose: string;
+  status: string;
+  durationSeconds: number | null;
+  callSid: string | null;
+  initiatedAt: string;
+};
+
+async function fetchVoiceCallLogs(): Promise<VoiceCallLog[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-call-logs`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load voice call logs");
+  return res.json() as Promise<VoiceCallLog[]>;
+}
+
+async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-status`, { credentials: "include" });
+  if (!res.ok) return { configured: false };
+  return res.json();
+}
+
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -184,6 +208,19 @@ export default function AdminPanel() {
   const { data: birthdayLogs, isLoading: logsLoading } = useQuery({
     queryKey: ["admin-birthday-logs"],
     queryFn: fetchBirthdayLogs,
+    enabled: isAdmin,
+  });
+
+  const { data: voiceCallLogs, isLoading: voiceLoading } = useQuery({
+    queryKey: ["admin-voice-call-logs"],
+    queryFn: fetchVoiceCallLogs,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
+  const { data: voiceStatus } = useQuery({
+    queryKey: ["admin-voice-status"],
+    queryFn: fetchVoiceStatus,
     enabled: isAdmin,
   });
 
@@ -246,6 +283,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="birthdays" className="flex items-center gap-2">
             <Cake className="w-4 h-4" /> Birthday Messages
+          </TabsTrigger>
+          <TabsTrigger value="voice" className="flex items-center gap-2">
+            <Phone className="w-4 h-4" /> Voice Calls
           </TabsTrigger>
         </TabsList>
 
@@ -388,6 +428,92 @@ export default function AdminPanel() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Voice Calls tab ──────────────────────────────────────────── */}
+        <TabsContent value="voice">
+          <div className="space-y-4">
+            {/* Twilio status */}
+            {voiceStatus && (
+              <div className={`rounded-lg border p-4 text-sm flex items-center gap-3 ${voiceStatus.configured ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" : "border-amber-200 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"}`}>
+                {voiceStatus.configured
+                  ? <><CheckCircle2 className="w-4 h-4 shrink-0" /> <span><strong>Twilio connected.</strong> Birthday calls at 06:00 UTC and vendor campaigns are active.</span></>
+                  : <><AlertCircle className="w-4 h-4 shrink-0" /> <span><strong>Twilio not configured.</strong> Set <code className="bg-black/10 px-1 rounded text-xs">TWILIO_ACCOUNT_SID</code>, <code className="bg-black/10 px-1 rounded text-xs">TWILIO_AUTH_TOKEN</code>, and <code className="bg-black/10 px-1 rounded text-xs">TWILIO_PHONE_NUMBER</code> in Secrets to enable calls.</span></>
+                }
+              </div>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-primary" /> Voice Call Log
+                </CardTitle>
+                <CardDescription>
+                  All outbound calls placed by the platform — birthday greetings (06:00 UTC) and vendor campaigns. Refreshes every 30 seconds.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {voiceLoading ? (
+                  <div className="p-8 text-center text-muted-foreground">Loading call logs…</div>
+                ) : !voiceCallLogs?.length ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <Phone className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p className="font-medium">No calls placed yet.</p>
+                    <p className="text-xs mt-1">Birthday calls appear here at 06:00 UTC on vendors' birthdays. Campaign calls appear when a vendor launches a campaign.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Purpose</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead className="text-right">Initiated</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {voiceCallLogs.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="font-mono text-sm">{log.phone}</TableCell>
+                          <TableCell>
+                            {log.purpose === "birthday" ? (
+                              <div className="flex items-center gap-1.5 text-xs text-pink-500">
+                                <Cake className="w-3.5 h-3.5" /> Birthday
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-xs text-primary">
+                                <Phone className="w-3.5 h-3.5" /> Campaign
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {log.status === "completed" ? (
+                              <div className="flex items-center gap-1.5 text-xs text-emerald-500"><PhoneCall className="w-3.5 h-3.5" /> Completed</div>
+                            ) : log.status === "no-answer" ? (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><PhoneMissed className="w-3.5 h-3.5" /> No answer</div>
+                            ) : log.status === "failed" ? (
+                              <div className="flex items-center gap-1.5 text-xs text-destructive"><PhoneOff className="w-3.5 h-3.5" /> Failed</div>
+                            ) : log.status === "canceled" ? (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><PhoneOff className="w-3.5 h-3.5" /> Skipped</div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-xs text-blue-500"><Phone className="w-3.5 h-3.5 animate-pulse" /> {log.status}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {log.durationSeconds != null ? `${log.durationSeconds}s` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {new Date(log.initiatedAt).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

@@ -18,6 +18,7 @@ import externalRouter from "./external/index";
 import vendorPaymentCredentialsRouter from "./vendor-payment-credentials";
 import adminRouter from "./admin";
 import notificationsRouter from "./notifications";
+import voiceCampaignsRouter from "./voice-campaigns";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -49,6 +50,7 @@ router.use(apiKeysRouter);
 router.use(paymentsRouter);
 router.use(vendorPaymentCredentialsRouter);
 router.use(notificationsRouter);
+router.use(voiceCampaignsRouter);
 router.use(adminRouter);
 
 export default router;

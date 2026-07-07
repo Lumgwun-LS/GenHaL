@@ -114,6 +114,7 @@ export const GetVendorResponse = zod.object({
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -138,7 +139,8 @@ export const UpdateVendorBody = zod.object({
   "logoUrl": zod.string().optional(),
   "description": zod.string().optional(),
   "status": zod.string().optional(),
-  "dateOfBirth": zod.string().nullish()
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -154,6 +156,7 @@ export const UpdateVendorResponse = zod.object({
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake } from "lucide-react";
+import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -35,6 +35,7 @@ export default function VendorDetail() {
   const [paystackEnabled, setPaystackEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function VendorDetail() {
       setPaystackEnabled(vendor.paystackEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
+      setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
     }
   }, [vendor]);
 
@@ -161,6 +163,30 @@ export default function VendorDetail() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Used to send a birthday greeting automatically.</p>
+              </div>
+              <div className="pt-4 border-t mt-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <PhoneOff className="w-4 h-4 text-muted-foreground" />
+                      Opt out of birthday calls
+                    </Label>
+                    <p className="text-xs text-muted-foreground">When on, no AI voice call will be placed on your birthday.</p>
+                  </div>
+                  <Switch
+                    checked={voiceCallOptOut}
+                    onCheckedChange={async (val) => {
+                      setVoiceCallOptOut(val);
+                      await fetch(`${BASE_URL}/api/vendors/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ voiceCallOptOut: val }),
+                      });
+                      toast.success(val ? "Birthday calls disabled" : "Birthday calls enabled");
+                    }}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

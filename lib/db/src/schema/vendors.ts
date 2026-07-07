@@ -27,6 +27,8 @@ export const vendorsTable = pgTable("vendors", {
   verificationLevel: text("verification_level").notNull().default("unverified"), // unverified|basic|verified|premium
   // Birthday — used for automated birthday greetings
   dateOfBirth: date("date_of_birth"),
+  // Voice — opt-out of birthday & campaign calls (default opted in)
+  voiceCallOptOut: boolean("voice_call_opt_out").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

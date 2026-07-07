@@ -12,6 +12,7 @@ import {
   Mail, 
   MessageSquare,
   CreditCard,
+  Phone,
   Menu,
   X,
   ShieldCheck,
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { href: "/email-campaigns", label: "Email", icon: Mail },
   { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
   { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
