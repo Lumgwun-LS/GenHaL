@@ -152,6 +152,10 @@ async function logWebhookEvent(opts: {
     // retries both issue this UPDATE; the DB row-lock ensures only one gets
     // RETURNING rows > 0.  The other sees 0 rows → isDuplicate=true.
     //
+    // Claimable when processedAt IS NULL (not yet processed) AND errorMessage
+    // is either NULL (markWebhookFailed couldn't write during a DB outage) or
+    // a real error string (not a live sentinel).  Both cases are retryable.
+    //
     // We do NOT try to parse/compare sentinel timestamps in SQL to avoid
     // complex CAST/REGEX expressions.  Instead the background checker resets
     // timed-out sentinels to NULL, making this simple predicate sufficient.
