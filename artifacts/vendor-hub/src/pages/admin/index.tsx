@@ -438,7 +438,7 @@ export default function AdminPanel() {
               <div className={`rounded-lg border p-4 text-sm flex items-center gap-3 ${voiceStatus.configured ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" : "border-amber-200 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"}`}>
                 {voiceStatus.configured
                   ? <><CheckCircle2 className="w-4 h-4 shrink-0" /> <span><strong>Twilio connected.</strong> Birthday calls at 06:00 UTC and vendor campaigns are active.</span></>
-                  : <><AlertCircle className="w-4 h-4 shrink-0" /> <span><strong>Twilio not configured.</strong> Set <code className="bg-black/10 px-1 rounded text-xs">TWILIO_ACCOUNT_SID</code>, <code className="bg-black/10 px-1 rounded text-xs">TWILIO_AUTH_TOKEN</code>, and <code className="bg-black/10 px-1 rounded text-xs">TWILIO_PHONE_NUMBER</code> in Secrets to enable calls.</span></>
+                  : <><AlertCircle className="w-4 h-4 shrink-0" /> <span><strong>Almost there.</strong> The Twilio integration is connected — just add <code className="bg-black/10 px-1 rounded text-xs">TWILIO_PHONE_NUMBER</code> (your Twilio from-number in E.164 format, e.g. +12345678900) to Replit Secrets to enable calls.</span></>
                 }
               </div>
             )}

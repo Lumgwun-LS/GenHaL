@@ -2,6 +2,17 @@
  * Webhook-only router — public, no auth required.
  * Signature verification is done inside each handler.
  * Mounted BEFORE requireAuth in routes/index.ts.
+ *
+ * DB-outage resilience:
+ * When the database is unreachable the route returns HTTP 200 (so the provider
+ * does not retry) and queues the event in the in-memory webhook buffer.  A
+ * background drainer replays buffered events every 30 s until the DB recovers.
+ *
+ * Concurrent-delivery safety:
+ * Each event is claimed via an in-progress sentinel set atomically during INSERT
+ * (first delivery) or via a single atomic UPDATE … RETURNING (retry path).
+ * Timed-out sentinels (handler crashed mid-run) are reset by the background
+ * stale-sentinel cleanup so future retries can reclaim the event.
  */
 import { Router } from "express";
 import Stripe from "stripe";
@@ -9,17 +20,95 @@ import crypto from "crypto";
 import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { sendSlackAlert } from "../../lib/slack";
+import {
+  enqueueWebhookEvent,
+  registerSlackAlerter,
+} from "../../lib/webhook-buffer";
 
 const router = Router();
 
+// Wire Slack into the buffer so it can send alerts on DB outage / recovery
+registerSlackAlerter(sendSlackAlert);
+
+// ── DB-outage detection ───────────────────────────────────────────────────────
+
+function isDbUnavailableError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  const code = (err as { code?: string }).code ?? "";
+
+  if (["econnrefused", "econnreset", "etimedout", "enotfound", "epipe", "ehostunreach"].includes(code.toLowerCase())) return true;
+  if (["08000", "08006", "08001", "08004", "57p01", "53300", "57014"].includes(code)) return true;
+  if (
+    msg.includes("connection terminated") ||
+    msg.includes("connection closed") ||
+    msg.includes("connection refused") ||
+    msg.includes("server closed the connection unexpectedly") ||
+    msg.includes("cannot read from a closed connection") ||
+    msg.includes("query read timeout") ||
+    msg.includes("connect etimedout") ||
+    msg.includes("connect econnrefused") ||
+    msg.includes("getaddrinfo") ||
+    msg.includes("too many connections") ||
+    msg.includes("the database system is shut") ||
+    msg.includes("the database system is starting up") ||
+    msg.includes("connection is closed") ||
+    msg.includes("socket hang up") ||
+    msg.includes("pool is draining") ||
+    msg.includes("client checkout timed out")
+  ) return true;
+  return false;
+}
+
+// ── In-progress sentinel ──────────────────────────────────────────────────────
+
+/**
+ * Sentinels older than this are considered stale (handler crashed mid-run).
+ * The background checker resets them so future retries can reclaim the event.
+ */
+const IN_PROGRESS_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+function makeSentinel(): string {
+  return `[in-progress:${Date.now()}]`;
+}
+
+function isSentinel(s: string | null | undefined): boolean {
+  return typeof s === "string" && s.startsWith("[in-progress:");
+}
+
+function isSentinelTimedOut(s: string): boolean {
+  const match = s.match(/^\[in-progress:(\d+)\]$/);
+  if (!match) return true; // malformed → treat as timed-out so it can be reclaimed
+  return Date.now() - Number(match[1]) > IN_PROGRESS_TIMEOUT_MS;
+}
+
+// ── Core DB helpers ───────────────────────────────────────────────────────────
+
 /**
  * Persist a webhook event and return whether this event should be skipped.
- * processedAt is intentionally NOT set here — it is set after successful
- * business logic so that null means "not yet processed" or "failed".
  *
- * On retry (duplicate event_id): returns isDuplicate=true for already-processed
- * events, but isDuplicate=false for previously-failed events so the handler
- * retries business logic and can recover.
+ * Ownership model (prevents concurrent double-processing):
+ *
+ *  First delivery:
+ *    INSERT sets errorMessage = "[in-progress:ts]" atomically.  A concurrent
+ *    duplicate hitting the unique constraint sees the sentinel in the atomic
+ *    UPDATE claim below, gets 0 RETURNING rows → isDuplicate=true.
+ *
+ *  Retry (unique constraint hit):
+ *    A single atomic UPDATE … WHERE … RETURNING claims the row.  Two
+ *    concurrent retries race on the same SQL; the DB row-lock serialises them
+ *    and only one gets RETURNING rows > 0.
+ *
+ *    Claimable conditions (all checked in the single UPDATE):
+ *      • processedAt IS NULL  — not yet successfully processed
+ *      • errorMessage IS NULL OR NOT a live sentinel (real error → ready retry)
+ *
+ *    Timed-out sentinels are reset to NULL by checkStaleWebhookEvents, so by
+ *    the time this UPDATE runs any claimable timed-out sentinel has been cleared.
+ *
+ *  Success: markWebhookProcessed sets processedAt + clears errorMessage.
+ *  Failure: markWebhookFailed overwrites sentinel with real error (re-claimable).
+ *
+ * Throws on DB connectivity errors — callers must catch and buffer.
  */
 async function logWebhookEvent(opts: {
   provider: string;
@@ -28,51 +117,74 @@ async function logWebhookEvent(opts: {
   reference: string | null;
   rawPayload: unknown;
 }): Promise<{ isDuplicate: boolean }> {
+  const sentinel = makeSentinel();
+
   try {
+    // Sentinel written during INSERT — ownership established with no gap.
     await db.insert(webhookEventsTable).values({
-      provider: opts.provider,
-      eventType: opts.eventType,
-      eventId: opts.eventId,
-      reference: opts.reference,
-      rawPayload: opts.rawPayload as Record<string, unknown>,
-      // processedAt deliberately omitted — set to null until business logic succeeds
+      provider:     opts.provider,
+      eventType:    opts.eventType,
+      eventId:      opts.eventId,
+      reference:    opts.reference,
+      rawPayload:   opts.rawPayload as Record<string, unknown>,
+      errorMessage: sentinel,
+      // processedAt omitted — set only after business logic succeeds
     });
     return { isDuplicate: false };
   } catch (err: unknown) {
-    // Unique constraint violation on event_id = seen before
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("webhook_events_event_id_unique") || msg.includes("unique")) {
-      // Check if the previous attempt failed — if so, clear the error and allow retry
-      const [existing] = await db
-        .select({
-          processedAt: webhookEventsTable.processedAt,
-          errorMessage: webhookEventsTable.errorMessage,
-        })
-        .from(webhookEventsTable)
-        .where(eq(webhookEventsTable.eventId, opts.eventId));
+    const code = (err as { code?: string }).code;
 
-      if (existing && existing.processedAt === null && existing.errorMessage !== null) {
-        // Previously failed — clear error so retry can proceed
-        await db
-          .update(webhookEventsTable)
-          .set({ errorMessage: null })
-          .where(eq(webhookEventsTable.eventId, opts.eventId));
-        console.info(`[webhook] retrying previously failed event — id=${opts.eventId}`);
-        return { isDuplicate: false };
-      }
+    // SQLSTATE 23505 = unique_violation; message fallback for driver variants
+    const isUniqueViolation =
+      code === "23505" ||
+      msg.includes("webhook_events_event_id_unique") ||
+      msg.includes("unique constraint");
 
-      console.warn(`[webhook] duplicate event skipped — id=${opts.eventId}`);
+    if (!isUniqueViolation) {
+      throw err; // genuine DB connectivity error — caller will buffer
+    }
+
+    // ── Unique constraint hit: event already exists ──
+    //
+    // Atomic compare-and-set claim: the UPDATE's WHERE clause atomically
+    // checks all preconditions in a single SQL statement.  Two concurrent
+    // retries both issue this UPDATE; the DB row-lock ensures only one gets
+    // RETURNING rows > 0.  The other sees 0 rows → isDuplicate=true.
+    //
+    // We do NOT try to parse/compare sentinel timestamps in SQL to avoid
+    // complex CAST/REGEX expressions.  Instead the background checker resets
+    // timed-out sentinels to NULL, making this simple predicate sufficient.
+    const claimed = await db
+      .update(webhookEventsTable)
+      .set({ errorMessage: sentinel })
+      .where(
+        sql`
+          ${webhookEventsTable.eventId} = ${opts.eventId}
+          AND ${webhookEventsTable.processedAt} IS NULL
+          AND (
+            ${webhookEventsTable.errorMessage} IS NULL
+            OR ${webhookEventsTable.errorMessage} NOT LIKE '[in-progress:%'
+          )
+        `,
+      )
+      .returning({ id: webhookEventsTable.id });
+
+    if (claimed.length === 0) {
+      console.warn(`[webhook] duplicate or in-progress event — skipping — id=${opts.eventId}`);
       return { isDuplicate: true };
     }
-    throw err; // unexpected error — rethrow
+
+    console.info(`[webhook] retrying unprocessed event (atomic claim) — id=${opts.eventId}`);
+    return { isDuplicate: false };
   }
 }
 
-/** Mark a webhook event as successfully processed. */
+/** Mark a webhook event as successfully processed. Clears any in-progress sentinel. */
 async function markWebhookProcessed(eventId: string): Promise<void> {
   await db
     .update(webhookEventsTable)
-    .set({ processedAt: new Date() })
+    .set({ processedAt: new Date(), errorMessage: null })
     .where(eq(webhookEventsTable.eventId, eventId));
 }
 
@@ -94,32 +206,22 @@ async function markWebhookFailed(
     console.error("[webhook] Failed to persist error_message to DB:", dbErr);
   }
 
-  const alertText =
+  await sendSlackAlert(
     `🚨 *Webhook processing failed*\n` +
     `• Provider: \`${provider}\`\n` +
     `• Event type: \`${eventType}\`\n` +
     `• Event ID: \`${eventId}\`\n` +
-    `• Error: ${errorMessage}`;
-
-  await sendSlackAlert(alertText);
+    `• Error: ${errorMessage}`,
+  );
 }
 
-/**
- * POST /payments/stripe/webhook
- * Stripe sends checkout.session.completed events here.
- * Raw body required — mounted before express.json().
- */
+// ── Stripe webhook ────────────────────────────────────────────────────────────
+
 router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    res.status(500).json({ error: "STRIPE_WEBHOOK_SECRET not configured" });
-    return;
-  }
+  if (!webhookSecret) { res.status(500).json({ error: "STRIPE_WEBHOOK_SECRET not configured" }); return; }
   const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) {
-    res.status(500).json({ error: "STRIPE_SECRET_KEY not configured" });
-    return;
-  }
+  if (!stripeKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY not configured" }); return; }
 
   const sig = req.headers["stripe-signature"];
   if (!sig) { res.status(400).json({ error: "Missing stripe-signature header" }); return; }
@@ -135,69 +237,77 @@ router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
     return;
   }
 
-  const session = event.type === "checkout.session.completed"
-    ? (event.data.object as Stripe.Checkout.Session)
-    : null;
+  const session =
+    event.type === "checkout.session.completed"
+      ? (event.data.object as Stripe.Checkout.Session)
+      : null;
 
-  const { isDuplicate } = await logWebhookEvent({
-    provider: "stripe",
-    eventType: event.type,
-    eventId: event.id,
-    reference: session?.id ?? null,
-    rawPayload: event,
-  });
+  /**
+   * Full pipeline: log → business logic → mark processed.
+   *
+   * Business-logic failures call markWebhookFailed before rethrowing so that
+   * errorMessage is always set on failure — enabling the atomic claim path to
+   * reclaim the row on the next retry (provider or buffer drainer).
+   *
+   * Stored as a closure so the buffer can replay it when the DB recovers.
+   */
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "stripe",
+      eventType:  event.type,
+      eventId:    event.id,
+      reference:  session?.id ?? null,
+      rawPayload: event,
+    });
 
-  if (isDuplicate) {
-    res.json({ received: true });
-    return;
-  }
-
-  if (event.type === "checkout.session.completed" && session) {
-    const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
+    if (isDuplicate) return;
 
     try {
-      await db
-        .update(paymentsTable)
-        .set({ status: "paid", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, session.id));
+      if (event.type === "checkout.session.completed" && session) {
+        const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
 
-      if (orderId) {
-        await db
-          .update(ordersTable)
-          .set({ paymentStatus: "paid", updatedAt: new Date() })
-          .where(eq(ordersTable.id, orderId));
+        await db.update(paymentsTable)
+          .set({ status: "paid", updatedAt: new Date() })
+          .where(eq(paymentsTable.providerReference, session.id));
+
+        if (orderId) {
+          await db.update(ordersTable)
+            .set({ paymentStatus: "paid", updatedAt: new Date() })
+            .where(eq(ordersTable.id, orderId));
+        }
+
+        await markWebhookProcessed(event.id);
+        console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
+      } else {
+        await markWebhookProcessed(event.id);
+        console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
       }
-
-      await markWebhookProcessed(event.id);
-      console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
-    } catch (err) {
-      console.error(`[stripe webhook] Business logic failed — event=${event.id}:`, err);
-      await markWebhookFailed(event.id, "stripe", event.type, err);
-      // Return 500 so Stripe retries — idempotent inserts protect against double-processing.
-      res.status(500).json({ error: "Internal processing error — will retry" });
-      return;
+    } catch (bizErr) {
+      await markWebhookFailed(event.id, "stripe", event.type, bizErr).catch(() => {});
+      throw bizErr;
     }
-  } else {
-    // Unhandled but valid event type — mark as processed/skipped so it doesn't
-    // appear as a stale unprocessed event in alerts.
-    await markWebhookProcessed(event.id);
-    console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
   }
 
-  res.json({ received: true });
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId: event.id, provider: "stripe", eventType: event.type, process: fullPipeline });
+      console.warn(`[stripe webhook] DB unavailable — event ${event.id} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[stripe webhook] Processing failed — event=${event.id}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
 });
 
-/**
- * POST /payments/paystack/webhook
- * Paystack sends charge.success events here.
- * Raw body required — mounted before express.json().
- */
+// ── Paystack webhook ──────────────────────────────────────────────────────────
+
 router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
   const webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    res.status(500).json({ error: "PAYSTACK_WEBHOOK_SECRET not configured" });
-    return;
-  }
+  if (!webhookSecret) { res.status(500).json({ error: "PAYSTACK_WEBHOOK_SECRET not configured" }); return; }
 
   const rawBody = req.body as Buffer;
   const hash = crypto.createHmac("sha512", webhookSecret).update(rawBody).digest("hex");
@@ -213,97 +323,121 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
     data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
   };
 
-  // Paystack uses numeric event IDs; fall back to reference+type as composite key
   const eventId = event.data.id
     ? `paystack-${event.data.id}`
     : `paystack-${event.event}-${event.data.reference}`;
 
-  const { isDuplicate } = await logWebhookEvent({
-    provider: "paystack",
-    eventType: event.event,
-    eventId,
-    reference: event.data.reference,
-    rawPayload: event,
-  });
+  /** Same pipeline/safety model as the Stripe handler above. */
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "paystack",
+      eventType:  event.event,
+      eventId,
+      reference:  event.data.reference,
+      rawPayload: event,
+    });
 
-  if (isDuplicate) {
-    res.json({ received: true });
-    return;
-  }
-
-  if (event.event === "charge.success") {
-    const { reference, metadata } = event.data;
-    const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
+    if (isDuplicate) return;
 
     try {
-      await db
-        .update(paymentsTable)
-        .set({ status: "paid", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, reference));
+      if (event.event === "charge.success") {
+        const { reference, metadata } = event.data;
+        const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
-      if (orderId) {
-        await db
-          .update(ordersTable)
-          .set({ paymentStatus: "paid", updatedAt: new Date() })
-          .where(eq(ordersTable.id, orderId));
+        await db.update(paymentsTable)
+          .set({ status: "paid", updatedAt: new Date() })
+          .where(eq(paymentsTable.providerReference, reference));
+
+        if (orderId) {
+          await db.update(ordersTable)
+            .set({ paymentStatus: "paid", updatedAt: new Date() })
+            .where(eq(ordersTable.id, orderId));
+        }
+
+        await markWebhookProcessed(eventId);
+        console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);
+      } else {
+        await markWebhookProcessed(eventId);
+        console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${eventId}`);
       }
-
-      await markWebhookProcessed(eventId);
-      console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);
-    } catch (err) {
-      console.error(`[paystack webhook] Business logic failed — event=${eventId}:`, err);
-      await markWebhookFailed(eventId, "paystack", event.event, err);
-      // Return 500 so Paystack retries — idempotent inserts protect against double-processing.
-      res.status(500).json({ error: "Internal processing error — will retry" });
-      return;
+    } catch (bizErr) {
+      await markWebhookFailed(eventId, "paystack", event.event, bizErr).catch(() => {});
+      throw bizErr;
     }
-  } else {
-    // Unhandled but valid event type — mark as processed/skipped so it doesn't
-    // appear as a stale unprocessed event in alerts.
-    await markWebhookProcessed(eventId);
-    console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${eventId}`);
   }
 
-  res.json({ received: true });
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId, provider: "paystack", eventType: event.event, process: fullPipeline });
+      console.warn(`[paystack webhook] DB unavailable — event ${eventId} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[paystack webhook] Processing failed — event=${eventId}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
 });
 
-/**
- * Background job: alert on stale unprocessed webhook events.
- * Fires for events older than 5 minutes that are still unprocessed
- * (processedAt IS NULL). Runs every 60 seconds.
- */
-const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
-const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
+// ── Background checker: stale events + stale sentinel cleanup ─────────────────
 
-const alertedEventIds = new Set<string>(); // avoid repeat alerts within the same process
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL_MS   = 60 * 1000;      // 1 minute
+
+const alertedEventIds = new Set<string>();
 
 async function checkStaleWebhookEvents(): Promise<void> {
   try {
+    // ── 1. Reset timed-out in-progress sentinels ──────────────────────────────
+    // Fetch rows whose errorMessage is a sentinel (handler claimed but never
+    // completed, likely due to a crash).  Reset them to NULL so the atomic
+    // claim UPDATE in logWebhookEvent can reclaim them on the next delivery.
+    const inProgressRows = await db
+      .select({ eventId: webhookEventsTable.eventId, errorMessage: webhookEventsTable.errorMessage })
+      .from(webhookEventsTable)
+      .where(
+        sql`${webhookEventsTable.processedAt} IS NULL AND ${webhookEventsTable.errorMessage} LIKE '[in-progress:%'`,
+      );
+
+    for (const row of inProgressRows) {
+      if (row.errorMessage && isSentinel(row.errorMessage) && isSentinelTimedOut(row.errorMessage)) {
+        // Compare-and-swap: only reset if errorMessage is STILL the exact
+        // sentinel we read.  If another handler claimed the event between our
+        // SELECT and this UPDATE (writing a fresh sentinel), the WHERE won't
+        // match and we leave the new claim untouched.
+        const result = await db
+          .update(webhookEventsTable)
+          .set({ errorMessage: null })
+          .where(
+            sql`${webhookEventsTable.eventId} = ${row.eventId} AND ${webhookEventsTable.errorMessage} = ${row.errorMessage}`,
+          )
+          .returning({ id: webhookEventsTable.id });
+        if (result.length > 0) {
+          console.warn(`[webhook] timed-out in-progress sentinel reset — id=${row.eventId}`);
+        }
+      }
+    }
+
+    // ── 2. Alert on stale failed events ──────────────────────────────────────
     const cutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
 
-    // Only alert on events that explicitly failed (errorMessage set).
-    // Unhandled event types are marked processed immediately, so a null
-    // processedAt after 5 minutes means business logic threw before it could
-    // record success — confirmed failures, not just unknown event types.
     const stale = await db
       .select({
-        eventId: webhookEventsTable.eventId,
-        provider: webhookEventsTable.provider,
-        eventType: webhookEventsTable.eventType,
+        eventId:      webhookEventsTable.eventId,
+        provider:     webhookEventsTable.provider,
+        eventType:    webhookEventsTable.eventType,
         errorMessage: webhookEventsTable.errorMessage,
-        receivedAt: webhookEventsTable.receivedAt,
+        receivedAt:   webhookEventsTable.receivedAt,
       })
       .from(webhookEventsTable)
       .where(
-        sql`${webhookEventsTable.processedAt} IS NULL AND ${webhookEventsTable.errorMessage} IS NOT NULL AND ${webhookEventsTable.receivedAt} < ${cutoff}`,
+        sql`${webhookEventsTable.processedAt} IS NULL AND ${webhookEventsTable.errorMessage} IS NOT NULL AND ${webhookEventsTable.errorMessage} NOT LIKE '[in-progress:%' AND ${webhookEventsTable.receivedAt} < ${cutoff}`,
       );
 
     for (const row of stale) {
       if (alertedEventIds.has(row.eventId)) continue;
-
-      const reason = row.errorMessage
-        ? `Error: ${row.errorMessage}`
-        : "No error recorded — event may have been skipped without being marked processed.";
 
       await sendSlackAlert(
         `⏰ *Stale unprocessed webhook event* (>5 min)\n` +
@@ -311,17 +445,16 @@ async function checkStaleWebhookEvents(): Promise<void> {
         `• Event type: \`${row.eventType}\`\n` +
         `• Event ID: \`${row.eventId}\`\n` +
         `• Received: ${row.receivedAt.toISOString()}\n` +
-        `• ${reason}`,
+        `• Error: ${row.errorMessage}`,
       );
 
       alertedEventIds.add(row.eventId);
     }
   } catch (err) {
-    console.error("[webhook] Stale event checker failed:", err);
+    console.error("[webhook] Background checker failed:", err);
   }
 }
 
-// Start the background checker after a short delay so the server is fully up
 setTimeout(() => {
   void checkStaleWebhookEvents();
   setInterval(() => void checkStaleWebhookEvents(), POLL_INTERVAL_MS);

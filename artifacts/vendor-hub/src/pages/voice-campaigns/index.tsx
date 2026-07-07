@@ -122,8 +122,8 @@ export default function VoiceCampaignsPage() {
       <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 text-sm text-amber-700 dark:text-amber-400 flex gap-3">
         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
         <div>
-          <p className="font-medium">Voice calls require Twilio credentials</p>
-          <p className="text-xs mt-0.5 opacity-80">An admin needs to configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER. Campaigns can be created and queued in the meantime.</p>
+          <p className="font-medium">Voice calls require a phone number</p>
+          <p className="text-xs mt-0.5 opacity-80">The Twilio integration is already connected. An admin just needs to add <code className="bg-black/10 px-1 rounded">TWILIO_PHONE_NUMBER</code> to Replit Secrets. Campaigns can be created and queued in the meantime.</p>
         </div>
       </div>
 
