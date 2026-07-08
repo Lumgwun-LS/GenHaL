@@ -115,4 +115,23 @@ app.use(
 
 app.use("/api", router);
 
+// ─── Global error handler ────────────────────────────────────────────────────
+// Clerk's middleware can throw synchronously (e.g. a malformed/garbage
+// Authorization header) instead of resolving to an unauthenticated request.
+// Without this handler, Express's default handler turns that into an opaque
+// 500 with a stack trace instead of a clean 401. Any other unexpected error
+// is logged and returned as a generic 500 (never leaking internals to callers).
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  logger.error({ err, path: req.path }, "request error");
+
+  // Malformed JSON bodies and malformed bearer tokens (e.g. Clerk failing to
+  // base64-decode a garbage Authorization header) both surface as
+  // SyntaxErrors — treat them as a bad request rather than an opaque 500.
+  if (err instanceof SyntaxError) {
+    res.status(400).json({ error: "Malformed request" });
+    return;
+  }
+  res.status(500).json({ error: "Internal server error" });
+});
+
 export default app;

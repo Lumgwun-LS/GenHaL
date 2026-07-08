@@ -38,7 +38,6 @@ export const ListVendorsResponseItem = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
-  "dateOfBirth": zod.string().nullish(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -113,8 +112,6 @@ export const GetVendorResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
-  "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -138,9 +135,7 @@ export const UpdateVendorBody = zod.object({
   "address": zod.string().optional(),
   "logoUrl": zod.string().optional(),
   "description": zod.string().optional(),
-  "status": zod.string().optional(),
-  "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "status": zod.string().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -155,8 +150,6 @@ export const UpdateVendorResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "description": zod.string().nullish(),
   "clerkUserId": zod.string().nullish(),
-  "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional(),
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
@@ -1429,6 +1422,240 @@ export const GetSocialAnalyticsResponse = zod.object({
   "createdAt": zod.string()
 })),
   "totalEngagement": zod.number()
+})
+
+
+/**
+ * Called once when an Awajimaa user opens the VendorHub mobile app. Auto-creates (or finds) the matching vendor profile and returns a signed JWT to use as a bearer token on all other /external/* routes.
+ * @summary Exchange an Awajimaa API key + user identity for a VendorHub session token
+ */
+export const ExternalAuthHandshakeBody = zod.object({
+  "userId": zod.string(),
+  "userType": zod.enum(['state', 'hospital', 'emergency', 'business', 'individual']),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().optional()
+})
+
+export const ExternalAuthHandshakeResponse = zod.object({
+  "token": zod.string(),
+  "expiresAt": zod.string(),
+  "vendorId": zod.number(),
+  "features": zod.array(zod.string()),
+  "vendor": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "industry": zod.string(),
+  "status": zod.string(),
+  "awajimaaUserType": zod.string().nullish()
+})
+})
+
+
+/**
+ * Called directly by the VendorHub Mobile app itself (not a third-party partner backend), after the vendor has signed in with Clerk. Requires a valid Clerk session (Authorization bearer token verified by clerkMiddleware) — identity is never self-declared by the request body. Auto-creates (or finds) the matching vendor profile keyed by the verified Clerk user id, and returns a signed JWT to use as a bearer token on all other /external/* routes.
+ * @summary Exchange a signed-in Clerk session for a VendorHub session token (first-party mobile app)
+ */
+export const ExternalAuthMobileHandshakeBody = zod.object({
+  "userType": zod.enum(['state', 'hospital', 'emergency', 'business', 'individual']),
+  "phone": zod.string().optional()
+}).describe('Identity (name\/email\/userId) is derived server-side from the caller\'s verified Clerk session, not accepted from the client. Only the vendor\'s own feature-set selection and contact phone are supplied here.\n')
+
+export const ExternalAuthMobileHandshakeResponse = zod.object({
+  "token": zod.string(),
+  "expiresAt": zod.string(),
+  "vendorId": zod.number(),
+  "features": zod.array(zod.string()),
+  "vendor": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "industry": zod.string(),
+  "status": zod.string(),
+  "awajimaaUserType": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Revoke an external session token
+ */
+export const ExternalAuthRevokeBody = zod.object({
+  "jti": zod.string()
+})
+
+export const ExternalAuthRevokeResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Get the authenticated vendor's profile + enabled features
+ */
+export const GetExternalProfileResponse = zod.object({
+  "vendor": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "industry": zod.string(),
+  "status": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "stripeEnabled": zod.boolean().optional(),
+  "paystackEnabled": zod.boolean().optional(),
+  "defaultCurrency": zod.string().optional()
+}),
+  "features": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Update the authenticated vendor's own profile
+ */
+export const UpdateExternalProfileBody = zod.object({
+  "name": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "description": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+export const UpdateExternalProfileResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "industry": zod.string(),
+  "status": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "stripeEnabled": zod.boolean().optional(),
+  "paystackEnabled": zod.boolean().optional(),
+  "defaultCurrency": zod.string().optional()
+})
+
+
+/**
+ * @summary List the authenticated vendor's orders
+ */
+export const ListExternalOrdersResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "customerName": zod.string(),
+  "customerEmail": zod.string(),
+  "customerPhone": zod.string().nullish(),
+  "status": zod.string(),
+  "totalAmount": zod.number(),
+  "notes": zod.string().nullish(),
+  "shippingAddress": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalPrice": zod.number()
+})),
+  "createdAt": zod.string()
+})
+export const ListExternalOrdersResponse = zod.array(ListExternalOrdersResponseItem)
+
+
+/**
+ * @summary List the authenticated vendor's products
+ */
+export const ListExternalProductsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.number(),
+  "costPrice": zod.number().nullish(),
+  "stockQuantity": zod.number(),
+  "lowStockThreshold": zod.number().optional(),
+  "category": zod.string(),
+  "imageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "unit": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListExternalProductsResponse = zod.array(ListExternalProductsResponseItem)
+
+
+/**
+ * @summary List the authenticated vendor's inventory transactions
+ */
+export const ListExternalInventoryResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "quantity": zod.number(),
+  "notes": zod.string().nullish(),
+  "reference": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListExternalInventoryResponse = zod.array(ListExternalInventoryResponseItem)
+
+
+/**
+ * @summary Lightweight counts summary for the vendor dashboard
+ */
+export const GetExternalAnalyticsSummaryResponse = zod.object({
+  "vendorId": zod.number(),
+  "leadsCount": zod.number(),
+  "ordersCount": zod.number(),
+  "productsCount": zod.number()
+})
+
+
+/**
+ * @summary List the authenticated vendor's payment history
+ */
+export const ListExternalPaymentsResponseItem = zod.object({
+  "id": zod.number(),
+  "orderId": zod.number().nullish(),
+  "vendorId": zod.number(),
+  "provider": zod.string(),
+  "providerReference": zod.string(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListExternalPaymentsResponse = zod.array(ListExternalPaymentsResponseItem)
+
+
+/**
+ * @summary Initialize a Stripe or Paystack checkout for the vendor's order
+ */
+export const InitializeExternalPaymentBody = zod.object({
+  "orderId": zod.number().optional(),
+  "amount": zod.number(),
+  "currency": zod.string().optional(),
+  "email": zod.string().optional(),
+  "callbackUrl": zod.string().optional(),
+  "successUrl": zod.string().optional(),
+  "cancelUrl": zod.string().optional(),
+  "description": zod.string().optional()
+})
+
+export const InitializeExternalPaymentResponse = zod.object({
+  "provider": zod.string(),
+  "paymentId": zod.number(),
+  "url": zod.string().nullable(),
+  "reference": zod.string()
 })
 
 

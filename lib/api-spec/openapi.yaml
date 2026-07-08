@@ -32,6 +32,8 @@ tags:
     description: SMS marketing campaigns
   - name: analytics
     description: Dashboard analytics
+  - name: external
+    description: Awajimaa bridge — mobile app / external partner access
 
 paths:
   /healthz:
@@ -1147,7 +1149,238 @@ paths:
               schema:
                 $ref: "#/components/schemas/SocialAnalytics"
 
+  # ─── EXTERNAL (AWAJIMAA BRIDGE) ──────────────────────────────────────────
+  /external/auth/handshake:
+    post:
+      operationId: externalAuthHandshake
+      tags: [external]
+      summary: Exchange an Awajimaa API key + user identity for a VendorHub session token
+      description: >
+        Called once when an Awajimaa user opens the VendorHub mobile app.
+        Auto-creates (or finds) the matching vendor profile and returns a
+        signed JWT to use as a bearer token on all other /external/* routes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalHandshakeInput"
+      responses:
+        "200":
+          description: Session established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalHandshakeResponse"
+        "401":
+          description: Missing or invalid API key
+        "400":
+          description: Missing or invalid fields
+
+  /external/auth/mobile-handshake:
+    post:
+      operationId: externalAuthMobileHandshake
+      tags: [external]
+      summary: Exchange a signed-in Clerk session for a VendorHub session token (first-party mobile app)
+      description: >
+        Called directly by the VendorHub Mobile app itself (not a
+        third-party partner backend), after the vendor has signed in with
+        Clerk. Requires a valid Clerk session (Authorization bearer token
+        verified by clerkMiddleware) — identity is never self-declared by
+        the request body. Auto-creates (or finds) the matching vendor
+        profile keyed by the verified Clerk user id, and returns a signed
+        JWT to use as a bearer token on all other /external/* routes.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalMobileHandshakeInput"
+      responses:
+        "200":
+          description: Session established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalHandshakeResponse"
+        "401":
+          description: Missing or invalid Clerk session
+        "400":
+          description: Missing or invalid fields
+
+  /external/auth/revoke:
+    post:
+      operationId: externalAuthRevoke
+      tags: [external]
+      summary: Revoke an external session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalRevokeInput"
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalRevokeResponse"
+
+  /external/profile:
+    get:
+      operationId: getExternalProfile
+      tags: [external]
+      summary: Get the authenticated vendor's profile + enabled features
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: Vendor profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalProfileResponse"
+    patch:
+      operationId: updateExternalProfile
+      tags: [external]
+      summary: Update the authenticated vendor's own profile
+      security: [{ externalBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalProfileUpdate"
+      responses:
+        "200":
+          description: Updated vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  /external/orders:
+    get:
+      operationId: listExternalOrders
+      tags: [external]
+      summary: List the authenticated vendor's orders
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+        "403":
+          description: Feature not available for this user type
+
+  /external/products:
+    get:
+      operationId: listExternalProducts
+      tags: [external]
+      summary: List the authenticated vendor's products
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+        "403":
+          description: Feature not available for this user type
+
+  /external/inventory:
+    get:
+      operationId: listExternalInventory
+      tags: [external]
+      summary: List the authenticated vendor's inventory transactions
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: List of inventory transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryTransaction"
+        "403":
+          description: Feature not available for this user type
+
+  /external/analytics/summary:
+    get:
+      operationId: getExternalAnalyticsSummary
+      tags: [external]
+      summary: Lightweight counts summary for the vendor dashboard
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: Summary counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalAnalyticsSummary"
+        "403":
+          description: Feature not available for this user type
+
+  /external/payments:
+    get:
+      operationId: listExternalPayments
+      tags: [external]
+      summary: List the authenticated vendor's payment history
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: List of payments, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  /external/payments/initialize:
+    post:
+      operationId: initializeExternalPayment
+      tags: [external]
+      summary: Initialize a Stripe or Paystack checkout for the vendor's order
+      security: [{ externalBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalPaymentInitializeInput"
+      responses:
+        "200":
+          description: Checkout initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPaymentInitializeResponse"
+        "503":
+          description: No payment gateway available
+
 components:
+  securitySchemes:
+    externalBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT issued by POST /external/auth/handshake
+    clerkAuth:
+      type: http
+      scheme: bearer
+      description: Clerk session token for the signed-in first-party mobile app user
+
   schemas:
     HealthStatus:
       type: object
@@ -1657,6 +1890,178 @@ components:
                 type: integer
               unitPrice:
                 type: number
+
+    # ─── PAYMENT ────────────────────────────────────────────────────────────
+    Payment:
+      type: object
+      required: [id, vendorId, provider, providerReference, amount, currency, status, createdAt]
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: ["integer", "null"]
+        vendorId:
+          type: integer
+        provider:
+          type: string
+        providerReference:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    # ─── EXTERNAL (AWAJIMAA BRIDGE) ─────────────────────────────────────────
+    ExternalRevokeInput:
+      type: object
+      required: [jti]
+      properties:
+        jti:
+          type: string
+
+    ExternalRevokeResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    ExternalHandshakeInput:
+      type: object
+      required: [userId, userType, name, email]
+      properties:
+        userId:
+          type: string
+        userType:
+          type: string
+          enum: [state, hospital, emergency, business, individual]
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    ExternalMobileHandshakeInput:
+      type: object
+      required: [userType]
+      description: >
+        Identity (name/email/userId) is derived server-side from the caller's
+        verified Clerk session, not accepted from the client. Only the
+        vendor's own feature-set selection and contact phone are supplied here.
+      properties:
+        userType:
+          type: string
+          enum: [state, hospital, emergency, business, individual]
+        phone:
+          type: string
+
+    ExternalHandshakeResponse:
+      type: object
+      required: [token, expiresAt, vendorId, features, vendor]
+      properties:
+        token:
+          type: string
+        expiresAt:
+          type: string
+        vendorId:
+          type: integer
+        features:
+          type: array
+          items:
+            type: string
+        vendor:
+          type: object
+          required: [id, name, email, industry, status]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            email:
+              type: string
+            industry:
+              type: string
+            status:
+              type: string
+            awajimaaUserType:
+              type: ["string", "null"]
+
+    ExternalProfileResponse:
+      type: object
+      required: [vendor, features]
+      properties:
+        vendor:
+          $ref: "#/components/schemas/Vendor"
+        features:
+          type: array
+          items:
+            type: string
+
+    ExternalProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        description:
+          type: string
+        logoUrl:
+          type: string
+
+    ExternalAnalyticsSummary:
+      type: object
+      required: [vendorId, leadsCount, ordersCount, productsCount]
+      properties:
+        vendorId:
+          type: integer
+        leadsCount:
+          type: integer
+        ordersCount:
+          type: integer
+        productsCount:
+          type: integer
+
+    ExternalPaymentInitializeInput:
+      type: object
+      required: [amount]
+      properties:
+        orderId:
+          type: integer
+        amount:
+          type: number
+        currency:
+          type: string
+        email:
+          type: string
+        callbackUrl:
+          type: string
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+        description:
+          type: string
+
+    ExternalPaymentInitializeResponse:
+      type: object
+      required: [provider, paymentId, url, reference]
+      properties:
+        provider:
+          type: string
+        paymentId:
+          type: integer
+        url:
+          type: ["string", "null"]
+        reference:
+          type: string
 
     OrderUpdate:
       type: object

@@ -47,7 +47,7 @@ export const requireExternalAuth: RequestHandler = (req, res, next): void => {
 
   try {
     const payload = jwt.verify(token, secret) as ExternalUser & { iat: number; exp: number };
-    if (payload.source !== "awajimaa") {
+    if (payload.source !== "awajimaa" && payload.source !== "mobile-app") {
       res.status(401).json({ error: "Invalid token source" });
       return;
     }

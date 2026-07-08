@@ -14,7 +14,7 @@
 
 import { Router } from "express";
 import { db, paymentsTable, vendorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { requireExternalAuth } from "../../middlewares/requireExternalAuth";
 import Stripe from "stripe";
 import crypto from "crypto";
@@ -25,6 +25,24 @@ router.use(requireExternalAuth);
 
 const PAYSTACK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "KES"]);
 const PAYSTACK_BASE = "https://api.paystack.co";
+
+/**
+ * GET /external/payments
+ * Lists the authenticated vendor's payment history, most recent first.
+ * Used by the mobile app for the Payments screen and dashboard summary —
+ * clients should poll this (short interval) while any payment is "pending"
+ * to reflect webhook-driven status changes in near-real-time.
+ */
+router.get("/payments", async (req, res) => {
+  const { vendorId } = req.externalUser!;
+  const payments = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.vendorId, vendorId))
+    .orderBy(desc(paymentsTable.createdAt))
+    .limit(100);
+  res.json(payments);
+});
 
 function selectProvider(
   currency: string,

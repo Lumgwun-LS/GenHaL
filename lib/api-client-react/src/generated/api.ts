@@ -29,6 +29,16 @@ import type {
   EmailCampaignInput,
   EmailCampaignStats,
   EmailCampaignUpdate,
+  ExternalAnalyticsSummary,
+  ExternalHandshakeInput,
+  ExternalHandshakeResponse,
+  ExternalMobileHandshakeInput,
+  ExternalPaymentInitializeInput,
+  ExternalPaymentInitializeResponse,
+  ExternalProfileResponse,
+  ExternalProfileUpdate,
+  ExternalRevokeInput,
+  ExternalRevokeResponse,
   GetAnalyticsOverviewParams,
   GetEmailCampaignStatsParams,
   GetInventorySummaryParams,
@@ -60,6 +70,7 @@ import type {
   OrderInput,
   OrderUpdate,
   OrdersSummary,
+  Payment,
   Post,
   PostInput,
   PostUpdate,
@@ -4355,4 +4366,818 @@ export function useGetSocialAnalytics<TData = Awaited<ReturnType<typeof getSocia
 
 
 
+
+export const getExternalAuthHandshakeUrl = () => {
+
+
+
+
+  return `/api/external/auth/handshake`
+}
+
+/**
+ * Called once when an Awajimaa user opens the VendorHub mobile app. Auto-creates (or finds) the matching vendor profile and returns a signed JWT to use as a bearer token on all other /external/* routes.
+ * @summary Exchange an Awajimaa API key + user identity for a VendorHub session token
+ */
+export const externalAuthHandshake = async (externalHandshakeInput: ExternalHandshakeInput, options?: RequestInit): Promise<ExternalHandshakeResponse> => {
+
+  return customFetch<ExternalHandshakeResponse>(getExternalAuthHandshakeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalHandshakeInput)
+  }
+);}
+
+
+
+
+export const getExternalAuthHandshakeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthHandshake>>, TError,{data: BodyType<ExternalHandshakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof externalAuthHandshake>>, TError,{data: BodyType<ExternalHandshakeInput>}, TContext> => {
+
+const mutationKey = ['externalAuthHandshake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof externalAuthHandshake>>, {data: BodyType<ExternalHandshakeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  externalAuthHandshake(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExternalAuthHandshakeMutationResult = NonNullable<Awaited<ReturnType<typeof externalAuthHandshake>>>
+    export type ExternalAuthHandshakeMutationBody = BodyType<ExternalHandshakeInput>
+    export type ExternalAuthHandshakeMutationError = ErrorType<void>
+
+    /**
+ * @summary Exchange an Awajimaa API key + user identity for a VendorHub session token
+ */
+export const useExternalAuthHandshake = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthHandshake>>, TError,{data: BodyType<ExternalHandshakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof externalAuthHandshake>>,
+        TError,
+        {data: BodyType<ExternalHandshakeInput>},
+        TContext
+      > => {
+      return useMutation(getExternalAuthHandshakeMutationOptions(options));
+    }
+
+export const getExternalAuthMobileHandshakeUrl = () => {
+
+
+
+
+  return `/api/external/auth/mobile-handshake`
+}
+
+/**
+ * Called directly by the VendorHub Mobile app itself (not a third-party partner backend), after the vendor has signed in with Clerk. Requires a valid Clerk session (Authorization bearer token verified by clerkMiddleware) — identity is never self-declared by the request body. Auto-creates (or finds) the matching vendor profile keyed by the verified Clerk user id, and returns a signed JWT to use as a bearer token on all other /external/* routes.
+ * @summary Exchange a signed-in Clerk session for a VendorHub session token (first-party mobile app)
+ */
+export const externalAuthMobileHandshake = async (externalMobileHandshakeInput: ExternalMobileHandshakeInput, options?: RequestInit): Promise<ExternalHandshakeResponse> => {
+
+  return customFetch<ExternalHandshakeResponse>(getExternalAuthMobileHandshakeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalMobileHandshakeInput)
+  }
+);}
+
+
+
+
+export const getExternalAuthMobileHandshakeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthMobileHandshake>>, TError,{data: BodyType<ExternalMobileHandshakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof externalAuthMobileHandshake>>, TError,{data: BodyType<ExternalMobileHandshakeInput>}, TContext> => {
+
+const mutationKey = ['externalAuthMobileHandshake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof externalAuthMobileHandshake>>, {data: BodyType<ExternalMobileHandshakeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  externalAuthMobileHandshake(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExternalAuthMobileHandshakeMutationResult = NonNullable<Awaited<ReturnType<typeof externalAuthMobileHandshake>>>
+    export type ExternalAuthMobileHandshakeMutationBody = BodyType<ExternalMobileHandshakeInput>
+    export type ExternalAuthMobileHandshakeMutationError = ErrorType<void>
+
+    /**
+ * @summary Exchange a signed-in Clerk session for a VendorHub session token (first-party mobile app)
+ */
+export const useExternalAuthMobileHandshake = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthMobileHandshake>>, TError,{data: BodyType<ExternalMobileHandshakeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof externalAuthMobileHandshake>>,
+        TError,
+        {data: BodyType<ExternalMobileHandshakeInput>},
+        TContext
+      > => {
+      return useMutation(getExternalAuthMobileHandshakeMutationOptions(options));
+    }
+
+export const getExternalAuthRevokeUrl = () => {
+
+
+
+
+  return `/api/external/auth/revoke`
+}
+
+/**
+ * @summary Revoke an external session token
+ */
+export const externalAuthRevoke = async (externalRevokeInput: ExternalRevokeInput, options?: RequestInit): Promise<ExternalRevokeResponse> => {
+
+  return customFetch<ExternalRevokeResponse>(getExternalAuthRevokeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalRevokeInput)
+  }
+);}
+
+
+
+
+export const getExternalAuthRevokeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthRevoke>>, TError,{data: BodyType<ExternalRevokeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof externalAuthRevoke>>, TError,{data: BodyType<ExternalRevokeInput>}, TContext> => {
+
+const mutationKey = ['externalAuthRevoke'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof externalAuthRevoke>>, {data: BodyType<ExternalRevokeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  externalAuthRevoke(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExternalAuthRevokeMutationResult = NonNullable<Awaited<ReturnType<typeof externalAuthRevoke>>>
+    export type ExternalAuthRevokeMutationBody = BodyType<ExternalRevokeInput>
+    export type ExternalAuthRevokeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke an external session token
+ */
+export const useExternalAuthRevoke = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof externalAuthRevoke>>, TError,{data: BodyType<ExternalRevokeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof externalAuthRevoke>>,
+        TError,
+        {data: BodyType<ExternalRevokeInput>},
+        TContext
+      > => {
+      return useMutation(getExternalAuthRevokeMutationOptions(options));
+    }
+
+export const getGetExternalProfileUrl = () => {
+
+
+
+
+  return `/api/external/profile`
+}
+
+/**
+ * @summary Get the authenticated vendor's profile + enabled features
+ */
+export const getExternalProfile = async ( options?: RequestInit): Promise<ExternalProfileResponse> => {
+
+  return customFetch<ExternalProfileResponse>(getGetExternalProfileUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExternalProfileQueryKey = () => {
+    return [
+    `/api/external/profile`
+    ] as const;
+    }
+
+
+export const getGetExternalProfileQueryOptions = <TData = Awaited<ReturnType<typeof getExternalProfile>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExternalProfileQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExternalProfile>>> = ({ signal }) => getExternalProfile({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExternalProfile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExternalProfileQueryResult = NonNullable<Awaited<ReturnType<typeof getExternalProfile>>>
+export type GetExternalProfileQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated vendor's profile + enabled features
+ */
+
+export function useGetExternalProfile<TData = Awaited<ReturnType<typeof getExternalProfile>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExternalProfileQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateExternalProfileUrl = () => {
+
+
+
+
+  return `/api/external/profile`
+}
+
+/**
+ * @summary Update the authenticated vendor's own profile
+ */
+export const updateExternalProfile = async (externalProfileUpdate: ExternalProfileUpdate, options?: RequestInit): Promise<Vendor> => {
+
+  return customFetch<Vendor>(getUpdateExternalProfileUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalProfileUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateExternalProfileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalProfile>>, TError,{data: BodyType<ExternalProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExternalProfile>>, TError,{data: BodyType<ExternalProfileUpdate>}, TContext> => {
+
+const mutationKey = ['updateExternalProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExternalProfile>>, {data: BodyType<ExternalProfileUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateExternalProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateExternalProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateExternalProfile>>>
+    export type UpdateExternalProfileMutationBody = BodyType<ExternalProfileUpdate>
+    export type UpdateExternalProfileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the authenticated vendor's own profile
+ */
+export const useUpdateExternalProfile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalProfile>>, TError,{data: BodyType<ExternalProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateExternalProfile>>,
+        TError,
+        {data: BodyType<ExternalProfileUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateExternalProfileMutationOptions(options));
+    }
+
+export const getListExternalOrdersUrl = () => {
+
+
+
+
+  return `/api/external/orders`
+}
+
+/**
+ * @summary List the authenticated vendor's orders
+ */
+export const listExternalOrders = async ( options?: RequestInit): Promise<Order[]> => {
+
+  return customFetch<Order[]>(getListExternalOrdersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalOrdersQueryKey = () => {
+    return [
+    `/api/external/orders`
+    ] as const;
+    }
+
+
+export const getListExternalOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listExternalOrders>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalOrdersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalOrders>>> = ({ signal }) => listExternalOrders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalOrders>>>
+export type ListExternalOrdersQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the authenticated vendor's orders
+ */
+
+export function useListExternalOrders<TData = Awaited<ReturnType<typeof listExternalOrders>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalOrdersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListExternalProductsUrl = () => {
+
+
+
+
+  return `/api/external/products`
+}
+
+/**
+ * @summary List the authenticated vendor's products
+ */
+export const listExternalProducts = async ( options?: RequestInit): Promise<Product[]> => {
+
+  return customFetch<Product[]>(getListExternalProductsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalProductsQueryKey = () => {
+    return [
+    `/api/external/products`
+    ] as const;
+    }
+
+
+export const getListExternalProductsQueryOptions = <TData = Awaited<ReturnType<typeof listExternalProducts>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalProductsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalProducts>>> = ({ signal }) => listExternalProducts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalProducts>>>
+export type ListExternalProductsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the authenticated vendor's products
+ */
+
+export function useListExternalProducts<TData = Awaited<ReturnType<typeof listExternalProducts>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalProductsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListExternalInventoryUrl = () => {
+
+
+
+
+  return `/api/external/inventory`
+}
+
+/**
+ * @summary List the authenticated vendor's inventory transactions
+ */
+export const listExternalInventory = async ( options?: RequestInit): Promise<InventoryTransaction[]> => {
+
+  return customFetch<InventoryTransaction[]>(getListExternalInventoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalInventoryQueryKey = () => {
+    return [
+    `/api/external/inventory`
+    ] as const;
+    }
+
+
+export const getListExternalInventoryQueryOptions = <TData = Awaited<ReturnType<typeof listExternalInventory>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalInventoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalInventory>>> = ({ signal }) => listExternalInventory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalInventory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalInventoryQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalInventory>>>
+export type ListExternalInventoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the authenticated vendor's inventory transactions
+ */
+
+export function useListExternalInventory<TData = Awaited<ReturnType<typeof listExternalInventory>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalInventoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetExternalAnalyticsSummaryUrl = () => {
+
+
+
+
+  return `/api/external/analytics/summary`
+}
+
+/**
+ * @summary Lightweight counts summary for the vendor dashboard
+ */
+export const getExternalAnalyticsSummary = async ( options?: RequestInit): Promise<ExternalAnalyticsSummary> => {
+
+  return customFetch<ExternalAnalyticsSummary>(getGetExternalAnalyticsSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExternalAnalyticsSummaryQueryKey = () => {
+    return [
+    `/api/external/analytics/summary`
+    ] as const;
+    }
+
+
+export const getGetExternalAnalyticsSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getExternalAnalyticsSummary>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalAnalyticsSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExternalAnalyticsSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExternalAnalyticsSummary>>> = ({ signal }) => getExternalAnalyticsSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExternalAnalyticsSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExternalAnalyticsSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getExternalAnalyticsSummary>>>
+export type GetExternalAnalyticsSummaryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Lightweight counts summary for the vendor dashboard
+ */
+
+export function useGetExternalAnalyticsSummary<TData = Awaited<ReturnType<typeof getExternalAnalyticsSummary>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalAnalyticsSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExternalAnalyticsSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListExternalPaymentsUrl = () => {
+
+
+
+
+  return `/api/external/payments`
+}
+
+/**
+ * @summary List the authenticated vendor's payment history
+ */
+export const listExternalPayments = async ( options?: RequestInit): Promise<Payment[]> => {
+
+  return customFetch<Payment[]>(getListExternalPaymentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalPaymentsQueryKey = () => {
+    return [
+    `/api/external/payments`
+    ] as const;
+    }
+
+
+export const getListExternalPaymentsQueryOptions = <TData = Awaited<ReturnType<typeof listExternalPayments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalPayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalPaymentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalPayments>>> = ({ signal }) => listExternalPayments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalPayments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalPaymentsQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalPayments>>>
+export type ListExternalPaymentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated vendor's payment history
+ */
+
+export function useListExternalPayments<TData = Awaited<ReturnType<typeof listExternalPayments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalPayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalPaymentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInitializeExternalPaymentUrl = () => {
+
+
+
+
+  return `/api/external/payments/initialize`
+}
+
+/**
+ * @summary Initialize a Stripe or Paystack checkout for the vendor's order
+ */
+export const initializeExternalPayment = async (externalPaymentInitializeInput: ExternalPaymentInitializeInput, options?: RequestInit): Promise<ExternalPaymentInitializeResponse> => {
+
+  return customFetch<ExternalPaymentInitializeResponse>(getInitializeExternalPaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalPaymentInitializeInput)
+  }
+);}
+
+
+
+
+export const getInitializeExternalPaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeExternalPayment>>, TError,{data: BodyType<ExternalPaymentInitializeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeExternalPayment>>, TError,{data: BodyType<ExternalPaymentInitializeInput>}, TContext> => {
+
+const mutationKey = ['initializeExternalPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeExternalPayment>>, {data: BodyType<ExternalPaymentInitializeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  initializeExternalPayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeExternalPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof initializeExternalPayment>>>
+    export type InitializeExternalPaymentMutationBody = BodyType<ExternalPaymentInitializeInput>
+    export type InitializeExternalPaymentMutationError = ErrorType<void>
+
+    /**
+ * @summary Initialize a Stripe or Paystack checkout for the vendor's order
+ */
+export const useInitializeExternalPayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeExternalPayment>>, TError,{data: BodyType<ExternalPaymentInitializeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializeExternalPayment>>,
+        TError,
+        {data: BodyType<ExternalPaymentInitializeInput>},
+        TContext
+      > => {
+      return useMutation(getInitializeExternalPaymentMutationOptions(options));
+    }
 

@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/vendorhub-mobile/"
+title = "VendorHub Mobile"
+version = "1.0.0"
+id = "artifacts/vendorhub-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/vendorhub-mobile/" ]
+localPort = 19306
+
+[services.development]
+run = "pnpm --filter @workspace/vendorhub-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vendorhub-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/vendorhub-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "19306"
+BASE_PATH = "/vendorhub-mobile/"

@@ -1,3 +1,8 @@
 - [VendorHub stack decisions](vendorhub-stack.md) — multivendor platform: React+Vite frontend, Express API, Drizzle+Postgres, Clerk auth, all routes auth-gated via requireAuth middleware.
 - [Drizzle numeric/timestamp types](drizzle-type-coercions.md) — numeric columns need string coercion and timestamp columns need Date objects before Drizzle insert/update.
 - [DB package build requirement](db-build-requirement.md) — @workspace/db must be rebuilt (tsc) after schema changes or dist/schema/index.d.ts stays stale and api-server typecheck breaks.
+- [Orval zod duplicate export](orval-zod-duplicate-export.md) — inline (unnamed) request/response bodies in openapi.yaml cause TS2308 ambiguous-export after codegen; give them named components.schemas entries instead.
+- [Mobile auth security rule](mobile-auth-security.md) — mobile-handshake identity must come from a verified provider (Clerk) on the server, never self-asserted request fields; two-token pattern: Clerk token for handshake only, app JWT for all other /external/* calls.
+- [Dev DB schema drift](dev-db-schema-drift.md) — "column/relation does not exist" against dev DB despite matching Drizzle schema means drizzle-kit push wasn't run; apply DDL directly via executeSql for dev-only drift.
+- [Mobile brand palette](mobile-brand-palette.md) — VendorHub Mobile uses #7F50FF (primary/violet) and #FF7F50 (accent/coral); GradientButton and hero sections use LinearGradient between these two; do not revert to old blue palette.
+- [Reanimated + entering conflict](reanimated-entering-conflict.md) — applying both entering= prop and useAnimatedStyle with transform on the same Animated.View causes a web warning; separate them into nested views (entering on outer, useAnimatedStyle on inner).

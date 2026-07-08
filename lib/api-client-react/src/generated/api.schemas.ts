@@ -289,6 +289,122 @@ export interface OrderInput {
   items: OrderInputItemsItem[];
 }
 
+export interface Payment {
+  id: number;
+  /** @nullable */
+  orderId?: number | null;
+  vendorId: number;
+  provider: string;
+  providerReference: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ExternalRevokeInput {
+  jti: string;
+}
+
+export interface ExternalRevokeResponse {
+  ok: boolean;
+}
+
+export type ExternalHandshakeInputUserType = typeof ExternalHandshakeInputUserType[keyof typeof ExternalHandshakeInputUserType];
+
+
+export const ExternalHandshakeInputUserType = {
+  state: 'state',
+  hospital: 'hospital',
+  emergency: 'emergency',
+  business: 'business',
+  individual: 'individual',
+} as const;
+
+export interface ExternalHandshakeInput {
+  userId: string;
+  userType: ExternalHandshakeInputUserType;
+  name: string;
+  email: string;
+  phone?: string;
+}
+
+export type ExternalMobileHandshakeInputUserType = typeof ExternalMobileHandshakeInputUserType[keyof typeof ExternalMobileHandshakeInputUserType];
+
+
+export const ExternalMobileHandshakeInputUserType = {
+  state: 'state',
+  hospital: 'hospital',
+  emergency: 'emergency',
+  business: 'business',
+  individual: 'individual',
+} as const;
+
+/**
+ * Identity (name/email/userId) is derived server-side from the caller's verified Clerk session, not accepted from the client. Only the vendor's own feature-set selection and contact phone are supplied here.
+ */
+export interface ExternalMobileHandshakeInput {
+  userType: ExternalMobileHandshakeInputUserType;
+  phone?: string;
+}
+
+export type ExternalHandshakeResponseVendor = {
+  id: number;
+  name: string;
+  email: string;
+  industry: string;
+  status: string;
+  /** @nullable */
+  awajimaaUserType?: string | null;
+};
+
+export interface ExternalHandshakeResponse {
+  token: string;
+  expiresAt: string;
+  vendorId: number;
+  features: string[];
+  vendor: ExternalHandshakeResponseVendor;
+}
+
+export interface ExternalProfileResponse {
+  vendor: Vendor;
+  features: string[];
+}
+
+export interface ExternalProfileUpdate {
+  name?: string;
+  phone?: string;
+  address?: string;
+  description?: string;
+  logoUrl?: string;
+}
+
+export interface ExternalAnalyticsSummary {
+  vendorId: number;
+  leadsCount: number;
+  ordersCount: number;
+  productsCount: number;
+}
+
+export interface ExternalPaymentInitializeInput {
+  orderId?: number;
+  amount: number;
+  currency?: string;
+  email?: string;
+  callbackUrl?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+  description?: string;
+}
+
+export interface ExternalPaymentInitializeResponse {
+  provider: string;
+  paymentId: number;
+  /** @nullable */
+  url: string | null;
+  reference: string;
+}
+
 export interface OrderUpdate {
   status?: string;
   notes?: string;
