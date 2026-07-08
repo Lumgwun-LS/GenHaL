@@ -2,6 +2,7 @@ import { useGetVendor, useListSocialAccounts, useListOrders, getGetVendorQueryKe
 import { useParams, Link } from "wouter";
 import { useState, useEffect } from "react";
 import VendorPaymentAccounts from "@/components/vendor-payment-accounts";
+import UpgradePlanCard from "@/components/upgrade-plan-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -26,8 +28,9 @@ const CURRENCIES = [
 export default function VendorDetail() {
   const params = useParams();
   const id = parseInt(params.id || "0");
+  const queryClient = useQueryClient();
 
-  const { data: vendor, isLoading } = useGetVendor(id, { query: { enabled: !!id, queryKey: getGetVendorQueryKey(id) } });
+  const { data: vendor, isLoading, refetch: refetchVendor } = useGetVendor(id, { query: { enabled: !!id, queryKey: getGetVendorQueryKey(id) } });
   const { data: socials } = useListSocialAccounts({ vendorId: id });
   const { data: orders } = useListOrders({ vendorId: id });
 
@@ -37,6 +40,24 @@ export default function VendorDetail() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Handle Stripe Checkout return — show a toast and refresh vendor data
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgrade = params.get("upgrade");
+    const tier = params.get("tier");
+    if (upgrade === "success" && tier) {
+      toast.success(`🎉 You're now on the ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan! Your payment accounts are now unlocked.`);
+      // Remove params from URL without a full reload
+      const clean = window.location.pathname;
+      window.history.replaceState({}, "", clean);
+      // Invalidate vendor query so the new tier is reflected immediately
+      void queryClient.invalidateQueries({ queryKey: getGetVendorQueryKey(id) });
+    } else if (upgrade === "cancelled") {
+      toast.info("Upgrade cancelled — no charge was made.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (vendor) {
@@ -307,6 +328,15 @@ export default function VendorDetail() {
           </Card>
 
           <VendorPaymentAccounts vendorId={id} />
+
+          {/* Self-service plan upgrade — visible when not on enterprise */}
+          {vendor.subscriptionTier !== "enterprise" && (
+            <UpgradePlanCard
+              vendorId={id}
+              currentTier={vendor.subscriptionTier ?? "free"}
+              onUpgradeInitiated={() => void refetchVendor()}
+            />
+          )}
         </div>
       </div>
     </div>

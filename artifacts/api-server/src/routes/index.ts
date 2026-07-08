@@ -19,6 +19,7 @@ import vendorPaymentCredentialsRouter from "./vendor-payment-credentials";
 import adminRouter from "./admin";
 import notificationsRouter from "./notifications";
 import voiceCampaignsRouter from "./voice-campaigns";
+import subscriptionUpgradeRouter from "./subscription-upgrade";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -51,6 +52,7 @@ router.use(paymentsRouter);
 router.use(vendorPaymentCredentialsRouter);
 router.use(notificationsRouter);
 router.use(voiceCampaignsRouter);
+router.use(subscriptionUpgradeRouter);
 router.use(adminRouter);
 
 export default router;

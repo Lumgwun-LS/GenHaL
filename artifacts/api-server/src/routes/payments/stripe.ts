@@ -2,7 +2,7 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { resolveStripeKey } from "../../lib/vendor-keys";
+import { resolveStripeKey, canAddPaymentKeys } from "../../lib/vendor-keys";
 
 const router = Router();
 
@@ -126,19 +126,49 @@ router.post(
       const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
       const vendorId = session.metadata?.vendorId ? parseInt(session.metadata.vendorId) : null;
 
-      await db
-        .update(paymentsTable)
-        .set({ status: "paid", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, session.id));
+      // ── Subscription upgrade path ────────────────────────────────────────
+      const upgradeVendorId = session.metadata?.upgradeVendorId
+        ? parseInt(session.metadata.upgradeVendorId)
+        : null;
+      const upgradeTier = session.metadata?.upgradeTier ?? null;
 
-      if (orderId) {
+      if (upgradeVendorId && upgradeTier) {
+        const VALID_TIERS = ["starter", "pro", "enterprise"];
+        if (VALID_TIERS.includes(upgradeTier)) {
+          const [updated] = await db
+            .update(vendorsTable)
+            .set({ subscriptionTier: upgradeTier, updatedAt: new Date() })
+            .where(eq(vendorsTable.id, upgradeVendorId))
+            .returning({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier });
+
+          if (updated) {
+            const featureUnlocked = canAddPaymentKeys({ subscriptionTier: upgradeTier, verificationLevel: "unverified" } as Parameters<typeof canAddPaymentKeys>[0]);
+            console.info(
+              `[stripe webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} featureUnlocked=${featureUnlocked} session=${session.id}`,
+            );
+          } else {
+            console.warn(`[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`);
+          }
+        } else {
+          console.warn(`[stripe webhook] subscription upgrade — invalid tier '${upgradeTier}' in session=${session.id}`);
+        }
+        // Subscription upgrades don't have a paymentsTable row — skip order/payment updates.
+      } else {
+        // ── Regular order checkout path ────────────────────────────────────
         await db
-          .update(ordersTable)
-          .set({ paymentStatus: "paid", updatedAt: new Date() })
-          .where(eq(ordersTable.id, orderId));
-      }
+          .update(paymentsTable)
+          .set({ status: "paid", updatedAt: new Date() })
+          .where(eq(paymentsTable.providerReference, session.id));
 
-      console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId} vendor=${vendorId}`);
+        if (orderId) {
+          await db
+            .update(ordersTable)
+            .set({ paymentStatus: "paid", updatedAt: new Date() })
+            .where(eq(ordersTable.id, orderId));
+        }
+
+        console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId} vendor=${vendorId}`);
+      }
     }
 
     res.json({ received: true });
