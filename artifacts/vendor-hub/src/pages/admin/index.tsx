@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
 
@@ -292,9 +293,28 @@ export default function AdminPanel() {
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
         <TabsContent value="vendors">
           <Card>
-            <CardHeader>
-              <CardTitle>All Vendors</CardTitle>
-              <CardDescription>Adjust subscription tiers and verification levels. Changes take effect immediately.</CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle>All Vendors</CardTitle>
+                <CardDescription>Adjust subscription tiers and verification levels. Changes take effect immediately.</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-2"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = `${BASE_URL}/api/admin/vendors/export`;
+                  a.download = "";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  toast.success("CSV download started");
+                }}
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (

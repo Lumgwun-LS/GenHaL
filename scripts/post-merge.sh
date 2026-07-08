@@ -1,4 +1,10 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile
-pnpm --filter db push
+
+# Post-merge setup: install dependencies and rebuild shared packages.
+# Runs automatically after every task merge. Must be idempotent and non-interactive.
+
+pnpm install
+
+# Rebuild the DB package so api-server typecheck picks up schema changes
+pnpm --filter @workspace/db run build

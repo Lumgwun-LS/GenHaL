@@ -78,6 +78,48 @@ router.get("/admin/vendors", async (req, res): Promise<void> => {
   res.json(enriched);
 });
 
+// ─── GET /admin/vendors/export ────────────────────────────────────────────────
+
+router.get("/admin/vendors/export", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const vendors = await db.select().from(vendorsTable).orderBy(vendorsTable.name);
+
+  const HEADERS = [
+    "ID", "Name", "Industry", "Status", "Email", "Phone", "Website",
+    "Address", "Subscription Tier", "Verification Level",
+    "Stripe Enabled", "Paystack Enabled", "Default Currency",
+    "Voice Call Opt-Out", "Date of Birth", "Created At", "Updated At",
+  ];
+
+  function csvCell(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    const s = v instanceof Date ? v.toISOString() : String(v);
+    // Wrap in quotes if the value contains a comma, quote, or newline
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  const rows = vendors.map((v) => [
+    v.id, v.name, v.industry, v.status, v.email ?? "",
+    v.phone ?? "", v.website ?? "", v.address ?? "",
+    v.subscriptionTier, v.verificationLevel,
+    v.stripeEnabled, v.paystackEnabled, v.defaultCurrency ?? "",
+    v.voiceCallOptOut, v.dateOfBirth ?? "", v.createdAt, v.updatedAt,
+  ].map(csvCell).join(","));
+
+  const csv = [HEADERS.join(","), ...rows].join("\r\n");
+  const filename = `vendors-export-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(csv);
+});
+
 // ─── GET /admin/birthday-logs ─────────────────────────────────────────────────
 
 router.get("/admin/birthday-logs", async (req, res): Promise<void> => {
