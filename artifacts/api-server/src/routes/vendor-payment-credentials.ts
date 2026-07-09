@@ -10,7 +10,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, adminAuditLogTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, adminAuditLogTable, vendorNotificationsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, maskEncryptedKey } from "../lib/encryption";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -347,6 +347,26 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     }
     if (auditRows.length > 0) {
       await tx.insert(adminAuditLogTable).values(auditRows);
+    }
+
+    // Notify the vendor in-app about each field that actually changed
+    const notificationRows: { vendorId: number; type: string; message: string }[] = [];
+    if (subscriptionTier && subscriptionTier !== before.subscriptionTier) {
+      notificationRows.push({
+        vendorId: id,
+        type: "tier_change",
+        message: `Your subscription tier changed from ${before.subscriptionTier} to ${subscriptionTier}.`,
+      });
+    }
+    if (verificationLevel && verificationLevel !== before.verificationLevel) {
+      notificationRows.push({
+        vendorId: id,
+        type: "tier_change",
+        message: `Your verification level changed from ${before.verificationLevel} to ${verificationLevel}.`,
+      });
+    }
+    if (notificationRows.length > 0) {
+      await tx.insert(vendorNotificationsTable).values(notificationRows);
     }
 
     return vendor;

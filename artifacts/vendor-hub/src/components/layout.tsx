@@ -21,6 +21,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { NotificationBell } from "./notification-bell";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -109,6 +110,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">My Account</p>
           </div>
+          <NotificationBell />
         </div>
       </div>
 
