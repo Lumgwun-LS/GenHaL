@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
@@ -157,6 +157,23 @@ function KeyStatus({ hasKey, testPassed, label }: { hasKey: boolean; testPassed:
   );
 }
 
+type AuditLogEntry = {
+  id: number;
+  adminUserId: string;
+  vendorId: number;
+  vendorName: string | null;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  changedAt: string;
+};
+
+async function fetchAuditLog(): Promise<AuditLogEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/audit-log`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load audit log");
+  return res.json() as Promise<AuditLogEntry[]>;
+}
+
 type BirthdayLog = {
   id: number;
   vendorId: number;
@@ -225,8 +242,16 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
+  const { data: auditLog, isLoading: auditLoading } = useQuery({
+    queryKey: ["admin-audit-log"],
+    queryFn: fetchAuditLog,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
+    qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
   }
 
   if (!isAdmin && !isLoading) return <Redirect to="/dashboard" />;
@@ -287,6 +312,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Phone className="w-4 h-4" /> Voice Calls
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" /> Audit Log
           </TabsTrigger>
         </TabsList>
 
@@ -534,6 +562,71 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── Audit Log tab ─────────────────────────────────────────── */}
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary" /> Tier Change Audit Log
+              </CardTitle>
+              <CardDescription>
+                The last 50 changes to vendor subscription tiers and verification levels. Read-only — entries cannot be deleted.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {auditLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading audit log…</div>
+              ) : !auditLog?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No changes recorded yet.</p>
+                  <p className="text-xs mt-1">Every tier or verification level change made from this panel will appear here.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Field</TableHead>
+                      <TableHead>Change</TableHead>
+                      <TableHead>Admin</TableHead>
+                      <TableHead className="text-right">When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditLog.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {entry.field === "subscriptionTier" ? "Tier" : "Verification"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <Badge variant="default" className="text-xs capitalize">{entry.newValue}</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {new Date(entry.changedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

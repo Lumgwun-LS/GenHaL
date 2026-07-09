@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -160,6 +160,32 @@ router.get("/admin/voice-call-logs", async (req, res): Promise<void> => {
     .limit(300);
 
   res.json(logs);
+});
+
+// ─── GET /admin/audit-log ─────────────────────────────────────────────────────
+
+router.get("/admin/audit-log", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const entries = await db
+    .select({
+      id: adminAuditLogTable.id,
+      adminUserId: adminAuditLogTable.adminUserId,
+      vendorId: adminAuditLogTable.vendorId,
+      vendorName: vendorsTable.name,
+      field: adminAuditLogTable.field,
+      oldValue: adminAuditLogTable.oldValue,
+      newValue: adminAuditLogTable.newValue,
+      changedAt: adminAuditLogTable.changedAt,
+    })
+    .from(adminAuditLogTable)
+    .leftJoin(vendorsTable, eq(adminAuditLogTable.vendorId, vendorsTable.id))
+    .orderBy(desc(adminAuditLogTable.changedAt))
+    .limit(50);
+
+  res.json(entries);
 });
 
 // ─── GET /admin/voice-status ──────────────────────────────────────────────────

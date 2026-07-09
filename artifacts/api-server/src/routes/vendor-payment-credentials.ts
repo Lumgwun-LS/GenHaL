@@ -10,7 +10,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, adminAuditLogTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, maskEncryptedKey } from "../lib/encryption";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -314,23 +314,51 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     return;
   }
 
-  const [vendor] = await db
-    .update(vendorsTable)
-    .set({
-      ...(subscriptionTier && { subscriptionTier }),
-      ...(verificationLevel && { verificationLevel }),
-      updatedAt: new Date(),
-    })
-    .where(eq(vendorsTable.id, id))
-    .returning();
+  // Execute the vendor update + audit log insert atomically.
+  // If either step fails the entire transaction rolls back — no silent partial commits.
+  const result = await db.transaction(async (tx) => {
+    // Read old values inside the transaction for a consistent snapshot
+    const [before] = await tx
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id))
+      .limit(1);
+    if (!before) return null;
 
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+    const [vendor] = await tx
+      .update(vendorsTable)
+      .set({
+        ...(subscriptionTier && { subscriptionTier }),
+        ...(verificationLevel && { verificationLevel }),
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorsTable.id, id))
+      .returning();
+
+    if (!vendor) return null;
+
+    // Write one audit row per field that actually changed
+    const auditRows: { adminUserId: string; vendorId: number; field: string; oldValue: string; newValue: string }[] = [];
+    if (subscriptionTier && subscriptionTier !== before.subscriptionTier) {
+      auditRows.push({ adminUserId: userId, vendorId: id, field: "subscriptionTier", oldValue: before.subscriptionTier, newValue: subscriptionTier });
+    }
+    if (verificationLevel && verificationLevel !== before.verificationLevel) {
+      auditRows.push({ adminUserId: userId, vendorId: id, field: "verificationLevel", oldValue: before.verificationLevel, newValue: verificationLevel });
+    }
+    if (auditRows.length > 0) {
+      await tx.insert(adminAuditLogTable).values(auditRows);
+    }
+
+    return vendor;
+  });
+
+  if (!result) { res.status(404).json({ error: "Vendor not found" }); return; }
 
   res.json({
-    id: vendor.id,
-    subscriptionTier: vendor.subscriptionTier,
-    verificationLevel: vendor.verificationLevel,
-    featureUnlocked: canAddPaymentKeys(vendor),
+    id: result.id,
+    subscriptionTier: result.subscriptionTier,
+    verificationLevel: result.verificationLevel,
+    featureUnlocked: canAddPaymentKeys(result),
   });
 });
 
