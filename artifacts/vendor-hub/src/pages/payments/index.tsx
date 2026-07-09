@@ -173,6 +173,26 @@ export default function Payments() {
       }));
   })();
 
+  // Build chart data: webhook event volume by day (processed vs duplicate/unprocessed)
+  const webhookChartData = (() => {
+    if (!webhookData?.events) return [];
+    const dayMap: Record<string, { processed: number; duplicate: number }> = {};
+    for (const e of webhookData.events) {
+      const day = new Date(e.receivedAt).toISOString().split("T")[0]!;
+      if (!dayMap[day]) dayMap[day] = { processed: 0, duplicate: 0 };
+      if (e.processedAt) dayMap[day]!.processed += 1;
+      else dayMap[day]!.duplicate += 1;
+    }
+    return Object.entries(dayMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-14)
+      .map(([day, vals]) => ({
+        day: format(new Date(day), "MMM d"),
+        Processed: vals.processed,
+        Duplicate: vals.duplicate,
+      }));
+  })();
+
   const summary = data?.summary;
 
   const filteredWebhookEvents = (webhookData?.events ?? []).filter((e) => {
@@ -268,6 +288,34 @@ export default function Payments() {
                 <Legend />
                 <Bar dataKey="Stripe" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Paystack" fill="#0d9488" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Webhook volume chart */}
+      {webhookChartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">Webhook Event Volume (Last 14 Days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={webhookChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="Processed" stackId="webhooks" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Duplicate" stackId="webhooks" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
