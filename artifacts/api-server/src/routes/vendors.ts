@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc } from "drizzle-orm";
 import { db, vendorsTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
+import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import {
   ListVendorsQueryParams,
   CreateVendorBody,
@@ -116,6 +117,10 @@ router.patch("/vendors/:id", async (req, res): Promise<void> => {
 
   const parsed = UpdateVendorBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (parsed.data.brandTheme !== undefined && !BRAND_THEME_IDS.includes(parsed.data.brandTheme)) {
+    res.status(400).json({ error: `brandTheme must be one of: ${BRAND_THEME_IDS.join(", ")}` });
+    return;
+  }
   const [vendor] = await db.update(vendorsTable).set(parsed.data).where(eq(vendorsTable.id, params.data.id)).returning();
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   res.json(UpdateVendorResponse.parse(vendor));

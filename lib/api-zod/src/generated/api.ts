@@ -41,7 +41,8 @@ export const ListVendorsResponseItem = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
 
@@ -75,7 +76,8 @@ export const CreateVendorResponse = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 
 
@@ -115,7 +117,8 @@ export const GetVendorResponse = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 
 
@@ -135,7 +138,8 @@ export const UpdateVendorBody = zod.object({
   "address": zod.string().optional(),
   "logoUrl": zod.string().optional(),
   "description": zod.string().optional(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -153,7 +157,8 @@ export const UpdateVendorResponse = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 
 
@@ -1509,7 +1514,8 @@ export const GetExternalProfileResponse = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 }),
   "features": zod.array(zod.string())
 })
@@ -1541,7 +1547,8 @@ export const UpdateExternalProfileResponse = zod.object({
   "createdAt": zod.string(),
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
-  "defaultCurrency": zod.string().optional()
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional()
 })
 
 

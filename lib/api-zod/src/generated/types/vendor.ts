@@ -28,4 +28,5 @@ export interface Vendor {
   stripeEnabled?: boolean;
   paystackEnabled?: boolean;
   defaultCurrency?: string;
+  brandTheme?: string;
 }

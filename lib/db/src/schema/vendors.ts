@@ -13,6 +13,8 @@ export const vendorsTable = pgTable("vendors", {
   address: text("address"),
   logoUrl: text("logo_url"),
   description: text("description"),
+  // Public storefront theme — a preset id from the brand-themes template list
+  brandTheme: text("brand_theme").notNull().default("violet"),
   clerkUserId: text("clerk_user_id"),
   // Awajimaa bridge fields — populated when vendor is created via external handshake
   awajimaaUserId: text("awajimaa_user_id").unique(),

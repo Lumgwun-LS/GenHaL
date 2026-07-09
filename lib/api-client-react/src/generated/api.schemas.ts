@@ -31,6 +31,7 @@ export interface Vendor {
   stripeEnabled?: boolean;
   paystackEnabled?: boolean;
   defaultCurrency?: string;
+  brandTheme?: string;
 }
 
 export interface VendorInput {
@@ -54,6 +55,7 @@ export interface VendorUpdate {
   logoUrl?: string;
   description?: string;
   status?: string;
+  brandTheme?: string;
 }
 
 export type VendorStatsIndustriesItem = {

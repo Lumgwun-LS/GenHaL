@@ -11,11 +11,38 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake, PhoneOff } from "lucide-react";
+import { ArrowLeft, Globe, Mail, Phone, MapPin, CreditCard, Cake, PhoneOff, Palette, ExternalLink, Check } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+type BrandTheme = {
+  id: string;
+  label: string;
+  primary: string;
+  accent: string;
+  gradientFrom: string;
+  gradientTo: string;
+};
+
+async function fetchBrandThemes(): Promise<BrandTheme[]> {
+  const res = await fetch(`${BASE_URL}/api/public/brand-themes`);
+  if (!res.ok) throw new Error("Failed to load brand themes");
+  return res.json();
+}
+
+/** Only ever render http(s) links — blocks javascript:/data: URLs stored on a vendor's website field. */
+function safeExternalUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.toString();
+  } catch {
+    // not a valid absolute URL
+  }
+  return null;
+}
 
 const CURRENCIES = [
   { value: "USD", label: "USD — US Dollar" },
@@ -33,6 +60,7 @@ export default function VendorDetail() {
   const { data: vendor, isLoading, refetch: refetchVendor } = useGetVendor(id, { query: { enabled: !!id, queryKey: getGetVendorQueryKey(id) } });
   const { data: socials } = useListSocialAccounts({ vendorId: id });
   const { data: orders } = useListOrders({ vendorId: id });
+  const { data: brandThemes } = useQuery({ queryKey: ["brand-themes"], queryFn: fetchBrandThemes });
 
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [paystackEnabled, setPaystackEnabled] = useState(false);
@@ -40,6 +68,7 @@ export default function VendorDetail() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
 
   // Handle Stripe Checkout return — show a toast and refresh vendor data
   useEffect(() => {
@@ -91,6 +120,29 @@ export default function VendorDetail() {
     }
   }
 
+  async function handleSaveBrandTheme(themeId: string) {
+    setSavingTheme(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/vendors/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ brandTheme: themeId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(err.error ?? "Failed to save brand theme");
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: getGetVendorQueryKey(id) });
+      toast.success("Storefront theme updated");
+    } catch {
+      toast.error("Network error — could not save brand theme");
+    } finally {
+      setSavingTheme(false);
+    }
+  }
+
   async function handleSavePaymentSettings() {
     setSaving(true);
     try {
@@ -122,13 +174,18 @@ export default function VendorDetail() {
         <Button variant="ghost" size="icon" asChild>
           <Link href="/vendors"><ArrowLeft className="w-4 h-4" /></Link>
         </Button>
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight">{vendor.name}</h1>
             <Badge variant={vendor.status === 'active' ? 'default' : 'secondary'}>{vendor.status}</Badge>
           </div>
           <p className="text-muted-foreground">{vendor.industry}</p>
         </div>
+        <Button variant="outline" size="sm" asChild>
+          <a href={`${BASE_URL}/store/${id}`} target="_blank" rel="noreferrer">
+            View public storefront <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+          </a>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -148,10 +205,10 @@ export default function VendorDetail() {
                   <span>{vendor.phone}</span>
                 </div>
               )}
-              {vendor.website && (
+              {safeExternalUrl(vendor.website) && (
                 <div className="flex items-center gap-3 text-sm">
                   <Globe className="w-4 h-4 text-muted-foreground" />
-                  <a href={vendor.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  <a href={safeExternalUrl(vendor.website)!} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline">
                     {vendor.website}
                   </a>
                 </div>
@@ -208,6 +265,48 @@ export default function VendorDetail() {
                     }}
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Storefront Theme */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="w-4 h-4" />
+                Storefront Theme
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-4">
+                Pick a brand color theme for your public storefront page. Changes apply immediately.
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {brandThemes?.map((theme) => {
+                  const selected = (vendor.brandTheme ?? "violet") === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      disabled={savingTheme}
+                      onClick={() => handleSaveBrandTheme(theme.id)}
+                      className={`relative rounded-lg border-2 p-2 text-left transition-colors disabled:opacity-60 ${
+                        selected ? "border-primary" : "border-border hover:border-muted-foreground/50"
+                      }`}
+                    >
+                      <div
+                        className="h-10 w-full rounded-md mb-2"
+                        style={{ background: `linear-gradient(135deg, ${theme.gradientFrom}, ${theme.gradientTo})` }}
+                      />
+                      <div className="text-xs font-medium">{theme.label}</div>
+                      {selected && (
+                        <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground rounded-full p-0.5">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

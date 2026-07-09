@@ -21,6 +21,7 @@ import notificationsRouter from "./notifications";
 import voiceCampaignsRouter from "./voice-campaigns";
 import subscriptionUpgradeRouter from "./subscription-upgrade";
 import siteContentPublicRouter from "./site-content-public";
+import publicVendorsRouter from "./public-vendors";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -30,6 +31,9 @@ router.use(healthRouter);
 
 // Site content (marketing copy, footer, etc.) — public read, no auth needed
 router.use(siteContentPublicRouter);
+
+// Public vendor storefronts (brand themes + safe vendor fields) — no auth needed
+router.use(publicVendorsRouter);
 
 // Payment webhooks — public (signature-verified internally), before auth
 router.use(paymentsWebhooksRouter);

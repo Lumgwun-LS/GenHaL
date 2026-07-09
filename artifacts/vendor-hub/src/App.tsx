@@ -11,6 +11,7 @@ import { Toaster } from "sonner";
 import { Layout } from "@/components/layout";
 
 import LandingPage from "@/pages/landing";
+import VendorStorefront from "@/pages/store";
 import Dashboard from "@/pages/dashboard";
 import Vendors from "@/pages/vendors";
 import VendorDetail from "@/pages/vendors/detail";
@@ -170,7 +171,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
-          
+          <Route path="/store/:id" component={VendorStorefront} />
+
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />
           <Route path="/vendors" component={() => <AuthenticatedRoute component={Vendors} />} />

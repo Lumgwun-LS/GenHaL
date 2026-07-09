@@ -16,4 +16,5 @@ export interface VendorUpdate {
   logoUrl?: string;
   description?: string;
   status?: string;
+  brandTheme?: string;
 }
