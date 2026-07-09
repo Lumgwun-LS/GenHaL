@@ -11,6 +11,8 @@ import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, 
 import { eq, desc } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
+import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
+import { ZodError } from "zod";
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
 function isAdmin(userId: string): boolean {
@@ -186,6 +188,51 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
     .limit(50);
 
   res.json(entries);
+});
+
+// ─── GET /admin/site-content ─────────────────────────────────────────────────
+
+router.get("/admin/site-content", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const content = await getSiteContent();
+  res.json(content);
+});
+
+// ─── PATCH /admin/site-content/:key ───────────────────────────────────────────
+
+router.patch("/admin/site-content/:key", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const key = req.params.key as SiteContentKey;
+  if (!SITE_CONTENT_KEYS.includes(key)) {
+    res.status(400).json({ error: `Unknown content key "${key}".` });
+    return;
+  }
+
+  const { value } = req.body as { value?: unknown };
+  if (value === undefined || value === null || typeof value !== "object") {
+    res.status(400).json({ error: "Body must include a `value` object." });
+    return;
+  }
+
+  let validated: unknown;
+  try {
+    validated = validateSiteContentBlock(key, value);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: "Invalid content shape.", details: err.issues });
+      return;
+    }
+    throw err;
+  }
+
+  await setSiteContentBlock(key, validated, userId);
+  res.json({ success: true });
 });
 
 // ─── GET /admin/voice-status ──────────────────────────────────────────────────

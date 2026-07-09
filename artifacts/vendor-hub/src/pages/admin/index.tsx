@@ -6,10 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
+import SiteEditor from "./site-editor";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -315,6 +316,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="site-editor" className="flex items-center gap-2">
+            <Layout className="w-4 h-4" /> Site Editor
           </TabsTrigger>
         </TabsList>
 
@@ -627,6 +631,11 @@ export default function AdminPanel() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Site Editor tab ────────────────────────────────────────── */}
+        <TabsContent value="site-editor">
+          <SiteEditor />
         </TabsContent>
       </Tabs>
     </div>

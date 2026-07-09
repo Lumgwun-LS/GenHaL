@@ -20,12 +20,16 @@ import adminRouter from "./admin";
 import notificationsRouter from "./notifications";
 import voiceCampaignsRouter from "./voice-campaigns";
 import subscriptionUpgradeRouter from "./subscription-upgrade";
+import siteContentPublicRouter from "./site-content-public";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
 // Health check — public
 router.use(healthRouter);
+
+// Site content (marketing copy, footer, etc.) — public read, no auth needed
+router.use(siteContentPublicRouter);
 
 // Payment webhooks — public (signature-verified internally), before auth
 router.use(paymentsWebhooksRouter);

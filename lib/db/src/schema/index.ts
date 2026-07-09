@@ -19,3 +19,4 @@ export * from "./voice-call-logs";
 export * from "./voice-campaigns";
 export * from "./voice-campaign-calls";
 export * from "./admin-audit-log";
+export * from "./site-content";
