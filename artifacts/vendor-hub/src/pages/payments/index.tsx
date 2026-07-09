@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,17 @@ function providerBadge(provider: string) {
   return "bg-muted text-muted-foreground";
 }
 
+async function retryWebhookEvent(id: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/payments/webhook-events/${id}/retry`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "Retry failed");
+  }
+}
+
 async function refundPayment(id: number): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/payments/${id}/refund`, {
     method: "POST",
@@ -115,6 +127,7 @@ export default function Payments() {
   const [webhookSearch, setWebhookSearch] = useState<string>("");
   const [webhookDuplicatesOnly, setWebhookDuplicatesOnly] = useState<boolean>(false);
   const queryClient = useQueryClient();
+  const isAdmin = useIsAdmin();
 
   const { data, isLoading } = useQuery({
     queryKey: ["payments", providerFilter, statusFilter],
@@ -130,6 +143,13 @@ export default function Payments() {
     mutationFn: refundPayment,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: retryWebhookEvent,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["webhook-events"] });
     },
   });
 
@@ -404,16 +424,17 @@ export default function Payments() {
               <TableHead>Reference</TableHead>
               <TableHead>Received</TableHead>
               <TableHead>Status</TableHead>
+              {isAdmin && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {webhookLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">Loading webhook events…</TableCell>
+                <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8">Loading webhook events…</TableCell>
               </TableRow>
             ) : filteredWebhookEvents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Webhook className="w-8 h-8" />
                     <span>
@@ -461,6 +482,22 @@ export default function Payments() {
                       </Badge>
                     )}
                   </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      {!e.processedAt && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs gap-1"
+                          disabled={retryMutation.isPending && retryMutation.variables === e.id}
+                          onClick={() => retryMutation.mutate(e.id)}
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          {retryMutation.isPending && retryMutation.variables === e.id ? "Retrying…" : "Retry"}
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

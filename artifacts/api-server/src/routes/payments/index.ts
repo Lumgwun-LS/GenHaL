@@ -1,11 +1,22 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
+import { retryWebhookEventById } from "./webhooks";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
+
+/** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
+function isAdmin(userId: string): boolean {
+  const ids = (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.includes(userId);
+}
 
 const router = Router();
 
@@ -115,6 +126,34 @@ router.get("/payments/webhook-events", async (req, res): Promise<void> => {
   if (provider) events = events.filter((e) => e.provider === provider);
 
   res.json({ events, total: events.length });
+});
+
+/**
+ * POST /payments/webhook-events/:id/retry
+ * Re-processes a skipped/failed webhook event's stored raw payload through the
+ * same business logic as the live handler. Admin-only recovery action.
+ */
+router.post("/payments/webhook-events/:id/retry", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdmin(userId)) {
+    res.status(403).json({ error: "Admin access required." });
+    return;
+  }
+
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid webhook event id" });
+    return;
+  }
+
+  try {
+    const result = await retryWebhookEventById(id);
+    res.json({ success: true, eventId: result.eventId });
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
+    const message = err instanceof Error ? err.message : "Retry failed";
+    res.status(statusCode).json({ error: message });
+  }
 });
 
 /**

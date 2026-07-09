@@ -219,6 +219,133 @@ async function markWebhookFailed(
   );
 }
 
+// ── Shared business logic (used by live webhooks and admin retry) ────────────
+
+/** Applies the business-logic side effects for a Stripe event. Idempotent-ish: safe to re-run. */
+async function processStripeEvent(event: Stripe.Event): Promise<void> {
+  const session =
+    event.type === "checkout.session.completed"
+      ? (event.data.object as Stripe.Checkout.Session)
+      : null;
+
+  if (event.type === "checkout.session.completed" && session) {
+    const upgradeVendorId = session.metadata?.upgradeVendorId
+      ? parseInt(session.metadata.upgradeVendorId)
+      : null;
+    const upgradeTier = session.metadata?.upgradeTier ?? null;
+
+    if (upgradeVendorId && upgradeTier) {
+      // ── Subscription self-upgrade path ──────────────────────────────
+      const VALID_UPGRADE_TIERS = ["starter", "pro", "enterprise"];
+      if (VALID_UPGRADE_TIERS.includes(upgradeTier)) {
+        const [updated] = await db
+          .update(vendorsTable)
+          .set({ subscriptionTier: upgradeTier, updatedAt: new Date() })
+          .where(eq(vendorsTable.id, upgradeVendorId))
+          .returning({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier });
+
+        if (updated) {
+          console.info(
+            `[stripe webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} session=${session.id}`,
+          );
+        } else {
+          console.warn(
+            `[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`,
+          );
+        }
+      } else {
+        console.warn(
+          `[stripe webhook] subscription upgrade — invalid tier '${upgradeTier}' in session=${session.id}`,
+        );
+      }
+    } else {
+      // ── Regular order checkout path ─────────────────────────────────
+      const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
+
+      await db.update(paymentsTable)
+        .set({ status: "paid", updatedAt: new Date() })
+        .where(eq(paymentsTable.providerReference, session.id));
+
+      if (orderId) {
+        await db.update(ordersTable)
+          .set({ paymentStatus: "paid", updatedAt: new Date() })
+          .where(eq(ordersTable.id, orderId));
+      }
+
+      console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
+    }
+
+    console.info(`[stripe webhook] checkout.session.completed processed — session=${session.id}`);
+  } else {
+    console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
+  }
+}
+
+/** Applies the business-logic side effects for a Paystack event. Idempotent-ish: safe to re-run. */
+async function processPaystackEvent(event: {
+  event: string;
+  data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
+}): Promise<void> {
+  if (event.event === "charge.success") {
+    const { reference, metadata } = event.data;
+    const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
+
+    await db.update(paymentsTable)
+      .set({ status: "paid", updatedAt: new Date() })
+      .where(eq(paymentsTable.providerReference, reference));
+
+    if (orderId) {
+      await db.update(ordersTable)
+        .set({ paymentStatus: "paid", updatedAt: new Date() })
+        .where(eq(ordersTable.id, orderId));
+    }
+
+    console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);
+  } else {
+    console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${event.data.id ?? event.data.reference}`);
+  }
+}
+
+/**
+ * Re-processes a stored webhook event's raw payload through the same business
+ * logic used by the live webhook handlers. Used by the admin "Retry" action
+ * for skipped/failed events. Does NOT re-verify provider signatures — the
+ * payload was already verified and persisted at original delivery time.
+ *
+ * Throws if the event id is unknown or the event was already processed.
+ * On success, sets processedAt. On failure, records the error and rethrows.
+ */
+export async function retryWebhookEventById(id: number): Promise<{ eventId: string }> {
+  const [row] = await db.select().from(webhookEventsTable).where(eq(webhookEventsTable.id, id));
+  if (!row) {
+    throw Object.assign(new Error("Webhook event not found"), { statusCode: 404 });
+  }
+  if (row.processedAt) {
+    throw Object.assign(new Error("Webhook event was already processed"), { statusCode: 409 });
+  }
+
+  try {
+    if (row.provider === "stripe") {
+      await processStripeEvent(row.rawPayload as unknown as Stripe.Event);
+    } else if (row.provider === "paystack") {
+      await processPaystackEvent(row.rawPayload as unknown as {
+        event: string;
+        data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
+      });
+    } else {
+      throw new Error(`Unknown provider '${row.provider}'`);
+    }
+    await markWebhookProcessed(row.eventId);
+    console.info(`[webhook] admin retry succeeded — id=${row.id} eventId=${row.eventId}`);
+  } catch (err) {
+    await markWebhookFailed(row.eventId, row.provider, row.eventType, err).catch(() => {});
+    console.error(`[webhook] admin retry failed — id=${row.id} eventId=${row.eventId}:`, err);
+    throw Object.assign(new Error(err instanceof Error ? err.message : String(err)), { statusCode: 502 });
+  }
+
+  return { eventId: row.eventId };
+}
+
 // ── Stripe webhook ────────────────────────────────────────────────────────────
 
 router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
@@ -267,59 +394,8 @@ router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
     if (isDuplicate) return;
 
     try {
-      if (event.type === "checkout.session.completed" && session) {
-        const upgradeVendorId = session.metadata?.upgradeVendorId
-          ? parseInt(session.metadata.upgradeVendorId)
-          : null;
-        const upgradeTier = session.metadata?.upgradeTier ?? null;
-
-        if (upgradeVendorId && upgradeTier) {
-          // ── Subscription self-upgrade path ──────────────────────────────
-          const VALID_UPGRADE_TIERS = ["starter", "pro", "enterprise"];
-          if (VALID_UPGRADE_TIERS.includes(upgradeTier)) {
-            const [updated] = await db
-              .update(vendorsTable)
-              .set({ subscriptionTier: upgradeTier, updatedAt: new Date() })
-              .where(eq(vendorsTable.id, upgradeVendorId))
-              .returning({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier });
-
-            if (updated) {
-              console.info(
-                `[stripe webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} session=${session.id}`,
-              );
-            } else {
-              console.warn(
-                `[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`,
-              );
-            }
-          } else {
-            console.warn(
-              `[stripe webhook] subscription upgrade — invalid tier '${upgradeTier}' in session=${session.id}`,
-            );
-          }
-        } else {
-          // ── Regular order checkout path ─────────────────────────────────
-          const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
-
-          await db.update(paymentsTable)
-            .set({ status: "paid", updatedAt: new Date() })
-            .where(eq(paymentsTable.providerReference, session.id));
-
-          if (orderId) {
-            await db.update(ordersTable)
-              .set({ paymentStatus: "paid", updatedAt: new Date() })
-              .where(eq(ordersTable.id, orderId));
-          }
-
-          console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
-        }
-
-        await markWebhookProcessed(event.id);
-        console.info(`[stripe webhook] checkout.session.completed processed — session=${session.id}`);
-      } else {
-        await markWebhookProcessed(event.id);
-        console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
-      }
+      await processStripeEvent(event);
+      await markWebhookProcessed(event.id);
     } catch (bizErr) {
       await markWebhookFailed(event.id, "stripe", event.type, bizErr).catch(() => {});
       throw bizErr;
@@ -378,26 +454,8 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
     if (isDuplicate) return;
 
     try {
-      if (event.event === "charge.success") {
-        const { reference, metadata } = event.data;
-        const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
-
-        await db.update(paymentsTable)
-          .set({ status: "paid", updatedAt: new Date() })
-          .where(eq(paymentsTable.providerReference, reference));
-
-        if (orderId) {
-          await db.update(ordersTable)
-            .set({ paymentStatus: "paid", updatedAt: new Date() })
-            .where(eq(ordersTable.id, orderId));
-        }
-
-        await markWebhookProcessed(eventId);
-        console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);
-      } else {
-        await markWebhookProcessed(eventId);
-        console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${eventId}`);
-      }
+      await processPaystackEvent(event);
+      await markWebhookProcessed(eventId);
     } catch (bizErr) {
       await markWebhookFailed(eventId, "paystack", event.event, bizErr).catch(() => {});
       throw bizErr;
