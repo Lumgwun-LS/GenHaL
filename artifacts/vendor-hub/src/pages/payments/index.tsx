@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy, XCircle, Clock } from "lucide-react";
 import {
@@ -111,6 +112,8 @@ export default function Payments() {
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [webhookProviderFilter, setWebhookProviderFilter] = useState<string>("all");
+  const [webhookSearch, setWebhookSearch] = useState<string>("");
+  const [webhookDuplicatesOnly, setWebhookDuplicatesOnly] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -151,6 +154,19 @@ export default function Payments() {
   })();
 
   const summary = data?.summary;
+
+  const filteredWebhookEvents = (webhookData?.events ?? []).filter((e) => {
+    if (webhookDuplicatesOnly && (e.processedAt || e.errorMessage)) return false;
+    if (webhookSearch.trim()) {
+      const q = webhookSearch.trim().toLowerCase();
+      const matches =
+        e.eventType.toLowerCase().includes(q) ||
+        (e.reference ?? "").toLowerCase().includes(q) ||
+        e.eventId.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
@@ -348,19 +364,37 @@ export default function Payments() {
             <Webhook className="w-4 h-4 text-muted-foreground" />
             <span className="font-semibold text-base">Webhook Events</span>
             {webhookData && (
-              <span className="text-xs text-muted-foreground">({webhookData.total} shown)</span>
+              <span className="text-xs text-muted-foreground">({filteredWebhookEvents.length} of {webhookData.total} shown)</span>
             )}
           </div>
-          <Select value={webhookProviderFilter} onValueChange={setWebhookProviderFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Provider" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All providers</SelectItem>
-              <SelectItem value="stripe">Stripe</SelectItem>
-              <SelectItem value="paystack">Paystack</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              value={webhookSearch}
+              onChange={(e) => setWebhookSearch(e.target.value)}
+              placeholder="Search event type or reference…"
+              className="w-56"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant={webhookDuplicatesOnly ? "default" : "outline"}
+              className="text-xs gap-1"
+              onClick={() => setWebhookDuplicatesOnly((v) => !v)}
+            >
+              <Copy className="w-3 h-3" />
+              {webhookDuplicatesOnly ? "Showing skipped/unprocessed" : "Only skipped/unprocessed"}
+            </Button>
+            <Select value={webhookProviderFilter} onValueChange={setWebhookProviderFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All providers</SelectItem>
+                <SelectItem value="stripe">Stripe</SelectItem>
+                <SelectItem value="paystack">Paystack</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <Table>
           <TableHeader>
@@ -377,17 +411,19 @@ export default function Payments() {
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8">Loading webhook events…</TableCell>
               </TableRow>
-            ) : webhookData?.events?.length === 0 ? (
+            ) : filteredWebhookEvents.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Webhook className="w-8 h-8" />
-                    <span>No webhook events recorded yet.</span>
+                    <span>
+                      {webhookData?.events?.length ? "No webhook events match your filters." : "No webhook events recorded yet."}
+                    </span>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              webhookData?.events?.map((e) => (
+              filteredWebhookEvents.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell>
                     <Badge variant="outline" className={providerBadge(e.provider)}>
