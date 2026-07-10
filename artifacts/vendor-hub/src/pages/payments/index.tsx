@@ -131,6 +131,7 @@ export default function Payments() {
   const [webhookProviderFilter, setWebhookProviderFilter] = useState<string>("all");
   const [webhookSearch, setWebhookSearch] = useState<string>("");
   const [webhookDuplicatesOnly, setWebhookDuplicatesOnly] = useState<boolean>(false);
+  const [webhookDayFilter, setWebhookDayFilter] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const isAdmin = useIsAdmin();
   const highlightId = Number(new URLSearchParams(window.location.search).get("highlight")) || null;
@@ -211,6 +212,7 @@ export default function Payments() {
       .slice(-14)
       .map(([day, vals]) => ({
         day: format(new Date(day), "MMM d"),
+        dayKey: day,
         Processed: vals.processed,
         Duplicate: vals.duplicate,
       }));
@@ -219,6 +221,7 @@ export default function Payments() {
   const summary = data?.summary;
 
   const filteredWebhookEvents = (webhookData?.events ?? []).filter((e) => {
+    if (webhookDayFilter && new Date(e.receivedAt).toISOString().split("T")[0] !== webhookDayFilter) return false;
     if (webhookDuplicatesOnly && (e.processedAt || e.errorMessage)) return false;
     if (webhookSearch.trim()) {
       const q = webhookSearch.trim().toLowerCase();
@@ -320,8 +323,20 @@ export default function Payments() {
       {/* Webhook volume chart */}
       {webhookChartData.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base font-semibold">Webhook Event Volume (Last 14 Days)</CardTitle>
+            <div className="flex items-center gap-2">
+              {webhookDayFilter && (
+                <span className="text-xs text-muted-foreground">
+                  Showing {format(new Date(webhookDayFilter), "MMM d, yyyy")}
+                </span>
+              )}
+              {webhookDayFilter && (
+                <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setWebhookDayFilter(null)}>
+                  <XCircle className="w-3 h-3" /> Clear day filter
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -337,8 +352,22 @@ export default function Payments() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="Processed" stackId="webhooks" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Duplicate" stackId="webhooks" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="Processed"
+                  stackId="webhooks"
+                  fill="#10b981"
+                  radius={[0, 0, 0, 0]}
+                  cursor="pointer"
+                  onClick={(d: any) => setWebhookDayFilter((prev) => (prev === d.dayKey ? null : d.dayKey))}
+                />
+                <Bar
+                  dataKey="Duplicate"
+                  stackId="webhooks"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                  cursor="pointer"
+                  onClick={(d: any) => setWebhookDayFilter((prev) => (prev === d.dayKey ? null : d.dayKey))}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -460,6 +489,19 @@ export default function Payments() {
             <span className="font-semibold text-base">Webhook Events</span>
             {webhookData && (
               <span className="text-xs text-muted-foreground">({filteredWebhookEvents.length} of {webhookData.total} shown)</span>
+            )}
+            {webhookDayFilter && (
+              <Badge variant="outline" className="gap-1 text-xs">
+                {format(new Date(webhookDayFilter), "MMM d, yyyy")}
+                <button
+                  type="button"
+                  onClick={() => setWebhookDayFilter(null)}
+                  className="ml-1 hover:text-foreground"
+                  aria-label="Clear day filter"
+                >
+                  <XCircle className="w-3 h-3" />
+                </button>
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
