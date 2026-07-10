@@ -35,6 +35,21 @@ async function getAccountSid(): Promise<string> {
   return sid;
 }
 
+/**
+ * Public base URL Twilio can reach to deliver status callbacks.
+ * In dev, Replit exposes the workspace at REPLIT_DEV_DOMAIN. In production,
+ * set PUBLIC_APP_DOMAIN to the deployed domain (e.g. api.example.com).
+ */
+function getPublicDomain(): string | null {
+  return process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || null;
+}
+
+function getStatusCallbackUrl(): string | null {
+  const domain = getPublicDomain();
+  if (!domain) return null;
+  return `https://${domain}/api/voice/status-callback`;
+}
+
 function buildTwiml(message: string): string {
   const safe = message
     .replace(/&/g, "&amp;")
@@ -80,6 +95,17 @@ export async function placeCall(opts: {
       From:   fromNumber,
       Twiml:  buildTwiml(opts.message),
     });
+
+    const statusCallbackUrl = getStatusCallbackUrl();
+    if (statusCallbackUrl) {
+      body.set("StatusCallback", statusCallbackUrl);
+      body.set("StatusCallbackMethod", "POST");
+      body.set("StatusCallbackEvent", "completed");
+    } else {
+      logger.warn(
+        "[voice] No public domain configured (PUBLIC_APP_DOMAIN/REPLIT_DEV_DOMAIN) — status callback not set, call status won't update after completion",
+      );
+    }
 
     const res = await connectors().proxy(
       "twilio",

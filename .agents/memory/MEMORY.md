@@ -8,3 +8,4 @@
 - [VendorHub email dispatch](vendorhub-email.md) — real emails go via SMTP/nodemailer (user-provided creds), not Resend/SendGrid; reuse mailer.ts sendEmail for new email features.
 - [Reanimated + entering conflict](reanimated-entering-conflict.md) — applying both entering= prop and useAnimatedStyle with transform on the same Animated.View causes a web warning; separate them into nested views (entering on outer, useAnimatedStyle on inner).
 - [Scheduled job pattern](scheduled-job-pattern.md) — recurring background jobs (birthday, voice-campaign auto-launch) use setInterval(5min) + atomic conditional UPDATE ... WHERE status = X for idempotency, not a cron library.
+- [API route mounting prefix](api-route-mount-prefix.md) — app.ts mounts routes/index.ts at "/api"; new route files must NOT repeat "/api" in their own path or requests 404/misbehave.
