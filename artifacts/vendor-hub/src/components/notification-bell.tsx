@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
-import { Bell } from "lucide-react";
+import { Bell, Cake, TrendingUp, Info } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { useListVendors } from "@workspace/api-client-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -56,6 +57,17 @@ export function NotificationBell() {
 
   if (!vendorId) return null;
 
+  function typeIcon(type: string) {
+    switch (type) {
+      case "birthday":
+        return <Cake className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />;
+      case "tier_change":
+        return <TrendingUp className="w-4 h-4 text-primary shrink-0 mt-0.5" />;
+      default:
+        return <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />;
+    }
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -85,10 +97,11 @@ export function NotificationBell() {
                   key={n.id}
                   className={`p-3 text-sm flex items-start gap-2 ${!n.readAt ? "bg-primary/5" : ""}`}
                 >
+                  {typeIcon(n.type)}
                   <div className="flex-1 min-w-0">
                     <p className="text-foreground">{n.message}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(n.createdAt).toLocaleString()}
+                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                     </p>
                   </div>
                   {!n.readAt && (
