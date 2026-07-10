@@ -24,6 +24,62 @@ import { z } from "zod";
 
 const router = Router();
 
+/**
+ * Places calls to all callable leads for an already-transitioned ("running")
+ * campaign, then marks it completed/failed. Shared by the manual /launch
+ * route and the scheduled-campaign background job so both paths run the
+ * exact same call loop.
+ */
+export async function runCampaignCalls(
+  campaign: typeof voiceCampaignsTable.$inferSelect,
+  vendorId: number,
+  callable: Array<typeof leadsTable.$inferSelect>,
+): Promise<void> {
+  const campaignId = campaign.id;
+  let completedCount = 0;
+  let terminalStatus = "completed";
+  try {
+    for (const lead of callable) {
+      const script = campaign.script.replace(/\{\{name\}\}/gi, lead.name ?? "there");
+
+      const [callRow] = await db.insert(voiceCampaignCallsTable).values({
+        campaignId,
+        leadId: lead.id,
+        leadName: lead.name ?? "Unknown",
+        phone: lead.phone!,
+        status: "queued",
+      }).returning();
+
+      const result = await placeCall({ to: lead.phone!, message: script, purpose: "campaign", vendorId, campaignId });
+
+      await db.insert(voiceCallLogsTable).values({
+        vendorId,
+        campaignId,
+        phone: lead.phone!,
+        purpose: "campaign",
+        status: result.status === "placed" ? "queued" : result.status,
+        callSid: result.callSid ?? null,
+      });
+
+      await db.update(voiceCampaignCallsTable).set({
+        status: result.status === "placed" ? "ringing" : (result.status === "skipped" ? "canceled" : "failed"),
+        callSid: result.callSid ?? null,
+      }).where(eq(voiceCampaignCallsTable.id, callRow.id));
+
+      completedCount++;
+      // Small delay between calls to avoid rate-limiting
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } catch (err) {
+    terminalStatus = "failed";
+    logger.error({ err, campaignId, vendorId, completedCount }, "[voice] Campaign loop error — marking failed");
+  } finally {
+    await db.update(voiceCampaignsTable).set({ status: terminalStatus })
+      .where(eq(voiceCampaignsTable.id, campaignId));
+    logger.info({ campaignId, vendorId, completedCount, terminalStatus }, "[voice] Campaign finished");
+  }
+}
+
 const ADMIN_IDS = () =>
   (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -83,6 +139,7 @@ router.post("/vendors/:id/voice-campaigns", async (req, res): Promise<void> => {
     name,
     script,
     scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+    status: scheduledAt ? "scheduled" : "draft",
   }).returning();
 
   res.status(201).json(campaign);
@@ -122,20 +179,33 @@ router.patch("/vendors/:id/voice-campaigns/:cid", async (req, res): Promise<void
   if (isNaN(vendorId) || isNaN(campaignId)) { res.status(400).json({ error: "Invalid id" }); return; }
   if (!(await ownerOrAdmin(req, vendorId))) { res.status(403).json({ error: "Forbidden" }); return; }
 
-  const PatchBody = z.object({ name: z.string().optional(), script: z.string().optional(), scheduledAt: z.string().nullish() });
+  const PatchBody = z.object({ name: z.string().optional(), script: z.string().optional(), scheduledAt: z.string().nullish(), status: z.enum(["draft", "scheduled", "paused"]).optional() });
   const parsed = PatchBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const update: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) update.name = parsed.data.name;
   if (parsed.data.script !== undefined) update.script = parsed.data.script;
-  if (parsed.data.scheduledAt !== undefined) update.scheduledAt = parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null;
+  if (parsed.data.scheduledAt !== undefined) {
+    update.scheduledAt = parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null;
+    // Keep status in sync with scheduling intent unless the caller explicitly overrides it below.
+    if (parsed.data.status === undefined) {
+      update.status = parsed.data.scheduledAt ? "scheduled" : "draft";
+    }
+  }
+  if (parsed.data.status !== undefined) update.status = parsed.data.status;
 
+  // Only allow editing a campaign that isn't already running/completed — prevents
+  // reviving or mutating a campaign that's mid-flight or finished.
   const [campaign] = await db.update(voiceCampaignsTable).set(update)
-    .where(and(eq(voiceCampaignsTable.id, campaignId), eq(voiceCampaignsTable.vendorId, vendorId)))
+    .where(and(
+      eq(voiceCampaignsTable.id, campaignId),
+      eq(voiceCampaignsTable.vendorId, vendorId),
+      sql`${voiceCampaignsTable.status} NOT IN ('running', 'completed')`,
+    ))
     .returning();
 
-  if (!campaign) { res.status(404).json({ error: "Campaign not found" }); return; }
+  if (!campaign) { res.status(404).json({ error: "Campaign not found, or it can no longer be edited" }); return; }
   res.json(campaign);
 });
 
@@ -176,50 +246,7 @@ router.post("/vendors/:id/voice-campaigns/:cid/launch", async (req, res): Promis
   res.json({ message: `Launching campaign — placing ${callable.length} call(s) now.`, totalCalls: callable.length });
 
   // Place calls asynchronously after response is sent
-  setImmediate(async () => {
-    let completedCount = 0;
-    let terminalStatus = "completed";
-    try {
-      for (const lead of callable) {
-        const script = (transitioned.script).replace(/\{\{name\}\}/gi, lead.name ?? "there");
-
-        const [callRow] = await db.insert(voiceCampaignCallsTable).values({
-          campaignId,
-          leadId: lead.id,
-          leadName: lead.name ?? "Unknown",
-          phone: lead.phone!,
-          status: "queued",
-        }).returning();
-
-        const result = await placeCall({ to: lead.phone!, message: script, purpose: "campaign", vendorId, campaignId });
-
-        await db.insert(voiceCallLogsTable).values({
-          vendorId,
-          campaignId,
-          phone: lead.phone!,
-          purpose: "campaign",
-          status: result.status === "placed" ? "queued" : result.status,
-          callSid: result.callSid ?? null,
-        });
-
-        await db.update(voiceCampaignCallsTable).set({
-          status: result.status === "placed" ? "ringing" : (result.status === "skipped" ? "canceled" : "failed"),
-          callSid: result.callSid ?? null,
-        }).where(eq(voiceCampaignCallsTable.id, callRow.id));
-
-        completedCount++;
-        // Small delay between calls to avoid rate-limiting
-        await new Promise((r) => setTimeout(r, 500));
-      }
-    } catch (err) {
-      terminalStatus = "failed";
-      logger.error({ err, campaignId, vendorId, completedCount }, "[voice] Campaign loop error — marking failed");
-    } finally {
-      await db.update(voiceCampaignsTable).set({ status: terminalStatus })
-        .where(eq(voiceCampaignsTable.id, campaignId));
-      logger.info({ campaignId, vendorId, completedCount, terminalStatus }, "[voice] Campaign finished");
-    }
-  });
+  setImmediate(() => { runCampaignCalls(transitioned, vendorId, callable).catch(() => {}); });
 });
 
 export default router;

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Phone, Plus, PlayCircle, BarChart2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Phone, Plus, PlayCircle, BarChart2, Clock, CheckCircle2, AlertCircle, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useListVendors } from "@workspace/api-client-react";
 import { useUser } from "@clerk/react";
@@ -33,7 +33,21 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
   running:   { label: "Running",   variant: "default" },
   completed: { label: "Completed", variant: "default" },
   paused:    { label: "Paused",    variant: "secondary" },
+  failed:    { label: "Failed",    variant: "destructive" },
 };
+
+/** Converts an ISO string to the `YYYY-MM-DDTHH:mm` value a <input type="datetime-local"> expects, in local time. */
+function toDatetimeLocalValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatScheduledAt(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
 
 export default function VoiceCampaignsPage() {
   const { user } = useUser();
@@ -57,8 +71,13 @@ export default function VoiceCampaignsPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [script, setScript] = useState("Hello {{name}}! This is a call from [Your Business Name]. We wanted to reach out to share some exciting news with you. Please visit our website or call us back for more details. Have a great day!");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [creating, setCreating] = useState(false);
   const [launching, setLaunching] = useState<number | null>(null);
+
+  const [editing, setEditing] = useState<Campaign | null>(null);
+  const [editScheduledAt, setEditScheduledAt] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function handleCreate() {
     if (!vendorId || !name.trim() || !script.trim()) return;
@@ -68,16 +87,21 @@ export default function VoiceCampaignsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, script }),
+        body: JSON.stringify({
+          name,
+          script,
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error ?? "Failed to create campaign");
         return;
       }
-      toast.success("Campaign created");
+      toast.success(scheduledAt ? "Campaign scheduled" : "Campaign created");
       setOpen(false);
       setName("");
+      setScheduledAt("");
       qc.invalidateQueries({ queryKey: ["voice-campaigns", vendorId] });
     } finally {
       setCreating(false);
@@ -99,6 +123,47 @@ export default function VoiceCampaignsPage() {
     } finally {
       setLaunching(null);
     }
+  }
+
+  function openEdit(c: Campaign) {
+    setEditing(c);
+    setEditScheduledAt(toDatetimeLocalValue(c.scheduledAt));
+  }
+
+  async function handleSaveSchedule() {
+    if (!vendorId || !editing) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/voice-campaigns/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          scheduledAt: editScheduledAt ? new Date(editScheduledAt).toISOString() : null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data.error ?? "Failed to update schedule"); return; }
+      toast.success(editScheduledAt ? "Schedule updated" : "Schedule removed — campaign is now a draft");
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["voice-campaigns", vendorId] });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleCancelSchedule(c: Campaign) {
+    if (!vendorId) return;
+    const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/voice-campaigns/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ scheduledAt: null, status: "paused" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(data.error ?? "Failed to cancel"); return; }
+    toast.success("Scheduled launch cancelled");
+    qc.invalidateQueries({ queryKey: ["voice-campaigns", vendorId] });
   }
 
   return (
@@ -148,6 +213,7 @@ export default function VoiceCampaignsPage() {
                 <TableRow>
                   <TableHead>Campaign</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Scheduled For</TableHead>
                   <TableHead>Calls</TableHead>
                   <TableHead>Answer Rate</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -157,6 +223,7 @@ export default function VoiceCampaignsPage() {
                 {campaigns.map((c) => {
                   const badge = STATUS_BADGE[c.status] ?? { label: c.status, variant: "secondary" as const };
                   const answerRate = c.totalCalls > 0 ? Math.round((c.answeredCalls / c.totalCalls) * 100) : null;
+                  const editable = c.status !== "running" && c.status !== "completed";
                   return (
                     <TableRow key={c.id}>
                       <TableCell>
@@ -165,6 +232,14 @@ export default function VoiceCampaignsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={badge.variant}>{badge.label}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {c.scheduledAt ? (
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span>{formatScheduledAt(c.scheduledAt)}</span>
+                          </div>
+                        ) : <span className="text-muted-foreground text-sm">—</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
@@ -184,6 +259,16 @@ export default function VoiceCampaignsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {editable && (
+                            <Button size="sm" variant="ghost" onClick={() => openEdit(c)} title="Edit schedule">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {c.status === "scheduled" && (
+                            <Button size="sm" variant="ghost" onClick={() => handleCancelSchedule(c)} title="Cancel scheduled launch">
+                              <XCircle className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -192,7 +277,7 @@ export default function VoiceCampaignsPage() {
                             className="flex items-center gap-1.5"
                           >
                             <PlayCircle className="w-3.5 h-3.5" />
-                            {launching === c.id ? "Launching…" : "Launch"}
+                            {launching === c.id ? "Launching…" : "Launch Now"}
                           </Button>
                           <Button size="sm" variant="ghost" asChild>
                             <Link href={`/voice-campaigns/${c.id}`}>
@@ -236,11 +321,52 @@ export default function VoiceCampaignsPage() {
                 Use <code className="bg-muted px-1 rounded">{"{{name}}"}</code> to personalise each call with the lead's name. Keep it conversational — this is what the AI voice will say word-for-word.
               </p>
             </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Schedule for later (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to save as a draft you launch manually. If set, the campaign auto-launches at this time — you can change or cancel it any time before then.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={creating || !name.trim()}>
-              {creating ? "Creating…" : "Create Campaign"}
+              {creating ? "Creating…" : scheduledAt ? "Schedule Campaign" : "Create Campaign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit schedule dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" /> Edit Schedule — {editing?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Launch Date & Time</Label>
+              <Input
+                type="datetime-local"
+                value={editScheduledAt}
+                onChange={(e) => setEditScheduledAt(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Clear this field to unschedule the campaign — it will go back to draft and won't auto-launch.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={handleSaveSchedule} disabled={savingEdit}>
+              {savingEdit ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

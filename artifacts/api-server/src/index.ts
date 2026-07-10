@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startBirthdayScheduler } from "./lib/birthday-scheduler";
 import { startWebhookBufferDrainer } from "./lib/webhook-buffer";
+import { startVoiceCampaignScheduler } from "./lib/voice-campaign-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +27,5 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startBirthdayScheduler();
   startWebhookBufferDrainer();
+  startVoiceCampaignScheduler();
 });

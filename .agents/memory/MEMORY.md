@@ -7,3 +7,4 @@
 - [Mobile brand palette](mobile-brand-palette.md) — VendorHub Mobile uses #7F50FF (primary/violet) and #FF7F50 (accent/coral); GradientButton and hero sections use LinearGradient between these two; do not revert to old blue palette.
 - [VendorHub email dispatch](vendorhub-email.md) — real emails go via SMTP/nodemailer (user-provided creds), not Resend/SendGrid; reuse mailer.ts sendEmail for new email features.
 - [Reanimated + entering conflict](reanimated-entering-conflict.md) — applying both entering= prop and useAnimatedStyle with transform on the same Animated.View causes a web warning; separate them into nested views (entering on outer, useAnimatedStyle on inner).
+- [Scheduled job pattern](scheduled-job-pattern.md) — recurring background jobs (birthday, voice-campaign auto-launch) use setInterval(5min) + atomic conditional UPDATE ... WHERE status = X for idempotency, not a cron library.
