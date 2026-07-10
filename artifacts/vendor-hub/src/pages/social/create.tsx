@@ -4,11 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock } from "lucide-react";
-import { useCreatePost } from "@workspace/api-client-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check } from "lucide-react";
+import { useCreatePost, useUpdatePost, useListProducts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+type LinkMode = "none" | "interest" | "checkout";
 
 const PLATFORMS = [
   { id: 'facebook', label: 'Facebook', color: 'bg-blue-600' },
@@ -21,9 +26,15 @@ const PLATFORMS = [
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [linkMode, setLinkMode] = useState<LinkMode>("none");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [, setLocation] = useLocation();
-  
+
+  const { data: products } = useListProducts({ vendorId: 1 });
   const createPost = useCreatePost();
+  const updatePost = useUpdatePost();
   const queryClient = useQueryClient();
 
   const togglePlatform = (id: string) => {
@@ -32,28 +43,54 @@ export default function CreatePost() {
     );
   };
 
+  const toggleProduct = (id: number) => {
+    setSelectedProductIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+  };
+
   const handlePublish = async (status: 'published' | 'draft' | 'scheduled') => {
     if (!caption || selectedPlatforms.length === 0) {
       toast.error("Please enter a caption and select at least one platform");
       return;
     }
+    if (selectedProductIds.length > 0 && linkMode === "none") {
+      toast.error("Choose what customers can do with the shop link (express interest or check out)");
+      return;
+    }
 
     try {
-      await createPost.mutateAsync({
+      const post = await createPost.mutateAsync({
         data: {
           vendorId: 1, // hardcoded for demo, normally from context
           caption,
           platforms: selectedPlatforms,
+          productIds: selectedProductIds,
+          linkMode,
           // status would be passed here if the API supported it in creation, for now it assumes draft or published
         }
       });
-      
+
+      if (post.shareToken) {
+        // Always append the shop link to the bottom of the caption once we know the token.
+        const url = `${window.location.origin}${BASE_URL}/p/${post.shareToken}`;
+        const cta = linkMode === "checkout" ? "🛍️ Shop this post" : "🛍️ Interested? Let us know";
+        const finalCaption = `${caption}\n\n${cta}: ${url}`;
+        await updatePost.mutateAsync({ id: post.id, data: { caption: finalCaption } });
+        setShareUrl(url);
+      }
+
       queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
       toast.success(`Post ${status === 'published' ? 'published' : 'saved'}`);
-      setLocation("/social");
+      if (!post.shareToken) setLocation("/social");
     } catch (e) {
       toast.error("Failed to save post");
     }
+  };
+
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -113,6 +150,72 @@ export default function CreatePost() {
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Shop this post</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Attach products and we'll add a shoppable link to the bottom of your post automatically.
+              </p>
+
+              {products && products.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {products.map((p) => (
+                    <label
+                      key={p.id}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer ${
+                        selectedProductIds.includes(p.id) ? "border-primary bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selectedProductIds.includes(p.id)}
+                        onCheckedChange={() => toggleProduct(p.id)}
+                      />
+                      <span className="truncate">{p.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">${p.price.toFixed(2)}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No products yet — add some in Products first.</p>
+              )}
+
+              {selectedProductIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setLinkMode("interest")}
+                    className={`px-3 py-1.5 rounded-full border text-xs font-medium ${
+                      linkMode === "interest" ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-muted"
+                    }`}
+                  >
+                    Let customers express interest
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkMode("checkout")}
+                    className={`px-3 py-1.5 rounded-full border text-xs font-medium ${
+                      linkMode === "checkout" ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-muted"
+                    }`}
+                  >
+                    Let customers buy now
+                  </button>
+                </div>
+              )}
+
+              {shareUrl && (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="truncate flex-1">{shareUrl}</span>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={copyShareUrl}>
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

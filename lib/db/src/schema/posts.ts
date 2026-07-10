@@ -15,6 +15,9 @@ export const postsTable = pgTable("posts", {
   publishedAt: timestamp("published_at", { withTimezone: true }),
   hashtags: text("hashtags"),
   aiGenerated: boolean("ai_generated").notNull().default(false),
+  productIds: integer("product_ids").array().notNull().default([]),
+  linkMode: text("link_mode").notNull().default("none"), // none | interest | checkout
+  shareToken: text("share_token").unique(),
   engagementData: text("engagement_data"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

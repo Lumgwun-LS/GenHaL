@@ -1984,6 +1984,14 @@ components:
           type: boolean
         engagementData:
           type: ["string", "null"]
+        productIds:
+          type: array
+          items:
+            type: integer
+        linkMode:
+          type: string
+        shareToken:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -2011,6 +2019,12 @@ components:
           type: string
         aiGenerated:
           type: boolean
+        productIds:
+          type: array
+          items:
+            type: integer
+        linkMode:
+          type: string
 
     PostUpdate:
       type: object
@@ -2030,6 +2044,12 @@ components:
         hashtags:
           type: string
         status:
+          type: string
+        productIds:
+          type: array
+          items:
+            type: integer
+        linkMode:
           type: string
 
     # ─── AI ─────────────────────────────────────────────────────────────────

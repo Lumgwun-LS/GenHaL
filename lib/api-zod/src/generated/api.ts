@@ -330,6 +330,9 @@ export const ListPostsResponseItem = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListPostsResponse = zod.array(ListPostsResponseItem)
@@ -346,7 +349,9 @@ export const CreatePostBody = zod.object({
   "mediaType": zod.string().optional(),
   "scheduledAt": zod.string().optional(),
   "hashtags": zod.string().optional(),
-  "aiGenerated": zod.boolean().optional()
+  "aiGenerated": zod.boolean().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional()
 })
 
 export const CreatePostResponse = zod.object({
@@ -362,6 +367,9 @@ export const CreatePostResponse = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -382,6 +390,9 @@ export const ListScheduledPostsResponseItem = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListScheduledPostsResponse = zod.array(ListScheduledPostsResponseItem)
@@ -407,6 +418,9 @@ export const GetPostResponse = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -424,7 +438,9 @@ export const UpdatePostBody = zod.object({
   "mediaUrls": zod.array(zod.string()).optional(),
   "scheduledAt": zod.string().optional(),
   "hashtags": zod.string().optional(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional()
 })
 
 export const UpdatePostResponse = zod.object({
@@ -440,6 +456,9 @@ export const UpdatePostResponse = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -474,6 +493,9 @@ export const PublishPostResponse = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -1480,6 +1502,9 @@ export const GetSocialAnalyticsResponse = zod.object({
   "hashtags": zod.string().nullish(),
   "aiGenerated": zod.boolean().optional(),
   "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
 })),
   "totalEngagement": zod.number()

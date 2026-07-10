@@ -13,4 +13,6 @@ export interface PostUpdate {
   scheduledAt?: string;
   hashtags?: string;
   status?: string;
+  productIds?: number[];
+  linkMode?: string;
 }

@@ -212,6 +212,10 @@ export interface Post {
   aiGenerated?: boolean;
   /** @nullable */
   engagementData?: string | null;
+  productIds?: number[];
+  linkMode?: string;
+  /** @nullable */
+  shareToken?: string | null;
   createdAt: string;
 }
 
@@ -224,6 +228,8 @@ export interface PostInput {
   scheduledAt?: string;
   hashtags?: string;
   aiGenerated?: boolean;
+  productIds?: number[];
+  linkMode?: string;
 }
 
 export interface PostUpdate {
@@ -233,6 +239,8 @@ export interface PostUpdate {
   scheduledAt?: string;
   hashtags?: string;
   status?: string;
+  productIds?: number[];
+  linkMode?: string;
 }
 
 export interface AiGeneration {

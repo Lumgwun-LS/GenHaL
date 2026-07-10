@@ -16,6 +16,7 @@ export const leadsTable = pgTable("leads", {
   source: text("source"),
   notes: text("notes"),
   score: integer("score"),
+  productId: integer("product_id"),
   linkedinUrl: text("linkedin_url"),
   websiteUrl: text("website_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

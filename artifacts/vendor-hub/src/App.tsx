@@ -14,6 +14,7 @@ import { Layout } from "@/components/layout";
 
 import LandingPage from "@/pages/landing";
 import VendorStorefront from "@/pages/store";
+import ShopLinkPage from "@/pages/shop";
 import Dashboard from "@/pages/dashboard";
 import Vendors from "@/pages/vendors";
 import VendorDetail from "@/pages/vendors/detail";
@@ -216,6 +217,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/store/:id" component={VendorStorefront} />
+          <Route path="/p/:token" component={ShopLinkPage} />
 
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />

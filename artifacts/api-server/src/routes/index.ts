@@ -25,6 +25,7 @@ import voiceCampaignsRouter from "./voice-campaigns";
 import subscriptionUpgradeRouter from "./subscription-upgrade";
 import siteContentPublicRouter from "./site-content-public";
 import publicVendorsRouter from "./public-vendors";
+import publicPostLinksRouter from "./public-post-links";
 import voiceStatusCallbackRouter from "./voice-status-callback";
 import voiceTtsAudioRouter from "./voice-tts-audio";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -39,6 +40,9 @@ router.use(siteContentPublicRouter);
 
 // Public vendor storefronts (brand themes + safe vendor fields) — no auth needed
 router.use(publicVendorsRouter);
+
+// Public "shop this post" links — no auth needed
+router.use(publicPostLinksRouter);
 
 // Payment webhooks — public (signature-verified internally), before auth
 router.use(paymentsWebhooksRouter);

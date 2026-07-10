@@ -15,4 +15,6 @@ export interface PostInput {
   scheduledAt?: string;
   hashtags?: string;
   aiGenerated?: boolean;
+  productIds?: number[];
+  linkMode?: string;
 }

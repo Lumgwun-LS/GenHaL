@@ -24,5 +24,9 @@ export interface Post {
   aiGenerated?: boolean;
   /** @nullable */
   engagementData?: string | null;
+  productIds?: number[];
+  linkMode?: string;
+  /** @nullable */
+  shareToken?: string | null;
   createdAt: string;
 }
