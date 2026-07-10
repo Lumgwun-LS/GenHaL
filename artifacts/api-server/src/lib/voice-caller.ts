@@ -10,6 +10,7 @@
  */
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
+import { registerAudio, synthesizeSpeech } from "./elevenlabs-voice";
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
 
@@ -50,13 +51,50 @@ function getStatusCallbackUrl(): string | null {
   return `https://${domain}/api/voice/status-callback`;
 }
 
-function buildTwiml(message: string): string {
-  const safe = message
+function escapeXml(message: string): string {
+  return message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna" language="en-US">${safe}</Say><Pause length="1"/></Response>`;
+}
+
+function buildSayTwiml(message: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna" language="en-US">${escapeXml(message)}</Say><Pause length="1"/></Response>`;
+}
+
+/**
+ * Builds TwiML for the call. Synthesizes the message via ElevenLabs UP FRONT
+ * (before the Twilio call is placed) and points TwiML at our own
+ * /api/voice/tts-audio/:token endpoint to serve that pre-made audio — so
+ * there's no synthesis latency mid-call and Twilio never has to hit a URL
+ * that isn't ready yet.
+ *
+ * Falls back to Twilio's built-in <Say> voice when no public domain is
+ * configured, or when ElevenLabs synthesis fails for any reason — a robotic
+ * voice beats a silent/failed call.
+ */
+async function buildTwiml(message: string): Promise<string> {
+  const domain = getPublicDomain();
+  if (!domain) {
+    logger.warn(
+      "[voice] No public domain configured — falling back to Twilio's built-in voice for this call",
+    );
+    return buildSayTwiml(message);
+  }
+
+  try {
+    const audio = await synthesizeSpeech(message);
+    const token = registerAudio(audio);
+    const audioUrl = `https://${domain}/api/voice/tts-audio/${token}`;
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Play>${escapeXml(audioUrl)}</Play><Pause length="1"/></Response>`;
+  } catch (err) {
+    logger.warn(
+      { err },
+      "[voice] ElevenLabs synthesis failed — falling back to Twilio's built-in voice for this call",
+    );
+    return buildSayTwiml(message);
+  }
 }
 
 export type CallResult = {
@@ -93,7 +131,7 @@ export async function placeCall(opts: {
     const body = new URLSearchParams({
       To:     opts.to,
       From:   fromNumber,
-      Twiml:  buildTwiml(opts.message),
+      Twiml:  await buildTwiml(opts.message),
     });
 
     const statusCallbackUrl = getStatusCallbackUrl();

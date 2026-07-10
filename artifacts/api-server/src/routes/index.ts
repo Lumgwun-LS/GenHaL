@@ -26,6 +26,7 @@ import subscriptionUpgradeRouter from "./subscription-upgrade";
 import siteContentPublicRouter from "./site-content-public";
 import publicVendorsRouter from "./public-vendors";
 import voiceStatusCallbackRouter from "./voice-status-callback";
+import voiceTtsAudioRouter from "./voice-tts-audio";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -44,6 +45,9 @@ router.use(paymentsWebhooksRouter);
 
 // Twilio call status callbacks — public, before auth
 router.use(voiceStatusCallbackRouter);
+
+// ElevenLabs-generated call audio — public, Twilio fetches this mid-call
+router.use(voiceTtsAudioRouter);
 
 // External / Awajimaa bridge — has its own auth (API key + JWT), no Clerk required
 router.use("/external", externalRouter);

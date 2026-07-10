@@ -18,4 +18,5 @@
 - [Migration file numbering](db-migration-numbering.md) — always `ls lib/db/migrations` before naming a new file; two agents/sessions can pick the same next number.
 - [Mobile node_modules drift](mobile-node-modules-drift.md) — expo workflow PluginError for a declared package usually means node_modules is stale; run pnpm install for that filter before debugging your own code.
 - [VendorHub email branding](vendorhub-email-branding.md) — wrapVendorEmail renders bodyHtml raw; callers must escapeHtml() any vendor-controlled value before interpolating it in.
+- [VendorHub voice calls use ElevenLabs TTS](vendorhub-voice-tts.md) — synthesize audio before placing the Twilio call (not on-demand), cache bytes by short-lived token, fall back to Twilio <Say> on failure.
 - [Dev DB drizzle-kit push blocked](drizzle-push-interactive-prompt.md) — drizzle-kit push can hang needing a TTY confirmation for unrelated pre-existing drift; apply just the new table's DDL via executeSql instead of blocking on push.
