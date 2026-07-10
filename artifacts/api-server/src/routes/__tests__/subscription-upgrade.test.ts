@@ -1,9 +1,13 @@
 /**
- * Tests for POST /vendors/:id/subscription/checkout
+ * Tests for POST /vendors/:id/subscription/checkout and
+ * POST /vendors/:id/subscription/portal.
  *
  * Verifies that:
  * 1. Attempting to "upgrade" to the vendor's current tier or lower is rejected with 409
- * 2. Missing STRIPE_SECRET_KEY returns 503 instead of crashing
+ * 2. Missing Stripe platform key returns 503 instead of crashing
+ * 3. A valid upgrade creates a checkout session against a catalog Price (not price_data)
+ * 4. The portal route 409s when the vendor has no Stripe customer yet, and otherwise
+ *    creates a portal session against a catalog-backed configuration
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -13,9 +17,12 @@ const MOCK_VENDOR = {
   email: "vendor@example.com",
   clerkUserId: "user_vendor",
   subscriptionTier: "pro",
+  stripeCustomerId: null as string | null,
 };
 
 let sessionsCreate = vi.fn(async () => ({ id: "cs_new", url: "https://stripe.test/cs_new" }));
+let portalSessionsCreate = vi.fn(async () => ({ url: "https://stripe.test/portal" }));
+let platformStripeKey: string | undefined = "sk_test_platform";
 
 vi.mock("@workspace/db", () => ({
   db: {
@@ -24,6 +31,11 @@ vi.mock("@workspace/db", () => ({
         where: () => ({
           limit: () => [MOCK_VENDOR],
         }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => Promise.resolve([]),
       }),
     }),
   },
@@ -41,12 +53,37 @@ vi.mock("@clerk/express", () => ({
   getAuth: () => ({ userId: "user_vendor" }),
 }));
 
+// Platform Stripe key resolution is tested separately (platform-gateways.ts);
+// here we just control whether a key is "configured".
+vi.mock("../../lib/platform-gateways", () => ({
+  resolveGatewayField: async () => platformStripeKey,
+}));
+
+// Catalog/portal-configuration creation hits real Stripe Product/Price/portal
+// APIs — stub them so route tests stay fast and deterministic.
+vi.mock("../../lib/stripe-catalog", () => ({
+  ensureStripeCatalog: async () => [
+    { tier: "starter", productId: "prod_starter", priceId: "price_starter" },
+    { tier: "pro", productId: "prod_pro", priceId: "price_pro" },
+    { tier: "enterprise", productId: "prod_enterprise", priceId: "price_enterprise" },
+  ],
+  ensurePortalConfiguration: async () => "bpc_test_config",
+}));
+
 vi.mock("stripe", () => {
   class MockStripe {
     checkout = {
       sessions: {
         create: (...args: unknown[]) => sessionsCreate(...(args as [])),
       },
+    };
+    billingPortal = {
+      sessions: {
+        create: (...args: unknown[]) => portalSessionsCreate(...(args as [])),
+      },
+    };
+    customers = {
+      create: async () => ({ id: "cus_new" }),
     };
   }
   return { default: MockStripe };
@@ -55,7 +92,8 @@ vi.mock("stripe", () => {
 import express, { type Request, type Response } from "express";
 import { createServer } from "node:http";
 
-async function postCheckout(
+async function post(
+  path: string,
   body: unknown,
 ): Promise<{ status: number; body: Record<string, unknown> | null }> {
   const { default: router } = await import("../subscription-upgrade");
@@ -71,7 +109,7 @@ async function postCheckout(
     const server = createServer(app);
     server.listen(0, () => {
       const addr = server.address() as { port: number };
-      fetch(`http://localhost:${addr.port}/vendors/1/subscription/checkout`, {
+      fetch(`http://localhost:${addr.port}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -95,12 +133,15 @@ async function postCheckout(
   });
 }
 
-describe("POST /vendors/:id/subscription/checkout", () => {
-  const ORIGINAL_STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
+const postCheckout = (body: unknown) => post("/vendors/1/subscription/checkout", body);
+const postPortal = (body: unknown) => post("/vendors/1/subscription/portal", body);
 
+describe("POST /vendors/:id/subscription/checkout", () => {
   beforeEach(() => {
     sessionsCreate = vi.fn(async () => ({ id: "cs_new", url: "https://stripe.test/cs_new" }));
-    process.env.STRIPE_SECRET_KEY = "sk_test_platform";
+    portalSessionsCreate = vi.fn(async () => ({ url: "https://stripe.test/portal" }));
+    platformStripeKey = "sk_test_platform";
+    MOCK_VENDOR.stripeCustomerId = null;
     vi.resetModules();
   });
 
@@ -116,8 +157,8 @@ describe("POST /vendors/:id/subscription/checkout", () => {
     expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
-  it("returns 503 when STRIPE_SECRET_KEY is not configured", async () => {
-    delete process.env.STRIPE_SECRET_KEY;
+  it("returns 503 when Stripe is not configured on the platform", async () => {
+    platformStripeKey = undefined;
 
     const { status, body } = await postCheckout({
       tier: "enterprise",
@@ -128,11 +169,9 @@ describe("POST /vendors/:id/subscription/checkout", () => {
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: expect.stringContaining("Stripe") });
     expect(sessionsCreate).not.toHaveBeenCalled();
-
-    process.env.STRIPE_SECRET_KEY = ORIGINAL_STRIPE_KEY;
   });
 
-  it("creates a checkout session when upgrading to a higher tier", async () => {
+  it("creates a subscription-mode checkout session against a catalog Price when upgrading", async () => {
     const { status, body } = await postCheckout({
       tier: "enterprise",
       successUrl: "https://app.test/success",
@@ -142,5 +181,40 @@ describe("POST /vendors/:id/subscription/checkout", () => {
     expect(status).toBe(200);
     expect(body).toMatchObject({ sessionId: "cs_new" });
     expect(sessionsCreate).toHaveBeenCalledTimes(1);
+
+    const args = (sessionsCreate.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+    expect(args.mode).toBe("subscription");
+    expect(args.line_items).toMatchObject([{ price: "price_enterprise", quantity: 1 }]);
+  });
+});
+
+describe("POST /vendors/:id/subscription/portal", () => {
+  beforeEach(() => {
+    portalSessionsCreate = vi.fn(async () => ({ url: "https://stripe.test/portal" }));
+    platformStripeKey = "sk_test_platform";
+    MOCK_VENDOR.stripeCustomerId = null;
+    vi.resetModules();
+  });
+
+  it("returns 409 when the vendor has no Stripe customer yet", async () => {
+    const { status, body } = await postPortal({ returnUrl: "https://app.test/billing" });
+
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ error: expect.stringContaining("billing account") });
+    expect(portalSessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a portal session against the catalog-backed configuration", async () => {
+    MOCK_VENDOR.stripeCustomerId = "cus_existing";
+
+    const { status, body } = await postPortal({ returnUrl: "https://app.test/billing" });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ url: "https://stripe.test/portal" });
+    expect(portalSessionsCreate).toHaveBeenCalledWith({
+      customer: "cus_existing",
+      return_url: "https://app.test/billing",
+      configuration: "bpc_test_config",
+    });
   });
 });

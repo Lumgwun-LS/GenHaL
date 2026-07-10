@@ -428,14 +428,12 @@ export default function VendorDetail() {
 
           <VendorPaymentAccounts vendorId={id} />
 
-          {/* Self-service plan upgrade — visible when not on enterprise */}
-          {vendor.subscriptionTier !== "enterprise" && (
-            <UpgradePlanCard
-              vendorId={id}
-              currentTier={vendor.subscriptionTier ?? "free"}
-              onUpgradeInitiated={() => void refetchVendor()}
-            />
-          )}
+          {/* Self-service plan upgrade + billing management (invoices, payment method, cancel) */}
+          <UpgradePlanCard
+            vendorId={id}
+            currentTier={vendor.subscriptionTier ?? "free"}
+            onUpgradeInitiated={() => void refetchVendor()}
+          />
         </div>
       </div>
     </div>

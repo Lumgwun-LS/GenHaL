@@ -9,3 +9,4 @@
 - [Reanimated + entering conflict](reanimated-entering-conflict.md) — applying both entering= prop and useAnimatedStyle with transform on the same Animated.View causes a web warning; separate them into nested views (entering on outer, useAnimatedStyle on inner).
 - [Scheduled job pattern](scheduled-job-pattern.md) — recurring background jobs (birthday, voice-campaign auto-launch) use setInterval(5min) + atomic conditional UPDATE ... WHERE status = X for idempotency, not a cron library.
 - [API route mounting prefix](api-route-mount-prefix.md) — app.ts mounts routes/index.ts at "/api"; new route files must NOT repeat "/api" in their own path or requests 404/misbehave.
+- [VendorHub billing portal](vendorhub-billing-portal.md) — subscription checkout uses Stripe subscription mode + stored stripeCustomerId; cancellation via Customer Portal + customer.subscription.deleted webhook, not a custom button.

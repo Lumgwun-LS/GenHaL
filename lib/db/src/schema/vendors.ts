@@ -27,6 +27,9 @@ export const vendorsTable = pgTable("vendors", {
   // Subscription & verification — controls which premium features are unlocked
   subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise
   verificationLevel: text("verification_level").notNull().default("unverified"), // unverified|basic|verified|premium
+  // Stripe customer — created on first subscription checkout, reused for portal sessions & cancellations
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   // Birthday — used for automated birthday greetings
   dateOfBirth: date("date_of_birth"),
   // Voice — opt-out of birthday & campaign calls (default opted in)

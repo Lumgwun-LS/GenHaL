@@ -79,6 +79,43 @@ interface Props {
   onUpgradeInitiated?: () => void;
 }
 
+export function ManageBillingButton({ vendorId, currentTier }: { vendorId: number; currentTier: string }) {
+  const [loading, setLoading] = useState(false);
+
+  // A vendor only has a Stripe customer once they've completed a checkout at
+  // least once — free-tier vendors who never upgraded have nothing to manage.
+  if (currentTier === "free") return null;
+
+  async function handleManageBilling() {
+    setLoading(true);
+    try {
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/subscription/portal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ returnUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not open the billing portal.");
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      toast.error("Network error — could not open the billing portal.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button size="sm" variant="outline" disabled={loading} onClick={handleManageBilling}>
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Manage Billing"}
+    </Button>
+  );
+}
+
 export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitiated }: Props) {
   const [busy, setBusy] = useState<PlanTier | null>(null);
 
@@ -122,21 +159,40 @@ export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitia
     }
   }
 
-  // If vendor is already on enterprise there's nothing to upgrade to
+  // If vendor is already on enterprise there's nothing to upgrade to — but
+  // they may still want to manage billing (invoices, payment method, cancel).
   if (currentRank >= TIER_RANK["enterprise"]) {
-    return null;
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowUpCircle className="w-4 h-4 text-violet-400" />
+              Your Plan
+            </CardTitle>
+            <CardDescription>
+              You're on the Enterprise plan. Manage billing details, invoices, or cancel below.
+            </CardDescription>
+          </div>
+          <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
+        </CardHeader>
+      </Card>
+    );
   }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ArrowUpCircle className="w-4 h-4 text-violet-400" />
-          Upgrade Your Plan
-        </CardTitle>
-        <CardDescription>
-          Unlock direct payment routing and more by upgrading your subscription.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpCircle className="w-4 h-4 text-violet-400" />
+            Upgrade Your Plan
+          </CardTitle>
+          <CardDescription>
+            Unlock direct payment routing and more by upgrading your subscription.
+          </CardDescription>
+        </div>
+        <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

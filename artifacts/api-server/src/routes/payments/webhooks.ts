@@ -239,9 +239,16 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       // ── Subscription self-upgrade path ──────────────────────────────
       const VALID_UPGRADE_TIERS = ["starter", "pro", "enterprise"];
       if (VALID_UPGRADE_TIERS.includes(upgradeTier)) {
+        const subscriptionId =
+          typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+
         const [updated] = await db
           .update(vendorsTable)
-          .set({ subscriptionTier: upgradeTier, updatedAt: new Date() })
+          .set({
+            subscriptionTier: upgradeTier,
+            ...(subscriptionId && { stripeSubscriptionId: subscriptionId }),
+            updatedAt: new Date(),
+          })
           .where(eq(vendorsTable.id, upgradeVendorId))
           .returning({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier });
 
@@ -277,9 +284,69 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
     }
 
     console.info(`[stripe webhook] checkout.session.completed processed — session=${session.id}`);
-  } else {
-    console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
+    return;
   }
+
+  // ── Subscription plan switch (via Customer Portal) ────────────────────
+  // Fires when a vendor changes price on their subscription inside the
+  // Stripe Customer Portal. Each catalog Price carries metadata.tier (see
+  // lib/stripe-catalog.ts) so the new tier can be read directly off the
+  // subscription item without a second API call.
+  if (event.type === "customer.subscription.updated") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+    const item = subscription.items.data[0];
+    const newTier = item?.price?.metadata?.tier;
+
+    if (newTier) {
+      const [updated] = await db
+        .update(vendorsTable)
+        .set({ subscriptionTier: newTier, stripeSubscriptionId: subscription.id, updatedAt: new Date() })
+        .where(eq(vendorsTable.stripeCustomerId, customerId))
+        .returning({ id: vendorsTable.id });
+
+      if (updated) {
+        console.info(
+          `[stripe webhook] subscription plan switched via portal — vendor=${updated.id} customer=${customerId} tier=${newTier}`,
+        );
+      } else {
+        console.warn(`[stripe webhook] subscription.updated — no vendor found for customer=${customerId}`);
+      }
+    } else {
+      console.info(
+        `[stripe webhook] subscription.updated with no recognizable tier metadata — customer=${customerId}, skipping`,
+      );
+    }
+    return;
+  }
+
+  // ── Subscription cancellation ─────────────────────────────────────────
+  // Fired at the end of the billing period once Stripe finishes cancelling
+  // a subscription (whether cancelled immediately or "at period end" via
+  // the Customer Portal). Drop the vendor back to the free tier.
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({ subscriptionTier: "free", stripeSubscriptionId: null, updatedAt: new Date() })
+      .where(eq(vendorsTable.stripeCustomerId, customerId))
+      .returning({ id: vendorsTable.id });
+
+    if (updated) {
+      console.info(
+        `[stripe webhook] subscription cancelled — vendor=${updated.id} customer=${customerId} downgraded to free`,
+      );
+    } else {
+      console.warn(`[stripe webhook] subscription cancelled — no vendor found for customer=${customerId}`);
+    }
+    return;
+  }
+
+  console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
 }
 
 /** Applies the business-logic side effects for a Paystack event. Idempotent-ish: safe to re-run. */
