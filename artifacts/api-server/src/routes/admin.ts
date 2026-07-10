@@ -8,7 +8,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, type SQL } from "drizzle-orm";
+import { eq, desc, and, gte, lte, gt, asc, inArray, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
@@ -112,14 +112,6 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
     }
   }
 
-  const vendors = await db
-    .select()
-    .from(vendorsTable)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(vendorsTable.name);
-  const creds = await db.select().from(vendorPaymentCredentialsTable);
-  const credsByVendor = new Map(creds.map((c) => [c.vendorId, c]));
-
   const HEADERS = [
     "ID", "Name", "Industry", "Status", "Email", "Phone", "Website",
     "Address", "Subscription Tier", "Verification Level",
@@ -137,28 +129,61 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
     return s;
   }
 
-  const rows = vendors.map((v) => {
-    const c = credsByVendor.get(v.id);
-    const keysConnected: string[] = [];
-    if (c?.stripeSecretEncrypted) keysConnected.push("Stripe");
-    if (c?.paystackSecretEncrypted) keysConnected.push("Paystack");
-
-    return [
-      v.id, v.name, v.industry, v.status, v.email ?? "",
-      v.phone ?? "", v.website ?? "", v.address ?? "",
-      v.subscriptionTier, v.verificationLevel,
-      keysConnected.join("; "),
-      v.stripeEnabled, v.paystackEnabled, v.defaultCurrency ?? "",
-      v.voiceCallOptOut, v.dateOfBirth ?? "", v.createdAt, v.updatedAt,
-    ].map(csvCell).join(",");
-  });
-
-  const csv = [HEADERS.join(","), ...rows].join("\r\n");
   const filename = `vendors-export-${new Date().toISOString().slice(0, 10)}.csv`;
-
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(csv);
+
+  res.write(HEADERS.join(",") + "\r\n");
+
+  // Stream vendors in fixed-size batches ordered by a stable, indexed key (id)
+  // so memory usage stays constant regardless of table size — no matter how
+  // many thousands of vendors match the filters, we only ever hold one batch
+  // (plus its payment-credential lookups) in memory at a time.
+  const BATCH_SIZE = 500;
+  let lastId = 0;
+
+  while (true) {
+    const batchConditions = [...conditions, gt(vendorsTable.id, lastId)];
+    const batch = await db
+      .select()
+      .from(vendorsTable)
+      .where(and(...batchConditions))
+      .orderBy(asc(vendorsTable.id))
+      .limit(BATCH_SIZE);
+
+    if (batch.length === 0) break;
+
+    const batchIds = batch.map((v) => v.id);
+    const creds = await db
+      .select()
+      .from(vendorPaymentCredentialsTable)
+      .where(inArray(vendorPaymentCredentialsTable.vendorId, batchIds));
+    const credsByVendor = new Map(creds.map((c) => [c.vendorId, c]));
+
+    let chunk = "";
+    for (const v of batch) {
+      const c = credsByVendor.get(v.id);
+      const keysConnected: string[] = [];
+      if (c?.stripeSecretEncrypted) keysConnected.push("Stripe");
+      if (c?.paystackSecretEncrypted) keysConnected.push("Paystack");
+
+      const row = [
+        v.id, v.name, v.industry, v.status, v.email ?? "",
+        v.phone ?? "", v.website ?? "", v.address ?? "",
+        v.subscriptionTier, v.verificationLevel,
+        keysConnected.join("; "),
+        v.stripeEnabled, v.paystackEnabled, v.defaultCurrency ?? "",
+        v.voiceCallOptOut, v.dateOfBirth ?? "", v.createdAt, v.updatedAt,
+      ].map(csvCell).join(",");
+      chunk += row + "\r\n";
+    }
+    res.write(chunk);
+
+    lastId = batch[batch.length - 1]!.id;
+    if (batch.length < BATCH_SIZE) break;
+  }
+
+  res.end();
 });
 
 // ─── GET /admin/birthday-logs ─────────────────────────────────────────────────
