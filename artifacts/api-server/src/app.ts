@@ -96,7 +96,13 @@ app.use(
 // ─── Webhook routes need raw body for signature verification ─────────────────
 // These must be mounted BEFORE express.json() so the raw Buffer is preserved.
 app.use(
-  ["/api/payments/stripe/webhook", "/api/payments/paystack/webhook", "/api/external/payments/webhook"],
+  [
+    "/api/payments/stripe/webhook",
+    "/api/payments/paystack/webhook",
+    "/api/payments/flutterwave/webhook",
+    "/api/payments/nomba/webhook",
+    "/api/external/payments/webhook",
+  ],
   express.raw({ type: "application/json" }),
 );
 // ─────────────────────────────────────────────────────────────────────────────

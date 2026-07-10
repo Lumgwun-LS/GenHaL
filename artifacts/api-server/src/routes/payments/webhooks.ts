@@ -513,6 +513,159 @@ async function processPaystackEvent(event: {
 }
 
 /**
+ * Applies the business-logic side effects for a Flutterwave event. Idempotent-ish: safe to re-run.
+ * Returns `matched: false` when the target payment could not be found (see processStripeEvent).
+ */
+async function processFlutterwaveEvent(event: {
+  event: string;
+  data: { tx_ref: string; status: string; meta?: { orderId?: string } };
+}): Promise<{ matched: boolean }> {
+  const { tx_ref: reference, status, meta } = event.data;
+  const orderId = meta?.orderId ? parseInt(meta.orderId) : null;
+
+  if (status !== "successful") {
+    await db.update(paymentsTable)
+      .set({ status: "failed", updatedAt: new Date() })
+      .where(eq(paymentsTable.providerReference, reference));
+    console.info(`[flutterwave webhook] non-successful status=${status} reference=${reference}`);
+    return { matched: true };
+  }
+
+  const [updatedPayment] = await db.update(paymentsTable)
+    .set({ status: "paid", updatedAt: new Date() })
+    .where(eq(paymentsTable.providerReference, reference))
+    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+
+  let orderMatched = true;
+  if (orderId) {
+    const [updatedOrder] = await db.update(ordersTable)
+      .set({ paymentStatus: "paid", updatedAt: new Date() })
+      .where(eq(ordersTable.id, orderId))
+      .returning({ id: ordersTable.id });
+    orderMatched = !!updatedOrder;
+  }
+
+  if (updatedPayment) {
+    await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
+  }
+
+  console.info(`[flutterwave webhook] successful — reference=${reference} order=${orderId}`);
+
+  if (!updatedPayment) {
+    console.warn(`[flutterwave webhook] successful — no matching payment found for reference=${reference}`);
+    return { matched: false };
+  }
+  if (orderId && !orderMatched) {
+    console.warn(`[flutterwave webhook] successful — no matching order found for order=${orderId} reference=${reference}`);
+    return { matched: false };
+  }
+  return { matched: true };
+}
+
+/**
+ * Applies the business-logic side effects for a Nomba event. Idempotent-ish: safe to re-run.
+ * Returns `matched: false` when the target payment could not be found (see processStripeEvent).
+ */
+async function processNombaEvent(event: {
+  event_type: string;
+  data: { order?: { orderReference?: string }; transaction?: { status?: string }; orderReference?: string };
+}): Promise<{ matched: boolean }> {
+  const reference = event.data?.order?.orderReference ?? event.data?.orderReference;
+  const status = event.data?.transaction?.status?.toLowerCase();
+  const success = status === "success" || event.event_type === "payment_success";
+
+  if (!reference) {
+    console.warn(`[nomba webhook] event with no order reference — type=${event.event_type}`);
+    return { matched: false };
+  }
+
+  if (!success) {
+    await db.update(paymentsTable)
+      .set({ status: "failed", updatedAt: new Date() })
+      .where(eq(paymentsTable.providerReference, reference));
+    console.info(`[nomba webhook] non-success status=${status} reference=${reference}`);
+    return { matched: true };
+  }
+
+  const [updatedPayment] = await db.update(paymentsTable)
+    .set({ status: "paid", updatedAt: new Date() })
+    .where(eq(paymentsTable.providerReference, reference))
+    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency, orderId: paymentsTable.orderId });
+
+  if (updatedPayment?.orderId) {
+    await db.update(ordersTable)
+      .set({ paymentStatus: "paid", updatedAt: new Date() })
+      .where(eq(ordersTable.id, updatedPayment.orderId));
+  }
+
+  if (updatedPayment) {
+    await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
+  }
+
+  console.info(`[nomba webhook] payment success — reference=${reference}`);
+
+  if (!updatedPayment) {
+    console.warn(`[nomba webhook] payment success — no matching payment found for reference=${reference}`);
+    return { matched: false };
+  }
+  return { matched: true };
+}
+
+/**
+ * Applies the business-logic side effects for a Remita callback. Idempotent-ish: safe to re-run.
+ *
+ * Remita does not sign its inbound callbacks, so the callback is treated only as a
+ * "check now" trigger: we re-query Remita's own status API for the RRR using the same
+ * merchantId/apiKey hash scheme used at checkout, and only mark the payment paid if
+ * Remita's own records confirm the transaction succeeded.
+ */
+async function processRemitaEvent(event: { rrr: string }): Promise<{ matched: boolean }> {
+  const { rrr } = event;
+
+  const merchantId = await resolveGatewayField("remita", "merchantId");
+  const apiKey = await resolveGatewayField("remita", "apiKey");
+  if (!merchantId || !apiKey) {
+    throw new Error("Remita is not configured — cannot verify RRR status");
+  }
+
+  const hash = crypto.createHash("sha512").update(`${rrr}${apiKey}${merchantId}`).digest("hex");
+
+  const response = await fetch(
+    `https://login.remita.net/remita/exapp/api/v1/send/api/echannelsvc/${merchantId}/${rrr}/${hash}/status.reg`,
+  );
+  const statusData = (await response.json().catch(() => ({}))) as { status?: string; message?: string };
+
+  // Remita's confirmed-success status is "00"
+  if (statusData.status !== "00") {
+    console.info(`[remita webhook] RRR ${rrr} not yet confirmed paid — status=${statusData.status}`);
+    return { matched: true };
+  }
+
+  const [updatedPayment] = await db.update(paymentsTable)
+    .set({ status: "paid", updatedAt: new Date() })
+    .where(eq(paymentsTable.providerReference, rrr))
+    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency, orderId: paymentsTable.orderId });
+
+  if (updatedPayment?.orderId) {
+    await db.update(ordersTable)
+      .set({ paymentStatus: "paid", updatedAt: new Date() })
+      .where(eq(ordersTable.id, updatedPayment.orderId));
+  }
+
+  if (updatedPayment) {
+    await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
+  }
+
+  console.info(`[remita webhook] confirmed paid — rrr=${rrr}`);
+
+  if (!updatedPayment) {
+    console.warn(`[remita webhook] confirmed paid — no matching payment found for rrr=${rrr}`);
+    return { matched: false };
+  }
+  return { matched: true };
+}
+
+/**
  * Re-processes a stored webhook event's raw payload through the same business
  * logic used by the live webhook handlers. Used by the admin "Retry" action
  * for skipped/failed events. Does NOT re-verify provider signatures — the
@@ -550,6 +703,18 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
         event: string;
         data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
       }));
+    } else if (row.provider === "flutterwave") {
+      ({ matched } = await processFlutterwaveEvent(row.rawPayload as unknown as {
+        event: string;
+        data: { tx_ref: string; status: string; meta?: { orderId?: string } };
+      }));
+    } else if (row.provider === "nomba") {
+      ({ matched } = await processNombaEvent(row.rawPayload as unknown as {
+        event_type: string;
+        data: { order?: { orderReference?: string }; transaction?: { status?: string }; orderReference?: string };
+      }));
+    } else if (row.provider === "remita") {
+      ({ matched } = await processRemitaEvent(row.rawPayload as unknown as { rrr: string }));
     } else {
       throw new Error(`Unknown provider '${row.provider}'`);
     }
@@ -699,6 +864,177 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
       res.json({ received: true, buffered: true });
     } else {
       console.error(`[paystack webhook] Processing failed — event=${eventId}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
+});
+
+// ── Flutterwave webhook ────────────────────────────────────────────────────────
+
+router.post("/payments/flutterwave/webhook", async (req, res): Promise<void> => {
+  const webhookSecretHash = await resolveGatewayField("flutterwave", "webhookSecretHash");
+  if (!webhookSecretHash) { res.status(503).json({ error: "Flutterwave is not configured. Add a platform Flutterwave key in Admin \u2192 Payment Gateways." }); return; }
+
+  const incomingHash = req.headers["verif-hash"] as string | undefined;
+  if (!incomingHash || incomingHash !== webhookSecretHash) {
+    res.status(400).json({ error: "Invalid Flutterwave webhook signature" });
+    return;
+  }
+
+  const rawBody = req.body as Buffer;
+  const event = JSON.parse(rawBody.toString()) as {
+    event: string;
+    data: { id?: number | string; tx_ref: string; status: string; meta?: { orderId?: string } };
+  };
+
+  const eventId = event.data.id ? `flutterwave-${event.data.id}` : `flutterwave-${event.data.tx_ref}-${event.data.status}`;
+
+  /** Same pipeline/safety model as the Stripe handler above. */
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "flutterwave",
+      eventType:  event.event ?? event.data.status,
+      eventId,
+      reference:  event.data.tx_ref,
+      rawPayload: event,
+    });
+
+    if (isDuplicate) return;
+
+    try {
+      await processFlutterwaveEvent(event);
+      await markWebhookProcessed(eventId);
+    } catch (bizErr) {
+      await markWebhookFailed(eventId, "flutterwave", event.event ?? event.data.status, bizErr).catch(() => {});
+      throw bizErr;
+    }
+  }
+
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId, provider: "flutterwave", eventType: event.event ?? event.data.status, process: fullPipeline });
+      console.warn(`[flutterwave webhook] DB unavailable — event ${eventId} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[flutterwave webhook] Processing failed — event=${eventId}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
+});
+
+// ── Nomba webhook ──────────────────────────────────────────────────────────────
+
+router.post("/payments/nomba/webhook", async (req, res): Promise<void> => {
+  const clientSecret = await resolveGatewayField("nomba", "clientSecret");
+  if (!clientSecret) { res.status(503).json({ error: "Nomba is not configured. Add a platform Nomba key in Admin \u2192 Payment Gateways." }); return; }
+
+  const rawBody = req.body as Buffer;
+  const incomingSignature = req.headers["signature"] as string | undefined;
+  const expectedSignature = crypto.createHmac("sha256", clientSecret).update(rawBody).digest("hex");
+
+  if (!incomingSignature || incomingSignature !== expectedSignature) {
+    res.status(400).json({ error: "Invalid Nomba webhook signature" });
+    return;
+  }
+
+  const event = JSON.parse(rawBody.toString()) as {
+    event_type: string;
+    data: { order?: { orderReference?: string }; transaction?: { status?: string; id?: string }; orderReference?: string };
+  };
+
+  const reference = event.data?.order?.orderReference ?? event.data?.orderReference ?? "unknown";
+  const eventId = event.data?.transaction?.id
+    ? `nomba-${event.data.transaction.id}`
+    : `nomba-${reference}-${event.event_type}`;
+
+  /** Same pipeline/safety model as the Stripe handler above. */
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "nomba",
+      eventType:  event.event_type,
+      eventId,
+      reference,
+      rawPayload: event,
+    });
+
+    if (isDuplicate) return;
+
+    try {
+      await processNombaEvent(event);
+      await markWebhookProcessed(eventId);
+    } catch (bizErr) {
+      await markWebhookFailed(eventId, "nomba", event.event_type, bizErr).catch(() => {});
+      throw bizErr;
+    }
+  }
+
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId, provider: "nomba", eventType: event.event_type, process: fullPipeline });
+      console.warn(`[nomba webhook] DB unavailable — event ${eventId} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[nomba webhook] Processing failed — event=${eventId}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
+});
+
+// ── Remita callback ─────────────────────────────────────────────────────────────
+// Remita doesn't sign inbound callbacks, so this is treated only as a trigger to
+// re-verify status directly against Remita's own status API (see processRemitaEvent).
+// Registered as JSON (not raw) — Remita's callback body has no signature to verify.
+
+router.post("/payments/remita/webhook", async (req, res): Promise<void> => {
+  const remitaMerchantId = await resolveGatewayField("remita", "merchantId");
+  if (!remitaMerchantId) { res.status(503).json({ error: "Remita is not configured. Add a platform Remita key in Admin \u2192 Payment Gateways." }); return; }
+
+  const { RRR, rrr } = req.body as { RRR?: string; rrr?: string };
+  const reference = RRR ?? rrr;
+  if (!reference) { res.status(400).json({ error: "Missing RRR in Remita callback" }); return; }
+
+  const eventId = `remita-${reference}-${Date.now()}`;
+  const event = { rrr: reference };
+
+  /** Same pipeline/safety model as the Stripe handler above, minus dedup-by-eventId
+   *  since Remita callbacks carry no unique id — dedup instead happens naturally
+   *  because processRemitaEvent only flips status once (paymentsTable.status). */
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "remita",
+      eventType:  "callback",
+      eventId,
+      reference: reference ?? null,
+      rawPayload: event,
+    });
+
+    if (isDuplicate) return;
+
+    try {
+      await processRemitaEvent(event);
+      await markWebhookProcessed(eventId);
+    } catch (bizErr) {
+      await markWebhookFailed(eventId, "remita", "callback", bizErr).catch(() => {});
+      throw bizErr;
+    }
+  }
+
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId, provider: "remita", eventType: "callback", process: fullPipeline });
+      console.warn(`[remita webhook] DB unavailable — event ${eventId} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[remita webhook] Processing failed — event=${eventId}:`, err);
       res.status(500).json({ error: "Internal processing error — will retry" });
     }
   }

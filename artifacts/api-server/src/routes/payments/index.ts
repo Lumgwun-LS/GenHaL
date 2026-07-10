@@ -5,6 +5,9 @@ import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
+import flutterwaveRouter from "./flutterwave";
+import nombaRouter from "./nomba";
+import remitaRouter from "./remita";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
@@ -25,6 +28,9 @@ const router = Router();
 // Mount sub-routers
 router.use(stripeRouter);
 router.use(paystackRouter);
+router.use(flutterwaveRouter);
+router.use(nombaRouter);
+router.use(remitaRouter);
 
 /**
  * POST /payments/:id/refund

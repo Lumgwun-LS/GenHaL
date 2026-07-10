@@ -23,3 +23,4 @@
 - [VendorHub vendor-ownership pattern](vendorhub-vendor-ownership-pattern.md) — requireAuth alone doesn't stop a caller passing another vendor's id in the body; resolve vendor via clerkUserId + admin allowlist and reject mismatches, per route.
 - [Voice campaign finish notifications](vendorhub-voice-campaign-notify.md) — runCampaignCalls sends in-app + email notice on terminal state; reuse this pattern for other background-job completions.
 - [Twilio webhook signature verification](twilio-webhook-signature.md) — connector only exposes API Key creds, not Auth Token; request TWILIO_AUTH_TOKEN separately for validateRequest.
+- [VendorHub multi-gateway checkout/webhook pattern](vendorhub-gateway-checkout-webhooks.md) — checkout lives per-provider, webhook pipeline is centralized in webhooks.ts; per-file webhook routes elsewhere are dead code.
