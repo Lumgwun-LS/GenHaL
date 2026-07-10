@@ -8,7 +8,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gte, lte, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
@@ -87,7 +87,36 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const vendors = await db.select().from(vendorsTable).orderBy(vendorsTable.name);
+  const { tier, status, verificationLevel, joinedAfter, joinedBefore } = req.query as {
+    tier?: string;
+    status?: string;
+    verificationLevel?: string;
+    joinedAfter?: string;
+    joinedBefore?: string;
+  };
+
+  const conditions: SQL[] = [];
+  if (tier) conditions.push(eq(vendorsTable.subscriptionTier, tier));
+  if (status) conditions.push(eq(vendorsTable.status, status));
+  if (verificationLevel) conditions.push(eq(vendorsTable.verificationLevel, verificationLevel));
+  if (joinedAfter) {
+    const d = new Date(joinedAfter);
+    if (!isNaN(d.getTime())) conditions.push(gte(vendorsTable.createdAt, d));
+  }
+  if (joinedBefore) {
+    const d = new Date(joinedBefore);
+    if (!isNaN(d.getTime())) {
+      // Include the entire selected day by treating it as an inclusive end-of-day bound.
+      const endOfDay = new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
+      conditions.push(lte(vendorsTable.createdAt, endOfDay));
+    }
+  }
+
+  const vendors = await db
+    .select()
+    .from(vendorsTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(vendorsTable.name);
   const creds = await db.select().from(vendorPaymentCredentialsTable);
   const credsByVendor = new Map(creds.map((c) => [c.vendorId, c]));
 

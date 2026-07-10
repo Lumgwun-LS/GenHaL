@@ -4,6 +4,9 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3 } from "lucide-react";
@@ -216,6 +219,124 @@ async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
   return res.json();
 }
 
+const ANY = "__any__";
+
+type ExportFilters = {
+  tier: string;
+  status: string;
+  verificationLevel: string;
+  joinedAfter: string;
+  joinedBefore: string;
+};
+
+const EMPTY_FILTERS: ExportFilters = {
+  tier: ANY,
+  status: ANY,
+  verificationLevel: ANY,
+  joinedAfter: "",
+  joinedBefore: "",
+};
+
+const STATUSES = ["active", "inactive", "suspended"] as const;
+
+function ExportFilterPopover({ onExport }: { onExport: (filters: ExportFilters) => void }) {
+  const [open, setOpen] = useState(false);
+  const [filters, setFilters] = useState<ExportFilters>(EMPTY_FILTERS);
+
+  function update<K extends keyof ExportFilters>(key: K, value: ExportFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="shrink-0 gap-2">
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Subscription Tier</Label>
+          <Select value={filters.tier} onValueChange={(v) => update("tier", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any tier</SelectItem>
+              {TIERS.map((t) => (
+                <SelectItem key={t} value={t} className="text-xs">{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <Select value={filters.status} onValueChange={(v) => update("status", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any status</SelectItem>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s} className="text-xs">{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Verification Level</Label>
+          <Select value={filters.verificationLevel} onValueChange={(v) => update("verificationLevel", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any level</SelectItem>
+              {LEVELS.map((l) => (
+                <SelectItem key={l} value={l} className="text-xs">{l.charAt(0).toUpperCase() + l.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Joined after</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={filters.joinedAfter}
+              onChange={(e) => update("joinedAfter", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Joined before</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={filters.joinedBefore}
+              onChange={(e) => update("joinedBefore", e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-between gap-2 pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+          >
+            Clear
+          </Button>
+          <Button
+            size="sm"
+            className="text-xs"
+            onClick={() => {
+              onExport(filters);
+              setOpen(false);
+            }}
+          >
+            Export CSV
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -338,23 +459,24 @@ export default function AdminPanel() {
                 <CardTitle>All Vendors</CardTitle>
                 <CardDescription>Adjust subscription tiers and verification levels. Changes take effect immediately.</CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 gap-2"
-                onClick={() => {
+              <ExportFilterPopover
+                onExport={(filters) => {
+                  const params = new URLSearchParams();
+                  if (filters.tier !== ANY) params.set("tier", filters.tier);
+                  if (filters.status !== ANY) params.set("status", filters.status);
+                  if (filters.verificationLevel !== ANY) params.set("verificationLevel", filters.verificationLevel);
+                  if (filters.joinedAfter) params.set("joinedAfter", filters.joinedAfter);
+                  if (filters.joinedBefore) params.set("joinedBefore", filters.joinedBefore);
+                  const qs = params.toString();
                   const a = document.createElement("a");
-                  a.href = `${BASE_URL}/api/admin/vendors/export`;
+                  a.href = `${BASE_URL}/api/admin/vendors/export${qs ? `?${qs}` : ""}`;
                   a.download = "";
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   toast.success("CSV download started");
                 }}
-              >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </Button>
+              />
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
