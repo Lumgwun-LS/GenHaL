@@ -13,6 +13,7 @@ import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
+import { resendBirthdayEmail } from "../lib/birthday-scheduler";
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
 function isAdmin(userId: string): boolean {
@@ -224,6 +225,27 @@ router.get("/admin/birthday-logs", async (req, res): Promise<void> => {
     .limit(200);
 
   res.json(logs);
+});
+
+// ─── POST /admin/birthday-logs/:id/resend ─────────────────────────────────────
+
+router.post("/admin/birthday-logs/:id/resend", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const logId = Number(req.params.id);
+  if (!Number.isInteger(logId) || logId <= 0) {
+    res.status(400).json({ error: "Invalid log id." });
+    return;
+  }
+
+  const result = await resendBirthdayEmail(logId);
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
 });
 
 // ─── GET /admin/voice-call-logs ───────────────────────────────────────────────

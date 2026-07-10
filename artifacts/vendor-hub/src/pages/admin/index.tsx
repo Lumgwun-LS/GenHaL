@@ -439,6 +439,47 @@ function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } 
   );
 }
 
+async function resendBirthdayEmail(logId: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/birthday-logs/${logId}/resend`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to resend email");
+  }
+}
+
+function ResendBirthdayEmailButton({ logId, onDone }: { logId: number; onDone: () => void }) {
+  const [sending, setSending] = useState(false);
+
+  async function handleResend() {
+    setSending(true);
+    try {
+      await resendBirthdayEmail(logId);
+      toast.success("Birthday email resent");
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to resend email");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-7 gap-1.5 text-xs"
+      onClick={handleResend}
+      disabled={sending}
+      data-testid={`button-resend-birthday-${logId}`}
+    >
+      <Send className="w-3.5 h-3.5" /> {sending ? "Resending…" : "Resend"}
+    </Button>
+  );
+}
+
 const AUDIT_FIELD_ANY = "__any__";
 
 export default function AdminPanel() {
@@ -756,6 +797,7 @@ export default function AdminPanel() {
                       <TableHead>Email</TableHead>
                       <TableHead>Channel</TableHead>
                       <TableHead className="text-right">Sent</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -782,6 +824,14 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
                           {new Date(log.sentAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {log.channel === "email-failed" && (
+                            <ResendBirthdayEmailButton
+                              logId={log.id}
+                              onDone={() => qc.invalidateQueries({ queryKey: ["admin-birthday-logs"] })}
+                            />
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

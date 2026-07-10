@@ -246,6 +246,69 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
 }
 
 /**
+ * Resends a birthday email for a given failed log row (admin-triggered).
+ * Looks up the vendor fresh (in case name/email changed), re-sends via
+ * sendEmail, and updates the log row's channel on success.
+ */
+export async function resendBirthdayEmail(logId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [log] = await db
+    .select()
+    .from(birthdayMessageLogsTable)
+    .where(eq(birthdayMessageLogsTable.id, logId))
+    .limit(1);
+
+  if (!log) {
+    return { ok: false, error: "Log entry not found." };
+  }
+  if (log.channel !== "email-failed") {
+    return { ok: false, error: "Only failed email log entries can be resent." };
+  }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, log.vendorId))
+    .limit(1);
+
+  const email = vendor?.email ?? log.vendorEmail;
+  if (!email) {
+    return { ok: false, error: "Vendor has no email address on file." };
+  }
+  const name = vendor?.name ?? log.vendorName;
+
+  const emailHtml = wrapVendorEmail({
+    bodyHtml: `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 40px;">🎂</span>
+      </div>
+      <h1 style="text-align: center; font-size: 22px; color: #1a1a1a; margin: 0 0 16px;">Happy Birthday, ${escapeHtml(name)}!</h1>
+      <p style="text-align: center; font-size: 15px; line-height: 1.6; color: #444;">
+        Wishing you a wonderful day from the entire Awajimaa Connect Suite team.
+        We're so grateful to have you with us. 🎉
+      </p>`,
+  });
+
+  const result = await sendEmail({
+    to: email,
+    subject: `🎂 Happy Birthday, ${name}!`,
+    html: emailHtml,
+  });
+
+  if (result.status !== "sent") {
+    logger.warn({ logId, vendorId: log.vendorId, email, reason: result.error }, "[birthday] Manual resend did not succeed");
+    return { ok: false, error: result.error ?? "Email dispatch failed." };
+  }
+
+  await db
+    .update(birthdayMessageLogsTable)
+    .set({ channel: "email", vendorEmail: email, sentAt: new Date() })
+    .where(eq(birthdayMessageLogsTable.id, logId));
+
+  logger.info({ logId, vendorId: log.vendorId, email }, "[birthday] Manual resend succeeded");
+  return { ok: true };
+}
+
+/**
  * Starts the daily birthday scheduler.
  * - Checks every 5 minutes; fires when UTC hour is 08.
  * - `lastRanDate` advances only AFTER a successful run so a DB error at 08:00
