@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,11 +129,21 @@ export default function Payments() {
   const [webhookDuplicatesOnly, setWebhookDuplicatesOnly] = useState<boolean>(false);
   const queryClient = useQueryClient();
   const isAdmin = useIsAdmin();
+  const highlightId = Number(new URLSearchParams(window.location.search).get("highlight")) || null;
+  const highlightRef = useRef<HTMLTableRowElement | null>(null);
+  const scrolledRef = useRef(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["payments", providerFilter, statusFilter],
     queryFn: () => fetchPayments({ provider: providerFilter, status: statusFilter }),
   });
+
+  useEffect(() => {
+    if (!scrolledRef.current && highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrolledRef.current = true;
+    }
+  }, [highlightId, data]);
 
   const { data: webhookData, isLoading: webhookLoading } = useQuery({
     queryKey: ["webhook-events", webhookProviderFilter],
@@ -377,7 +388,11 @@ export default function Payments() {
               </TableRow>
             ) : (
               data?.payments?.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow
+                  key={p.id}
+                  ref={p.id === highlightId ? highlightRef : undefined}
+                  className={p.id === highlightId ? "ring-2 ring-primary bg-primary/5" : undefined}
+                >
                   <TableCell className="font-mono text-xs">#{p.id}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={providerBadge(p.provider)}>
@@ -555,6 +570,3 @@ export default function Payments() {
     </div>
   );
 }
-
-// Import useState at the top (hoisted here for clarity)
-import { useState } from "react";

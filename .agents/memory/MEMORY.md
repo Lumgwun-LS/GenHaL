@@ -17,3 +17,4 @@
 - [VendorHub signup/onboarding gap](vendorhub-onboarding.md) — web Clerk `<SignUp/>` never created a vendors row; onboarding step now does, with server-verified identity and DB-unique clerkUserId to survive double-submits.
 - [Migration file numbering](db-migration-numbering.md) — always `ls lib/db/migrations` before naming a new file; two agents/sessions can pick the same next number.
 - [Mobile node_modules drift](mobile-node-modules-drift.md) — expo workflow PluginError for a declared package usually means node_modules is stale; run pnpm install for that filter before debugging your own code.
+- [VendorHub email branding](vendorhub-email-branding.md) — wrapVendorEmail renders bodyHtml raw; callers must escapeHtml() any vendor-controlled value before interpolating it in.

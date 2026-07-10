@@ -32,6 +32,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { placeCall } from "./voice-caller";
 import { sendEmail } from "./mailer";
+import { wrapVendorEmail, escapeHtml } from "./email-branding";
 
 /** True if a birthday notification was already created for this vendor today (UTC). */
 async function alreadyNotifiedToday(vendorId: number, utcDateStr: string): Promise<boolean> {
@@ -199,19 +200,17 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
 
       // ── Real birthday email ───────────────────────────────────────────────
       if (vendor.email && !(await alreadyLoggedToday(vendor.id, "email", utcDateStr))) {
-        const emailHtml = `
-          <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #ffffff;">
+        const emailHtml = wrapVendorEmail({
+          bodyHtml: `
             <div style="text-align: center; margin-bottom: 24px;">
               <span style="font-size: 40px;">🎂</span>
             </div>
-            <h1 style="text-align: center; font-size: 22px; color: #1a1a1a; margin: 0 0 16px;">Happy Birthday, ${vendor.name}!</h1>
+            <h1 style="text-align: center; font-size: 22px; color: #1a1a1a; margin: 0 0 16px;">Happy Birthday, ${escapeHtml(vendor.name)}!</h1>
             <p style="text-align: center; font-size: 15px; line-height: 1.6; color: #444;">
               Wishing you a wonderful day from the entire Awajimaa Connect Suite team.
               We're so grateful to have you with us. 🎉
-            </p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0 16px;" />
-            <p style="text-align: center; font-size: 12px; color: #999;">Awajimaa Connect Suite</p>
-          </div>`;
+            </p>`,
+        });
 
         const result = await sendEmail({
           to: vendor.email,

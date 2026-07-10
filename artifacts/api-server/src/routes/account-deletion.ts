@@ -10,6 +10,7 @@ import { getAuth } from "@clerk/express";
 import { db, vendorsTable, accountDeletionRequestsTable } from "@workspace/db";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 import { sendSms } from "../lib/sms";
 import {
   checkDeletionEligibility,
@@ -94,7 +95,9 @@ router.post("/vendors/:id/deletion-requests", async (req, res): Promise<void> =>
     sendEmail({
       to: vendor.email,
       subject: "Confirm deletion of your VendorHub account data",
-      html: `<p>Hi ${vendor.name},</p><p>Use this code to confirm permanent deletion of your account data: <strong>${emailCode}</strong></p><p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`,
+      html: wrapVendorEmail({
+        bodyHtml: `<p>Hi ${escapeHtml(vendor.name)},</p><p>Use this code to confirm permanent deletion of your account data: <strong>${emailCode}</strong></p><p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`,
+      }),
     }),
     sendSms({
       to: vendor.phone,

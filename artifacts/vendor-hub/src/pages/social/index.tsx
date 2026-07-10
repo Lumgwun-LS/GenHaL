@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useListPosts } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,16 @@ import { Link } from "wouter";
 
 export default function Social() {
   const { data: posts, isLoading } = useListPosts();
+  const highlightId = Number(new URLSearchParams(window.location.search).get("highlight")) || null;
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  const scrolledRef = useRef(false);
+
+  useEffect(() => {
+    if (!scrolledRef.current && highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrolledRef.current = true;
+    }
+  }, [highlightId, posts]);
 
   const getPlatformIcon = (platform: string) => {
     switch (platform.toLowerCase()) {
@@ -53,7 +64,11 @@ export default function Social() {
           </div>
         ) : (
           posts?.map((post) => (
-            <Card key={post.id} className="flex flex-col h-full hover:border-primary/50 transition-colors">
+            <Card
+              key={post.id}
+              ref={post.id === highlightId ? highlightRef : undefined}
+              className={`flex flex-col h-full hover:border-primary/50 transition-colors ${post.id === highlightId ? "ring-2 ring-primary" : ""}`}
+            >
               <CardContent className="p-5 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex gap-2">

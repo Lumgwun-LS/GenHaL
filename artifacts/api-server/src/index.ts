@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startBirthdayScheduler } from "./lib/birthday-scheduler";
 import { startWebhookBufferDrainer } from "./lib/webhook-buffer";
 import { startVoiceCampaignScheduler } from "./lib/voice-campaign-scheduler";
+import { startPendingReminderScheduler } from "./lib/pending-reminders";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +29,5 @@ app.listen(port, (err) => {
   startBirthdayScheduler();
   startWebhookBufferDrainer();
   startVoiceCampaignScheduler();
+  startPendingReminderScheduler();
 });
