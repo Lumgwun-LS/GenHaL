@@ -10,3 +10,4 @@
 - [Scheduled job pattern](scheduled-job-pattern.md) — recurring background jobs (birthday, voice-campaign auto-launch) use setInterval(5min) + atomic conditional UPDATE ... WHERE status = X for idempotency, not a cron library.
 - [API route mounting prefix](api-route-mount-prefix.md) — app.ts mounts routes/index.ts at "/api"; new route files must NOT repeat "/api" in their own path or requests 404/misbehave.
 - [VendorHub billing portal](vendorhub-billing-portal.md) — subscription checkout uses Stripe subscription mode + stored stripeCustomerId; cancellation via Customer Portal + customer.subscription.deleted webhook, not a custom button.
+- [Git remote tooling limits](git-remote-tooling-limits.md) — gitPush/createPullRequest only support GitHub; pushing directly to a GitHub repo's default branch can fail with a false BRANCH_ALREADY_EXISTS even when empty — push to a new branch instead and let the user flip the default/rename it.
