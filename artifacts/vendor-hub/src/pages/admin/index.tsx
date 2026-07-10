@@ -460,9 +460,9 @@ export default function AdminPanel() {
                             <div className="flex items-center gap-1.5 text-xs text-primary">
                               <Bell className="w-3.5 h-3.5" /> In-app
                             </div>
-                          ) : log.channel === "email-queued" ? (
-                            <div className="flex items-center gap-1.5 text-xs text-amber-500">
-                              <Mail className="w-3.5 h-3.5" /> Email queued
+                          ) : log.channel === "email-failed" ? (
+                            <div className="flex items-center gap-1.5 text-xs text-red-500">
+                              <Mail className="w-3.5 h-3.5" /> Email failed
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 text-xs text-emerald-500">

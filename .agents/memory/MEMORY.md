@@ -5,4 +5,5 @@
 - [Mobile auth security rule](mobile-auth-security.md) — mobile-handshake identity must come from a verified provider (Clerk) on the server, never self-asserted request fields; two-token pattern: Clerk token for handshake only, app JWT for all other /external/* calls.
 - [Dev DB schema drift](dev-db-schema-drift.md) — "column/relation does not exist" against dev DB despite matching Drizzle schema means drizzle-kit push wasn't run; apply DDL directly via executeSql for dev-only drift.
 - [Mobile brand palette](mobile-brand-palette.md) — VendorHub Mobile uses #7F50FF (primary/violet) and #FF7F50 (accent/coral); GradientButton and hero sections use LinearGradient between these two; do not revert to old blue palette.
+- [VendorHub email dispatch](vendorhub-email.md) — real emails go via SMTP/nodemailer (user-provided creds), not Resend/SendGrid; reuse mailer.ts sendEmail for new email features.
 - [Reanimated + entering conflict](reanimated-entering-conflict.md) — applying both entering= prop and useAnimatedStyle with transform on the same Animated.View causes a web warning; separate them into nested views (entering on outer, useAnimatedStyle on inner).
