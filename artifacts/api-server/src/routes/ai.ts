@@ -1,6 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, aiGenerationsTable } from "@workspace/db";
+import { getAuth } from "@clerk/express";
+import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { openai } from "@workspace/integrations-openai-ai-server";
+import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import {
   GenerateAiImageBody,
   GenerateAiCaptionBody,
@@ -12,28 +15,58 @@ import {
 
 const router: IRouter = Router();
 
+const MAX_PROMPT_LEN = 500;
+
+/**
+ * Resolves the calling Clerk user to their own vendor row (or confirms admin status).
+ * Mirrors the ownership pattern used in vendors.ts/posts.ts — identity/ownership is
+ * always derived server-side from the verified session, never trusted from the body.
+ */
+async function resolveAuthedVendor(req: import("express").Request): Promise<{ vendorId: number | null; isAdmin: boolean }> {
+  const { userId } = getAuth(req);
+  if (!userId) return { vendorId: null, isAdmin: false };
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+  const [vendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  return { vendorId: vendor?.id ?? null, isAdmin };
+}
+
 router.post("/ai/generate-image", async (req, res): Promise<void> => {
   const parsed = GenerateAiImageBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { vendorId, prompt, style, industry } = parsed.data;
 
-  // Record generation attempt
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+  if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+
   const fullPrompt = [
     prompt,
     style ? `Style: ${style}` : "",
     industry ? `Industry: ${industry}` : "",
+    "Wide 16:9 social media post image, professional marketing quality.",
   ].filter(Boolean).join(". ");
 
-  const result = `[AI Image Generation: ${fullPrompt}] - Image generation requires OpenAI DALL-E integration. Connect via Settings to enable.`;
+  let result: string;
+  let status: "completed" | "failed" = "completed";
+  try {
+    const buffer = await generateImageBuffer(fullPrompt, "1024x1024");
+    result = `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch (err) {
+    status = "failed";
+    result = `Image generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
     type: "image",
     prompt: fullPrompt,
     result,
-    status: "completed",
+    status,
   }).returning();
 
+  if (status === "failed") { res.status(502).json(GenerateAiImageResponse.parse(generation)); return; }
   res.json(GenerateAiImageResponse.parse(generation));
 });
 
@@ -42,7 +75,11 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { vendorId, topic, platform, tone, includeHashtags, includeEmoji } = parsed.data;
 
-  // Generate caption using template (real AI via OpenAI can be added)
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+  if (topic.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Topic must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+
   const toneMap: Record<string, string> = {
     professional: "professional and authoritative",
     casual: "friendly and conversational",
@@ -58,30 +95,51 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
   };
   const limit = platformLimits[platform?.toLowerCase() ?? ""] ?? 500;
 
-  const captions = [
-    `Exciting developments in ${topic}! Discover how we're transforming the industry with cutting-edge solutions designed for modern businesses.`,
-    `${topic} is changing everything. Are you ready to be part of the revolution? Join thousands of businesses already making the shift.`,
-    `Your business deserves the best. Explore our ${topic} solutions and see the difference premium service makes.`,
-  ];
-  const caption = captions[Math.floor(Math.random() * captions.length)]!;
-
-  const hashtags = includeHashtags ? `\n\n#${topic.replace(/\s+/g, "")} #Business #Growth #Innovation` : "";
-  const result = `${caption}${hashtags}`.slice(0, limit);
+  let result: string;
+  let status: "completed" | "failed" = "completed";
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 500,
+      messages: [
+        {
+          role: "system",
+          content: `You write short, high-converting social media captions for small business vendors. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes or preamble.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}`,
+        },
+        { role: "user", content: `Write a caption about: ${topic}` },
+      ],
+    });
+    result = (response.choices[0]?.message?.content ?? "").trim().slice(0, limit);
+    if (!result) throw new Error("empty response from model");
+  } catch (err) {
+    status = "failed";
+    result = `Caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
     type: "caption",
     prompt: `${topic} | ${platform} | ${toneDesc}`,
     result,
-    status: "completed",
+    status,
   }).returning();
 
+  if (status === "failed") { res.status(502).json(GenerateAiCaptionResponse.parse(generation)); return; }
   res.json(GenerateAiCaptionResponse.parse(generation));
 });
 
 router.get("/ai/generations", async (req, res): Promise<void> => {
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = ListAiGenerationsQueryParams.safeParse(req.query);
+  if (!isAdmin && params.success && params.data.vendorId && params.data.vendorId !== authedVendorId) {
+    res.status(403).json({ error: "You can only view your own vendor's AI generations." });
+    return;
+  }
+
   let generations = await db.select().from(aiGenerationsTable).orderBy(desc(aiGenerationsTable.createdAt));
+  if (!isAdmin) generations = generations.filter((g) => g.vendorId === authedVendorId);
   if (params.success) {
     if (params.data.vendorId) generations = generations.filter((g) => g.vendorId === params.data.vendorId);
     if (params.data.type) generations = generations.filter((g) => g.type === params.data.type);

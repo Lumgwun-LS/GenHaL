@@ -24,4 +24,5 @@
 - [Voice campaign finish notifications](vendorhub-voice-campaign-notify.md) — runCampaignCalls sends in-app + email notice on terminal state; reuse this pattern for other background-job completions.
 - [Twilio webhook signature verification](twilio-webhook-signature.md) — connector only exposes API Key creds, not Auth Token; request TWILIO_AUTH_TOKEN separately for validateRequest.
 - [VendorHub multi-gateway checkout/webhook pattern](vendorhub-gateway-checkout-webhooks.md) — checkout lives per-provider, webhook pipeline is centralized in webhooks.ts; per-file webhook routes elsewhere are dead code.
+- [VendorHub AI content generation](vendorhub-ai-content-generation.md) — real OpenAI image/caption gen wired for Social Media Manager; no video gen or real platform publishing yet.
 - [Tier-downgrade notification pattern](vendorhub-tier-downgrade-notify.md) — any webhook path that drops subscriptionTier to free (cancel, refund) should insert a tier_change vendorNotification AND email via mailer, listing SUBSCRIPTION_PLANS features lost.
