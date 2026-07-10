@@ -253,6 +253,7 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
     .select({
       id: adminAuditLogTable.id,
       adminUserId: adminAuditLogTable.adminUserId,
+      adminDisplayName: adminAuditLogTable.adminDisplayName,
       vendorId: adminAuditLogTable.vendorId,
       vendorName: vendorsTable.name,
       field: adminAuditLogTable.field,

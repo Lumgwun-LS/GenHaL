@@ -166,6 +166,7 @@ function KeyStatus({ hasKey, testPassed, label }: { hasKey: boolean; testPassed:
 type AuditLogEntry = {
   id: number;
   adminUserId: string;
+  adminDisplayName: string | null;
   vendorId: number;
   vendorName: string | null;
   field: string;
@@ -910,7 +911,11 @@ export default function AdminPanel() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
+                          {entry.adminDisplayName ? (
+                            <span className="text-xs">{entry.adminDisplayName}</span>
+                          ) : (
+                            <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
                           {new Date(entry.changedAt).toLocaleString()}

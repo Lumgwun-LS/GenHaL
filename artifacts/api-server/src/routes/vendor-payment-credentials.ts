@@ -14,7 +14,7 @@ import { vendorsTable, vendorPaymentCredentialsTable, adminAuditLogTable, vendor
 import { eq } from "drizzle-orm";
 import { encrypt, maskEncryptedKey } from "../lib/encryption";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
@@ -314,6 +314,22 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     return;
   }
 
+  // Resolve the admin's display name from Clerk so the audit log is readable
+  // without a separate Clerk lookup later. Fall back gracefully if unavailable.
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
   // Execute the vendor update + audit log insert atomically.
   // If either step fails the entire transaction rolls back — no silent partial commits.
   const result = await db.transaction(async (tx) => {
@@ -338,12 +354,12 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     if (!vendor) return null;
 
     // Write one audit row per field that actually changed
-    const auditRows: { adminUserId: string; vendorId: number; field: string; oldValue: string; newValue: string }[] = [];
+    const auditRows: { adminUserId: string; adminDisplayName: string | null; vendorId: number; field: string; oldValue: string; newValue: string }[] = [];
     if (subscriptionTier && subscriptionTier !== before.subscriptionTier) {
-      auditRows.push({ adminUserId: userId, vendorId: id, field: "subscriptionTier", oldValue: before.subscriptionTier, newValue: subscriptionTier });
+      auditRows.push({ adminUserId: userId, adminDisplayName, vendorId: id, field: "subscriptionTier", oldValue: before.subscriptionTier, newValue: subscriptionTier });
     }
     if (verificationLevel && verificationLevel !== before.verificationLevel) {
-      auditRows.push({ adminUserId: userId, vendorId: id, field: "verificationLevel", oldValue: before.verificationLevel, newValue: verificationLevel });
+      auditRows.push({ adminUserId: userId, adminDisplayName, vendorId: id, field: "verificationLevel", oldValue: before.verificationLevel, newValue: verificationLevel });
     }
     if (auditRows.length > 0) {
       await tx.insert(adminAuditLogTable).values(auditRows);
