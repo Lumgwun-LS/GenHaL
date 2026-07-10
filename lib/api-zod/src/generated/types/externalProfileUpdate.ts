@@ -12,4 +12,8 @@ export interface ExternalProfileUpdate {
   address?: string;
   description?: string;
   logoUrl?: string;
+  gender?: string;
+  country?: string;
+  state?: string;
+  city?: string;
 }

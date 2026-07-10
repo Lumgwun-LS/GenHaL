@@ -17,4 +17,8 @@ export interface VendorUpdate {
   description?: string;
   status?: string;
   brandTheme?: string;
+  gender?: string;
+  country?: string;
+  state?: string;
+  city?: string;
 }

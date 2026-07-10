@@ -42,7 +42,11 @@ export const ListVendorsResponseItem = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
 
@@ -77,7 +81,11 @@ export const CreateVendorResponse = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 })
 
 
@@ -118,7 +126,11 @@ export const GetVendorResponse = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 })
 
 
@@ -139,7 +151,11 @@ export const UpdateVendorBody = zod.object({
   "logoUrl": zod.string().optional(),
   "description": zod.string().optional(),
   "status": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "country": zod.string().optional(),
+  "state": zod.string().optional(),
+  "city": zod.string().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -158,7 +174,11 @@ export const UpdateVendorResponse = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 })
 
 
@@ -1431,6 +1451,147 @@ export const GetSocialAnalyticsResponse = zod.object({
 
 
 /**
+ * @summary A single vendor's own revenue/orders/customers over a period
+ */
+export const GetVendorPerformanceAnalyticsQueryParams = zod.object({
+  "vendorId": zod.coerce.number(),
+  "period": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const GetVendorPerformanceAnalyticsResponse = zod.object({
+  "range": zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "period": zod.string()
+}),
+  "totalRevenue": zod.number(),
+  "totalOrders": zod.number(),
+  "completedOrders": zod.number(),
+  "uniqueCustomers": zod.number(),
+  "averageOrderValue": zod.number(),
+  "revenueOverTime": zod.array(zod.object({
+  "date": zod.string(),
+  "amount": zod.number()
+})),
+  "ordersOverTime": zod.array(zod.object({
+  "date": zod.string(),
+  "count": zod.number()
+}))
+})
+
+
+/**
+ * @summary Admin-only user + payment analytics broken down by gender/country/state/city
+ */
+export const GetAdminDemographicsAnalyticsQueryParams = zod.object({
+  "period": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const GetAdminDemographicsAnalyticsResponse = zod.object({
+  "range": zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "period": zod.string()
+}),
+  "totalUsers": zod.number(),
+  "totalRevenue": zod.number(),
+  "usersByGender": zod.array(zod.object({
+  "key": zod.string(),
+  "count": zod.number()
+})),
+  "usersByCountry": zod.array(zod.object({
+  "key": zod.string(),
+  "count": zod.number()
+})),
+  "usersByState": zod.array(zod.object({
+  "key": zod.string(),
+  "count": zod.number()
+})),
+  "usersByCity": zod.array(zod.object({
+  "key": zod.string(),
+  "count": zod.number()
+})),
+  "paymentsByGender": zod.array(zod.object({
+  "key": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+})),
+  "paymentsByCountry": zod.array(zod.object({
+  "key": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+})),
+  "paymentsByState": zod.array(zod.object({
+  "key": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+})),
+  "paymentsByCity": zod.array(zod.object({
+  "key": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+})),
+  "signupsOverTime": zod.array(zod.object({
+  "date": zod.string(),
+  "count": zod.number()
+})),
+  "revenueOverTime": zod.array(zod.object({
+  "date": zod.string(),
+  "amount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Whether this vendor can currently request deletion of their data
+ */
+export const GetVendorDeletionEligibilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetVendorDeletionEligibilityResponse = zod.object({
+  "eligible": zod.boolean(),
+  "reasons": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Start account deletion — emails and texts a one-time code
+ */
+export const RequestVendorDeletionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RequestVendorDeletionResponse = zod.object({
+  "requestId": zod.number(),
+  "expiresAt": zod.string(),
+  "emailDelivery": zod.string(),
+  "smsDelivery": zod.string()
+})
+
+
+/**
+ * @summary Confirm both one-time codes and permanently delete the vendor's data
+ */
+export const VerifyVendorDeletionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const VerifyVendorDeletionBody = zod.object({
+  "emailCode": zod.string(),
+  "phoneCode": zod.string()
+})
+
+export const VerifyVendorDeletionResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * Called once when an Awajimaa user opens the VendorHub mobile app. Auto-creates (or finds) the matching vendor profile and returns a signed JWT to use as a bearer token on all other /external/* routes.
  * @summary Exchange an Awajimaa API key + user identity for a VendorHub session token
  */
@@ -1515,7 +1676,11 @@ export const GetExternalProfileResponse = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 }),
   "features": zod.array(zod.string())
 })
@@ -1529,7 +1694,11 @@ export const UpdateExternalProfileBody = zod.object({
   "phone": zod.string().optional(),
   "address": zod.string().optional(),
   "description": zod.string().optional(),
-  "logoUrl": zod.string().optional()
+  "logoUrl": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "country": zod.string().optional(),
+  "state": zod.string().optional(),
+  "city": zod.string().optional()
 })
 
 export const UpdateExternalProfileResponse = zod.object({
@@ -1548,7 +1717,11 @@ export const UpdateExternalProfileResponse = zod.object({
   "stripeEnabled": zod.boolean().optional(),
   "paystackEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
-  "brandTheme": zod.string().optional()
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
 })
 
 

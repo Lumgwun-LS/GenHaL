@@ -32,6 +32,14 @@ export interface Vendor {
   paystackEnabled?: boolean;
   defaultCurrency?: string;
   brandTheme?: string;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  city?: string | null;
 }
 
 export interface VendorInput {
@@ -56,6 +64,87 @@ export interface VendorUpdate {
   description?: string;
   status?: string;
   brandTheme?: string;
+  gender?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+}
+
+export interface DeletionEligibility {
+  eligible: boolean;
+  reasons: string[];
+}
+
+export interface DeletionRequestResult {
+  requestId: number;
+  expiresAt: string;
+  emailDelivery: string;
+  smsDelivery: string;
+}
+
+export interface DeletionVerifyInput {
+  emailCode: string;
+  phoneCode: string;
+}
+
+export interface DemographicBucket {
+  key: string;
+  count: number;
+}
+
+export interface PaymentDemographicBucket {
+  key: string;
+  total: number;
+  count: number;
+}
+
+export interface TimeSeriesCountPoint {
+  date: string;
+  count: number;
+}
+
+export interface TimeSeriesAmountPoint {
+  date: string;
+  amount: number;
+}
+
+export type AdminDemographicsAnalyticsRange = {
+  from: string;
+  to: string;
+  period: string;
+};
+
+export interface AdminDemographicsAnalytics {
+  range: AdminDemographicsAnalyticsRange;
+  totalUsers: number;
+  totalRevenue: number;
+  usersByGender: DemographicBucket[];
+  usersByCountry: DemographicBucket[];
+  usersByState: DemographicBucket[];
+  usersByCity: DemographicBucket[];
+  paymentsByGender: PaymentDemographicBucket[];
+  paymentsByCountry: PaymentDemographicBucket[];
+  paymentsByState: PaymentDemographicBucket[];
+  paymentsByCity: PaymentDemographicBucket[];
+  signupsOverTime: TimeSeriesCountPoint[];
+  revenueOverTime: TimeSeriesAmountPoint[];
+}
+
+export type VendorPerformanceAnalyticsRange = {
+  from: string;
+  to: string;
+  period: string;
+};
+
+export interface VendorPerformanceAnalytics {
+  range: VendorPerformanceAnalyticsRange;
+  totalRevenue: number;
+  totalOrders: number;
+  completedOrders: number;
+  uniqueCustomers: number;
+  averageOrderValue: number;
+  revenueOverTime: TimeSeriesAmountPoint[];
+  ordersOverTime: TimeSeriesCountPoint[];
 }
 
 export type VendorStatsIndustriesItem = {
@@ -379,6 +468,10 @@ export interface ExternalProfileUpdate {
   address?: string;
   description?: string;
   logoUrl?: string;
+  gender?: string;
+  country?: string;
+  state?: string;
+  city?: string;
 }
 
 export interface ExternalAnalyticsSummary {
@@ -749,5 +842,22 @@ period?: string;
 
 export type GetSocialAnalyticsParams = {
 vendorId?: number;
+};
+
+export type GetVendorPerformanceAnalyticsParams = {
+vendorId: number;
+period?: string;
+from?: string;
+to?: string;
+};
+
+export type GetAdminDemographicsAnalyticsParams = {
+period?: string;
+from?: string;
+to?: string;
+};
+
+export type VerifyVendorDeletion200 = {
+  success: boolean;
 };
 

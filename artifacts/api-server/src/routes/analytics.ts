@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
-import { desc } from "drizzle-orm";
-import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable } from "@workspace/db";
+import { desc, and, gte, lte, eq as eqOp } from "drizzle-orm";
+import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable, paymentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
+import { resolveDateRange } from "../lib/date-range";
 import {
   GetAnalyticsOverviewQueryParams,
   GetSalesAnalyticsQueryParams,
@@ -10,6 +12,14 @@ import {
   GetSalesAnalyticsResponse,
   GetSocialAnalyticsResponse,
 } from "@workspace/api-zod";
+
+function isAdmin(userId: string): boolean {
+  return (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .includes(userId);
+}
 
 const router: IRouter = Router();
 
@@ -140,6 +150,57 @@ router.get("/analytics/social", async (req, res): Promise<void> => {
   }));
 
   res.json(GetSocialAnalyticsResponse.parse({ postsByPlatform, postsByStatus, recentPosts, totalEngagement: 0 }));
+});
+
+/**
+ * GET /analytics/vendor-performance?vendorId=&period=week|month|year|custom&from=&to=
+ * Own-store performance for a single vendor over a selectable period —
+ * revenue, orders, and distinct customers, bucketed by day.
+ */
+router.get("/analytics/vendor-performance", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendorId = Number(req.query.vendorId);
+  if (isNaN(vendorId)) { res.status(400).json({ error: "vendorId is required" }); return; }
+
+  const [vendor] = await db.select().from(vendorsTable).where(eqOp(vendorsTable.id, vendorId));
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (vendor.clerkUserId !== userId && !isAdmin(userId)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+
+  const [orders, payments] = await Promise.all([
+    db.select().from(ordersTable).where(and(eqOp(ordersTable.vendorId, vendorId), gte(ordersTable.createdAt, from), lte(ordersTable.createdAt, to))),
+    db.select().from(paymentsTable).where(and(eqOp(paymentsTable.vendorId, vendorId), gte(paymentsTable.createdAt, from), lte(paymentsTable.createdAt, to))),
+  ]);
+
+  const paidPayments = payments.filter((p) => p.status === "paid");
+  const revenueByDay: Record<string, number> = {};
+  for (const p of paidPayments) {
+    const key = p.createdAt.toISOString().split("T")[0]!;
+    revenueByDay[key] = (revenueByDay[key] ?? 0) + parseFloat(p.amount);
+  }
+  const ordersByDay: Record<string, number> = {};
+  for (const o of orders) {
+    const key = o.createdAt.toISOString().split("T")[0]!;
+    ordersByDay[key] = (ordersByDay[key] ?? 0) + 1;
+  }
+
+  const uniqueCustomers = new Set(orders.map((o) => o.customerEmail)).size;
+  const totalRevenue = paidPayments.reduce((s, p) => s + parseFloat(p.amount), 0);
+  const completedOrders = orders.filter((o) => o.status === "completed").length;
+
+  res.json({
+    range: { from: from.toISOString(), to: to.toISOString(), period },
+    totalRevenue,
+    totalOrders: orders.length,
+    completedOrders,
+    uniqueCustomers,
+    averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
+    revenueOverTime: Object.entries(revenueByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount })),
+    ordersOverTime: Object.entries(ordersByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
+  });
 });
 
 export default router;

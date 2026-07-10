@@ -20,11 +20,15 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminDemographicsAnalytics,
   AiCaptionRequest,
   AiGeneration,
   AiImageRequest,
   AnalyticsOverview,
   CampaignSendResult,
+  DeletionEligibility,
+  DeletionRequestResult,
+  DeletionVerifyInput,
   EmailCampaign,
   EmailCampaignInput,
   EmailCampaignStats,
@@ -39,6 +43,7 @@ import type {
   ExternalProfileUpdate,
   ExternalRevokeInput,
   ExternalRevokeResponse,
+  GetAdminDemographicsAnalyticsParams,
   GetAnalyticsOverviewParams,
   GetEmailCampaignStatsParams,
   GetInventorySummaryParams,
@@ -46,6 +51,7 @@ import type {
   GetOrdersSummaryParams,
   GetSalesAnalyticsParams,
   GetSocialAnalyticsParams,
+  GetVendorPerformanceAnalyticsParams,
   HealthStatus,
   InventorySummary,
   InventoryTransaction,
@@ -86,8 +92,10 @@ import type {
   SocialAnalytics,
   Vendor,
   VendorInput,
+  VendorPerformanceAnalytics,
   VendorStats,
-  VendorUpdate
+  VendorUpdate,
+  VerifyVendorDeletion200
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -4366,6 +4374,392 @@ export function useGetSocialAnalytics<TData = Awaited<ReturnType<typeof getSocia
 
 
 
+
+export const getGetVendorPerformanceAnalyticsUrl = (params: GetVendorPerformanceAnalyticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/analytics/vendor-performance?${stringifiedParams}` : `/api/analytics/vendor-performance`
+}
+
+/**
+ * @summary A single vendor's own revenue/orders/customers over a period
+ */
+export const getVendorPerformanceAnalytics = async (params: GetVendorPerformanceAnalyticsParams, options?: RequestInit): Promise<VendorPerformanceAnalytics> => {
+
+  return customFetch<VendorPerformanceAnalytics>(getGetVendorPerformanceAnalyticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVendorPerformanceAnalyticsQueryKey = (params?: GetVendorPerformanceAnalyticsParams,) => {
+    return [
+    `/api/analytics/vendor-performance`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVendorPerformanceAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>, TError = ErrorType<unknown>>(params: GetVendorPerformanceAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVendorPerformanceAnalyticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>> = ({ signal }) => getVendorPerformanceAnalytics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVendorPerformanceAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>>
+export type GetVendorPerformanceAnalyticsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary A single vendor's own revenue/orders/customers over a period
+ */
+
+export function useGetVendorPerformanceAnalytics<TData = Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>, TError = ErrorType<unknown>>(
+ params: GetVendorPerformanceAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendorPerformanceAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVendorPerformanceAnalyticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminDemographicsAnalyticsUrl = (params?: GetAdminDemographicsAnalyticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/analytics/demographics?${stringifiedParams}` : `/api/admin/analytics/demographics`
+}
+
+/**
+ * @summary Admin-only user + payment analytics broken down by gender/country/state/city
+ */
+export const getAdminDemographicsAnalytics = async (params?: GetAdminDemographicsAnalyticsParams, options?: RequestInit): Promise<AdminDemographicsAnalytics> => {
+
+  return customFetch<AdminDemographicsAnalytics>(getGetAdminDemographicsAnalyticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminDemographicsAnalyticsQueryKey = (params?: GetAdminDemographicsAnalyticsParams,) => {
+    return [
+    `/api/admin/analytics/demographics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminDemographicsAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>, TError = ErrorType<unknown>>(params?: GetAdminDemographicsAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminDemographicsAnalyticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>> = ({ signal }) => getAdminDemographicsAnalytics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminDemographicsAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>>
+export type GetAdminDemographicsAnalyticsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Admin-only user + payment analytics broken down by gender/country/state/city
+ */
+
+export function useGetAdminDemographicsAnalytics<TData = Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>, TError = ErrorType<unknown>>(
+ params?: GetAdminDemographicsAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminDemographicsAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminDemographicsAnalyticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVendorDeletionEligibilityUrl = (id: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/deletion-eligibility`
+}
+
+/**
+ * @summary Whether this vendor can currently request deletion of their data
+ */
+export const getVendorDeletionEligibility = async (id: number, options?: RequestInit): Promise<DeletionEligibility> => {
+
+  return customFetch<DeletionEligibility>(getGetVendorDeletionEligibilityUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVendorDeletionEligibilityQueryKey = (id: number,) => {
+    return [
+    `/api/vendors/${id}/deletion-eligibility`
+    ] as const;
+    }
+
+
+export const getGetVendorDeletionEligibilityQueryOptions = <TData = Awaited<ReturnType<typeof getVendorDeletionEligibility>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendorDeletionEligibility>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVendorDeletionEligibilityQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVendorDeletionEligibility>>> = ({ signal }) => getVendorDeletionEligibility(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVendorDeletionEligibility>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVendorDeletionEligibilityQueryResult = NonNullable<Awaited<ReturnType<typeof getVendorDeletionEligibility>>>
+export type GetVendorDeletionEligibilityQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Whether this vendor can currently request deletion of their data
+ */
+
+export function useGetVendorDeletionEligibility<TData = Awaited<ReturnType<typeof getVendorDeletionEligibility>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVendorDeletionEligibility>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVendorDeletionEligibilityQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestVendorDeletionUrl = (id: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/deletion-requests`
+}
+
+/**
+ * @summary Start account deletion — emails and texts a one-time code
+ */
+export const requestVendorDeletion = async (id: number, options?: RequestInit): Promise<DeletionRequestResult> => {
+
+  return customFetch<DeletionRequestResult>(getRequestVendorDeletionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRequestVendorDeletionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestVendorDeletion>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestVendorDeletion>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['requestVendorDeletion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestVendorDeletion>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  requestVendorDeletion(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestVendorDeletionMutationResult = NonNullable<Awaited<ReturnType<typeof requestVendorDeletion>>>
+
+    export type RequestVendorDeletionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start account deletion — emails and texts a one-time code
+ */
+export const useRequestVendorDeletion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestVendorDeletion>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestVendorDeletion>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRequestVendorDeletionMutationOptions(options));
+    }
+
+export const getVerifyVendorDeletionUrl = (id: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/deletion-requests/verify`
+}
+
+/**
+ * @summary Confirm both one-time codes and permanently delete the vendor's data
+ */
+export const verifyVendorDeletion = async (id: number,
+    deletionVerifyInput: DeletionVerifyInput, options?: RequestInit): Promise<VerifyVendorDeletion200> => {
+
+  return customFetch<VerifyVendorDeletion200>(getVerifyVendorDeletionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deletionVerifyInput)
+  }
+);}
+
+
+
+
+export const getVerifyVendorDeletionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyVendorDeletion>>, TError,{id: number;data: BodyType<DeletionVerifyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyVendorDeletion>>, TError,{id: number;data: BodyType<DeletionVerifyInput>}, TContext> => {
+
+const mutationKey = ['verifyVendorDeletion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyVendorDeletion>>, {id: number;data: BodyType<DeletionVerifyInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  verifyVendorDeletion(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyVendorDeletionMutationResult = NonNullable<Awaited<ReturnType<typeof verifyVendorDeletion>>>
+    export type VerifyVendorDeletionMutationBody = BodyType<DeletionVerifyInput>
+    export type VerifyVendorDeletionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Confirm both one-time codes and permanently delete the vendor's data
+ */
+export const useVerifyVendorDeletion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyVendorDeletion>>, TError,{id: number;data: BodyType<DeletionVerifyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyVendorDeletion>>,
+        TError,
+        {id: number;data: BodyType<DeletionVerifyInput>},
+        TContext
+      > => {
+      return useMutation(getVerifyVendorDeletionMutationOptions(options));
+    }
 
 export const getExternalAuthHandshakeUrl = () => {
 

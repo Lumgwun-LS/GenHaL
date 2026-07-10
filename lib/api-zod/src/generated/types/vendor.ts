@@ -29,4 +29,12 @@ export interface Vendor {
   paystackEnabled?: boolean;
   defaultCurrency?: string;
   brandTheme?: string;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  city?: string | null;
 }

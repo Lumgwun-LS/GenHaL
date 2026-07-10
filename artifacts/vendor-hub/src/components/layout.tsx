@@ -16,6 +16,8 @@ import {
   Menu,
   X,
   ShieldCheck,
+  BarChart3,
+  UserCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,8 @@ const NAV_ITEMS = [
   { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/account", label: "Account", icon: UserCircle },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

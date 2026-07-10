@@ -6,12 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
 import SiteEditor from "./site-editor";
 import PaymentGatewaysPanel from "./payment-gateways";
+import AdminAnalyticsPanel from "./analytics";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -323,6 +324,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="site-editor" className="flex items-center gap-2">
             <Layout className="w-4 h-4" /> Site Editor
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" /> Analytics
           </TabsTrigger>
         </TabsList>
 
@@ -645,6 +649,11 @@ export default function AdminPanel() {
         {/* ── Site Editor tab ────────────────────────────────────────── */}
         <TabsContent value="site-editor">
           <SiteEditor />
+        </TabsContent>
+
+        {/* ── Analytics tab ──────────────────────────────────────────── */}
+        <TabsContent value="analytics">
+          <AdminAnalyticsPanel />
         </TabsContent>
       </Tabs>
     </div>

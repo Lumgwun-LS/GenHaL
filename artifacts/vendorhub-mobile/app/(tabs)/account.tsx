@@ -37,12 +37,20 @@ export default function AccountScreen() {
   const [name, setName] = useState(vendor?.name ?? '');
   const [phone, setPhone] = useState(vendor?.phone ?? '');
   const [address, setAddress] = useState(vendor?.address ?? '');
+  const [gender, setGender] = useState(vendor?.gender ?? '');
+  const [country, setCountry] = useState(vendor?.country ?? '');
+  const [state, setState] = useState(vendor?.state ?? '');
+  const [city, setCity] = useState(vendor?.city ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const startEditing = () => {
     setName(vendor?.name ?? '');
     setPhone(vendor?.phone ?? '');
     setAddress(vendor?.address ?? '');
+    setGender(vendor?.gender ?? '');
+    setCountry(vendor?.country ?? '');
+    setState(vendor?.state ?? '');
+    setCity(vendor?.city ?? '');
     setError(null);
     setIsEditing(true);
   };
@@ -51,7 +59,15 @@ export default function AccountScreen() {
     setIsSaving(true);
     setError(null);
     try {
-      await updateProfile({ name: name.trim(), phone: phone.trim(), address: address.trim() });
+      await updateProfile({
+        name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        gender: gender.trim(),
+        country: country.trim(),
+        state: state.trim(),
+        city: city.trim(),
+      });
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
@@ -125,6 +141,10 @@ export default function AccountScreen() {
                 { label: 'Store name', value: name, onChange: setName, keyboard: 'default' },
                 { label: 'Phone', value: phone, onChange: setPhone, keyboard: 'phone-pad' },
                 { label: 'Address', value: address, onChange: setAddress, keyboard: 'default' },
+                { label: 'Gender', value: gender, onChange: setGender, keyboard: 'default' },
+                { label: 'Country', value: country, onChange: setCountry, keyboard: 'default' },
+                { label: 'State', value: state, onChange: setState, keyboard: 'default' },
+                { label: 'City', value: city, onChange: setCity, keyboard: 'default' },
               ].map(({ label, value, onChange, keyboard }) => (
                 <View key={label} style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: colors.primary }]}>{label}</Text>
@@ -177,8 +197,11 @@ export default function AccountScreen() {
                 label="Currency"
                 value={vendor?.defaultCurrency || 'USD'}
                 colors={colors}
-                last
               />
+              <DetailRow icon="user" label="Gender" value={vendor?.gender || 'Not set'} colors={colors} />
+              <DetailRow icon="globe" label="Country" value={vendor?.country || 'Not set'} colors={colors} />
+              <DetailRow icon="map" label="State" value={vendor?.state || 'Not set'} colors={colors} />
+              <DetailRow icon="navigation" label="City" value={vendor?.city || 'Not set'} colors={colors} last />
             </View>
           )}
         </Card>

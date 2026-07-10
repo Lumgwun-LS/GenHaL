@@ -28,6 +28,8 @@ import EmailCampaignEditor from "@/pages/email-campaigns/detail";
 import SmsCampaigns from "@/pages/sms-campaigns";
 import Payments from "@/pages/payments";
 import AdminPanel from "@/pages/admin";
+import Analytics from "@/pages/analytics";
+import Account from "@/pages/account";
 import VoiceCampaigns from "@/pages/voice-campaigns/index";
 import VoiceCampaignDetail from "@/pages/voice-campaigns/detail";
 
@@ -192,6 +194,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/voice-campaigns" component={() => <AuthenticatedRoute component={VoiceCampaigns} />} />
           <Route path="/voice-campaigns/:id" component={() => <AuthenticatedRoute component={VoiceCampaignDetail} />} />
           <Route path="/admin" component={() => <AuthenticatedRoute component={AdminPanel} />} />
+          <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
+          <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           
           <Route path="/:rest*">
             <div className="flex h-screen items-center justify-center">

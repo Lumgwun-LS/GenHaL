@@ -1149,6 +1149,130 @@ paths:
               schema:
                 $ref: "#/components/schemas/SocialAnalytics"
 
+  /analytics/vendor-performance:
+    get:
+      operationId: getVendorPerformanceAnalytics
+      tags: [analytics]
+      summary: A single vendor's own revenue/orders/customers over a period
+      parameters:
+        - name: vendorId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vendor performance analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorPerformanceAnalytics"
+
+  /admin/analytics/demographics:
+    get:
+      operationId: getAdminDemographicsAnalytics
+      tags: [analytics]
+      summary: Admin-only user + payment analytics broken down by gender/country/state/city
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Demographic analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDemographicsAnalytics"
+
+  /vendors/{id}/deletion-eligibility:
+    get:
+      operationId: getVendorDeletionEligibility
+      tags: [vendors]
+      summary: Whether this vendor can currently request deletion of their data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deletion eligibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionEligibility"
+
+  /vendors/{id}/deletion-requests:
+    post:
+      operationId: requestVendorDeletion
+      tags: [vendors]
+      summary: Start account deletion — emails and texts a one-time code
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Codes sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionRequestResult"
+
+  /vendors/{id}/deletion-requests/verify:
+    post:
+      operationId: verifyVendorDeletion
+      tags: [vendors]
+      summary: Confirm both one-time codes and permanently delete the vendor's data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeletionVerifyInput"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+
   # ─── EXTERNAL (AWAJIMAA BRIDGE) ──────────────────────────────────────────
   /external/auth/handshake:
     post:
@@ -1427,6 +1551,14 @@ components:
           type: string
         brandTheme:
           type: string
+        gender:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
 
     VendorInput:
       type: object
@@ -1472,6 +1604,198 @@ components:
           type: string
         brandTheme:
           type: string
+        gender:
+          type: string
+        country:
+          type: string
+        state:
+          type: string
+        city:
+          type: string
+
+    DeletionEligibility:
+      type: object
+      required: [eligible, reasons]
+      properties:
+        eligible:
+          type: boolean
+        reasons:
+          type: array
+          items:
+            type: string
+
+    DeletionRequestResult:
+      type: object
+      required: [requestId, expiresAt, emailDelivery, smsDelivery]
+      properties:
+        requestId:
+          type: integer
+        expiresAt:
+          type: string
+        emailDelivery:
+          type: string
+        smsDelivery:
+          type: string
+
+    DeletionVerifyInput:
+      type: object
+      required: [emailCode, phoneCode]
+      properties:
+        emailCode:
+          type: string
+        phoneCode:
+          type: string
+
+    DemographicBucket:
+      type: object
+      required: [key, count]
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+
+    PaymentDemographicBucket:
+      type: object
+      required: [key, total, count]
+      properties:
+        key:
+          type: string
+        total:
+          type: number
+        count:
+          type: integer
+
+    TimeSeriesCountPoint:
+      type: object
+      required: [date, count]
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+
+    TimeSeriesAmountPoint:
+      type: object
+      required: [date, amount]
+      properties:
+        date:
+          type: string
+        amount:
+          type: number
+
+    AdminDemographicsAnalytics:
+      type: object
+      required:
+        - range
+        - totalUsers
+        - totalRevenue
+        - usersByGender
+        - usersByCountry
+        - usersByState
+        - usersByCity
+        - paymentsByGender
+        - paymentsByCountry
+        - paymentsByState
+        - paymentsByCity
+        - signupsOverTime
+        - revenueOverTime
+      properties:
+        range:
+          type: object
+          required: [from, to, period]
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+            period:
+              type: string
+        totalUsers:
+          type: integer
+        totalRevenue:
+          type: number
+        usersByGender:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemographicBucket"
+        usersByCountry:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemographicBucket"
+        usersByState:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemographicBucket"
+        usersByCity:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemographicBucket"
+        paymentsByGender:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentDemographicBucket"
+        paymentsByCountry:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentDemographicBucket"
+        paymentsByState:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentDemographicBucket"
+        paymentsByCity:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentDemographicBucket"
+        signupsOverTime:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeSeriesCountPoint"
+        revenueOverTime:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeSeriesAmountPoint"
+
+    VendorPerformanceAnalytics:
+      type: object
+      required:
+        - range
+        - totalRevenue
+        - totalOrders
+        - completedOrders
+        - uniqueCustomers
+        - averageOrderValue
+        - revenueOverTime
+        - ordersOverTime
+      properties:
+        range:
+          type: object
+          required: [from, to, period]
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+            period:
+              type: string
+        totalRevenue:
+          type: number
+        totalOrders:
+          type: integer
+        completedOrders:
+          type: integer
+        uniqueCustomers:
+          type: integer
+        averageOrderValue:
+          type: number
+        revenueOverTime:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeSeriesAmountPoint"
+        ordersOverTime:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeSeriesCountPoint"
 
     VendorStats:
       type: object
@@ -2018,6 +2342,14 @@ components:
         description:
           type: string
         logoUrl:
+          type: string
+        gender:
+          type: string
+        country:
+          type: string
+        state:
+          type: string
+        city:
           type: string
 
     ExternalAnalyticsSummary:
