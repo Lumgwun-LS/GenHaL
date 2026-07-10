@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy, XCircle, Clock } from "lucide-react";
+import { toast } from "sonner";
 import {
   BarChart,
   Bar,
@@ -101,15 +102,16 @@ function providerBadge(provider: string) {
   return "bg-muted text-muted-foreground";
 }
 
-async function retryWebhookEvent(id: number): Promise<void> {
+async function retryWebhookEvent(id: number): Promise<{ warning?: string }> {
   const res = await fetch(`${BASE_URL}/api/payments/webhook-events/${id}/retry`, {
     method: "POST",
     credentials: "include",
   });
+  const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? "Retry failed");
   }
+  return body as { warning?: string };
 }
 
 async function refundPayment(id: number): Promise<void> {
@@ -161,8 +163,16 @@ export default function Payments() {
 
   const retryMutation = useMutation({
     mutationFn: retryWebhookEvent,
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["webhook-events"] });
+      if (result.warning) {
+        toast.warning("Retry ran, but nothing was updated", { description: result.warning, duration: 10000 });
+      } else {
+        toast.success("Webhook event retried successfully");
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Retry failed");
     },
   });
 

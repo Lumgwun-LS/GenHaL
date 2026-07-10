@@ -223,8 +223,14 @@ async function markWebhookFailed(
 
 // ── Shared business logic (used by live webhooks and admin retry) ────────────
 
-/** Applies the business-logic side effects for a Stripe event. Idempotent-ish: safe to re-run. */
-async function processStripeEvent(event: Stripe.Event): Promise<void> {
+/**
+ * Applies the business-logic side effects for a Stripe event. Idempotent-ish: safe to re-run.
+ *
+ * Returns `matched: false` when the event's target row (payment/order/vendor) could not be
+ * found — e.g. it was deleted, or a retry runs after the underlying record no longer exists.
+ * Callers use this to warn admins instead of reporting a bare success on a no-op retry.
+ */
+async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boolean }> {
   const session =
     event.type === "checkout.session.completed"
       ? (event.data.object as Stripe.Checkout.Session)
@@ -261,11 +267,13 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
           console.warn(
             `[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`,
           );
+          return { matched: false };
         }
       } else {
         console.warn(
           `[stripe webhook] subscription upgrade — invalid tier '${upgradeTier}' in session=${session.id}`,
         );
+        return { matched: false };
       }
     } else {
       // ── Regular order checkout path ─────────────────────────────────
@@ -276,10 +284,13 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         .where(eq(paymentsTable.providerReference, session.id))
         .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
 
+      let orderMatched = true;
       if (orderId) {
-        await db.update(ordersTable)
+        const [updatedOrder] = await db.update(ordersTable)
           .set({ paymentStatus: "paid", updatedAt: new Date() })
-          .where(eq(ordersTable.id, orderId));
+          .where(eq(ordersTable.id, orderId))
+          .returning({ id: ordersTable.id });
+        orderMatched = !!updatedOrder;
       }
 
       if (updatedPayment) {
@@ -287,10 +298,19 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       }
 
       console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
+
+      if (!updatedPayment) {
+        console.warn(`[stripe webhook] checkout.session.completed — no matching payment found for session=${session.id}`);
+        return { matched: false };
+      }
+      if (orderId && !orderMatched) {
+        console.warn(`[stripe webhook] checkout.session.completed — no matching order found for order=${orderId} session=${session.id}`);
+        return { matched: false };
+      }
     }
 
     console.info(`[stripe webhook] checkout.session.completed processed — session=${session.id}`);
-    return;
+    return { matched: true };
   }
 
   // ── Subscription plan switch (via Customer Portal) ────────────────────
@@ -318,13 +338,14 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         );
       } else {
         console.warn(`[stripe webhook] subscription.updated — no vendor found for customer=${customerId}`);
+        return { matched: false };
       }
     } else {
       console.info(
         `[stripe webhook] subscription.updated with no recognizable tier metadata — customer=${customerId}, skipping`,
       );
     }
-    return;
+    return { matched: true };
   }
 
   // ── Subscription cancellation ─────────────────────────────────────────
@@ -348,8 +369,9 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       );
     } else {
       console.warn(`[stripe webhook] subscription cancelled — no vendor found for customer=${customerId}`);
+      return { matched: false };
     }
-    return;
+    return { matched: true };
   }
 
   // ── Refunded charge ────────────────────────────────────────────────────
@@ -366,7 +388,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
 
     if (!customerId) {
       console.info(`[stripe webhook] charge.refunded with no customer — skipping — charge=${charge.id}`);
-      return;
+      return { matched: false };
     }
 
     const [vendor] = await db
@@ -376,12 +398,12 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
 
     if (!vendor) {
       console.info(`[stripe webhook] charge.refunded — no vendor found for customer=${customerId}`);
-      return;
+      return { matched: false };
     }
 
     if (vendor.subscriptionTier === "free") {
       console.info(`[stripe webhook] charge.refunded — vendor=${vendor.id} already on free tier, nothing to do`);
-      return;
+      return { matched: true };
     }
 
     const previousTier = vendor.subscriptionTier;
@@ -400,7 +422,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
     console.warn(
       `[stripe webhook] charge.refunded — vendor=${vendor.id} downgraded from ${previousTier} to free — charge=${charge.id} customer=${customerId}`,
     );
-    return;
+    return { matched: true };
   }
 
   // ── Expired checkout session ───────────────────────────────────────────
@@ -429,18 +451,28 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       }
 
       console.info(`[stripe webhook] checkout.session.expired — order checkout abandoned — order=${orderId} session=${expiredSession.id}`);
+
+      if (!updatedPayment) {
+        console.warn(`[stripe webhook] checkout.session.expired — no matching payment found for session=${expiredSession.id}`);
+        return { matched: false };
+      }
     }
-    return;
+    return { matched: true };
   }
 
   console.info(`[stripe webhook] unhandled event type skipped — type=${event.type} id=${event.id}`);
+  return { matched: true };
 }
 
-/** Applies the business-logic side effects for a Paystack event. Idempotent-ish: safe to re-run. */
+/**
+ * Applies the business-logic side effects for a Paystack event. Idempotent-ish: safe to re-run.
+ *
+ * Returns `matched: false` when the target payment could not be found (see processStripeEvent).
+ */
 async function processPaystackEvent(event: {
   event: string;
   data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
-}): Promise<void> {
+}): Promise<{ matched: boolean }> {
   if (event.event === "charge.success") {
     const { reference, metadata } = event.data;
     const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
@@ -450,10 +482,13 @@ async function processPaystackEvent(event: {
       .where(eq(paymentsTable.providerReference, reference))
       .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
 
+    let orderMatched = true;
     if (orderId) {
-      await db.update(ordersTable)
+      const [updatedOrder] = await db.update(ordersTable)
         .set({ paymentStatus: "paid", updatedAt: new Date() })
-        .where(eq(ordersTable.id, orderId));
+        .where(eq(ordersTable.id, orderId))
+        .returning({ id: ordersTable.id });
+      orderMatched = !!updatedOrder;
     }
 
     if (updatedPayment) {
@@ -461,8 +496,19 @@ async function processPaystackEvent(event: {
     }
 
     console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);
+
+    if (!updatedPayment) {
+      console.warn(`[paystack webhook] charge.success — no matching payment found for reference=${reference}`);
+      return { matched: false };
+    }
+    if (orderId && !orderMatched) {
+      console.warn(`[paystack webhook] charge.success — no matching order found for order=${orderId} reference=${reference}`);
+      return { matched: false };
+    }
+    return { matched: true };
   } else {
     console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${event.data.id ?? event.data.reference}`);
+    return { matched: true };
   }
 }
 
@@ -474,8 +520,12 @@ async function processPaystackEvent(event: {
  *
  * Throws if the event id is unknown or the event was already processed.
  * On success, sets processedAt. On failure, records the error and rethrows.
+ *
+ * If the event replayed cleanly but its target payment/order/vendor row no longer
+ * exists (deleted or already changed since original delivery), `warning` is set so
+ * the admin isn't given false confidence that the retry actually fixed anything.
  */
-export async function retryWebhookEventById(id: number): Promise<{ eventId: string }> {
+export async function retryWebhookEventById(id: number): Promise<{ eventId: string; warning?: string }> {
   const [row] = await db.select().from(webhookEventsTable).where(eq(webhookEventsTable.id, id));
   if (!row) {
     throw Object.assign(new Error("Webhook event not found"), { statusCode: 404 });
@@ -491,23 +541,33 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
     .set({ retryCount: sql`${webhookEventsTable.retryCount} + 1`, lastRetriedAt: new Date() })
     .where(eq(webhookEventsTable.id, id));
 
+  let matched = true;
   try {
     if (row.provider === "stripe") {
-      await processStripeEvent(row.rawPayload as unknown as Stripe.Event);
+      ({ matched } = await processStripeEvent(row.rawPayload as unknown as Stripe.Event));
     } else if (row.provider === "paystack") {
-      await processPaystackEvent(row.rawPayload as unknown as {
+      ({ matched } = await processPaystackEvent(row.rawPayload as unknown as {
         event: string;
         data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
-      });
+      }));
     } else {
       throw new Error(`Unknown provider '${row.provider}'`);
     }
     await markWebhookProcessed(row.eventId);
-    console.info(`[webhook] admin retry succeeded — id=${row.id} eventId=${row.eventId}`);
+    console.info(`[webhook] admin retry succeeded — id=${row.id} eventId=${row.eventId} matched=${matched}`);
   } catch (err) {
     await markWebhookFailed(row.eventId, row.provider, row.eventType, err).catch(() => {});
     console.error(`[webhook] admin retry failed — id=${row.id} eventId=${row.eventId}:`, err);
     throw Object.assign(new Error(err instanceof Error ? err.message : String(err)), { statusCode: 502 });
+  }
+
+  if (!matched) {
+    return {
+      eventId: row.eventId,
+      warning:
+        "Retry ran successfully, but no matching payment, order, or vendor was found to update — " +
+        "it may have been deleted or already changed since this event was first received.",
+    };
   }
 
   return { eventId: row.eventId };

@@ -152,7 +152,7 @@ router.post("/payments/webhook-events/:id/retry", async (req, res): Promise<void
 
   try {
     const result = await retryWebhookEventById(id);
-    res.json({ success: true, eventId: result.eventId });
+    res.json({ success: true, eventId: result.eventId, warning: result.warning });
   } catch (err) {
     const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
     const message = err instanceof Error ? err.message : "Retry failed";
