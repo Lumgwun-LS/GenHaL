@@ -21,3 +21,4 @@
 - [VendorHub voice calls use ElevenLabs TTS](vendorhub-voice-tts.md) — synthesize audio before placing the Twilio call (not on-demand), cache bytes by short-lived token, fall back to Twilio <Say> on failure.
 - [Dev DB drizzle-kit push blocked](drizzle-push-interactive-prompt.md) — drizzle-kit push can hang needing a TTY confirmation for unrelated pre-existing drift; apply just the new table's DDL via executeSql instead of blocking on push.
 - [VendorHub vendor-ownership pattern](vendorhub-vendor-ownership-pattern.md) — requireAuth alone doesn't stop a caller passing another vendor's id in the body; resolve vendor via clerkUserId + admin allowlist and reject mismatches, per route.
+- [Voice campaign finish notifications](vendorhub-voice-campaign-notify.md) — runCampaignCalls sends in-app + email notice on terminal state; reuse this pattern for other background-job completions.

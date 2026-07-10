@@ -17,9 +17,12 @@ import {
   voiceCampaignCallsTable,
   voiceCallLogsTable,
   leadsTable,
+  vendorNotificationsTable,
 } from "@workspace/db/schema";
 import { placeCall } from "../lib/voice-caller";
 import { logger } from "../lib/logger";
+import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 import { z } from "zod";
 
 const router = Router();
@@ -77,6 +80,63 @@ export async function runCampaignCalls(
     await db.update(voiceCampaignsTable).set({ status: terminalStatus })
       .where(eq(voiceCampaignsTable.id, campaignId));
     logger.info({ campaignId, vendorId, completedCount, terminalStatus }, "[voice] Campaign finished");
+    await notifyCampaignFinished(campaign, vendorId, terminalStatus, completedCount, callable.length);
+  }
+}
+
+/**
+ * Notifies the vendor (in-app + email) once an auto-launched or manually
+ * launched campaign reaches a terminal state. Best-effort: failures here are
+ * logged, not thrown, so a notification hiccup never re-marks the campaign
+ * or otherwise disrupts the call loop that already finished.
+ */
+async function notifyCampaignFinished(
+  campaign: typeof voiceCampaignsTable.$inferSelect,
+  vendorId: number,
+  terminalStatus: string,
+  completedCount: number,
+  totalLeads: number,
+): Promise<void> {
+  try {
+    const calls = await db.select().from(voiceCampaignCallsTable)
+      .where(eq(voiceCampaignCallsTable.campaignId, campaign.id));
+    const placedCount = calls.filter((c) => c.status === "ringing" || c.status === "completed").length;
+    const failedCount = calls.filter((c) => c.status === "failed").length;
+    const canceledCount = calls.filter((c) => c.status === "canceled").length;
+
+    const summary = terminalStatus === "completed"
+      ? `placed ${placedCount} call(s)${failedCount ? `, ${failedCount} failed` : ""}${canceledCount ? `, ${canceledCount} skipped` : ""} out of ${totalLeads} lead(s)`
+      : `stopped after ${completedCount} of ${totalLeads} lead(s) — an error interrupted the run`;
+
+    const message = `Your voice campaign "${campaign.name}" ${terminalStatus === "completed" ? "finished" : "failed"}: ${summary}.`;
+
+    await db.insert(vendorNotificationsTable).values({
+      vendorId,
+      type: "voice_campaign",
+      message,
+    });
+
+    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
+    if (vendor?.email) {
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">
+            Voice campaign ${terminalStatus === "completed" ? "finished" : "failed"}
+          </h1>
+          <p style="font-size: 14px; line-height: 1.6; color: #444;">
+            Hi ${escapeHtml(vendor.name)}, your voice campaign "<strong>${escapeHtml(campaign.name)}</strong>" has
+            ${terminalStatus === "completed" ? "finished running" : "failed"}: ${escapeHtml(summary)}.
+          </p>
+        `,
+      });
+      await sendEmail({
+        to: vendor.email,
+        subject: `Voice campaign ${terminalStatus === "completed" ? "finished" : "failed"}: ${campaign.name}`,
+        html,
+      });
+    }
+  } catch (err) {
+    logger.error({ err, campaignId: campaign.id, vendorId }, "[voice] Failed to send campaign-finished notification");
   }
 }
 
