@@ -500,6 +500,14 @@ export interface ExternalPaymentInitializeResponse {
   reference: string;
 }
 
+export interface ExternalPushTokenInput {
+  expoPushToken: string;
+}
+
+export interface ExternalPushOkResponse {
+  ok: boolean;
+}
+
 export interface OrderUpdate {
   status?: string;
   notes?: string;

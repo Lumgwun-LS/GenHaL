@@ -3,6 +3,7 @@ import authRouter from "./auth";
 import profileRouter from "./profile";
 import featuresRouter from "./features";
 import paymentsRouter from "./payments";
+import pushRouter from "./push";
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use("/auth", authRouter);
 router.use(profileRouter);
 router.use(featuresRouter);
 router.use(paymentsRouter);
+router.use(pushRouter);
 
 export default router;

@@ -1471,6 +1471,50 @@ paths:
                 items:
                   $ref: "#/components/schemas/Payment"
 
+  /external/push/register:
+    post:
+      operationId: registerExternalPushToken
+      tags: [external]
+      summary: Register this device's Expo push token for instant notifications
+      security: [{ externalBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalPushTokenInput"
+      responses:
+        "200":
+          description: Token registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPushOkResponse"
+        "400":
+          description: Missing expoPushToken
+
+  /external/push/unregister:
+    post:
+      operationId: unregisterExternalPushToken
+      tags: [external]
+      summary: Remove a device's Expo push token (e.g. on logout)
+      security: [{ externalBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalPushTokenInput"
+      responses:
+        "200":
+          description: Token removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPushOkResponse"
+        "400":
+          description: Missing expoPushToken
+
   /external/payments/initialize:
     post:
       operationId: initializeExternalPayment
@@ -2398,6 +2442,20 @@ components:
           type: ["string", "null"]
         reference:
           type: string
+
+    ExternalPushTokenInput:
+      type: object
+      required: [expoPushToken]
+      properties:
+        expoPushToken:
+          type: string
+
+    ExternalPushOkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
 
     OrderUpdate:
       type: object

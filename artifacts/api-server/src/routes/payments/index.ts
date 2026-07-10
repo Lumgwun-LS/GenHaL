@@ -7,6 +7,7 @@ import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField } from "../../lib/platform-gateways";
+import { notifyVendorPaymentStatus } from "../../lib/push";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -105,6 +106,8 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       .set({ paymentStatus: "refunded", updatedAt: new Date() })
       .where(eq(ordersTable.id, payment.orderId));
   }
+
+  await notifyVendorPaymentStatus(payment.vendorId, "refunded", payment.amount, payment.currency);
 
   console.info(`[payments] refund issued — id=${paymentId} provider=${payment.provider} reference=${payment.providerReference}`);
   res.json({ success: true, paymentId, status: "refunded" });

@@ -1818,6 +1818,30 @@ export const ListExternalPaymentsResponse = zod.array(ListExternalPaymentsRespon
 
 
 /**
+ * @summary Register this device's Expo push token for instant notifications
+ */
+export const RegisterExternalPushTokenBody = zod.object({
+  "expoPushToken": zod.string()
+})
+
+export const RegisterExternalPushTokenResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Remove a device's Expo push token (e.g. on logout)
+ */
+export const UnregisterExternalPushTokenBody = zod.object({
+  "expoPushToken": zod.string()
+})
+
+export const UnregisterExternalPushTokenResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Initialize a Stripe or Paystack checkout for the vendor's order
  */
 export const InitializeExternalPaymentBody = zod.object({

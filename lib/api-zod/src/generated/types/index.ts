@@ -33,6 +33,8 @@ export * from './externalPaymentInitializeInput';
 export * from './externalPaymentInitializeResponse';
 export * from './externalProfileResponse';
 export * from './externalProfileUpdate';
+export * from './externalPushOkResponse';
+export * from './externalPushTokenInput';
 export * from './externalRevokeInput';
 export * from './externalRevokeResponse';
 export * from './getAdminDemographicsAnalyticsParams';

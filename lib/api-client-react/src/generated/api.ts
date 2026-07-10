@@ -41,6 +41,8 @@ import type {
   ExternalPaymentInitializeResponse,
   ExternalProfileResponse,
   ExternalProfileUpdate,
+  ExternalPushOkResponse,
+  ExternalPushTokenInput,
   ExternalRevokeInput,
   ExternalRevokeResponse,
   GetAdminDemographicsAnalyticsParams,
@@ -5504,6 +5506,146 @@ export function useListExternalPayments<TData = Awaited<ReturnType<typeof listEx
 
 
 
+
+export const getRegisterExternalPushTokenUrl = () => {
+
+
+
+
+  return `/api/external/push/register`
+}
+
+/**
+ * @summary Register this device's Expo push token for instant notifications
+ */
+export const registerExternalPushToken = async (externalPushTokenInput: ExternalPushTokenInput, options?: RequestInit): Promise<ExternalPushOkResponse> => {
+
+  return customFetch<ExternalPushOkResponse>(getRegisterExternalPushTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalPushTokenInput)
+  }
+);}
+
+
+
+
+export const getRegisterExternalPushTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext> => {
+
+const mutationKey = ['registerExternalPushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerExternalPushToken>>, {data: BodyType<ExternalPushTokenInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerExternalPushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterExternalPushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof registerExternalPushToken>>>
+    export type RegisterExternalPushTokenMutationBody = BodyType<ExternalPushTokenInput>
+    export type RegisterExternalPushTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Register this device's Expo push token for instant notifications
+ */
+export const useRegisterExternalPushToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerExternalPushToken>>,
+        TError,
+        {data: BodyType<ExternalPushTokenInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterExternalPushTokenMutationOptions(options));
+    }
+
+export const getUnregisterExternalPushTokenUrl = () => {
+
+
+
+
+  return `/api/external/push/unregister`
+}
+
+/**
+ * @summary Remove a device's Expo push token (e.g. on logout)
+ */
+export const unregisterExternalPushToken = async (externalPushTokenInput: ExternalPushTokenInput, options?: RequestInit): Promise<ExternalPushOkResponse> => {
+
+  return customFetch<ExternalPushOkResponse>(getUnregisterExternalPushTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalPushTokenInput)
+  }
+);}
+
+
+
+
+export const getUnregisterExternalPushTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unregisterExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext> => {
+
+const mutationKey = ['unregisterExternalPushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unregisterExternalPushToken>>, {data: BodyType<ExternalPushTokenInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  unregisterExternalPushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnregisterExternalPushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof unregisterExternalPushToken>>>
+    export type UnregisterExternalPushTokenMutationBody = BodyType<ExternalPushTokenInput>
+    export type UnregisterExternalPushTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a device's Expo push token (e.g. on logout)
+ */
+export const useUnregisterExternalPushToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterExternalPushToken>>, TError,{data: BodyType<ExternalPushTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unregisterExternalPushToken>>,
+        TError,
+        {data: BodyType<ExternalPushTokenInput>},
+        TContext
+      > => {
+      return useMutation(getUnregisterExternalPushTokenMutationOptions(options));
+    }
 
 export const getInitializeExternalPaymentUrl = () => {
 

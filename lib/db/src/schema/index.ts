@@ -15,6 +15,7 @@ export * from "./vendor-payment-credentials";
 export * from "./platform-payment-credentials";
 export * from "./webhook-events";
 export * from "./vendor-notifications";
+export * from "./vendor-push-tokens";
 export * from "./birthday-message-logs";
 export * from "./voice-call-logs";
 export * from "./voice-campaigns";

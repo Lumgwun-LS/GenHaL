@@ -25,6 +25,7 @@ import {
   registerSlackAlerter,
 } from "../../lib/webhook-buffer";
 import { resolveGatewayField } from "../../lib/platform-gateways";
+import { notifyVendorPaymentStatus } from "../../lib/push";
 
 const router = Router();
 
@@ -270,14 +271,19 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       // ── Regular order checkout path ─────────────────────────────────
       const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
 
-      await db.update(paymentsTable)
+      const [updatedPayment] = await db.update(paymentsTable)
         .set({ status: "paid", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, session.id));
+        .where(eq(paymentsTable.providerReference, session.id))
+        .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
 
       if (orderId) {
         await db.update(ordersTable)
           .set({ paymentStatus: "paid", updatedAt: new Date() })
           .where(eq(ordersTable.id, orderId));
+      }
+
+      if (updatedPayment) {
+        await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
       }
 
       console.info(`[stripe webhook] checkout.session.completed — session=${session.id} order=${orderId}`);
@@ -413,9 +419,14 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       );
     } else {
       const orderId = expiredSession.metadata?.orderId ? parseInt(expiredSession.metadata.orderId) : null;
-      await db.update(paymentsTable)
+      const [updatedPayment] = await db.update(paymentsTable)
         .set({ status: "failed", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, expiredSession.id));
+        .where(eq(paymentsTable.providerReference, expiredSession.id))
+        .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+
+      if (updatedPayment) {
+        await notifyVendorPaymentStatus(updatedPayment.vendorId, "failed", updatedPayment.amount, updatedPayment.currency);
+      }
 
       console.info(`[stripe webhook] checkout.session.expired — order checkout abandoned — order=${orderId} session=${expiredSession.id}`);
     }
@@ -434,14 +445,19 @@ async function processPaystackEvent(event: {
     const { reference, metadata } = event.data;
     const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
-    await db.update(paymentsTable)
+    const [updatedPayment] = await db.update(paymentsTable)
       .set({ status: "paid", updatedAt: new Date() })
-      .where(eq(paymentsTable.providerReference, reference));
+      .where(eq(paymentsTable.providerReference, reference))
+      .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
 
     if (orderId) {
       await db.update(ordersTable)
         .set({ paymentStatus: "paid", updatedAt: new Date() })
         .where(eq(ordersTable.id, orderId));
+    }
+
+    if (updatedPayment) {
+      await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
     }
 
     console.info(`[paystack webhook] charge.success — reference=${reference} order=${orderId}`);

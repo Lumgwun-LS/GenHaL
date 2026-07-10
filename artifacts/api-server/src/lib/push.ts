@@ -1,0 +1,112 @@
+/**
+ * Expo push notification helper.
+ * Sends notifications through Expo's push service (no API key required for
+ * Expo push tokens — Expo brokers delivery to APNs/FCM on our behalf).
+ *
+ * Docs: https://docs.expo.dev/push-notifications/sending-notifications/
+ */
+import { db, vendorPushTokensTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+
+const EXPO_PUSH_API = "https://exp.host/--/api/v2/push/send";
+
+interface PushMessage {
+  to: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}
+
+/** Sends a batch of push messages via Expo's push API. Never throws — logs and swallows errors. */
+async function sendExpoPushMessages(messages: PushMessage[]): Promise<void> {
+  if (messages.length === 0) return;
+
+  try {
+    const res = await fetch(EXPO_PUSH_API, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(messages),
+    });
+
+    const body = (await res.json().catch(() => null)) as
+      | { data?: Array<{ status: string; message?: string; details?: { error?: string } }> }
+      | null;
+    if (!res.ok) {
+      console.error("[push] Expo push API request failed:", res.status, body);
+      return;
+    }
+
+    // Each ticket can independently report an error (e.g. DeviceNotRegistered).
+    const tickets = body?.data ?? [];
+    for (const [i, ticket] of tickets.entries()) {
+      if (ticket.status === "error") {
+        console.warn(`[push] ticket error for token=${messages[i]?.to}:`, ticket.message, ticket.details);
+        if (ticket.details?.error === "DeviceNotRegistered") {
+          await db
+            .delete(vendorPushTokensTable)
+            .where(eq(vendorPushTokensTable.expoPushToken, messages[i].to))
+            .catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[push] Failed to send Expo push messages:", err);
+  }
+}
+
+/** Sends a push notification to every device a vendor has registered. */
+export async function sendPushToVendor(
+  vendorId: number,
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<void> {
+  const tokens = await db
+    .select({ expoPushToken: vendorPushTokensTable.expoPushToken })
+    .from(vendorPushTokensTable)
+    .where(eq(vendorPushTokensTable.vendorId, vendorId));
+
+  if (tokens.length === 0) return;
+
+  await sendExpoPushMessages(
+    tokens.map((t) => ({ to: t.expoPushToken, title, body, data })),
+  );
+}
+
+const CURRENCY_FORMATTERS = new Map<string, Intl.NumberFormat>();
+
+function formatCurrency(amount: string | number, currency: string): string {
+  let formatter = CURRENCY_FORMATTERS.get(currency);
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 });
+    } catch {
+      formatter = undefined;
+    }
+    if (formatter) CURRENCY_FORMATTERS.set(currency, formatter);
+  }
+  const numeric = typeof amount === "string" ? Number(amount) : amount;
+  return formatter ? formatter.format(numeric) : `${currency} ${numeric.toFixed(2)}`;
+}
+
+/** Notifies a vendor that one of their payments changed status (paid/failed/refunded). */
+export async function notifyVendorPaymentStatus(
+  vendorId: number,
+  status: "paid" | "failed" | "refunded",
+  amount: string | number,
+  currency: string,
+): Promise<void> {
+  const formatted = formatCurrency(amount, currency);
+  const copy: Record<typeof status, { title: string; body: string }> = {
+    paid:     { title: "Payment received", body: `A payment of ${formatted} just cleared.` },
+    failed:   { title: "Payment failed", body: `A payment of ${formatted} did not go through.` },
+    refunded: { title: "Payment refunded", body: `A payment of ${formatted} was refunded.` },
+  };
+
+  await sendPushToVendor(vendorId, copy[status].title, copy[status].body, {
+    screen: "payments",
+  });
+}
