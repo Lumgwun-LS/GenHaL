@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -30,7 +31,16 @@ import { GradientButton } from '@/components/GradientButton';
 export default function AccountScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { vendor, features, updateProfile, logout } = useAuth();
+  const {
+    vendor,
+    features,
+    updateProfile,
+    logout,
+    pushAlertsEnabled,
+    isLoadingPushPreference,
+    isTogglingPushAlerts,
+    setPushAlertsEnabled,
+  } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -235,8 +245,43 @@ export default function AccountScreen() {
         </Card>
       </AnimatedListItem>
 
-      {/* ── Sign out ── */}
+      {/* ── Notifications ── */}
       <AnimatedListItem index={2} baseDelay={120}>
+        <Card style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary, marginBottom: 4 }]}>
+            Notifications
+          </Text>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleTextWrap}>
+              <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                Phone push alerts
+              </Text>
+              <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                Get notified on this device about payment updates.
+              </Text>
+            </View>
+            {isLoadingPushPreference ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Switch
+                value={pushAlertsEnabled}
+                onValueChange={(next) => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.selectionAsync().catch(() => {});
+                  }
+                  void setPushAlertsEnabled(next);
+                }}
+                disabled={isTogglingPushAlerts}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                thumbColor="#FFFFFF"
+              />
+            )}
+          </View>
+        </Card>
+      </AnimatedListItem>
+
+      {/* ── Sign out ── */}
+      <AnimatedListItem index={3} baseDelay={120}>
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [
@@ -412,6 +457,25 @@ const styles = StyleSheet.create({
   },
   saveButtonWrap: {
     flex: 1,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+  },
+  toggleTextWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  toggleSubLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
   },
   featureWrap: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import {
 } from '@workspace/api-client-react';
 import type { ExternalProfileUpdate, Vendor } from '@workspace/api-client-react';
 import { setAuthToken } from '@/lib/auth-token';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const TOKEN_STORAGE_KEY = 'vendorhub-mobile-token';
 
@@ -42,6 +43,11 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: ExternalProfileUpdate) => Promise<void>;
+  /** Vendor's on-device preference for phone push alerts (Account tab toggle). */
+  pushAlertsEnabled: boolean;
+  isLoadingPushPreference: boolean;
+  isTogglingPushAlerts: boolean;
+  setPushAlertsEnabled: (next: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -147,6 +153,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isLoading = !isClerkLoaded || isRestoring;
 
+  const {
+    alertsEnabled: pushAlertsEnabled,
+    isLoadingPreference: isLoadingPushPreference,
+    isToggling: isTogglingPushAlerts,
+    setAlertsEnabled: setPushAlertsEnabled,
+  } = usePushNotifications(!!token);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isLoading,
@@ -158,6 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshProfile,
       updateProfile,
+      pushAlertsEnabled,
+      isLoadingPushPreference,
+      isTogglingPushAlerts,
+      setPushAlertsEnabled,
     }),
     [
       isLoading,
@@ -171,6 +188,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshProfile,
       updateProfile,
+      pushAlertsEnabled,
+      isLoadingPushPreference,
+      isTogglingPushAlerts,
+      setPushAlertsEnabled,
     ],
   );
 
