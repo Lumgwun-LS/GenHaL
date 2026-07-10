@@ -8,11 +8,16 @@ async function fetchAdminCheck(): Promise<{ isAdmin: boolean }> {
   return res.json() as Promise<{ isAdmin: boolean }>;
 }
 
-export function useIsAdmin() {
-  const { data } = useQuery({
+/** Returns both the admin flag and whether the check is still in flight, for callers that need to avoid acting on the default-false value before it settles. */
+export function useIsAdminStatus() {
+  const { data, isLoading } = useQuery({
     queryKey: ["admin-check"],
     queryFn: fetchAdminCheck,
     staleTime: 5 * 60 * 1000,
   });
-  return data?.isAdmin ?? false;
+  return { isAdmin: data?.isAdmin ?? false, isLoading };
+}
+
+export function useIsAdmin() {
+  return useIsAdminStatus().isAdmin;
 }

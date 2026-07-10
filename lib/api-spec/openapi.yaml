@@ -96,6 +96,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/Vendor"
 
+  /vendors/onboarding:
+    post:
+      operationId: onboardVendor
+      tags: [vendors]
+      summary: Complete first-time vendor onboarding for the signed-in Clerk user
+      description: >
+        Creates the vendor profile for the current Clerk user on first sign-in. Email and
+        clerkUserId are derived server-side from the verified Clerk session, never from the
+        request body. If a vendor profile already exists for this user, it is returned as-is.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorOnboardingInput"
+      responses:
+        "200":
+          description: Existing vendor profile (already onboarded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+        "201":
+          description: Newly created vendor profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
   /vendors/stats:
     get:
       operationId: getVendorStats
@@ -1603,6 +1632,21 @@ components:
           type: ["string", "null"]
         city:
           type: ["string", "null"]
+
+    VendorOnboardingInput:
+      type: object
+      required: [name, phone, country]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        country:
+          type: string
+        state:
+          type: string
+        city:
+          type: string
 
     VendorInput:
       type: object

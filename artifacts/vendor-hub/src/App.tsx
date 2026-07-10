@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from 'wouter';
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useListVendors } from "@workspace/api-client-react";
+import { useIsAdminStatus } from "@/hooks/useIsAdmin";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
@@ -30,6 +32,7 @@ import Payments from "@/pages/payments";
 import AdminPanel from "@/pages/admin";
 import Analytics from "@/pages/analytics";
 import Account from "@/pages/account";
+import Onboarding from "@/pages/onboarding";
 import VoiceCampaigns from "@/pages/voice-campaigns/index";
 import VoiceCampaignDetail from "@/pages/voice-campaigns/detail";
 
@@ -99,8 +102,21 @@ function SignUpPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-background to-background -z-10"></div>
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} forceRedirectUrl={`${basePath}/onboarding`} />
     </div>
+  );
+}
+
+function OnboardingRoute() {
+  return (
+    <>
+      <Show when="signed-in">
+        <Onboarding />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
   );
 }
 
@@ -117,13 +133,38 @@ function HomeRedirect() {
   );
 }
 
+/**
+ * Signed-in but hasn't finished onboarding yet (e.g. closed the tab mid-signup) — send them
+ * back. Platform admins are exempt: they're identified by Clerk user id (ADMIN_USER_IDS), not
+ * by owning a vendor row, so an admin account may legitimately have no vendor profile at all.
+ */
+function RequireVendorProfile({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
+  const { isAdmin, isLoading: isAdminLoading } = useIsAdminStatus();
+  const { data: vendors, isLoading: isVendorsLoading } = useListVendors();
+  const hasVendor = vendors?.some((v) => v.clerkUserId === user?.id) ?? false;
+
+  // Wait for both checks to settle — isAdmin defaults to false while its query is in flight,
+  // so redirecting before it resolves would briefly (or, on a slow admin-check response,
+  // not-so-briefly) send legitimate admins without a vendor row to /onboarding.
+  if (isVendorsLoading || isAdminLoading) {
+    return <div className="flex h-screen items-center justify-center text-muted-foreground">Loading...</div>;
+  }
+  if (!hasVendor && !isAdmin) {
+    return <Redirect to="/onboarding" />;
+  }
+  return <>{children}</>;
+}
+
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType<any> }) {
   return (
     <>
       <Show when="signed-in">
-        <Layout>
-          <Component />
-        </Layout>
+        <RequireVendorProfile>
+          <Layout>
+            <Component />
+          </Layout>
+        </RequireVendorProfile>
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
@@ -173,6 +214,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/store/:id" component={VendorStorefront} />
 
           {/* Authenticated Routes */}

@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc } from "drizzle-orm";
 import { db, vendorsTable } from "@workspace/db";
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
+import { COUNTRY_NAMES } from "../lib/country-names";
 import {
   ListVendorsQueryParams,
   CreateVendorBody,
@@ -15,6 +16,8 @@ import {
   GetVendorResponse,
   UpdateVendorResponse,
   GetVendorStatsResponse,
+  OnboardVendorBody,
+  OnboardVendorResponse,
 } from "@workspace/api-zod";
 
 type PaymentSettingsBody = {
@@ -87,6 +90,72 @@ router.post("/vendors", async (req, res): Promise<void> => {
   }
   const [vendor] = await db.insert(vendorsTable).values(parsed.data).returning();
   res.status(201).json(CreateVendorResponse.parse(vendor));
+});
+
+/**
+ * POST /vendors/onboarding
+ * First-time signup completion for the signed-in Clerk user. Email and clerkUserId
+ * always come from the verified Clerk session — never from the request body — so a
+ * vendor can never onboard as, or spoof, another user's identity.
+ */
+const E164_RE = /^\+[1-9]\d{4,14}$/;
+
+router.post("/vendors/onboarding", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [existing] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  if (existing) { res.status(200).json(OnboardVendorResponse.parse(existing)); return; }
+
+  const parsed = OnboardVendorBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const name = parsed.data.name.trim();
+  if (name.length < 2 || name.length > 100) {
+    res.status(400).json({ error: "Name must be between 2 and 100 characters." });
+    return;
+  }
+  if (!COUNTRY_NAMES.has(parsed.data.country)) {
+    res.status(400).json({ error: "Select a valid country from the list." });
+    return;
+  }
+  if (!E164_RE.test(parsed.data.phone)) {
+    res.status(400).json({ error: "Enter a valid phone number." });
+    return;
+  }
+
+  const clerkUser = await clerkClient.users.getUser(userId);
+  const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+  if (!email) { res.status(400).json({ error: "Your Clerk account has no verified email address." }); return; }
+
+  // A unique index on clerk_user_id (where not null) guards against a duplicate row if this
+  // request races with another onboarding submission for the same user (e.g. double-click).
+  try {
+    const [vendor] = await db
+      .insert(vendorsTable)
+      .values({
+        name,
+        email,
+        phone: parsed.data.phone,
+        country: parsed.data.country,
+        state: parsed.data.state,
+        city: parsed.data.city,
+        industry: "General",
+        clerkUserId: userId,
+        externalSource: "vendorhub",
+      })
+      .returning();
+
+    res.status(201).json(OnboardVendorResponse.parse(vendor));
+  } catch (err: any) {
+    // Only swallow the specific clerk_user_id race — any other unique violation (or error)
+    // is unexpected here and should surface rather than being masked as a successful onboard.
+    if (err?.code === "23505" && err?.constraint === "vendors_clerk_user_id_unique") {
+      const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+      if (vendor) { res.status(200).json(OnboardVendorResponse.parse(vendor)); return; }
+    }
+    throw err;
+  }
 });
 
 router.get("/vendors/:id", async (req, res): Promise<void> => {

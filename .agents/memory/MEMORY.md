@@ -14,3 +14,5 @@
 - [Account deletion eligibility](account-deletion-eligibility.md) — checking two independent "still owes platform" signals must OR them, not AND — ANDing lets drift between the fields wrongly permit destructive actions.
 - [Orval generated hook query options](orval-query-options-pattern.md) — passing `{ query: { enabled } }` to a generated `useGetX` hook needs an explicit `queryKey: getGetXQueryKey(params)` too, or TS rejects it — copy the pattern from an existing detail-page hook call, don't write it from scratch.
 - [VendorHub push notifications](vendorhub-push-notifications.md) — Expo push via exp.host API, tokens in vendor_push_tokens table, sent from lib/push.ts on payment status webhooks; Expo Go can't receive remote push (SDK 53+), needs EAS build to test.
+- [VendorHub signup/onboarding gap](vendorhub-onboarding.md) — web Clerk `<SignUp/>` never created a vendors row; onboarding step now does, with server-verified identity and DB-unique clerkUserId to survive double-submits.
+- [Migration file numbering](db-migration-numbering.md) — always `ls lib/db/migrations` before naming a new file; two agents/sessions can pick the same next number.

@@ -94,6 +94,7 @@ import type {
   SocialAnalytics,
   Vendor,
   VendorInput,
+  VendorOnboardingInput,
   VendorPerformanceAnalytics,
   VendorStats,
   VendorUpdate,
@@ -357,6 +358,77 @@ export const useCreateVendor = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateVendorMutationOptions(options));
+    }
+
+export const getOnboardVendorUrl = () => {
+
+
+
+
+  return `/api/vendors/onboarding`
+}
+
+/**
+ * Creates the vendor profile for the current Clerk user on first sign-in. Email and clerkUserId are derived server-side from the verified Clerk session, never from the request body. If a vendor profile already exists for this user, it is returned as-is.
+ * @summary Complete first-time vendor onboarding for the signed-in Clerk user
+ */
+export const onboardVendor = async (vendorOnboardingInput: VendorOnboardingInput, options?: RequestInit): Promise<Vendor> => {
+
+  return customFetch<Vendor>(getOnboardVendorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorOnboardingInput)
+  }
+);}
+
+
+
+
+export const getOnboardVendorMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof onboardVendor>>, TError,{data: BodyType<VendorOnboardingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof onboardVendor>>, TError,{data: BodyType<VendorOnboardingInput>}, TContext> => {
+
+const mutationKey = ['onboardVendor'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof onboardVendor>>, {data: BodyType<VendorOnboardingInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  onboardVendor(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OnboardVendorMutationResult = NonNullable<Awaited<ReturnType<typeof onboardVendor>>>
+    export type OnboardVendorMutationBody = BodyType<VendorOnboardingInput>
+    export type OnboardVendorMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Complete first-time vendor onboarding for the signed-in Clerk user
+ */
+export const useOnboardVendor = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof onboardVendor>>, TError,{data: BodyType<VendorOnboardingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof onboardVendor>>,
+        TError,
+        {data: BodyType<VendorOnboardingInput>},
+        TContext
+      > => {
+      return useMutation(getOnboardVendorMutationOptions(options));
     }
 
 export const getGetVendorStatsUrl = () => {

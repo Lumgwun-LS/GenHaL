@@ -90,6 +90,42 @@ export const CreateVendorResponse = zod.object({
 
 
 /**
+ * Creates the vendor profile for the current Clerk user on first sign-in. Email and clerkUserId are derived server-side from the verified Clerk session, never from the request body. If a vendor profile already exists for this user, it is returned as-is.
+ * @summary Complete first-time vendor onboarding for the signed-in Clerk user
+ */
+export const OnboardVendorBody = zod.object({
+  "name": zod.string(),
+  "phone": zod.string(),
+  "country": zod.string(),
+  "state": zod.string().optional(),
+  "city": zod.string().optional()
+})
+
+export const OnboardVendorResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "industry": zod.string(),
+  "status": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "stripeEnabled": zod.boolean().optional(),
+  "paystackEnabled": zod.boolean().optional(),
+  "defaultCurrency": zod.string().optional(),
+  "brandTheme": zod.string().optional(),
+  "gender": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "city": zod.string().nullish()
+})
+
+
+/**
  * @summary Get vendor stats
  */
 export const GetVendorStatsResponse = zod.object({

@@ -42,6 +42,14 @@ export interface Vendor {
   city?: string | null;
 }
 
+export interface VendorOnboardingInput {
+  name: string;
+  phone: string;
+  country: string;
+  state?: string;
+  city?: string;
+}
+
 export interface VendorInput {
   name: string;
   industry: string;

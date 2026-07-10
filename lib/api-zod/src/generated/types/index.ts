@@ -100,6 +100,7 @@ export * from './timeSeriesAmountPoint';
 export * from './timeSeriesCountPoint';
 export * from './vendor';
 export * from './vendorInput';
+export * from './vendorOnboardingInput';
 export * from './vendorPerformanceAnalytics';
 export * from './vendorPerformanceAnalyticsRange';
 export * from './vendorStats';
