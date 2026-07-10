@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -141,6 +141,7 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
   // (plus its payment-credential lookups) in memory at a time.
   const BATCH_SIZE = 500;
   let lastId = 0;
+  let totalRows = 0;
 
   while (true) {
     const batchConditions = [...conditions, gt(vendorsTable.id, lastId)];
@@ -179,11 +180,34 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
     }
     res.write(chunk);
 
+    totalRows += batch.length;
     lastId = batch[batch.length - 1]!.id;
     if (batch.length < BATCH_SIZE) break;
   }
 
   res.end();
+
+  await db.insert(adminExportLogsTable).values({
+    adminUserId: userId,
+    filters: JSON.stringify({ tier, status, verificationLevel, joinedAfter, joinedBefore }),
+    rowCount: totalRows,
+  });
+});
+
+// ─── GET /admin/export-logs ────────────────────────────────────────────────────
+
+router.get("/admin/export-logs", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const logs = await db
+    .select()
+    .from(adminExportLogsTable)
+    .orderBy(desc(adminExportLogsTable.exportedAt))
+    .limit(50);
+
+  res.json(logs);
 });
 
 // ─── GET /admin/birthday-logs ─────────────────────────────────────────────────

@@ -219,6 +219,32 @@ async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
   return res.json();
 }
 
+type ExportLog = {
+  id: number;
+  adminUserId: string;
+  filters: string;
+  rowCount: number;
+  exportedAt: string;
+};
+
+async function fetchExportLogs(): Promise<ExportLog[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/export-logs`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load export history");
+  return res.json() as Promise<ExportLog[]>;
+}
+
+function formatExportFilters(raw: string): string {
+  try {
+    const f = JSON.parse(raw) as Record<string, string | undefined>;
+    const parts = Object.entries(f)
+      .filter(([, v]) => Boolean(v))
+      .map(([k, v]) => `${k}: ${v}`);
+    return parts.length > 0 ? parts.join(", ") : "No filters";
+  } catch {
+    return "No filters";
+  }
+}
+
 const ANY = "__any__";
 
 type ExportFilters = {
@@ -373,6 +399,12 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: exportLogs, isLoading: exportLogsLoading } = useQuery({
+    queryKey: ["admin-export-logs"],
+    queryFn: fetchExportLogs,
+    enabled: isAdmin,
+  });
+
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
     qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
@@ -475,6 +507,7 @@ export default function AdminPanel() {
                   a.click();
                   document.body.removeChild(a);
                   toast.success("CSV download started");
+                  setTimeout(() => qc.invalidateQueries({ queryKey: ["admin-export-logs"] }), 1500);
                 }}
               />
             </CardHeader>
@@ -541,6 +574,45 @@ export default function AdminPanel() {
                         </TableRow>
                       ))
                     )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardList className="w-4 h-4" /> Export History
+              </CardTitle>
+              <CardDescription>Recent CSV downloads of vendor data, for compliance tracking.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {exportLogsLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading export history…</div>
+              ) : !exportLogs?.length ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">No exports yet.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Admin</TableHead>
+                      <TableHead>Filters Used</TableHead>
+                      <TableHead className="text-right">Rows</TableHead>
+                      <TableHead className="text-right">Downloaded</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {exportLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-mono text-xs">{log.adminUserId}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{formatExportFilters(log.filters)}</TableCell>
+                        <TableCell className="text-right text-sm">{log.rowCount}</TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {new Date(log.exportedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               )}

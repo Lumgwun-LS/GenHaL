@@ -24,3 +24,4 @@ export * from "./admin-audit-log";
 export * from "./site-content";
 export * from "./account-deletion-requests";
 export * from "./pending-reminder-logs";
+export * from "./admin-export-logs";
