@@ -17,7 +17,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { db, paymentsTable, ordersTable, vendorsTable, webhookEventsTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, vendorsTable, webhookEventsTable, vendorNotificationsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { sendSlackAlert } from "../../lib/slack";
 import {
@@ -342,6 +342,82 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       );
     } else {
       console.warn(`[stripe webhook] subscription cancelled — no vendor found for customer=${customerId}`);
+    }
+    return;
+  }
+
+  // ── Refunded charge ────────────────────────────────────────────────────
+  // Fired when a charge is refunded (fully or partially), including disputed
+  // charges that get reversed. If the charge belongs to a vendor's paid
+  // subscription (matched via Stripe Customer id), immediately revert the
+  // vendor to the free tier so they don't keep paid features they no longer
+  // paid for. Order-level charges (no matching vendor by customer id) are
+  // left alone here — that path is unrelated to subscription tier.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const customerId =
+      typeof charge.customer === "string" ? charge.customer : charge.customer?.id ?? null;
+
+    if (!customerId) {
+      console.info(`[stripe webhook] charge.refunded with no customer — skipping — charge=${charge.id}`);
+      return;
+    }
+
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.stripeCustomerId, customerId));
+
+    if (!vendor) {
+      console.info(`[stripe webhook] charge.refunded — no vendor found for customer=${customerId}`);
+      return;
+    }
+
+    if (vendor.subscriptionTier === "free") {
+      console.info(`[stripe webhook] charge.refunded — vendor=${vendor.id} already on free tier, nothing to do`);
+      return;
+    }
+
+    const previousTier = vendor.subscriptionTier;
+
+    await db
+      .update(vendorsTable)
+      .set({ subscriptionTier: "free", updatedAt: new Date() })
+      .where(eq(vendorsTable.id, vendor.id));
+
+    await db.insert(vendorNotificationsTable).values({
+      vendorId: vendor.id,
+      type: "tier_change",
+      message: `Your ${previousTier} plan payment was refunded, so your account has been moved back to the Free tier.`,
+    });
+
+    console.warn(
+      `[stripe webhook] charge.refunded — vendor=${vendor.id} downgraded from ${previousTier} to free — charge=${charge.id} customer=${customerId}`,
+    );
+    return;
+  }
+
+  // ── Expired checkout session ───────────────────────────────────────────
+  // A subscription upgrade checkout expired without completing payment.
+  // No tier was ever granted (that only happens on checkout.session.completed),
+  // so there is nothing to revert — just log for observability.
+  if (event.type === "checkout.session.expired") {
+    const expiredSession = event.data.object as Stripe.Checkout.Session;
+    const upgradeVendorId = expiredSession.metadata?.upgradeVendorId
+      ? parseInt(expiredSession.metadata.upgradeVendorId)
+      : null;
+
+    if (upgradeVendorId) {
+      console.info(
+        `[stripe webhook] checkout.session.expired — subscription upgrade abandoned — vendor=${upgradeVendorId} session=${expiredSession.id}`,
+      );
+    } else {
+      const orderId = expiredSession.metadata?.orderId ? parseInt(expiredSession.metadata.orderId) : null;
+      await db.update(paymentsTable)
+        .set({ status: "failed", updatedAt: new Date() })
+        .where(eq(paymentsTable.providerReference, expiredSession.id));
+
+      console.info(`[stripe webhook] checkout.session.expired — order checkout abandoned — order=${orderId} session=${expiredSession.id}`);
     }
     return;
   }
