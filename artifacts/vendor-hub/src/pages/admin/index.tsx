@@ -7,9 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
@@ -364,6 +366,79 @@ function ExportFilterPopover({ onExport }: { onExport: (filters: ExportFilters) 
   );
 }
 
+async function postVendorMessage(vendorId: number, message: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/notifications`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to send message");
+  }
+}
+
+function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function handleSend() {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    setSending(true);
+    try {
+      await postVendorMessage(vendor.id, trimmed);
+      toast.success(`Message sent to ${vendor.name}`);
+      setMessage("");
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 text-xs"
+        onClick={() => setOpen(true)}
+        data-testid={`button-message-vendor-${vendor.id}`}
+      >
+        <Send className="w-3.5 h-3.5" /> Message
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Message {vendor.name}</DialogTitle>
+          <DialogDescription>
+            Sends a one-off in-app notification to this vendor. It will appear in their notification bell.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type your message…"
+          className="min-h-28"
+          maxLength={1000}
+          data-testid="textarea-vendor-message"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSend} disabled={sending || !message.trim()} data-testid="button-send-vendor-message">
+            {sending ? "Sending…" : "Send"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const AUDIT_FIELD_ANY = "__any__";
 
 export default function AdminPanel() {
@@ -555,12 +630,13 @@ export default function AdminPanel() {
                       <TableHead>Verification</TableHead>
                       <TableHead>Payment Keys</TableHead>
                       <TableHead className="text-right">Joined</TableHead>
+                      <TableHead className="text-right">Message</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {vendors?.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           No vendors found.
                         </TableCell>
                       </TableRow>
@@ -599,6 +675,9 @@ export default function AdminPanel() {
                           </TableCell>
                           <TableCell className="text-right text-muted-foreground text-sm">
                             {new Date(vendor.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <MessageVendorDialog vendor={vendor} />
                           </TableCell>
                         </TableRow>
                       ))
