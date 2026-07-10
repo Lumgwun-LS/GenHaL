@@ -16,38 +16,73 @@ process.env.STRIPE_SECRET_KEY = "sk_test_platform";
 let vendorRows: Array<{ id: number; subscriptionTier: string }> = [];
 let updateCalls: Array<{ set: Record<string, unknown>; whereId: unknown }> = [];
 let constructedEvent: unknown = null;
+// Models the webhook_events table: eventId -> whether it finished successfully.
+let webhookEventRows: Map<string, { processedAt: Date | null }> = new Map();
+
+const webhookEventsTableRef = { eventId: "eventId", processedAt: "processedAt" };
+const vendorsTableRef = { id: "id" };
 
 // ── Mock @workspace/db ────────────────────────────────────────────────────────
 
 vi.mock("@workspace/db", () => ({
   db: {
     select: () => ({
-      from: () => ({
-        where: () => vendorRows,
+      from: (table: unknown) => ({
+        where: (whereArg: unknown) => {
+          if (table === webhookEventsTableRef) {
+            const eventId = (whereArg as { val: string }).val;
+            const row = webhookEventRows.get(eventId);
+            return Promise.resolve(row ? [{ processedAt: row.processedAt }] : []);
+          }
+          return { limit: () => vendorRows };
+        },
       }),
     }),
-    update: () => ({
+    update: (table: unknown) => ({
       set: (vals: Record<string, unknown>) => ({
-        where: (whereArg: unknown) => ({
-          returning: () => {
-            updateCalls.push({ set: vals, whereId: whereArg });
-            const match = vendorRows.find(
-              (v) => v.id === (whereArg as { val: number }).val,
-            );
-            if (!match) return [];
-            const updated = { ...match, ...vals };
-            // reflect the update so subsequent reads see it
-            const idx = vendorRows.findIndex((v) => v.id === match.id);
-            vendorRows[idx] = { ...vendorRows[idx], ...vals } as typeof match;
-            return [updated];
-          },
-        }),
+        where: (whereArg: unknown) => {
+          if (table === webhookEventsTableRef) {
+            const eventId = (whereArg as { val: string }).val;
+            const row = webhookEventRows.get(eventId);
+            if (row) row.processedAt = (vals.processedAt as Date | null) ?? row.processedAt;
+            return Promise.resolve();
+          }
+          return {
+            returning: () => {
+              updateCalls.push({ set: vals, whereId: whereArg });
+              const match = vendorRows.find(
+                (v) => v.id === (whereArg as { val: number }).val,
+              );
+              if (!match) return [];
+              const updated = { ...match, ...vals };
+              // reflect the update so subsequent reads see it
+              const idx = vendorRows.findIndex((v) => v.id === match.id);
+              vendorRows[idx] = { ...vendorRows[idx], ...vals } as typeof match;
+              return [updated];
+            },
+          };
+        },
       }),
+    }),
+    insert: () => ({
+      values: (vals: Record<string, unknown>) => {
+        const eventId = vals.eventId as string;
+        if (webhookEventRows.has(eventId)) {
+          const err = new Error(
+            'duplicate key value violates unique constraint "webhook_events_event_id_unique"',
+          ) as Error & { code?: string };
+          err.code = "23505";
+          throw err;
+        }
+        webhookEventRows.set(eventId, { processedAt: (vals.processedAt as Date | null) ?? null });
+        return Promise.resolve();
+      },
     }),
   },
   paymentsTable: {},
   ordersTable: {},
-  vendorsTable: { id: "id" },
+  vendorsTable: vendorsTableRef,
+  webhookEventsTable: webhookEventsTableRef,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -126,11 +161,13 @@ describe("POST /payments/stripe/webhook — subscription upgrade", () => {
   beforeEach(() => {
     vendorRows = [{ id: 7, subscriptionTier: "free" }];
     updateCalls = [];
+    webhookEventRows = new Map();
     vi.clearAllMocks();
   });
 
   it("activates the vendor's plan from checkout.session.completed metadata", async () => {
     const { status, body } = await postWebhook({
+      id: "evt_test_123",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -153,6 +190,7 @@ describe("POST /payments/stripe/webhook — subscription upgrade", () => {
 
   it("ignores an invalid tier in the metadata without crashing", async () => {
     const { status } = await postWebhook({
+      id: "evt_test_456",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -174,6 +212,7 @@ describe("POST /payments/stripe/webhook — subscription upgrade", () => {
     vendorRows = [];
 
     const { status } = await postWebhook({
+      id: "evt_test_789",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -187,5 +226,64 @@ describe("POST /payments/stripe/webhook — subscription upgrade", () => {
     });
 
     expect(status).toBe(200);
+  });
+
+  it("does not re-apply the tier upgrade when Stripe retries the same event id", async () => {
+    const event = {
+      id: "evt_test_dup",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_dup",
+          metadata: {
+            upgradeVendorId: "7",
+            upgradeTier: "pro",
+          },
+        },
+      },
+    };
+
+    const first = await postWebhook(event);
+    expect(first.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(vendorRows[0].subscriptionTier).toBe("pro");
+
+    // Simulate a manual downgrade in between deliveries — a duplicate
+    // delivery must NOT re-apply "pro" over this.
+    vendorRows[0].subscriptionTier = "free";
+
+    const second = await postWebhook(event);
+    expect(second.status).toBe(200);
+    expect(second.body).toMatchObject({ received: true });
+    // No new update call was issued for the duplicate delivery.
+    expect(updateCalls).toHaveLength(1);
+    expect(vendorRows[0].subscriptionTier).toBe("free");
+  });
+
+  it("reprocesses on retry if the first delivery failed before finishing (not treated as duplicate)", async () => {
+    const event = {
+      id: "evt_test_retry",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_retry",
+          metadata: {
+            upgradeVendorId: "7",
+            upgradeTier: "pro",
+          },
+        },
+      },
+    };
+
+    // Simulate a crashed first attempt: the event got claimed (row inserted)
+    // but never finished, so processedAt stayed NULL.
+    webhookEventRows.set("evt_test_retry", { processedAt: null });
+
+    const retry = await postWebhook(event);
+
+    expect(retry.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(vendorRows[0].subscriptionTier).toBe("pro");
+    expect(webhookEventRows.get("evt_test_retry")?.processedAt).not.toBeNull();
   });
 });
