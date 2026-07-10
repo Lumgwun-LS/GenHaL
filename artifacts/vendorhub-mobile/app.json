@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "VendorHub Mobile",
-    "slug": "vendorhub-mobile",
+    "name": "Awajimaa Connect Suite",
+    "slug": "awajimaaconnectsuite",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "vendorhub-mobile",
+    "scheme": "awajimaaconnectsuite",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,9 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.awajimaaconnectsuite.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.awajimaaconnectsuite.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
