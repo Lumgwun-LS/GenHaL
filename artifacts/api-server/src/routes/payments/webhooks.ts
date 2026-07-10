@@ -484,6 +484,13 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
     throw Object.assign(new Error("Webhook event was already processed"), { statusCode: 409 });
   }
 
+  // Record this retry attempt (count + timestamp) regardless of outcome, so
+  // admins can see repeated-failure patterns even when the retry itself fails.
+  await db
+    .update(webhookEventsTable)
+    .set({ retryCount: sql`${webhookEventsTable.retryCount} + 1`, lastRetriedAt: new Date() })
+    .where(eq(webhookEventsTable.id, id));
+
   try {
     if (row.provider === "stripe") {
       await processStripeEvent(row.rawPayload as unknown as Stripe.Event);

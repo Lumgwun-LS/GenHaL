@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, jsonb, unique, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +14,8 @@ export const webhookEventsTable = pgTable(
     processedAt: timestamp("processed_at", { withTimezone: true }), // null = not yet processed or failed
     errorMessage: text("error_message"), // set when business logic throws; null = no error
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    retryCount: integer("retry_count").notNull().default(0), // incremented on each admin-triggered retry attempt
+    lastRetriedAt: timestamp("last_retried_at", { withTimezone: true }), // set on each admin-triggered retry attempt
   },
   (t) => [unique("webhook_events_event_id_unique").on(t.eventId)],
 );
@@ -21,6 +23,8 @@ export const webhookEventsTable = pgTable(
 export const insertWebhookEventSchema = createInsertSchema(webhookEventsTable).omit({
   id: true,
   receivedAt: true,
+  retryCount: true,
+  lastRetriedAt: true,
 });
 export type InsertWebhookEvent = z.infer<typeof insertWebhookEventSchema>;
 export type WebhookEvent = typeof webhookEventsTable.$inferSelect;

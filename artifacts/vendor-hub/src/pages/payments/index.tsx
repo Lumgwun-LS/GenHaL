@@ -57,6 +57,8 @@ type WebhookEvent = {
   processedAt: string | null;
   errorMessage: string | null;
   receivedAt: string;
+  retryCount: number;
+  lastRetriedAt: string | null;
 };
 
 type WebhookEventsResponse = {
@@ -543,6 +545,15 @@ export default function Payments() {
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1">
                         <Clock className="w-3 h-3" /> Pending
                       </Badge>
+                    )}
+                    {e.retryCount > 0 && (
+                      <div
+                        className="text-xs text-muted-foreground mt-1"
+                        title={e.lastRetriedAt ? `Last retried at ${format(new Date(e.lastRetriedAt), "MMM d, yyyy HH:mm:ss")}` : undefined}
+                      >
+                        Retried {e.retryCount}x
+                        {e.lastRetriedAt && `, last at ${format(new Date(e.lastRetriedAt), "MMM d, HH:mm")}`}
+                      </div>
                     )}
                   </TableCell>
                   {isAdmin && (
