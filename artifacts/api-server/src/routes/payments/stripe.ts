@@ -2,7 +2,8 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { resolveStripeKey, canAddPaymentKeys } from "../../lib/vendor-keys";
+import { resolveStripeKey } from "../../lib/vendor-keys";
+import { applyVendorTierUpgrade } from "../../lib/subscription-sync";
 
 const router = Router();
 
@@ -133,24 +134,11 @@ router.post(
       const upgradeTier = session.metadata?.upgradeTier ?? null;
 
       if (upgradeVendorId && upgradeTier) {
-        const VALID_TIERS = ["starter", "pro", "enterprise"];
-        if (VALID_TIERS.includes(upgradeTier)) {
-          const [updated] = await db
-            .update(vendorsTable)
-            .set({ subscriptionTier: upgradeTier, updatedAt: new Date() })
-            .where(eq(vendorsTable.id, upgradeVendorId))
-            .returning({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier });
-
-          if (updated) {
-            const featureUnlocked = canAddPaymentKeys({ subscriptionTier: upgradeTier, verificationLevel: "unverified" } as Parameters<typeof canAddPaymentKeys>[0]);
-            console.info(
-              `[stripe webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} featureUnlocked=${featureUnlocked} session=${session.id}`,
-            );
-          } else {
-            console.warn(`[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`);
-          }
-        } else {
-          console.warn(`[stripe webhook] subscription upgrade — invalid tier '${upgradeTier}' in session=${session.id}`);
+        const subscriptionId =
+          typeof session.subscription === "string" ? session.subscription : (session.subscription?.id ?? null);
+        const result = await applyVendorTierUpgrade(upgradeVendorId, upgradeTier, subscriptionId, "webhook");
+        if (!result.applied) {
+          console.warn(`[stripe webhook] subscription upgrade skipped — vendor=${upgradeVendorId} reason=${result.reason} session=${session.id}`);
         }
         // Subscription upgrades don't have a paymentsTable row — skip order/payment updates.
       } else {
