@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -363,9 +363,16 @@ function ExportFilterPopover({ onExport }: { onExport: (filters: ExportFilters) 
   );
 }
 
+const AUDIT_FIELD_ANY = "__any__";
+
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
+
+  const [auditVendorSearch, setAuditVendorSearch] = useState("");
+  const [auditFieldFilter, setAuditFieldFilter] = useState(AUDIT_FIELD_ANY);
+  const [auditAfter, setAuditAfter] = useState("");
+  const [auditBefore, setAuditBefore] = useState("");
 
   const { data: vendors, isLoading, error } = useQuery({
     queryKey: ["admin-vendors"],
@@ -404,6 +411,27 @@ export default function AdminPanel() {
     queryFn: fetchExportLogs,
     enabled: isAdmin,
   });
+
+  const filteredAuditLog = useMemo(() => {
+    if (!auditLog) return auditLog;
+    const search = auditVendorSearch.trim().toLowerCase();
+    const afterDate = auditAfter ? new Date(auditAfter) : null;
+    const beforeDate = auditBefore ? new Date(new Date(auditBefore).getTime() + 24 * 60 * 60 * 1000 - 1) : null;
+    return auditLog.filter((entry) => {
+      if (search) {
+        const name = (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase();
+        if (!name.includes(search)) return false;
+      }
+      if (auditFieldFilter !== AUDIT_FIELD_ANY && entry.field !== auditFieldFilter) return false;
+      const changedAt = new Date(entry.changedAt);
+      if (afterDate && !isNaN(afterDate.getTime()) && changedAt < afterDate) return false;
+      if (beforeDate && !isNaN(beforeDate.getTime()) && changedAt > beforeDate) return false;
+      return true;
+    });
+  }, [auditLog, auditVendorSearch, auditFieldFilter, auditAfter, auditBefore]);
+
+  const auditFiltersActive =
+    auditVendorSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
@@ -780,6 +808,61 @@ export default function AdminPanel() {
               <CardDescription>
                 The last 50 changes to vendor subscription tiers and verification levels. Read-only — entries cannot be deleted.
               </CardDescription>
+              <div className="flex flex-wrap items-end gap-3 pt-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Vendor name</Label>
+                  <Input
+                    placeholder="Search vendor…"
+                    className="h-8 w-44 text-xs"
+                    value={auditVendorSearch}
+                    onChange={(e) => setAuditVendorSearch(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Field</Label>
+                  <Select value={auditFieldFilter} onValueChange={setAuditFieldFilter}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={AUDIT_FIELD_ANY} className="text-xs">Any field</SelectItem>
+                      <SelectItem value="subscriptionTier" className="text-xs">Tier</SelectItem>
+                      <SelectItem value="verificationLevel" className="text-xs">Verification</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">From</Label>
+                  <Input
+                    type="date"
+                    className="h-8 w-36 text-xs"
+                    value={auditAfter}
+                    onChange={(e) => setAuditAfter(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">To</Label>
+                  <Input
+                    type="date"
+                    className="h-8 w-36 text-xs"
+                    value={auditBefore}
+                    onChange={(e) => setAuditBefore(e.target.value)}
+                  />
+                </div>
+                {auditFiltersActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setAuditVendorSearch("");
+                      setAuditFieldFilter(AUDIT_FIELD_ANY);
+                      setAuditAfter("");
+                      setAuditBefore("");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {auditLoading ? (
@@ -789,6 +872,12 @@ export default function AdminPanel() {
                   <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium">No changes recorded yet.</p>
                   <p className="text-xs mt-1">Every tier or verification level change made from this panel will appear here.</p>
+                </div>
+              ) : !filteredAuditLog?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No entries match your filters.</p>
+                  <p className="text-xs mt-1">Try adjusting the vendor name, field, or date range.</p>
                 </div>
               ) : (
                 <Table>
@@ -802,7 +891,7 @@ export default function AdminPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {auditLog.map((entry) => (
+                    {filteredAuditLog.map((entry) => (
                       <TableRow key={entry.id}>
                         <TableCell>
                           <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
