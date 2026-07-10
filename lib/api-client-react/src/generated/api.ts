@@ -1546,6 +1546,216 @@ export const usePublishPost = <TError = ErrorType<unknown>,
       return useMutation(getPublishPostMutationOptions(options));
     }
 
+export const getSubmitPostForReviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/submit-for-review`
+}
+
+/**
+ * @summary Submit a draft post for vendor/admin approval
+ */
+export const submitPostForReview = async (id: number, options?: RequestInit): Promise<Post> => {
+
+  return customFetch<Post>(getSubmitPostForReviewUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSubmitPostForReviewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPostForReview>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPostForReview>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['submitPostForReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPostForReview>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  submitPostForReview(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPostForReviewMutationResult = NonNullable<Awaited<ReturnType<typeof submitPostForReview>>>
+
+    export type SubmitPostForReviewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Submit a draft post for vendor/admin approval
+ */
+export const useSubmitPostForReview = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPostForReview>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPostForReview>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSubmitPostForReviewMutationOptions(options));
+    }
+
+export const getApprovePostUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/approve`
+}
+
+/**
+ * @summary Approve a post that is pending review
+ */
+export const approvePost = async (id: number, options?: RequestInit): Promise<Post> => {
+
+  return customFetch<Post>(getApprovePostUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getApprovePostMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approvePost>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approvePost>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['approvePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approvePost>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approvePost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApprovePostMutationResult = NonNullable<Awaited<ReturnType<typeof approvePost>>>
+
+    export type ApprovePostMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Approve a post that is pending review
+ */
+export const useApprovePost = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approvePost>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approvePost>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getApprovePostMutationOptions(options));
+    }
+
+export const getRequestPostChangesUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/request-changes`
+}
+
+/**
+ * @summary Send a pending-review post back to draft for edits
+ */
+export const requestPostChanges = async (id: number, options?: RequestInit): Promise<Post> => {
+
+  return customFetch<Post>(getRequestPostChangesUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRequestPostChangesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPostChanges>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPostChanges>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['requestPostChanges'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPostChanges>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  requestPostChanges(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPostChangesMutationResult = NonNullable<Awaited<ReturnType<typeof requestPostChanges>>>
+
+    export type RequestPostChangesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Send a pending-review post back to draft for edits
+ */
+export const useRequestPostChanges = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPostChanges>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPostChanges>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRequestPostChangesMutationOptions(options));
+    }
+
 export const getGenerateAiImageUrl = () => {
 
 

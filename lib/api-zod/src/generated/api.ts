@@ -501,6 +501,87 @@ export const PublishPostResponse = zod.object({
 
 
 /**
+ * @summary Submit a draft post for vendor/admin approval
+ */
+export const SubmitPostForReviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SubmitPostForReviewResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "caption": zod.string(),
+  "platforms": zod.array(zod.string()),
+  "status": zod.string(),
+  "mediaUrls": zod.array(zod.string()).optional(),
+  "mediaType": zod.string().nullish(),
+  "scheduledAt": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "hashtags": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
+  "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Approve a post that is pending review
+ */
+export const ApprovePostParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApprovePostResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "caption": zod.string(),
+  "platforms": zod.array(zod.string()),
+  "status": zod.string(),
+  "mediaUrls": zod.array(zod.string()).optional(),
+  "mediaType": zod.string().nullish(),
+  "scheduledAt": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "hashtags": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
+  "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Send a pending-review post back to draft for edits
+ */
+export const RequestPostChangesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RequestPostChangesResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "caption": zod.string(),
+  "platforms": zod.array(zod.string()),
+  "status": zod.string(),
+  "mediaUrls": zod.array(zod.string()).optional(),
+  "mediaType": zod.string().nullish(),
+  "scheduledAt": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "hashtags": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
+  "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Generate an AI image for a post
  */
 export const GenerateAiImageBody = zod.object({

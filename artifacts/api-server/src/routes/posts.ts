@@ -44,19 +44,31 @@ async function productsBelongToVendor(vendorId: number, productIds: number[]): P
   return owned.length === productIds.length;
 }
 
-router.get("/posts/scheduled", async (_req, res): Promise<void> => {
+router.get("/posts/scheduled", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
   const now = new Date();
-  const posts = await db
+  let posts = await db
     .select()
     .from(postsTable)
     .where(and(eq(postsTable.status, "scheduled"), gt(postsTable.scheduledAt, now)))
     .orderBy(postsTable.scheduledAt);
+  if (!authed.isAdmin) posts = posts.filter((p) => p.vendorId === authed.vendorId);
   res.json(ListScheduledPostsResponse.parse(posts.map(serializePost)));
 });
 
 router.get("/posts", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = ListPostsQueryParams.safeParse(req.query);
+  if (!authed.isAdmin && params.success && params.data.vendorId && params.data.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "You can only view your own vendor's posts." });
+    return;
+  }
+
   let posts = await db.select().from(postsTable).orderBy(desc(postsTable.createdAt));
+  if (!authed.isAdmin) posts = posts.filter((p) => p.vendorId === authed.vendorId);
   if (params.success) {
     if (params.data.vendorId) posts = posts.filter((p) => p.vendorId === params.data.vendorId);
     if (params.data.status) posts = posts.filter((p) => p.status === params.data.status);
@@ -100,6 +112,8 @@ router.get("/posts/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [post] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
   if (!post) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== post.vendorId) { res.status(403).json({ error: "You do not have permission to view this post." }); return; }
   res.json(GetPostResponse.parse(serializePost(post)));
 });
 
@@ -108,20 +122,29 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdatePostBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { scheduledAt: saU, ...restUpdate } = parsed.data;
+  const { scheduledAt: saU, status: statusU, ...restUpdate } = parsed.data as typeof parsed.data & { status?: string };
+  if (statusU !== undefined) {
+    // Status only ever moves through the dedicated /submit-for-review, /approve,
+    // /request-changes, and /publish endpoints, which enforce the state machine and
+    // ownership atomically. Allowing it here would let a generic edit skip review.
+    res.status(400).json({ error: "Use /submit-for-review, /approve, /request-changes, or /publish to change post status." });
+    return;
+  }
   const updateData: typeof restUpdate & { scheduledAt?: Date | null; shareToken?: string | null } = {
     ...restUpdate,
     ...(saU !== undefined ? { scheduledAt: saU ? new Date(saU) : null } : {}),
   };
 
-  if (restUpdate.linkMode !== undefined || restUpdate.productIds !== undefined) {
+  // Every PATCH must be scoped to the post's own vendor (or an admin) — this was
+  // previously only checked for shop-link fields, leaving caption/platform/media
+  // edits open to any authenticated caller regardless of ownership.
+  {
     const [existing] = await db
       .select({ vendorId: postsTable.vendorId, productIds: postsTable.productIds, linkMode: postsTable.linkMode, shareToken: postsTable.shareToken })
       .from(postsTable)
       .where(eq(postsTable.id, params.data.id));
     if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
 
-    // Only the post's own vendor (or an admin) may change its shop-link configuration.
     const authed = await resolveAuthedVendor(req);
     if (!authed.isAdmin && authed.vendorId !== existing.vendorId) {
       res.status(403).json({ error: "You do not have permission to update this post." });
@@ -155,20 +178,77 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
 router.delete("/posts/:id", async (req, res): Promise<void> => {
   const params = DeletePostParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [post] = await db.delete(postsTable).where(eq(postsTable.id, params.data.id)).returning();
-  if (!post) { res.status(404).json({ error: "Post not found" }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to delete this post." }); return; }
+  await db.delete(postsTable).where(eq(postsTable.id, params.data.id));
   res.sendStatus(204);
+});
+
+/**
+ * AI-drafted posts must go through a human approval step before publishing —
+ * draft -> pending_review -> approved -> published. Only the post's own vendor
+ * (or an admin) may submit/approve/publish it. This is enforced here rather than
+ * left to the frontend, since the frontend is untrusted input.
+ */
+router.post("/posts/:id/submit-for-review", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+  // Guard the transition on the current status in the WHERE clause (not just a
+  // preceding read) so two concurrent requests can't both pass the precheck and
+  // race each other into an invalid state.
+  const [post] = await db.update(postsTable).set({ status: "pending_review" }).where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "draft"))).returning();
+  if (!post) { res.status(409).json({ error: `Cannot submit a post with status "${existing.status}" for review.` }); return; }
+  res.json(GetPostResponse.parse(serializePost(post)));
+});
+
+router.post("/posts/:id/approve", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+  const [post] = await db.update(postsTable).set({ status: "approved" }).where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "pending_review"))).returning();
+  if (!post) { res.status(409).json({ error: `Cannot approve a post with status "${existing.status}".` }); return; }
+  res.json(GetPostResponse.parse(serializePost(post)));
+});
+
+router.post("/posts/:id/request-changes", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+  const [post] = await db.update(postsTable).set({ status: "draft" }).where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "pending_review"))).returning();
+  if (!post) { res.status(409).json({ error: `Cannot request changes on a post with status "${existing.status}".` }); return; }
+  res.json(GetPostResponse.parse(serializePost(post)));
 });
 
 router.post("/posts/:id/publish", async (req, res): Promise<void> => {
   const params = PublishPostParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+
+  // Real cross-platform publishing (Meta, TikTok, X, LinkedIn) requires OAuth-connected
+  // accounts and per-platform developer app credentials, which are not configured yet.
+  // Publishing here marks the post live in VendorHub and is intentionally not wired to
+  // any external platform API until that credential/OAuth work is scoped.
   const [post] = await db
     .update(postsTable)
     .set({ status: "published", publishedAt: new Date() })
-    .where(eq(postsTable.id, params.data.id))
+    .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
     .returning();
-  if (!post) { res.status(404).json({ error: "Post not found" }); return; }
+  if (!post) { res.status(409).json({ error: "A post must be approved before it can be published. Submit it for review first." }); return; }
   res.json(GetPostResponse.parse(serializePost(post)));
 });
 

@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check } from "lucide-react";
-import { useCreatePost, useUpdatePost, useListProducts } from "@workspace/api-client-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2 } from "lucide-react";
+import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useSubmitPostForReview } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -32,10 +32,47 @@ export default function CreatePost() {
   const [copied, setCopied] = useState(false);
   const [, setLocation] = useLocation();
 
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+
   const { data: products } = useListProducts({ vendorId: 1 });
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
+  const generateCaption = useGenerateAiCaption();
+  const generateImage = useGenerateAiImage();
+  const submitForReviewMutation = useSubmitPostForReview();
   const queryClient = useQueryClient();
+
+  const handleGenerateCaption = async () => {
+    if (!caption.trim()) {
+      toast.error("Give the AI a topic to write about first (type a few words in the caption box)");
+      return;
+    }
+    try {
+      const result = await generateCaption.mutateAsync({
+        data: { vendorId: 1, topic: caption, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
+      });
+      if (result.status === "failed") { toast.error(result.result ?? "Caption generation failed"); return; }
+      setCaption(result.result ?? caption);
+      toast.success("Caption drafted by AI — review and edit as needed");
+    } catch {
+      toast.error("Failed to generate caption");
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!caption.trim()) {
+      toast.error("Write a caption first so the image matches your post");
+      return;
+    }
+    try {
+      const result = await generateImage.mutateAsync({ data: { vendorId: 1, prompt: caption } });
+      if (result.status === "failed") { toast.error(result.result ?? "Image generation failed"); return; }
+      setGeneratedImage(result.result ?? null);
+      toast.success("Image generated — review before publishing");
+    } catch {
+      toast.error("Failed to generate image");
+    }
+  };
 
   const togglePlatform = (id: string) => {
     setSelectedPlatforms(prev => 
@@ -47,7 +84,7 @@ export default function CreatePost() {
     setSelectedProductIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   };
 
-  const handlePublish = async (status: 'published' | 'draft' | 'scheduled') => {
+  const handlePublish = async (submitForReview: boolean) => {
     if (!caption || selectedPlatforms.length === 0) {
       toast.error("Please enter a caption and select at least one platform");
       return;
@@ -65,7 +102,7 @@ export default function CreatePost() {
           platforms: selectedPlatforms,
           productIds: selectedProductIds,
           linkMode,
-          // status would be passed here if the API supported it in creation, for now it assumes draft or published
+          ...(generatedImage ? { mediaUrls: [generatedImage] } : {}),
         }
       });
 
@@ -78,8 +115,14 @@ export default function CreatePost() {
         setShareUrl(url);
       }
 
+      // AI-drafted posts must be approved by a vendor/admin before publishing —
+      // this only moves the post to "pending_review", it never publishes directly.
+      if (submitForReview) {
+        await submitForReviewMutation.mutateAsync({ id: post.id });
+      }
+
       queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
-      toast.success(`Post ${status === 'published' ? 'published' : 'saved'}`);
+      toast.success(submitForReview ? "Post submitted for review" : "Draft saved");
       if (!post.shareToken) setLocation("/social");
     } catch (e) {
       toast.error("Failed to save post");
@@ -131,8 +174,8 @@ export default function CreatePost() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Caption</CardTitle>
-              <Button variant="outline" size="sm" className="h-8">
-                <Sparkles className="w-3 h-3 mr-2 text-primary" />
+              <Button variant="outline" size="sm" className="h-8" onClick={handleGenerateCaption} disabled={generateCaption.isPending}>
+                {generateCaption.isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2 text-primary" />}
                 AI Writer
               </Button>
             </CardHeader>
@@ -145,11 +188,26 @@ export default function CreatePost() {
               />
               <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-8 px-2"><ImageIcon className="w-4 h-4 mr-2" /> Media</Button>
-                  <Button variant="ghost" size="sm" className="h-8 px-2"># Hashtags</Button>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateImage} disabled={generateImage.isPending}>
+                    {generateImage.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
+                    AI Image
+                  </Button>
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
+              {generatedImage && (
+                <div className="mt-3 relative">
+                  <img src={generatedImage} alt="AI generated" className="w-full rounded-md border aspect-video object-cover" />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="absolute top-2 right-2 h-7 px-2"
+                    onClick={() => setGeneratedImage(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -219,13 +277,15 @@ export default function CreatePost() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => handlePublish('draft')}>Save Draft</Button>
-            <Button variant="secondary" onClick={() => handlePublish('scheduled')}>
-              <CalendarClock className="w-4 h-4 mr-2" />
-              Schedule
-            </Button>
-            <Button onClick={() => handlePublish('published')}>Publish Now</Button>
+          <div className="flex flex-col gap-2 items-end">
+            <p className="text-xs text-muted-foreground">Posts need approval before they go live — even AI-drafted ones.</p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => handlePublish(false)}>Save Draft</Button>
+              <Button onClick={() => handlePublish(true)}>
+                <CalendarClock className="w-4 h-4 mr-2" />
+                Submit for Review
+              </Button>
+            </div>
           </div>
         </div>
 
