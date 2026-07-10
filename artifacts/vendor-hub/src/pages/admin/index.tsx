@@ -216,6 +216,21 @@ async function fetchVoiceCallLogs(): Promise<VoiceCallLog[]> {
   return res.json() as Promise<VoiceCallLog[]>;
 }
 
+type ScheduledCampaign = {
+  id: number;
+  name: string;
+  scheduledAt: string | null;
+  vendorId: number;
+  vendorName: string;
+  leadCount: number;
+};
+
+async function fetchScheduledCampaigns(): Promise<ScheduledCampaign[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/scheduled`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load scheduled campaigns");
+  return res.json() as Promise<ScheduledCampaign[]>;
+}
+
 async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
   const res = await fetch(`${BASE_URL}/api/admin/voice-status`, { credentials: "include" });
   if (!res.ok) return { configured: false };
@@ -516,6 +531,13 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
+  const { data: scheduledCampaigns, isLoading: scheduledCampaignsLoading } = useQuery({
+    queryKey: ["admin-scheduled-campaigns"],
+    queryFn: fetchScheduledCampaigns,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const { data: auditLog, isLoading: auditLoading } = useQuery({
     queryKey: ["admin-audit-log"],
     queryFn: fetchAuditLog,
@@ -613,6 +635,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Phone className="w-4 h-4" /> Voice Calls
+          </TabsTrigger>
+          <TabsTrigger value="scheduled-campaigns" className="flex items-center gap-2">
+            <ArrowRight className="w-4 h-4" /> Scheduled Campaigns
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Audit Log
@@ -926,6 +951,54 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── Scheduled Campaigns tab ────────────────────────────────── */}
+        <TabsContent value="scheduled-campaigns">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="w-5 h-5 text-primary" /> Scheduled Voice Campaigns
+              </CardTitle>
+              <CardDescription>
+                All vendors' campaigns queued to auto-launch, sorted by launch time. Refreshes every 30 seconds.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {scheduledCampaignsLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading scheduled campaigns…</div>
+              ) : !scheduledCampaigns?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Phone className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No campaigns scheduled.</p>
+                  <p className="text-xs mt-1">Campaigns vendors schedule for a future launch time will appear here.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Leads</TableHead>
+                      <TableHead className="text-right">Scheduled For</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scheduledCampaigns.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium">{c.vendorName}</TableCell>
+                        <TableCell>{c.name}</TableCell>
+                        <TableCell>{c.leadCount}</TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {c.scheduledAt ? new Date(c.scheduledAt).toLocaleString() : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Audit Log tab ─────────────────────────────────────────── */}

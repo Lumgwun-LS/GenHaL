@@ -7,8 +7,8 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, gt, asc, inArray, type SQL } from "drizzle-orm";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, voiceCampaignsTable, voiceCampaignCallsTable } from "@workspace/db/schema";
+import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
@@ -334,6 +334,40 @@ router.patch("/admin/site-content/:key", async (req, res): Promise<void> => {
 
   await setSiteContentBlock(key, validated, userId);
   res.json({ success: true });
+});
+
+// ─── GET /admin/voice-campaigns/scheduled ─────────────────────────────────────
+
+router.get("/admin/voice-campaigns/scheduled", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const leadCounts = db
+    .select({
+      campaignId: voiceCampaignCallsTable.campaignId,
+      count: sql<number>`count(*)`.as("count"),
+    })
+    .from(voiceCampaignCallsTable)
+    .groupBy(voiceCampaignCallsTable.campaignId)
+    .as("lead_counts");
+
+  const rows = await db
+    .select({
+      id: voiceCampaignsTable.id,
+      name: voiceCampaignsTable.name,
+      scheduledAt: voiceCampaignsTable.scheduledAt,
+      vendorId: voiceCampaignsTable.vendorId,
+      vendorName: vendorsTable.name,
+      leadCount: sql<number>`coalesce(${leadCounts.count}, 0)`,
+    })
+    .from(voiceCampaignsTable)
+    .innerJoin(vendorsTable, eq(voiceCampaignsTable.vendorId, vendorsTable.id))
+    .leftJoin(leadCounts, eq(leadCounts.campaignId, voiceCampaignsTable.id))
+    .where(eq(voiceCampaignsTable.status, "scheduled"))
+    .orderBy(asc(voiceCampaignsTable.scheduledAt));
+
+  res.json(rows);
 });
 
 // ─── GET /admin/voice-status ──────────────────────────────────────────────────
