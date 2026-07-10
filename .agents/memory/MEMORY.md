@@ -16,3 +16,4 @@
 - [VendorHub push notifications](vendorhub-push-notifications.md) — Expo push via exp.host API, tokens in vendor_push_tokens table, sent from lib/push.ts on payment status webhooks; Expo Go can't receive remote push (SDK 53+), needs EAS build to test.
 - [VendorHub signup/onboarding gap](vendorhub-onboarding.md) — web Clerk `<SignUp/>` never created a vendors row; onboarding step now does, with server-verified identity and DB-unique clerkUserId to survive double-submits.
 - [Migration file numbering](db-migration-numbering.md) — always `ls lib/db/migrations` before naming a new file; two agents/sessions can pick the same next number.
+- [Mobile node_modules drift](mobile-node-modules-drift.md) — expo workflow PluginError for a declared package usually means node_modules is stale; run pnpm install for that filter before debugging your own code.
