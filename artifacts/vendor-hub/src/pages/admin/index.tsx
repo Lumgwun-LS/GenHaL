@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
 import SiteEditor from "./site-editor";
+import PaymentGatewaysPanel from "./payment-gateways";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -316,6 +317,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="payment-gateways" className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4" /> Payment Gateways
           </TabsTrigger>
           <TabsTrigger value="site-editor" className="flex items-center gap-2">
             <Layout className="w-4 h-4" /> Site Editor
@@ -631,6 +635,11 @@ export default function AdminPanel() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Payment Gateways tab ─────────────────────────────────────── */}
+        <TabsContent value="payment-gateways">
+          <PaymentGatewaysPanel />
         </TabsContent>
 
         {/* ── Site Editor tab ────────────────────────────────────────── */}

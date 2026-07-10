@@ -24,6 +24,7 @@ import {
   enqueueWebhookEvent,
   registerSlackAlerter,
 } from "../../lib/webhook-buffer";
+import { resolveGatewayField } from "../../lib/platform-gateways";
 
 const router = Router();
 
@@ -349,10 +350,10 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
 // ── Stripe webhook ────────────────────────────────────────────────────────────
 
 router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) { res.status(500).json({ error: "STRIPE_WEBHOOK_SECRET not configured" }); return; }
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY not configured" }); return; }
+  const webhookSecret = await resolveGatewayField("stripe", "webhookSecret");
+  if (!webhookSecret) { res.status(503).json({ error: "Stripe is not configured. Add a platform Stripe key in Admin \u2192 Payment Gateways." }); return; }
+  const stripeKey = await resolveGatewayField("stripe", "secretKey");
+  if (!stripeKey) { res.status(503).json({ error: "Stripe is not configured. Add a platform Stripe key in Admin \u2192 Payment Gateways." }); return; }
 
   const sig = req.headers["stripe-signature"];
   if (!sig) { res.status(400).json({ error: "Missing stripe-signature header" }); return; }
@@ -420,8 +421,8 @@ router.post("/payments/stripe/webhook", async (req, res): Promise<void> => {
 // ── Paystack webhook ──────────────────────────────────────────────────────────
 
 router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
-  const webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET;
-  if (!webhookSecret) { res.status(500).json({ error: "PAYSTACK_WEBHOOK_SECRET not configured" }); return; }
+  const webhookSecret = await resolveGatewayField("paystack", "webhookSecret");
+  if (!webhookSecret) { res.status(503).json({ error: "Paystack is not configured. Add a platform Paystack key in Admin \u2192 Payment Gateways." }); return; }
 
   const rawBody = req.body as Buffer;
   const hash = crypto.createHmac("sha512", webhookSecret).update(rawBody).digest("hex");

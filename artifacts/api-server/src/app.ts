@@ -23,28 +23,28 @@ if (!process.env.PAYMENT_CREDS_ENCRYPTION_KEY || process.env.PAYMENT_CREDS_ENCRY
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Payment gateway startup guard ───────────────────────────────────────────
-const hasStripe = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
-const hasPaystack = Boolean(process.env.PAYSTACK_SECRET_KEY && process.env.PAYSTACK_WEBHOOK_SECRET);
+// Gateway credentials can now be configured two ways: env secrets (legacy) or
+// an admin-managed platform key stored in the database via Admin → Payment
+// Gateways. Since DB-configured keys can be added *after* deploy without a
+// redeploy, missing env keys at startup is no longer fatal in any
+// environment — the app stays up, and payment-dependent routes return a
+// clear 503 until at least one gateway is configured.
+const hasStripeEnv = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+const hasPaystackEnv = Boolean(process.env.PAYSTACK_SECRET_KEY && process.env.PAYSTACK_WEBHOOK_SECRET);
 
-if (!hasStripe && !hasPaystack) {
-  const msg =
-    "No payment gateway configured. " +
-    "Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET and/or " +
-    "PAYSTACK_SECRET_KEY + PAYSTACK_WEBHOOK_SECRET.";
-  if (process.env.NODE_ENV === "production") {
-    // Hard crash in production — a payment platform with no gateways is broken.
-    console.error(`FATAL: ${msg}`);
-    process.exit(1);
-  } else {
-    // In development, warn loudly but keep running so the rest of the API is usable.
-    console.warn(`[payments] WARNING: ${msg} Payment routes will return 503 until keys are set.`);
-  }
+if (!hasStripeEnv && !hasPaystackEnv) {
+  console.warn(
+    "[payments] WARNING: No payment gateway env secrets configured. " +
+      "Payment routes will return 503 until an admin configures a gateway " +
+      "in Admin \u2192 Payment Gateways, or STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET " +
+      "and/or PAYSTACK_SECRET_KEY/PAYSTACK_WEBHOOK_SECRET are set.",
+  );
 } else {
-  if (!hasStripe) {
-    console.warn("[payments] Stripe not configured (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET missing) — Stripe payments disabled.");
+  if (!hasStripeEnv) {
+    console.warn("[payments] Stripe env secrets not set (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET) — falling back to admin-configured key if present.");
   }
-  if (!hasPaystack) {
-    console.warn("[payments] Paystack not configured (PAYSTACK_SECRET_KEY / PAYSTACK_WEBHOOK_SECRET missing) — Paystack payments disabled.");
+  if (!hasPaystackEnv) {
+    console.warn("[payments] Paystack env secrets not set (PAYSTACK_SECRET_KEY / PAYSTACK_WEBHOOK_SECRET) — falling back to admin-configured key if present.");
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────

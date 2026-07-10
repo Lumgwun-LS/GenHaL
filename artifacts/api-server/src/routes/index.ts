@@ -17,6 +17,7 @@ import paymentsWebhooksRouter from "./payments/webhooks";
 import externalRouter from "./external/index";
 import vendorPaymentCredentialsRouter from "./vendor-payment-credentials";
 import adminRouter from "./admin";
+import adminPaymentGatewaysRouter from "./admin-payment-gateways";
 import notificationsRouter from "./notifications";
 import voiceCampaignsRouter from "./voice-campaigns";
 import subscriptionUpgradeRouter from "./subscription-upgrade";
@@ -62,5 +63,6 @@ router.use(notificationsRouter);
 router.use(voiceCampaignsRouter);
 router.use(subscriptionUpgradeRouter);
 router.use(adminRouter);
+router.use(adminPaymentGatewaysRouter);
 
 export default router;

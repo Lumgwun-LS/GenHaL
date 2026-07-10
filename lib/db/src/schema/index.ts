@@ -12,6 +12,7 @@ export * from "./external-api-keys";
 export * from "./external-user-sessions";
 export * from "./payments";
 export * from "./vendor-payment-credentials";
+export * from "./platform-payment-credentials";
 export * from "./webhook-events";
 export * from "./vendor-notifications";
 export * from "./birthday-message-logs";

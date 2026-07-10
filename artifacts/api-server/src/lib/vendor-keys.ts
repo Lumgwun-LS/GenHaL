@@ -3,13 +3,15 @@
  *
  * Priority:
  *   1. Vendor's own key (if stored, test-passed, and tier allows it)
- *   2. Platform key from env
- *   3. Throws if neither is available
+ *   2. Platform key configured by an admin via the dashboard (DB)
+ *   3. Platform key from env (legacy / dev fallback)
+ *   4. Throws if none is available
  */
 import { db } from "@workspace/db";
 import { vendorPaymentCredentialsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./encryption";
+import { getPlatformCredentials } from "./platform-gateways";
 
 export interface TierCheckable {
   subscriptionTier: string;
@@ -41,8 +43,11 @@ export async function resolveStripeKey(
     }
   }
 
+  const adminCreds = await getPlatformCredentials("stripe");
+  if (adminCreds?.secretKey) return adminCreds.secretKey;
+
   const platformKey = process.env.STRIPE_SECRET_KEY;
-  if (!platformKey) throw new Error("STRIPE_SECRET_KEY is not configured");
+  if (!platformKey) throw new Error("Stripe is not configured. Add a platform Stripe key in Admin \u2192 Payment Gateways.");
   return platformKey;
 }
 
@@ -63,7 +68,10 @@ export async function resolvePaystackKey(
     }
   }
 
+  const adminCreds = await getPlatformCredentials("paystack");
+  if (adminCreds?.secretKey) return adminCreds.secretKey;
+
   const platformKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!platformKey) throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  if (!platformKey) throw new Error("Paystack is not configured. Add a platform Paystack key in Admin \u2192 Payment Gateways.");
   return platformKey;
 }

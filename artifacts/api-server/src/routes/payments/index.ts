@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
 import { retryWebhookEventById } from "./webhooks";
+import { resolveGatewayField } from "../../lib/platform-gateways";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -46,9 +47,9 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
   }
 
   if (payment.provider === "stripe") {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const stripeKey = await resolveGatewayField("stripe", "secretKey");
     if (!stripeKey) {
-      res.status(500).json({ error: "STRIPE_SECRET_KEY is not configured" });
+      res.status(503).json({ error: "Stripe is not configured. Add a platform Stripe key in Admin \u2192 Payment Gateways." });
       return;
     }
     const stripe = new Stripe(stripeKey);
@@ -66,9 +67,9 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
 
     await stripe.refunds.create({ payment_intent: paymentIntentId });
   } else if (payment.provider === "paystack") {
-    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    const paystackKey = await resolveGatewayField("paystack", "secretKey");
     if (!paystackKey) {
-      res.status(500).json({ error: "PAYSTACK_SECRET_KEY is not configured" });
+      res.status(503).json({ error: "Paystack is not configured. Add a platform Paystack key in Admin \u2192 Payment Gateways." });
       return;
     }
 
