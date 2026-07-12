@@ -26,14 +26,20 @@ import { AnimatedListItem } from '@/components/AnimatedListItem';
 import { GradientButton } from '@/components/GradientButton';
 import {
   getListExternalPaymentsQueryKey,
+  useGetExternalProfile,
   useInitializeExternalPayment,
   useListExternalOrders,
 } from '@workspace/api-client-react';
 import type { Order } from '@workspace/api-client-react';
 
-const PROVIDER_OPTIONS: { label: string; currency: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { label: 'Card (Stripe)', currency: 'USD', icon: 'credit-card' },
-  { label: 'Paystack', currency: 'NGN', icon: 'globe' },
+const PROVIDER_OPTIONS: {
+  label: string;
+  currency: string;
+  icon: keyof typeof Feather.glyphMap;
+  isEnabled: (vendor: { stripeEnabled?: boolean; paystackEnabled?: boolean }) => boolean;
+}[] = [
+  { label: 'Card (Stripe)', currency: 'USD', icon: 'credit-card', isEnabled: (v) => !!v.stripeEnabled },
+  { label: 'Paystack', currency: 'NGN', icon: 'globe', isEnabled: (v) => !!v.paystackEnabled },
 ];
 
 function currency(amount: number) {
@@ -51,7 +57,16 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
   const { data, isLoading, isError, refetch } = useListExternalOrders();
+  const {
+    data: profile,
+    isLoading: isProfileLoading,
+    isError: isProfileError,
+    refetch: refetchProfile,
+  } = useGetExternalProfile();
   const initializePayment = useInitializeExternalPayment();
+  const vendor = profile?.vendor;
+  // Fail closed: until we've confirmed which gateways are enabled, offer none.
+  const enabledProviders = vendor ? PROVIDER_OPTIONS.filter((option) => option.isEnabled(vendor)) : [];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -170,18 +185,37 @@ export default function OrdersScreen() {
           <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>
             Choose a payment provider
           </Text>
-          {PROVIDER_OPTIONS.map((option) => (
-            <Pressable
-              key={option.currency}
-              style={[styles.providerRow, { borderColor: colors.border }]}
-              disabled={initializePayment.isPending}
-              onPress={() => checkoutOrder && startCheckout(checkoutOrder, option.currency)}
-            >
-              <Feather name={option.icon} size={18} color={colors.primary} />
-              <Text style={[styles.providerLabel, { color: colors.foreground }]}>{option.label}</Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-            </Pressable>
-          ))}
+          {isProfileLoading ? (
+            <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+              Checking which payment providers are available…
+            </Text>
+          ) : isProfileError ? (
+            <>
+              <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+                Couldn't verify your available payment providers.
+              </Text>
+              <Pressable onPress={() => refetchProfile()} style={styles.retryLink}>
+                <Text style={[styles.retryLinkText, { color: colors.primary }]}>Try again</Text>
+              </Pressable>
+            </>
+          ) : enabledProviders.length === 0 ? (
+            <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+              No payment providers are enabled for your account yet. Contact the admin to turn one on.
+            </Text>
+          ) : (
+            enabledProviders.map((option) => (
+              <Pressable
+                key={option.currency}
+                style={[styles.providerRow, { borderColor: colors.border }]}
+                disabled={initializePayment.isPending}
+                onPress={() => checkoutOrder && startCheckout(checkoutOrder, option.currency)}
+              >
+                <Feather name={option.icon} size={18} color={colors.primary} />
+                <Text style={[styles.providerLabel, { color: colors.foreground }]}>{option.label}</Text>
+                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            ))
+          )}
           <GradientButton
             label="Cancel"
             variant="outline"
@@ -296,6 +330,20 @@ const styles = StyleSheet.create({
   providerLabel: {
     flex: 1,
     fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  noProvidersText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 8,
+    lineHeight: 19,
+  },
+  retryLink: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  retryLinkText: {
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
   cancelButton: {
