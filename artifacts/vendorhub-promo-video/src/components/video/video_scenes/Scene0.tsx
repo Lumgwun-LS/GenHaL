@@ -22,7 +22,7 @@ export const Scene0 = () => {
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Central Hub visualization */}
-      <div className="relative w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] flex items-center justify-center mb-12">
+      <div className="relative w-[30vw] h-[30vw] flex items-center justify-center mb-[3vw]">
         {/* Orbiting dots */}
         {[...Array(3)].map((_, i) => (
           <motion.div
@@ -44,7 +44,7 @@ export const Scene0 = () => {
             }}
           >
             <div 
-              className="absolute -top-1.5 left-1/2 w-3 h-3 rounded-full bg-accent shadow-[0_0_10px_var(--color-accent)]"
+              className="absolute -top-1.5 left-1/2 w-[0.8vw] h-[0.8vw] rounded-full bg-accent shadow-[0_0_0.5vw_var(--color-accent)]"
               style={{ transform: 'translateX(-50%)' }}
             />
           </motion.div>
@@ -52,7 +52,7 @@ export const Scene0 = () => {
 
         {/* Core logo */}
         <motion.div
-          className="relative z-10 w-24 h-24 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(127,80,255,0.6)]"
+          className="relative z-10 w-[6vw] h-[6vw] rounded-[1vw] overflow-hidden shadow-[0_0_1.5vw_rgba(127,80,255,0.6)]"
           initial={{ scale: 0, rotate: -45 }}
           animate={
             phase >= 3 ? { scale: 5, opacity: 0, rotate: 45 } :
@@ -66,9 +66,9 @@ export const Scene0 = () => {
       </div>
 
       {/* Typography */}
-      <div className="text-center overflow-hidden h-32">
+      <div className="text-center overflow-hidden h-[8vw]">
         <motion.h1
-          className="text-6xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight text-white mb-2"
+          className="text-[5vw] font-display font-bold tracking-tight text-white mb-[0.5vw]"
           initial={{ y: 100, opacity: 0 }}
           animate={
             phase >= 3 ? { y: -50, opacity: 0, filter: 'blur(5px)' } :
@@ -81,9 +81,9 @@ export const Scene0 = () => {
         </motion.h1>
       </div>
 
-      <div className="overflow-hidden h-16">
+      <div className="overflow-hidden h-[4vw]">
         <motion.p
-          className="text-2xl md:text-3xl text-text-secondary font-medium tracking-wide"
+          className="text-[1.5vw] text-text-secondary font-medium tracking-wide"
           initial={{ y: 50, opacity: 0 }}
           animate={
             phase >= 3 ? { y: -30, opacity: 0 } :

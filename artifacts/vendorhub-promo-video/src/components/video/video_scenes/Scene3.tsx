@@ -43,9 +43,9 @@ export const Scene3 = () => {
       </motion.div>
 
       {/* Content Container */}
-      <div className="relative z-10 flex flex-col items-center text-center max-w-4xl px-8">
+      <div className="relative z-10 flex flex-col items-center text-center max-w-[60vw] px-[2vw]">
         <motion.div
-          className="overflow-hidden mb-4"
+          className="overflow-hidden mb-[1vw]"
           initial={{ y: -50, opacity: 0 }}
           animate={
             phase >= 4 ? { y: -80, opacity: 0 } :
@@ -54,14 +54,14 @@ export const Scene3 = () => {
           }
           transition={{ duration: 0.6 }}
         >
-          <p className="text-white/80 font-bold tracking-widest uppercase text-lg border border-white/20 px-4 py-1 rounded-full bg-white/5 backdrop-blur-sm">
+          <p className="text-white/80 font-bold tracking-widest uppercase text-[1vw] border border-white/20 px-[1vw] py-[0.25vw] rounded-full bg-white/5 backdrop-blur-sm">
             Awajimaa Schools
           </p>
         </motion.div>
 
-        <div className="overflow-hidden mb-6">
+        <div className="overflow-hidden mb-[1.5vw]">
           <motion.h2
-            className="text-6xl md:text-8xl font-display font-bold text-white tracking-tight leading-tight"
+            className="text-[5vw] font-display font-bold text-white tracking-tight leading-tight"
             initial={{ y: 120 }}
             animate={
               phase >= 4 ? { y: -120 } :
@@ -74,9 +74,9 @@ export const Scene3 = () => {
           </motion.h2>
         </div>
 
-        <div className="overflow-hidden h-32">
+        <div className="overflow-hidden h-[8vw]">
           <motion.p
-            className="text-2xl md:text-3xl text-text-secondary max-w-2xl mx-auto"
+            className="text-[1.5vw] text-text-secondary max-w-[40vw] mx-auto"
             initial={{ y: 50, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -50, opacity: 0 } :
@@ -90,11 +90,11 @@ export const Scene3 = () => {
         </div>
 
         {/* Floating Modules */}
-        <div className="relative w-full h-32 mt-8 flex justify-center gap-6">
+        <div className="relative w-full h-[8vw] mt-[2vw] flex justify-center gap-[1.5vw]">
           {["Academics", "Security", "Fees"].map((item, i) => (
             <motion.div
               key={item}
-              className="bg-bg-muted/80 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3 flex items-center shadow-lg"
+              className="bg-bg-muted/80 backdrop-blur-md border border-white/10 rounded-[1vw] px-[1.5vw] py-[0.8vw] flex items-center shadow-lg h-fit"
               initial={{ y: 50, opacity: 0 }}
               animate={
                 phase >= 4 ? { y: 100, opacity: 0 } :
@@ -103,8 +103,8 @@ export const Scene3 = () => {
               }
               transition={{ type: "spring", stiffness: 300, damping: 25, delay: phase === 3 ? 0.2 + (i * 0.1) : 0 }}
             >
-              <div className="w-2 h-2 rounded-full bg-primary mr-3" />
-              <p className="text-white font-medium">{item}</p>
+              <div className="w-[0.5vw] h-[0.5vw] rounded-full bg-primary mr-[0.8vw]" />
+              <p className="text-white font-medium text-[1vw]">{item}</p>
             </motion.div>
           ))}
         </div>

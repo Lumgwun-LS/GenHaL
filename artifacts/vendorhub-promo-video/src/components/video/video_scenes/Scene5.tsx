@@ -43,9 +43,9 @@ export const Scene5 = () => {
       </motion.div>
 
       {/* Content Container */}
-      <div className="relative z-10 flex flex-col items-center text-center max-w-4xl px-8">
+      <div className="relative z-10 flex flex-col items-center text-center max-w-[60vw] px-[2vw]">
         <motion.div
-          className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-accent mb-8 flex items-center justify-center shadow-[0_0_40px_rgba(127,80,255,0.8)] relative"
+          className="w-[5vw] h-[5vw] rounded-full bg-gradient-to-r from-primary to-accent mb-[2vw] flex items-center justify-center shadow-[0_0_2vw_rgba(127,80,255,0.8)] relative"
           initial={{ scale: 0, rotate: -180 }}
           animate={
             phase >= 4 ? { scale: 0, rotate: 180 } :
@@ -67,12 +67,12 @@ export const Scene5 = () => {
           />
           
           {/* Core shape */}
-          <div className="w-8 h-8 rounded-lg bg-white rotate-45" />
+          <div className="w-[2vw] h-[2vw] rounded-[0.5vw] bg-white rotate-45" />
         </motion.div>
 
-        <div className="overflow-hidden mb-4">
+        <div className="overflow-hidden mb-[1vw]">
           <motion.h2
-            className="text-6xl md:text-8xl font-display font-bold text-white tracking-tight"
+            className="text-[5vw] font-display font-bold text-white tracking-tight"
             initial={{ y: 120 }}
             animate={
               phase >= 4 ? { y: -120 } :
@@ -85,9 +85,9 @@ export const Scene5 = () => {
           </motion.h2>
         </div>
 
-        <div className="overflow-hidden h-24">
+        <div className="overflow-hidden h-[6vw]">
           <motion.p
-            className="text-2xl md:text-3xl text-text-secondary max-w-2xl mx-auto"
+            className="text-[1.5vw] text-text-secondary max-w-[40vw] mx-auto"
             initial={{ y: 50, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -50, opacity: 0 } :

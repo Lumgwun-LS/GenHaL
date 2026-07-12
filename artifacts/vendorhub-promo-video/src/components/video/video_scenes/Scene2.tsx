@@ -50,20 +50,20 @@ export const Scene2 = () => {
           animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
         >
            <motion.div 
-             className="w-32 h-32 rounded-full border border-accent/60 absolute"
+             className="w-[8vw] h-[8vw] rounded-full border border-accent/60 absolute"
              animate={{ scale: [1, 3], opacity: [1, 0] }}
              transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
            />
            <motion.div 
-             className="w-32 h-32 rounded-full border border-accent/40 absolute"
+             className="w-[8vw] h-[8vw] rounded-full border border-accent/40 absolute"
              animate={{ scale: [1, 3], opacity: [1, 0] }}
              transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 1 }}
            />
-           <div className="w-4 h-4 bg-accent rounded-full" />
+           <div className="w-[1vw] h-[1vw] bg-accent rounded-full" />
         </motion.div>
 
         <motion.div
-          className="absolute -right-8 top-[30%] bg-bg-muted/90 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-xl"
+          className="absolute -right-[2vw] top-[30%] bg-bg-muted/90 backdrop-blur-xl border border-white/10 rounded-[1vw] p-[1vw] shadow-xl"
           initial={{ x: 50, opacity: 0, scale: 0.9 }}
           animate={
             phase >= 4 ? { x: 100, opacity: 0 } :
@@ -72,16 +72,16 @@ export const Scene2 = () => {
           }
           transition={{ type: "spring", stiffness: 300, damping: 20, delay: phase === 3 ? 0.2 : 0 }}
         >
-          <p className="text-accent text-xs font-bold mb-1 uppercase tracking-wider">Deploying</p>
-          <p className="text-white text-sm font-medium">Emergency Drone Team</p>
+          <p className="text-accent text-[0.8vw] font-bold mb-[0.2vw] uppercase tracking-wider">Deploying</p>
+          <p className="text-white text-[1vw] font-medium">Emergency Drone Team</p>
         </motion.div>
       </div>
 
       {/* Right Content */}
-      <div className="max-w-xl relative z-20 text-right">
-        <div className="overflow-hidden mb-4 flex justify-end">
+      <div className="max-w-[35vw] relative z-20 text-right">
+        <div className="overflow-hidden mb-[1vw] flex justify-end">
           <motion.p
-            className="text-primary font-bold tracking-widest uppercase text-lg"
+            className="text-primary font-bold tracking-widest uppercase text-[1vw]"
             initial={{ y: 50, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -30, opacity: 0 } :
@@ -94,9 +94,9 @@ export const Scene2 = () => {
           </motion.p>
         </div>
         
-        <div className="overflow-hidden mb-6 flex justify-end">
+        <div className="overflow-hidden mb-[1.5vw] flex justify-end">
           <motion.h2
-            className="text-6xl md:text-7xl font-display font-bold text-white leading-tight"
+            className="text-[4vw] font-display font-bold text-white leading-tight"
             initial={{ y: 100, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -50, opacity: 0 } :
@@ -111,7 +111,7 @@ export const Scene2 = () => {
         </div>
 
         <motion.p
-          className="text-2xl text-text-secondary ml-auto"
+          className="text-[1.5vw] text-text-secondary ml-auto"
           initial={{ opacity: 0, y: 20 }}
           animate={
             phase >= 4 ? { opacity: 0, y: -20 } :

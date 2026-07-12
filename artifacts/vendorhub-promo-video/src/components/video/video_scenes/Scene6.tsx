@@ -15,7 +15,7 @@ export const Scene6 = () => {
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 flex flex-col items-center justify-center text-center px-4"
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center text-center px-[2vw]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
@@ -30,9 +30,9 @@ export const Scene6 = () => {
       />
 
       <div className="relative z-20">
-        <div className="overflow-hidden mb-6">
+        <div className="overflow-hidden mb-[1.5vw]">
           <motion.h2
-            className="text-7xl md:text-9xl font-display font-black text-white tracking-tighter"
+            className="text-[6vw] font-display font-black text-white tracking-tighter"
             initial={{ y: 150 }}
             animate={
               phase >= 3 ? { y: -150, opacity: 0 } :
@@ -45,9 +45,9 @@ export const Scene6 = () => {
           </motion.h2>
         </div>
 
-        <div className="overflow-hidden h-16">
+        <div className="overflow-hidden h-[4vw]">
           <motion.p
-            className="text-3xl text-text-secondary font-medium tracking-wide"
+            className="text-[2vw] text-text-secondary font-medium tracking-wide"
             initial={{ y: 50, opacity: 0 }}
             animate={
               phase >= 3 ? { y: 50, opacity: 0 } :

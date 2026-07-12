@@ -23,9 +23,9 @@ export const Scene4 = () => {
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Left Content */}
-      <div className="max-w-2xl relative z-20">
+      <div className="max-w-[40vw] relative z-20">
         <motion.div
-          className="w-16 h-16 rounded-2xl bg-bg-muted border border-accent/30 flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(255,127,80,0.4)]"
+          className="w-[4vw] h-[4vw] rounded-[1vw] bg-bg-muted border border-accent/30 flex items-center justify-center mb-[2vw] shadow-[0_0_1.5vw_rgba(255,127,80,0.4)]"
           initial={{ scale: 0, rotate: -90 }}
           animate={
             phase >= 4 ? { scale: 0, rotate: 90 } :
@@ -34,17 +34,17 @@ export const Scene4 = () => {
           }
           transition={{ type: "spring", stiffness: 200, damping: 20 }}
         >
-          <div className="w-8 h-8 flex flex-wrap gap-1">
-             <div className="w-[14px] h-[14px] bg-accent rounded-sm" />
-             <div className="w-[14px] h-[14px] bg-primary rounded-sm" />
-             <div className="w-[14px] h-[14px] bg-primary rounded-sm" />
-             <div className="w-[14px] h-[14px] bg-accent rounded-sm" />
+          <div className="w-[2vw] h-[2vw] flex flex-wrap gap-[0.2vw]">
+             <div className="w-[0.9vw] h-[0.9vw] bg-accent rounded-[0.1vw]" />
+             <div className="w-[0.9vw] h-[0.9vw] bg-primary rounded-[0.1vw]" />
+             <div className="w-[0.9vw] h-[0.9vw] bg-primary rounded-[0.1vw]" />
+             <div className="w-[0.9vw] h-[0.9vw] bg-accent rounded-[0.1vw]" />
           </div>
         </motion.div>
 
-        <div className="overflow-hidden mb-2">
+        <div className="overflow-hidden mb-[0.5vw]">
           <motion.p
-            className="text-primary font-bold tracking-widest uppercase text-lg"
+            className="text-primary font-bold tracking-widest uppercase text-[1vw]"
             initial={{ y: 50, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -30, opacity: 0 } :
@@ -57,9 +57,9 @@ export const Scene4 = () => {
           </motion.p>
         </div>
 
-        <div className="overflow-hidden mb-6">
+        <div className="overflow-hidden mb-[1.5vw]">
           <motion.h2
-            className="text-6xl md:text-7xl font-display font-bold text-white leading-tight"
+            className="text-[4vw] font-display font-bold text-white leading-tight"
             initial={{ y: 100, opacity: 0 }}
             animate={
               phase >= 4 ? { y: -50, opacity: 0 } :
@@ -74,7 +74,7 @@ export const Scene4 = () => {
         </div>
 
         <motion.p
-          className="text-2xl text-text-secondary max-w-xl pr-8"
+          className="text-[1.5vw] text-text-secondary max-w-[35vw] pr-[2vw]"
           initial={{ opacity: 0, x: -50 }}
           animate={
             phase >= 4 ? { opacity: 0, x: 50 } :
@@ -111,7 +111,7 @@ export const Scene4 = () => {
         
         {/* Floating stats */}
         <motion.div
-          className="absolute left-[10%] bottom-[25%] bg-bg-muted/90 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl z-20"
+          className="absolute left-[10%] bottom-[25%] bg-bg-muted/90 backdrop-blur-xl border border-white/10 rounded-[1vw] p-[1vw] shadow-2xl z-20"
           initial={{ y: 50, opacity: 0, scale: 0.9 }}
           animate={
             phase >= 4 ? { y: 100, opacity: 0 } :
@@ -120,8 +120,8 @@ export const Scene4 = () => {
           }
           transition={{ type: "spring", stiffness: 300, damping: 20, delay: phase === 3 ? 0.4 : 0 }}
         >
-          <p className="text-text-secondary text-sm font-medium mb-1">Active Deals</p>
-          <p className="text-white font-bold text-2xl">4,289</p>
+          <p className="text-text-secondary text-[0.8vw] font-medium mb-[0.2vw]">Active Deals</p>
+          <p className="text-white font-bold text-[1.5vw]">4,289</p>
         </motion.div>
       </div>
     </motion.div>

@@ -103,7 +103,7 @@ export default function VideoTemplate({
       
       {/* Dynamic ambient background elements */}
       <motion.div
-        className="absolute w-[40vw] h-[40vw] rounded-full blur-[120px] pointer-events-none"
+        className="absolute w-[40vw] h-[40vw] rounded-full blur-[6vw] pointer-events-none"
         animate={{
           x: currentScene === 0 ? '-10vw' : currentScene === 1 ? '70vw' : currentScene === 2 ? '10vw' : currentScene === 3 ? '60vw' : currentScene === 4 ? '-10vw' : currentScene === 5 ? '80vw' : '50vw',
           y: currentScene === 0 ? '-10vh' : currentScene === 1 ? '60vh' : currentScene === 2 ? '-20vh' : currentScene === 3 ? '50vh' : currentScene === 4 ? '-10vh' : currentScene === 5 ? '70vh' : '50vh',
@@ -115,7 +115,7 @@ export default function VideoTemplate({
       />
       
       <motion.div
-        className="absolute w-[50vw] h-[50vw] rounded-full blur-[150px] pointer-events-none"
+        className="absolute w-[50vw] h-[50vw] rounded-full blur-[8vw] pointer-events-none"
         animate={{
           x: currentScene === 0 ? '80vw' : currentScene === 1 ? '-20vw' : currentScene === 2 ? '80vw' : currentScene === 3 ? '-10vw' : currentScene === 4 ? '70vw' : currentScene === 5 ? '20vw' : '50vw',
           y: currentScene === 0 ? '80vh' : currentScene === 1 ? '10vh' : currentScene === 2 ? '80vh' : currentScene === 3 ? '-20vh' : currentScene === 4 ? '90vh' : currentScene === 5 ? '-10vh' : '50vh',
@@ -137,7 +137,7 @@ export default function VideoTemplate({
 
       {/* Persistent Logo Mark */}
       <motion.div
-        className="absolute z-50 font-display font-bold flex items-center gap-2"
+        className="absolute z-50 font-display font-bold flex items-center gap-[0.5vw]"
         animate={{
           top: currentScene === 0 ? '50vh' : currentScene === 6 ? '50vh' : '4vh',
           left: currentScene === 0 ? '50vw' : currentScene === 6 ? '50vw' : '4vw',
@@ -148,10 +148,10 @@ export default function VideoTemplate({
         }}
         transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="w-8 h-8 rounded-lg overflow-hidden shadow-[0_0_15px_rgba(127,80,255,0.5)]">
+        <div className="w-[2vw] h-[2vw] rounded-[0.5vw] overflow-hidden shadow-[0_0_1vw_rgba(127,80,255,0.5)]">
           <img src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`} alt="Awajimaa" className="w-full h-full object-cover" />
         </div>
-        <span className="text-white text-xl tracking-tight">Awajimaa</span>
+        <span className="text-white text-[1.5vw] tracking-tight">Awajimaa</span>
       </motion.div>
 
       {/* Foreground Scenes */}
