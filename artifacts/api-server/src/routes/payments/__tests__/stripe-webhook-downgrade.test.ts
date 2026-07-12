@@ -61,7 +61,7 @@ vi.mock("@workspace/db", () => ({
         where: (whereArg: { col: unknown; val: unknown }) => {
           const apply = (): unknown[] => {
             if (table === vendorsTableRef) {
-              const idx = vendorRows.findIndex((v) => v.id === whereArg.val);
+              const idx = vendorRows.findIndex((v) => v.id === whereArg.val || v.stripeCustomerId === whereArg.val);
               if (idx === -1) return [];
               vendorRows[idx] = { ...vendorRows[idx], ...vals } as VendorRow;
               return [vendorRows[idx]];
@@ -294,6 +294,58 @@ describe("POST /payments/stripe/webhook — charge.refunded", () => {
     expect(status).toBe(200);
     expect(body).toMatchObject({ received: true });
     expect(notificationRows).toHaveLength(0);
+  });
+});
+
+describe("POST /payments/stripe/webhook — customer.subscription.updated", () => {
+  it("notifies the vendor by email and in-app when their plan changes via the portal", async () => {
+    vendorRows = [
+      { id: 42, subscriptionTier: "starter", stripeCustomerId: "cus_abc", email: "vendor@example.com", name: "Acme Co" },
+    ];
+
+    const { status, body } = await postWebhook({
+      id: "evt_sub_updated_1",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_123",
+          customer: "cus_abc",
+          items: { data: [{ price: { metadata: { tier: "pro" } } }] },
+        },
+      },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ received: true });
+
+    expect(vendorRows[0].subscriptionTier).toBe("pro");
+    expect(notificationRows).toHaveLength(1);
+    expect(notificationRows[0]).toMatchObject({ vendorId: 42, type: "tier_change" });
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0]).toMatchObject({ to: "vendor@example.com" });
+  });
+
+  it("does not notify when the plan switch resolves to the same tier", async () => {
+    vendorRows = [
+      { id: 43, subscriptionTier: "pro", stripeCustomerId: "cus_same", email: "same@example.com", name: "Same Co" },
+    ];
+
+    const { status, body } = await postWebhook({
+      id: "evt_sub_updated_2",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_456",
+          customer: "cus_same",
+          items: { data: [{ price: { metadata: { tier: "pro" } } }] },
+        },
+      },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ received: true });
+    expect(notificationRows).toHaveLength(0);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });
 

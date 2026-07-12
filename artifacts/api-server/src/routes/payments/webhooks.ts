@@ -61,6 +61,57 @@ async function sendSubscriptionCancelledEmail(email: string, vendorName: string,
   }
 }
 
+/** Rank used only to decide "upgrade" vs "downgrade" wording in the notice. */
+const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
+
+/** Sends the vendor an email when their plan changes tier via the Customer Portal (upgrade or downgrade). */
+async function sendSubscriptionChangedEmail(
+  email: string,
+  vendorName: string,
+  previousTier: string,
+  newTier: string,
+): Promise<void> {
+  const isUpgrade = (TIER_RANK[newTier] ?? 0) > (TIER_RANK[previousTier] ?? 0);
+  const newPlan = SUBSCRIPTION_PLANS.find((p) => p.tier === newTier);
+  const lostPlan = SUBSCRIPTION_PLANS.find((p) => p.tier === previousTier);
+
+  const featuresHtml = isUpgrade
+    ? newPlan
+      ? `
+        <p style="font-size: 14px; line-height: 1.6; color: #444;">You now have access to ${escapeHtml(newPlan.name)} features, including:</p>
+        <ul style="font-size: 14px; line-height: 1.8; color: #444; padding-left: 20px;">
+          ${newPlan.features.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}
+        </ul>`
+      : ""
+    : lostPlan
+      ? `
+        <p style="font-size: 14px; line-height: 1.6; color: #444;">You'll no longer have access to ${escapeHtml(lostPlan.name)} features, including:</p>
+        <ul style="font-size: 14px; line-height: 1.8; color: #444; padding-left: 20px;">
+          ${lostPlan.features.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}
+        </ul>`
+      : "";
+
+  const newPlanName = newPlan?.name ?? newTier;
+  const previousPlanName = lostPlan?.name ?? previousTier;
+
+  const html = wrapVendorEmail({
+    bodyHtml: `
+      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your plan has changed</h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Hi ${escapeHtml(vendorName)}, your VendorHub subscription was switched from ${escapeHtml(previousPlanName)} to ${escapeHtml(newPlanName)} via the billing portal.
+      </p>
+      ${featuresHtml}
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        You can manage your plan at any time from your dashboard.
+      </p>`,
+  });
+
+  const result = await sendEmail({ to: email, subject: "Your VendorHub plan has changed", html });
+  if (result.status !== "sent") {
+    console.warn(`[stripe webhook] subscription plan-change email did not send — reason=${result.error}`);
+  }
+}
+
 // Wire Slack into the buffer so it can send alerts on DB outage / recovery
 registerSlackAlerter(sendSlackAlert);
 
@@ -358,6 +409,16 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
     const newTier = item?.price?.metadata?.tier;
 
     if (newTier) {
+      const [vendorBefore] = await db
+        .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
+        .from(vendorsTable)
+        .where(eq(vendorsTable.stripeCustomerId, customerId));
+
+      if (!vendorBefore) {
+        console.warn(`[stripe webhook] subscription.updated — no vendor found for customer=${customerId}`);
+        return { matched: false };
+      }
+
       const [updated] = await db
         .update(vendorsTable)
         .set({ subscriptionTier: newTier, stripeSubscriptionId: subscription.id, updatedAt: new Date() })
@@ -368,6 +429,22 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
         console.info(
           `[stripe webhook] subscription plan switched via portal — vendor=${updated.id} customer=${customerId} tier=${newTier}`,
         );
+
+        const previousTier = vendorBefore.subscriptionTier;
+        if (previousTier !== newTier) {
+          const isUpgrade = (TIER_RANK[newTier] ?? 0) > (TIER_RANK[previousTier] ?? 0);
+          await db.insert(vendorNotificationsTable).values({
+            vendorId: updated.id,
+            type: "tier_change",
+            message: isUpgrade
+              ? `Your plan was upgraded from ${previousTier} to ${newTier} via the billing portal.`
+              : `Your plan was downgraded from ${previousTier} to ${newTier} via the billing portal.`,
+          });
+
+          if (vendorBefore.email) {
+            await sendSubscriptionChangedEmail(vendorBefore.email, vendorBefore.name, previousTier, newTier);
+          }
+        }
       } else {
         console.warn(`[stripe webhook] subscription.updated — no vendor found for customer=${customerId}`);
         return { matched: false };
