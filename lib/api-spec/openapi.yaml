@@ -385,7 +385,7 @@ paths:
     post:
       operationId: publishPost
       tags: [posts]
-      summary: Publish a post immediately
+      summary: Publish a post immediately to each of its connected platforms
       parameters:
         - name: id
           in: path
@@ -394,11 +394,46 @@ paths:
             type: integer
       responses:
         "200":
-          description: Published post
+          description: Published post, plus the per-platform publish outcome
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Post"
+                $ref: "#/components/schemas/PostWithPublications"
+        "502":
+          description: Publishing failed on every selected platform
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, publications]
+                properties:
+                  error:
+                    type: string
+                  publications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PostPublication"
+
+  /posts/{id}/publications:
+    get:
+      operationId: listPostPublications
+      tags: [posts]
+      summary: History of publish attempts for a post, one row per platform per attempt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Publish attempts, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostPublication"
 
   /posts/{id}/submit-for-review:
     post:
@@ -2042,6 +2077,10 @@ components:
           type: string
         followersCount:
           type: ["integer", "null"]
+        connectedVia:
+          type: string
+        tokenExpiresAt:
+          type: ["string", "null"]
         createdAt:
           type: string
 
@@ -2079,6 +2118,11 @@ components:
           type: array
           items:
             type: string
+        socialAccountIds:
+          type: array
+          description: Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means "not explicitly chosen".
+          items:
+            type: integer
         status:
           type: string
         mediaUrls:
@@ -2120,6 +2164,10 @@ components:
           type: array
           items:
             type: string
+        socialAccountIds:
+          type: array
+          items:
+            type: integer
         mediaUrls:
           type: array
           items:
@@ -2139,6 +2187,40 @@ components:
         linkMode:
           type: string
 
+    PostPublication:
+      type: object
+      required: [id, postId, platform, status, publishedAt]
+      properties:
+        id:
+          type: integer
+        postId:
+          type: integer
+        socialAccountId:
+          type: ["integer", "null"]
+        platform:
+          type: string
+        status:
+          type: string
+        externalPostId:
+          type: ["string", "null"]
+        externalUrl:
+          type: ["string", "null"]
+        errorMessage:
+          type: ["string", "null"]
+        publishedAt:
+          type: string
+
+    PostWithPublications:
+      allOf:
+        - $ref: "#/components/schemas/Post"
+        - type: object
+          required: [publications]
+          properties:
+            publications:
+              type: array
+              items:
+                $ref: "#/components/schemas/PostPublication"
+
     PostUpdate:
       type: object
       properties:
@@ -2148,6 +2230,10 @@ components:
           type: array
           items:
             type: string
+        socialAccountIds:
+          type: array
+          items:
+            type: integer
         mediaUrls:
           type: array
           items:

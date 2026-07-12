@@ -11,6 +11,8 @@ export interface Post {
   vendorId: number;
   caption: string;
   platforms: string[];
+  /** Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means "not explicitly chosen". */
+  socialAccountIds?: number[];
   status: string;
   mediaUrls?: string[];
   /** @nullable */

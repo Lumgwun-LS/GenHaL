@@ -20,5 +20,8 @@ export interface SocialAccount {
   status: string;
   /** @nullable */
   followersCount?: number | null;
+  connectedVia?: string;
+  /** @nullable */
+  tokenExpiresAt?: string | null;
   createdAt: string;
 }

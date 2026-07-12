@@ -17,20 +17,41 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2 } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
-const CONNECTABLE_PLATFORMS = ["Instagram", "Facebook", "TikTok", "X (Twitter)", "LinkedIn"];
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+// Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
+const MANUAL_ONLY_PLATFORMS = ["TikTok", "X (Twitter)", "LinkedIn"];
 
 function ConnectedAccounts() {
   const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: 1 });
   const createAccount = useCreateSocialAccount();
   const deleteAccount = useDeleteSocialAccount();
   const queryClient = useQueryClient();
-  const [platform, setPlatform] = useState(CONNECTABLE_PLATFORMS[0]);
+  const [platform, setPlatform] = useState(MANUAL_ONLY_PLATFORMS[0]);
   const [accountName, setAccountName] = useState("");
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("social_connect");
+    if (result === "success") {
+      const count = params.get("count");
+      toast.success(`Connected ${count ?? ""} Facebook/Instagram account${count === "1" ? "" : "s"}`.trim());
+      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (result === "error") {
+      toast.error(params.get("message") ?? "Failed to connect account");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnectMeta = () => {
+    window.location.href = `${BASE_URL}/api/social/oauth/meta/start`;
+  };
 
   const handleConnect = async () => {
     if (!accountName.trim()) { toast.error("Enter the account/page name"); return; }
@@ -60,35 +81,39 @@ function ConnectedAccounts() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <Link2 className="w-4 h-4" /> Connected Accounts
-          <Badge variant="outline" className="font-normal text-xs">Manual — no live OAuth yet</Badge>
         </CardTitle>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline"><Plus className="w-3.5 h-3.5 mr-1" /> Connect account</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Connect a social account</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Real OAuth login for each platform is coming soon — for now, register the account you'll be posting from so it shows up on your posts.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CONNECTABLE_PLATFORMS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPlatform(p)}
-                    className={`px-3 py-1.5 rounded-full border text-xs font-medium ${platform === p ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-muted"}`}
-                  >
-                    {p}
-                  </button>
-                ))}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={handleConnectMeta}>
+            <Facebook className="w-3.5 h-3.5 mr-1.5" /> Connect Facebook / Instagram
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline"><Plus className="w-3.5 h-3.5 mr-1" /> Add manually</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Register another account</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Live OAuth publishing is only wired up for Facebook/Instagram so far — these platforms are label-only until they get a real connection.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {MANUAL_ONLY_PLATFORMS.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPlatform(p)}
+                      className={`px-3 py-1.5 rounded-full border text-xs font-medium ${platform === p ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-muted"}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <Input placeholder="Account or page name" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+                <Button className="w-full" onClick={handleConnect} disabled={createAccount.isPending}>Connect</Button>
               </div>
-              <Input placeholder="Account or page name" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
-              <Button className="w-full" onClick={handleConnect} disabled={createAccount.isPending}>Connect</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -99,6 +124,9 @@ function ConnectedAccounts() {
               <div key={a.id} className="flex items-center gap-2 rounded-full border pl-3 pr-1 py-1 text-sm">
                 <span className="font-medium">{a.platform}</span>
                 <span className="text-muted-foreground">{a.accountName}</span>
+                {a.connectedVia === "oauth_meta" && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Live</Badge>
+                )}
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDisconnect(a.id)}>
                   <Trash2 className="w-3 h-3" />
                 </Button>
@@ -124,6 +152,7 @@ export default function Social() {
   const approvePost = useApprovePost();
   const requestChanges = useRequestPostChanges();
   const publishPost = usePublishPost();
+  const [publishResults, setPublishResults] = useState<Record<number, { platform: string; status: string; externalUrl?: string | null; errorMessage?: string | null }[]>>({});
 
   const invalidatePosts = () => queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
 
@@ -140,8 +169,20 @@ export default function Social() {
     catch { toast.error("Failed to request changes"); }
   };
   const handlePublish = async (id: number) => {
-    try { await publishPost.mutateAsync({ id }); invalidatePosts(); toast.success("Post published"); }
-    catch { toast.error("Failed to publish"); }
+    try {
+      const result = await publishPost.mutateAsync({ id });
+      setPublishResults((prev) => ({ ...prev, [id]: result.publications }));
+      invalidatePosts();
+      const succeeded = result.publications.filter((p) => p.status === "success").length;
+      const failed = result.publications.filter((p) => p.status !== "success").length;
+      if (failed === 0) toast.success("Published to all selected platforms");
+      else if (succeeded > 0) toast.warning(`Published to ${succeeded} platform${succeeded === 1 ? "" : "s"}, ${failed} failed — see details on the post`);
+      else toast.error("Publish failed on every platform");
+    } catch (err: any) {
+      const publications = err?.data?.publications;
+      if (publications) setPublishResults((prev) => ({ ...prev, [id]: publications }));
+      toast.error(err?.data?.error ?? "Publishing failed on every selected platform");
+    }
   };
 
   useEffect(() => {
@@ -237,6 +278,28 @@ export default function Social() {
                     <span>Created: {new Date(post.createdAt).toLocaleDateString()}</span>
                   )}
                 </div>
+
+                {publishResults[post.id] && publishResults[post.id].length > 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    {publishResults[post.id].map((r, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-xs">
+                        {r.status === "success" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        )}
+                        <span className="font-medium">{r.platform}:</span>
+                        {r.status === "success" && r.externalUrl ? (
+                          <a href={r.externalUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-0.5 truncate">
+                            View live post <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground truncate">{r.errorMessage}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex gap-2 mt-auto">
                   {post.status === "draft" && (

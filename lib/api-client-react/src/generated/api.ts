@@ -81,10 +81,13 @@ import type {
   Payment,
   Post,
   PostInput,
+  PostPublication,
   PostUpdate,
+  PostWithPublications,
   Product,
   ProductInput,
   ProductUpdate,
+  PublishPost502,
   SalesAnalytics,
   SmsCampaign,
   SmsCampaignInput,
@@ -1485,11 +1488,11 @@ export const getPublishPostUrl = (id: number,) => {
 }
 
 /**
- * @summary Publish a post immediately
+ * @summary Publish a post immediately to each of its connected platforms
  */
-export const publishPost = async (id: number, options?: RequestInit): Promise<Post> => {
+export const publishPost = async (id: number, options?: RequestInit): Promise<PostWithPublications> => {
 
-  return customFetch<Post>(getPublishPostUrl(id),
+  return customFetch<PostWithPublications>(getPublishPostUrl(id),
   {
     ...options,
     method: 'POST'
@@ -1501,7 +1504,7 @@ export const publishPost = async (id: number, options?: RequestInit): Promise<Po
 
 
 
-export const getPublishPostMutationOptions = <TError = ErrorType<unknown>,
+export const getPublishPostMutationOptions = <TError = ErrorType<PublishPost502>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishPost>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof publishPost>>, TError,{id: number}, TContext> => {
 
@@ -1530,12 +1533,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type PublishPostMutationResult = NonNullable<Awaited<ReturnType<typeof publishPost>>>
 
-    export type PublishPostMutationError = ErrorType<unknown>
+    export type PublishPostMutationError = ErrorType<PublishPost502>
 
     /**
- * @summary Publish a post immediately
+ * @summary Publish a post immediately to each of its connected platforms
  */
-export const usePublishPost = <TError = ErrorType<unknown>,
+export const usePublishPost = <TError = ErrorType<PublishPost502>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishPost>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof publishPost>>,
@@ -1545,6 +1548,83 @@ export const usePublishPost = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getPublishPostMutationOptions(options));
     }
+
+export const getListPostPublicationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/publications`
+}
+
+/**
+ * @summary History of publish attempts for a post, one row per platform per attempt
+ */
+export const listPostPublications = async (id: number, options?: RequestInit): Promise<PostPublication[]> => {
+
+  return customFetch<PostPublication[]>(getListPostPublicationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPostPublicationsQueryKey = (id: number,) => {
+    return [
+    `/api/posts/${id}/publications`
+    ] as const;
+    }
+
+
+export const getListPostPublicationsQueryOptions = <TData = Awaited<ReturnType<typeof listPostPublications>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPostPublications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPostPublicationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPostPublications>>> = ({ signal }) => listPostPublications(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPostPublications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPostPublicationsQueryResult = NonNullable<Awaited<ReturnType<typeof listPostPublications>>>
+export type ListPostPublicationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary History of publish attempts for a post, one row per platform per attempt
+ */
+
+export function useListPostPublications<TData = Awaited<ReturnType<typeof listPostPublications>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPostPublications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPostPublicationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSubmitPostForReviewUrl = (id: number,) => {
 

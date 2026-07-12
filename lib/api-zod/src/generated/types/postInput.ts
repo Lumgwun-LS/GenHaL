@@ -10,6 +10,7 @@ export interface PostInput {
   vendorId: number;
   caption: string;
   platforms: string[];
+  socialAccountIds?: number[];
   mediaUrls?: string[];
   mediaType?: string;
   scheduledAt?: string;

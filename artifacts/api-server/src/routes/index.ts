@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import vendorsRouter from "./vendors";
 import socialAccountsRouter from "./social-accounts";
+import socialOauthRouter from "./social-oauth";
 import postsRouter from "./posts";
 import aiRouter from "./ai";
 import productsRouter from "./products";
@@ -61,6 +62,7 @@ router.use(requireAuth);
 
 router.use(vendorsRouter);
 router.use(socialAccountsRouter);
+router.use(socialOauthRouter);
 router.use(postsRouter);
 router.use(aiRouter);
 router.use(productsRouter);

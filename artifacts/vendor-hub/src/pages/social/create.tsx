@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2 } from "lucide-react";
-import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useSubmitPostForReview } from "@workspace/api-client-react";
+import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useSubmitPostForReview, useListSocialAccounts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -23,6 +23,13 @@ const PLATFORMS = [
   { id: 'tiktok', label: 'TikTok', color: 'bg-teal-600' }
 ];
 
+/** Mirrors the server's normalizePlatformKey so account.platform ("Facebook", "X (Twitter)", ...) matches a PLATFORMS id. */
+function normalizePlatformKey(platform: string): string {
+  const p = platform.trim().toLowerCase();
+  if (p === "x" || p === "twitter" || p.startsWith("x (")) return "twitter";
+  return p;
+}
+
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
@@ -33,8 +40,10 @@ export default function CreatePost() {
   const [, setLocation] = useLocation();
 
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [selectedAccountByPlatform, setSelectedAccountByPlatform] = useState<Record<string, number>>({});
 
   const { data: products } = useListProducts({ vendorId: 1 });
+  const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const generateCaption = useGenerateAiCaption();
@@ -74,10 +83,28 @@ export default function CreatePost() {
     }
   };
 
+  const accountsForPlatform = (platformId: string) =>
+    (socialAccounts ?? []).filter((a) => normalizePlatformKey(a.platform) === platformId && a.status === "active");
+
   const togglePlatform = (id: string) => {
-    setSelectedPlatforms(prev => 
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
+    setSelectedPlatforms(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      return next;
+    });
+    // Auto-pick the account when there's exactly one connected account for this
+    // platform; when there are several, the vendor must choose explicitly below
+    // so publishing never guesses which live account to post to.
+    if (!selectedPlatforms.includes(id)) {
+      const matches = accountsForPlatform(id);
+      if (matches.length === 1) {
+        setSelectedAccountByPlatform((prev) => ({ ...prev, [id]: matches[0].id }));
+      }
+    } else {
+      setSelectedAccountByPlatform((prev) => {
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   const toggleProduct = (id: number) => {
@@ -93,6 +120,12 @@ export default function CreatePost() {
       toast.error("Choose what customers can do with the shop link (express interest or check out)");
       return;
     }
+    const ambiguousPlatform = selectedPlatforms.find((id) => accountsForPlatform(id).length > 1 && !selectedAccountByPlatform[id]);
+    if (ambiguousPlatform) {
+      const label = PLATFORMS.find((p) => p.id === ambiguousPlatform)?.label ?? ambiguousPlatform;
+      toast.error(`You have multiple ${label} accounts connected — choose which one this post goes to.`);
+      return;
+    }
 
     try {
       const post = await createPost.mutateAsync({
@@ -100,6 +133,7 @@ export default function CreatePost() {
           vendorId: 1, // hardcoded for demo, normally from context
           caption,
           platforms: selectedPlatforms,
+          socialAccountIds: selectedPlatforms.map((id) => selectedAccountByPlatform[id] ?? 0),
           productIds: selectedProductIds,
           linkMode,
           ...(generatedImage ? { mediaUrls: [generatedImage] } : {}),
@@ -168,6 +202,28 @@ export default function CreatePost() {
                   </button>
                 ))}
               </div>
+              {selectedPlatforms.some((id) => accountsForPlatform(id).length > 1) && (
+                <div className="mt-3 space-y-2">
+                  {selectedPlatforms.filter((id) => accountsForPlatform(id).length > 1).map((id) => (
+                    <div key={id} className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground w-20">{PLATFORMS.find((p) => p.id === id)?.label}:</span>
+                      <select
+                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                        value={selectedAccountByPlatform[id] ?? ""}
+                        onChange={(e) => setSelectedAccountByPlatform((prev) => ({ ...prev, [id]: Number(e.target.value) }))}
+                      >
+                        <option value="" disabled>Choose which account...</option>
+                        {accountsForPlatform(id).map((a) => (
+                          <option key={a.id} value={a.id}>{a.accountName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedPlatforms.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">Connect accounts from the Social Hub to publish for real once approved.</p>
+              )}
             </CardContent>
           </Card>
 

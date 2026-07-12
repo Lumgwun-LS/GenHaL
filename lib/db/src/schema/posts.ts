@@ -8,6 +8,10 @@ export const postsTable = pgTable("posts", {
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   caption: text("caption").notNull(),
   platforms: text("platforms").array().notNull().default([]),
+  // Aligned by index with `platforms`: which connected social_accounts row to publish
+  // each platform entry to. Null/missing entries fall back to "the one active account
+  // for that platform" at publish time, and publish fails explicitly if that's ambiguous.
+  socialAccountIds: integer("social_account_ids").array().notNull().default([]),
   status: text("status").notNull().default("draft"),
   mediaUrls: text("media_urls").array().notNull().default([]),
   mediaType: text("media_type"),

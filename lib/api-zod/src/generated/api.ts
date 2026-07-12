@@ -260,6 +260,8 @@ export const ListSocialAccountsResponseItem = zod.object({
   "avatarUrl": zod.string().nullish(),
   "status": zod.string(),
   "followersCount": zod.number().nullish(),
+  "connectedVia": zod.string().optional(),
+  "tokenExpiresAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListSocialAccountsResponse = zod.array(ListSocialAccountsResponseItem)
@@ -288,6 +290,8 @@ export const CreateSocialAccountResponse = zod.object({
   "avatarUrl": zod.string().nullish(),
   "status": zod.string(),
   "followersCount": zod.number().nullish(),
+  "connectedVia": zod.string().optional(),
+  "tokenExpiresAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -309,6 +313,8 @@ export const GetSocialAccountResponse = zod.object({
   "avatarUrl": zod.string().nullish(),
   "status": zod.string(),
   "followersCount": zod.number().nullish(),
+  "connectedVia": zod.string().optional(),
+  "tokenExpiresAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -337,6 +343,7 @@ export const ListPostsResponseItem = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -360,6 +367,7 @@ export const CreatePostBody = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().optional(),
   "scheduledAt": zod.string().optional(),
@@ -374,6 +382,7 @@ export const CreatePostResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -397,6 +406,7 @@ export const ListScheduledPostsResponseItem = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -425,6 +435,7 @@ export const GetPostResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -450,6 +461,7 @@ export const UpdatePostParams = zod.object({
 export const UpdatePostBody = zod.object({
   "caption": zod.string().optional(),
   "platforms": zod.array(zod.string()).optional(),
+  "socialAccountIds": zod.array(zod.number()).optional(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "scheduledAt": zod.string().optional(),
   "hashtags": zod.string().optional(),
@@ -463,6 +475,7 @@ export const UpdatePostResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -489,7 +502,7 @@ export const DeletePostResponse = zod.void()
 
 
 /**
- * @summary Publish a post immediately
+ * @summary Publish a post immediately to each of its connected platforms
  */
 export const PublishPostParams = zod.object({
   "id": zod.coerce.number()
@@ -500,6 +513,7 @@ export const PublishPostResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -512,7 +526,40 @@ export const PublishPostResponse = zod.object({
   "linkMode": zod.string().optional(),
   "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
+}).and(zod.object({
+  "publications": zod.array(zod.object({
+  "id": zod.number(),
+  "postId": zod.number(),
+  "socialAccountId": zod.number().nullish(),
+  "platform": zod.string(),
+  "status": zod.string(),
+  "externalPostId": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "publishedAt": zod.string()
+}))
+}))
+
+
+/**
+ * @summary History of publish attempts for a post, one row per platform per attempt
+ */
+export const ListPostPublicationsParams = zod.object({
+  "id": zod.coerce.number()
 })
+
+export const ListPostPublicationsResponseItem = zod.object({
+  "id": zod.number(),
+  "postId": zod.number(),
+  "socialAccountId": zod.number().nullish(),
+  "platform": zod.string(),
+  "status": zod.string(),
+  "externalPostId": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "publishedAt": zod.string()
+})
+export const ListPostPublicationsResponse = zod.array(ListPostPublicationsResponseItem)
 
 
 /**
@@ -527,6 +574,7 @@ export const SubmitPostForReviewResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -554,6 +602,7 @@ export const ApprovePostResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -581,6 +630,7 @@ export const RequestPostChangesResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),
@@ -1590,6 +1640,7 @@ export const GetSocialAnalyticsResponse = zod.object({
   "vendorId": zod.number(),
   "caption": zod.string(),
   "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
   "status": zod.string(),
   "mediaUrls": zod.array(zod.string()).optional(),
   "mediaType": zod.string().nullish(),

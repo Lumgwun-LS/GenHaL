@@ -184,6 +184,9 @@ export interface SocialAccount {
   status: string;
   /** @nullable */
   followersCount?: number | null;
+  connectedVia?: string;
+  /** @nullable */
+  tokenExpiresAt?: string | null;
   createdAt: string;
 }
 
@@ -202,6 +205,8 @@ export interface Post {
   vendorId: number;
   caption: string;
   platforms: string[];
+  /** Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means "not explicitly chosen". */
+  socialAccountIds?: number[];
   status: string;
   mediaUrls?: string[];
   /** @nullable */
@@ -226,6 +231,7 @@ export interface PostInput {
   vendorId: number;
   caption: string;
   platforms: string[];
+  socialAccountIds?: number[];
   mediaUrls?: string[];
   mediaType?: string;
   scheduledAt?: string;
@@ -235,9 +241,30 @@ export interface PostInput {
   linkMode?: string;
 }
 
+export interface PostPublication {
+  id: number;
+  postId: number;
+  /** @nullable */
+  socialAccountId?: number | null;
+  platform: string;
+  status: string;
+  /** @nullable */
+  externalPostId?: string | null;
+  /** @nullable */
+  externalUrl?: string | null;
+  /** @nullable */
+  errorMessage?: string | null;
+  publishedAt: string;
+}
+
+export type PostWithPublications = Post & {
+  publications: PostPublication[];
+};
+
 export interface PostUpdate {
   caption?: string;
   platforms?: string[];
+  socialAccountIds?: number[];
   mediaUrls?: string[];
   scheduledAt?: string;
   hashtags?: string;
@@ -797,6 +824,11 @@ export type ListPostsParams = {
 vendorId?: number;
 status?: string;
 platform?: string;
+};
+
+export type PublishPost502 = {
+  error: string;
+  publications: PostPublication[];
 };
 
 export type ListAiGenerationsParams = {

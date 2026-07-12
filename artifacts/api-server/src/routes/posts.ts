@@ -2,7 +2,9 @@ import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
 import { randomBytes } from "node:crypto";
 import { eq, and, gt, desc, inArray } from "drizzle-orm";
-import { db, postsTable, productsTable, vendorsTable } from "@workspace/db";
+import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postPublicationsTable } from "@workspace/db";
+import { decrypt } from "../lib/encryption";
+import { publishFacebookFeedPost, publishFacebookPhotoPost, publishInstagramPhotoPost } from "../lib/meta";
 import {
   ListPostsQueryParams,
   CreatePostBody,
@@ -231,25 +233,220 @@ router.post("/posts/:id/request-changes", async (req, res): Promise<void> => {
   res.json(GetPostResponse.parse(serializePost(post)));
 });
 
+/** Collapses platform spellings used across the UI ("X (Twitter)", "twitter", "x") to one key. */
+function normalizePlatformKey(platform: string): string {
+  const p = platform.trim().toLowerCase();
+  if (p === "x" || p === "twitter" || p.startsWith("x (")) return "twitter";
+  return p;
+}
+
+function bufferFromDataUri(dataUri: string): Buffer | null {
+  const match = /^data:image\/[a-zA-Z+.-]+;base64,(.+)$/.exec(dataUri);
+  if (!match) return null;
+  return Buffer.from(match[1], "base64");
+}
+
+interface PublishOutcome {
+  platform: string;
+  socialAccountId: number | null;
+  status: "success" | "failed";
+  externalPostId: string | null;
+  externalUrl: string | null;
+  errorMessage: string | null;
+}
+
+/**
+ * Resolves exactly which connected account a platform entry should publish to.
+ * `socialAccountIds` is aligned by index with `platforms` — when a post was
+ * created/edited after this feature shipped, that explicit id is authoritative.
+ * Older posts (or entries left unset) fall back to "the vendor's one active
+ * account for this platform", but only when that's unambiguous; if the vendor
+ * has multiple connected accounts for the same platform, publishing must fail
+ * rather than guess which one to post to.
+ */
+function resolveTargetAccount(
+  platformLabel: string,
+  explicitAccountId: number | null | undefined,
+  vendorAccounts: (typeof socialAccountsTable.$inferSelect)[],
+): { account: typeof socialAccountsTable.$inferSelect | undefined; error: string | null } {
+  // 0 (or unset) means "not explicitly chosen" — real social_accounts ids start at 1.
+  if (explicitAccountId != null && explicitAccountId !== 0) {
+    const account = vendorAccounts.find((a) => a.id === explicitAccountId);
+    if (!account) return { account: undefined, error: `The account connected to this post for ${platformLabel} is no longer connected. Reconnect it and edit the post.` };
+    return { account, error: null };
+  }
+  const key = normalizePlatformKey(platformLabel);
+  const matches = vendorAccounts.filter((a) => normalizePlatformKey(a.platform) === key);
+  if (matches.length > 1) {
+    return { account: undefined, error: `Multiple ${platformLabel} accounts are connected. Edit this post and choose which one to publish to.` };
+  }
+  return { account: matches[0], error: null };
+}
+
+/**
+ * Publishes a single platform's leg of a post. Only Facebook/Instagram have a
+ * real OAuth-connected publish path today (via Meta Graph API); every other
+ * platform fails clearly instead of silently pretending to succeed.
+ */
+async function publishToPlatform(
+  platformKey: string,
+  rawPlatformLabel: string,
+  account: typeof socialAccountsTable.$inferSelect | undefined,
+  caption: string,
+  mediaUrls: string[],
+): Promise<PublishOutcome> {
+  const base = { platform: rawPlatformLabel, socialAccountId: account?.id ?? null };
+  if (!account || !account.accessTokenEncrypted) {
+    return {
+      ...base,
+      status: "failed",
+      externalPostId: null,
+      externalUrl: null,
+      errorMessage: `No connected ${rawPlatformLabel} account with a live connection. Connect it via OAuth from the Social Hub first.`,
+    };
+  }
+
+  if (platformKey !== "facebook" && platformKey !== "instagram") {
+    return {
+      ...base,
+      status: "failed",
+      externalPostId: null,
+      externalUrl: null,
+      errorMessage: `Live publishing isn't available yet for ${rawPlatformLabel}.`,
+    };
+  }
+
+  try {
+    const accessToken = decrypt(account.accessTokenEncrypted);
+    const media = mediaUrls[0] ?? null;
+
+    if (platformKey === "facebook") {
+      if (media) {
+        const buffer = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        if (buffer) {
+          const result = await publishFacebookPhotoPost(account.accountId!, accessToken, buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+        }
+        if (/^https?:\/\//.test(media)) {
+          // Facebook's photo endpoint also accepts a hosted URL directly.
+          const res = await fetch(`https://graph.facebook.com/v21.0/${account.accountId}/photos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: media, caption, access_token: accessToken }),
+          });
+          const json: any = await res.json().catch(() => ({}));
+          if (!res.ok || !json.post_id) throw new Error(json?.error?.message || "Facebook rejected the photo post");
+          return { ...base, status: "success", externalPostId: json.post_id, externalUrl: `https://www.facebook.com/${json.post_id}`, errorMessage: null };
+        }
+      }
+      const result = await publishFacebookFeedPost(account.accountId!, accessToken, caption);
+      return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+    }
+
+    // Instagram Content Publishing requires a publicly reachable image URL — a
+    // base64 data: URI (how in-app AI-generated images are stored today) can't
+    // be used, so that case fails with a clear, specific reason rather than
+    // silently dropping the image or lying about success.
+    if (!media) throw new Error("Instagram posts require an image. Add one before publishing.");
+    if (!/^https?:\/\//.test(media)) {
+      throw new Error("Instagram requires a publicly hosted image URL. This post's image was generated in-app and isn't hosted online yet — attach a hosted image URL to publish to Instagram.");
+    }
+    const result = await publishInstagramPhotoPost(account.accountId!, accessToken, media, caption);
+    return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+  } catch (err) {
+    return {
+      ...base,
+      status: "failed",
+      externalPostId: null,
+      externalUrl: null,
+      errorMessage: err instanceof Error ? err.message : "Publish failed",
+    };
+  }
+}
+
+function serializePublication(row: typeof postPublicationsTable.$inferSelect) {
+  return { ...row, publishedAt: row.publishedAt.toISOString() };
+}
+
 router.post("/posts/:id/publish", async (req, res): Promise<void> => {
   const params = PublishPostParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  const [existing] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
   const authed = await resolveAuthedVendor(req);
   if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
 
-  // Real cross-platform publishing (Meta, TikTok, X, LinkedIn) requires OAuth-connected
-  // accounts and per-platform developer app credentials, which are not configured yet.
-  // Publishing here marks the post live in VendorHub and is intentionally not wired to
-  // any external platform API until that credential/OAuth work is scoped.
-  const [post] = await db
+  // Atomically claim the post for publishing: the WHERE clause guards the
+  // transition on the status column itself, so two concurrent publish clicks
+  // (or a double-submit) can't both pass and both post the same content twice
+  // to the same live account.
+  const [claimed] = await db
     .update(postsTable)
-    .set({ status: "published", publishedAt: new Date() })
+    .set({ status: "publishing" })
     .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
     .returning();
-  if (!post) { res.status(409).json({ error: "A post must be approved before it can be published. Submit it for review first." }); return; }
-  res.json(GetPostResponse.parse(serializePost(post)));
+  if (!claimed) {
+    res.status(409).json({ error: `Cannot publish a post with status "${existing.status}". It must be approved first, and can't already be publishing.` });
+    return;
+  }
+
+  const vendorAccounts = await db.select().from(socialAccountsTable).where(and(eq(socialAccountsTable.vendorId, claimed.vendorId), eq(socialAccountsTable.status, "active")));
+
+  const outcomes: PublishOutcome[] = [];
+  for (let i = 0; i < claimed.platforms.length; i++) {
+    const platformLabel = claimed.platforms[i];
+    const explicitAccountId = claimed.socialAccountIds[i] ?? null;
+    const { account, error } = resolveTargetAccount(platformLabel, explicitAccountId, vendorAccounts);
+    if (error) {
+      outcomes.push({ platform: platformLabel, socialAccountId: account?.id ?? null, status: "failed", externalPostId: null, externalUrl: null, errorMessage: error });
+      continue;
+    }
+    const key = normalizePlatformKey(platformLabel);
+    outcomes.push(await publishToPlatform(key, platformLabel, account, claimed.caption, claimed.mediaUrls));
+  }
+
+  const insertedPublications = outcomes.length > 0
+    ? await db.insert(postPublicationsTable).values(
+        outcomes.map((o) => ({
+          postId: claimed.id,
+          socialAccountId: o.socialAccountId,
+          platform: o.platform,
+          status: o.status,
+          externalPostId: o.externalPostId,
+          externalUrl: o.externalUrl,
+          errorMessage: o.errorMessage,
+        })),
+      ).returning()
+    : [];
+
+  const anySucceeded = outcomes.some((o) => o.status === "success");
+  // Resolve the "publishing" claim: back to "approved" on total failure (so the
+  // vendor can fix the connection and retry), or "published" if at least one
+  // platform went live. Guarded on status="publishing" for the same reason as
+  // the initial claim — nothing else should have moved this post in between.
+  const [post] = await db
+    .update(postsTable)
+    .set(anySucceeded ? { status: "published", publishedAt: new Date() } : { status: "approved" })
+    .where(and(eq(postsTable.id, claimed.id), eq(postsTable.status, "publishing")))
+    .returning();
+
+  const publications = insertedPublications.map(serializePublication);
+  if (!anySucceeded) {
+    res.status(502).json({ error: "Publishing failed on every selected platform.", publications });
+    return;
+  }
+  res.json({ ...GetPostResponse.parse(serializePost(post!)), publications });
+});
+
+router.get("/posts/:id/publications", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to view this post." }); return; }
+  const rows = await db.select().from(postPublicationsTable).where(eq(postPublicationsTable.postId, params.data.id)).orderBy(desc(postPublicationsTable.publishedAt));
+  res.json(rows.map(serializePublication));
 });
 
 function serializePost(post: typeof postsTable.$inferSelect) {

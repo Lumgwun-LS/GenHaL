@@ -9,6 +9,7 @@
 export interface PostUpdate {
   caption?: string;
   platforms?: string[];
+  socialAccountIds?: number[];
   mediaUrls?: string[];
   scheduledAt?: string;
   hashtags?: string;
