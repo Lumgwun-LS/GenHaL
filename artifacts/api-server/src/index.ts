@@ -5,6 +5,7 @@ import { startWebhookBufferDrainer } from "./lib/webhook-buffer";
 import { startVoiceCampaignScheduler } from "./lib/voice-campaign-scheduler";
 import { startPendingReminderScheduler } from "./lib/pending-reminders";
 import { startGatewayHealthScheduler } from "./lib/gateway-health-scheduler";
+import { startSubscriptionSyncScheduler } from "./lib/subscription-sync-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -32,4 +33,5 @@ app.listen(port, (err) => {
   startVoiceCampaignScheduler();
   startPendingReminderScheduler();
   startGatewayHealthScheduler();
+  startSubscriptionSyncScheduler();
 });

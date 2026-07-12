@@ -35,3 +35,4 @@
 
 - [Per-vendor gateway enable flags](vendorhub-gateway-enable-flags.md) — new payment gateways need a vendorsTable.<gateway>Enabled boolean checked in the checkout route, mirroring stripeEnabled/paystackEnabled.
 - [Platform gateway credential health recheck](gateway-health-recheck.md) — periodic re-test of saved gateway keys (not just at save time) with pass/fail transition Slack alerts and admin UI banner.
+- [Subscription reconciliation is a shared helper](vendorhub-subscription-reconcile.md) — Stripe tier reconciliation logic lives once in subscription-sync.ts, called by the manual /sync route AND a periodic scheduler; it only upgrades, never downgrades.

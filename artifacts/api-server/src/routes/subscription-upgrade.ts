@@ -28,7 +28,7 @@ import { getAuth } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
 import { resolveGatewayField } from "../lib/platform-gateways";
 import { ensureStripeCatalog, ensurePortalConfiguration } from "../lib/stripe-catalog";
-import { applyVendorTierUpgrade } from "../lib/subscription-sync";
+import { reconcileVendorSubscription } from "../lib/subscription-sync";
 
 const router = Router();
 
@@ -334,79 +334,10 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
   }
 
   const stripe = new Stripe(stripeKey);
-  const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
 
-  // 1) Look at the vendor's active/trialing subscriptions directly — this is
-  //    authoritative and catches the case where the webhook never fired at
-  //    all (checkout completed, subscription exists, DB was never told).
-  const subscriptions = await stripe.subscriptions.list({
-    customer: vendor.stripeCustomerId,
-    status: "all",
-    limit: 10,
-  });
+  const result = await reconcileVendorSubscription(vendor, stripe, "manual-sync");
 
-  let bestTier: string | null = null;
-  let bestSubscriptionId: string | null = null;
-
-  for (const sub of subscriptions.data) {
-    if (sub.status !== "active" && sub.status !== "trialing") continue;
-    const tier = sub.metadata?.upgradeTier ?? sub.items.data[0]?.price?.metadata?.tier ?? null;
-    if (!tier || !VALID_UPGRADE_TIERS.includes(tier as PlanTier)) continue;
-    if (!bestTier || (TIER_RANK[tier] ?? 0) > (TIER_RANK[bestTier] ?? 0)) {
-      bestTier = tier;
-      bestSubscriptionId = sub.id;
-    }
-  }
-
-  // 2) Fall back to recent Checkout Sessions in case the subscription lookup
-  //    above misses (e.g. session paid but subscription object metadata
-  //    lagged) — covers a dropped webhook mid-flight. A paid session is only
-  //    used to *locate* a subscription id; entitlement is decided by
-  //    re-fetching that subscription and confirming it's still active or
-  //    trialing right now. A historical paid session for a since-canceled
-  //    subscription must never grant a tier.
-  if (!bestTier) {
-    const sessions = await stripe.checkout.sessions.list({
-      customer: vendor.stripeCustomerId,
-      limit: 10,
-    });
-    for (const session of sessions.data) {
-      if (session.payment_status !== "paid" || session.status !== "complete") continue;
-      const tier = session.metadata?.upgradeTier ?? null;
-      const sessionVendorId = session.metadata?.upgradeVendorId ? parseInt(session.metadata.upgradeVendorId) : null;
-      if (sessionVendorId !== id || !tier || !VALID_UPGRADE_TIERS.includes(tier as PlanTier)) continue;
-
-      const subscriptionId =
-        typeof session.subscription === "string" ? session.subscription : (session.subscription?.id ?? null);
-      if (!subscriptionId) continue; // no subscription tied to this session — nothing to verify
-
-      // Re-fetch live status; do not trust the session snapshot alone.
-      const liveSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-      if (liveSubscription.status !== "active" && liveSubscription.status !== "trialing") continue;
-
-      if (!bestTier || (TIER_RANK[tier] ?? 0) > (TIER_RANK[bestTier] ?? 0)) {
-        bestTier = tier;
-        bestSubscriptionId = subscriptionId;
-      }
-    }
-  }
-
-  if (!bestTier) {
-    res.json({
-      synced: false,
-      reason: "No paid subscription found on Stripe for this vendor.",
-      currentTier: vendor.subscriptionTier,
-    });
-    return;
-  }
-
-  const result = await applyVendorTierUpgrade(id, bestTier, bestSubscriptionId, "manual-sync");
-
-  res.json({
-    synced: result.applied,
-    reason: result.reason,
-    currentTier: result.applied ? bestTier : vendor.subscriptionTier,
-  });
+  res.json(result);
 });
 
 export default router;
