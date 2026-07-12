@@ -23,6 +23,7 @@ import { placeCall } from "../lib/voice-caller";
 import { logger } from "../lib/logger";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
+import { sendPushToVendor } from "../lib/push";
 import { z } from "zod";
 
 const router = Router();
@@ -135,6 +136,13 @@ async function notifyCampaignFinished(
         html,
       });
     }
+
+    await sendPushToVendor(
+      vendorId,
+      `Voice campaign ${terminalStatus === "completed" ? "finished" : "failed"}`,
+      `"${campaign.name}" ${terminalStatus === "completed" ? "finished" : "failed"}: ${summary}.`,
+      { screen: "voice-campaigns", campaignId: campaign.id },
+    );
   } catch (err) {
     logger.error({ err, campaignId: campaign.id, vendorId }, "[voice] Failed to send campaign-finished notification");
   }
