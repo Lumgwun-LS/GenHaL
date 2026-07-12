@@ -265,6 +265,105 @@ async function fetchExportAlerts(): Promise<ExportAlerts> {
   return res.json() as Promise<ExportAlerts>;
 }
 
+async function saveExportAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save alert settings");
+  }
+}
+
+function ExportAlertSettingsDialog({ threshold, windowMinutes }: { threshold: number; windowMinutes: number }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState(String(threshold));
+  const [windowInput, setWindowInput] = useState(String(windowMinutes));
+  const [saving, setSaving] = useState(false);
+
+  function openDialog() {
+    setThresholdInput(String(threshold));
+    setWindowInput(String(windowMinutes));
+    setOpen(true);
+  }
+
+  async function handleSave() {
+    const t = Number(thresholdInput);
+    const w = Number(windowInput);
+    if (!Number.isInteger(t) || t < 1 || t > 1000) {
+      toast.error("Threshold must be a whole number between 1 and 1000.");
+      return;
+    }
+    if (!Number.isInteger(w) || w < 1 || w > 1440) {
+      toast.error("Window must be a whole number of minutes between 1 and 1440.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveExportAlertSettings({ threshold: t, windowMinutes: w });
+      toast.success("Export alert threshold updated.");
+      qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => (next ? openDialog() : setOpen(false))}>
+      <Button variant="outline" size="sm" className="gap-2" onClick={openDialog} data-testid="button-edit-export-alert-settings">
+        <Bell className="w-3.5 h-3.5" />
+        Alert Settings
+      </Button>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Export burst alert settings</DialogTitle>
+          <DialogDescription>
+            Flag an admin when they download the vendor export this many times within the window below.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Threshold (downloads)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={1000}
+              className="h-8 text-xs"
+              value={thresholdInput}
+              onChange={(e) => setThresholdInput(e.target.value)}
+              data-testid="input-export-alert-threshold"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Window (minutes)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={1440}
+              className="h-8 text-xs"
+              value={windowInput}
+              onChange={(e) => setWindowInput(e.target.value)}
+              data-testid="input-export-alert-window"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button size="sm" onClick={handleSave} disabled={saving} data-testid="button-save-export-alert-settings">
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type VoiceSignatureFailureAlert = {
   threshold: number;
   windowMinutes: number;
@@ -985,11 +1084,16 @@ export default function AdminPanel() {
           </Card>
 
           <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardList className="w-4 h-4" /> Export History
-              </CardTitle>
-              <CardDescription>Recent CSV downloads of vendor data, for compliance tracking.</CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="w-4 h-4" /> Export History
+                </CardTitle>
+                <CardDescription>Recent CSV downloads of vendor data, for compliance tracking.</CardDescription>
+              </div>
+              {exportAlerts && (
+                <ExportAlertSettingsDialog threshold={exportAlerts.threshold} windowMinutes={exportAlerts.windowMinutes} />
+              )}
             </CardHeader>
             <CardContent className="p-0">
               {exportAlerts && exportAlerts.flagged.length > 0 && (

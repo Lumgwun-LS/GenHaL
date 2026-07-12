@@ -11,7 +11,7 @@ import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, 
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
-import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
+import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
 import { sendSlackAlert } from "../lib/slack";
@@ -20,11 +20,15 @@ import { sendSlackAlert } from "../lib/slack";
  * Export-burst detection: if the same admin downloads the vendor CSV export
  * this many times within the rolling window below, we treat it as unusual
  * activity (possible mass-exfiltration of vendor PII) and surface a warning
- * — both a Slack alert and a flag the Admin Panel can display. Configurable
- * via env vars so operators can tune sensitivity without a code change.
+ * — both a Slack alert and a flag the Admin Panel can display. Threshold and
+ * window are editable from the Admin Panel (persisted via the site-content
+ * store under "admin.exportAlertSettings"); the env vars below are only the
+ * fallback default until an admin saves an override.
  */
-const EXPORT_ALERT_THRESHOLD = Number(process.env.EXPORT_ALERT_THRESHOLD ?? 5);
-const EXPORT_ALERT_WINDOW_MINUTES = Number(process.env.EXPORT_ALERT_WINDOW_MINUTES ?? 15);
+async function getExportAlertSettings(): Promise<{ threshold: number; windowMinutes: number }> {
+  const raw = await getSiteContentBlock("admin.exportAlertSettings");
+  return raw as { threshold: number; windowMinutes: number };
+}
 
 /**
  * Mirrors the thresholds used in routes/voice-status-callback.ts so the
@@ -42,16 +46,17 @@ const VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES = Number(
  * threshold — so a long-running spree doesn't spam a message per download.
  */
 async function checkExportBurst(adminUserId: string): Promise<void> {
-  const windowStart = new Date(Date.now() - EXPORT_ALERT_WINDOW_MINUTES * 60 * 1000);
+  const { threshold, windowMinutes } = await getExportAlertSettings();
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
   const [row] = await db
     .select({ count: sql<number>`count(*)` })
     .from(adminExportLogsTable)
     .where(and(eq(adminExportLogsTable.adminUserId, adminUserId), gte(adminExportLogsTable.exportedAt, windowStart)));
 
   const count = Number(row?.count ?? 0);
-  if (count === EXPORT_ALERT_THRESHOLD) {
+  if (count === threshold) {
     await sendSlackAlert(
-      `:rotating_light: Admin *${adminUserId}* has downloaded the vendor data export ${count} times in the last ${EXPORT_ALERT_WINDOW_MINUTES} minutes. Review the Export History in the Admin Panel to confirm this is expected.`,
+      `:rotating_light: Admin *${adminUserId}* has downloaded the vendor data export ${count} times in the last ${windowMinutes} minutes. Review the Export History in the Admin Panel to confirm this is expected.`,
     );
   }
 }
@@ -251,7 +256,8 @@ router.get("/admin/export-alerts", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const windowStart = new Date(Date.now() - EXPORT_ALERT_WINDOW_MINUTES * 60 * 1000);
+  const { threshold, windowMinutes } = await getExportAlertSettings();
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
   const flagged = await db
     .select({
       adminUserId: adminExportLogsTable.adminUserId,
@@ -261,11 +267,11 @@ router.get("/admin/export-alerts", async (req, res): Promise<void> => {
     .from(adminExportLogsTable)
     .where(gte(adminExportLogsTable.exportedAt, windowStart))
     .groupBy(adminExportLogsTable.adminUserId)
-    .having(sql`count(*) >= ${EXPORT_ALERT_THRESHOLD}`);
+    .having(sql`count(*) >= ${threshold}`);
 
   res.json({
-    threshold: EXPORT_ALERT_THRESHOLD,
-    windowMinutes: EXPORT_ALERT_WINDOW_MINUTES,
+    threshold,
+    windowMinutes,
     flagged: flagged.map((f) => ({ ...f, count: Number(f.count) })),
   });
 });

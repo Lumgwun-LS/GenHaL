@@ -65,13 +65,19 @@ export const DEFAULT_SITE_CONTENT = {
     subject: "🎂 Happy Birthday from Awa Biz Suite!",
     body: "Happy Birthday, {{name}}! Wishing you a wonderful day from the entire Awa Biz Suite team. We're so grateful to have you with us.",
   },
+  "admin.exportAlertSettings": {
+    threshold: Number(process.env.EXPORT_ALERT_THRESHOLD ?? 5),
+    windowMinutes: Number(process.env.EXPORT_ALERT_WINDOW_MINUTES ?? 15),
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
 export const SITE_CONTENT_KEYS = Object.keys(DEFAULT_SITE_CONTENT) as SiteContentKey[];
 
-/** Public-facing keys — everything except internal templates (e.g. email copy). */
-export const PUBLIC_SITE_CONTENT_KEYS = SITE_CONTENT_KEYS.filter((k) => !k.startsWith("email."));
+/** Public-facing keys — everything except internal templates (e.g. email copy) and internal admin settings. */
+export const PUBLIC_SITE_CONTENT_KEYS = SITE_CONTENT_KEYS.filter(
+  (k) => !k.startsWith("email.") && !k.startsWith("admin."),
+);
 
 // ─── Per-key runtime validation ──────────────────────────────────────────────
 // Every write is validated against its exact shape before being persisted, so
@@ -116,6 +122,11 @@ const emailSchema = z.object({
   body: z.string().max(2000),
 });
 
+const exportAlertSettingsSchema = z.object({
+  threshold: z.number().int().min(1).max(1000),
+  windowMinutes: z.number().int().min(1).max(1440),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -123,6 +134,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.cta": ctaSchema,
   "site.settings": settingsSchema,
   "email.birthday": emailSchema,
+  "admin.exportAlertSettings": exportAlertSettingsSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */
