@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { vendorNotificationsTable, vendorsTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 
 function isAdmin(userId: string): boolean {
@@ -116,6 +116,66 @@ router.post("/vendors/:id/notifications", async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(notification);
+});
+
+// ─── POST /vendors/notifications/bulk — admin messages several vendors ───────
+
+router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!message) { res.status(400).json({ error: "Message is required" }); return; }
+  if (message.length > 1000) { res.status(400).json({ error: "Message is too long" }); return; }
+
+  const all = req.body?.all === true;
+  const rawIds = Array.isArray(req.body?.vendorIds) ? req.body.vendorIds : [];
+  const vendorIds: number[] = Array.from(
+    new Set(rawIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isInteger(n))),
+  );
+
+  let targetVendors: { id: number }[];
+  if (all) {
+    targetVendors = await db.select({ id: vendorsTable.id }).from(vendorsTable);
+  } else {
+    if (vendorIds.length === 0) { res.status(400).json({ error: "Select at least one vendor" }); return; }
+    targetVendors = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(inArray(vendorsTable.id, vendorIds));
+  }
+
+  if (targetVendors.length === 0) { res.status(404).json({ error: "No matching vendors found" }); return; }
+
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
+  const notifications = await db
+    .insert(vendorNotificationsTable)
+    .values(
+      targetVendors.map((v) => ({
+        vendorId: v.id,
+        type: "general" as const,
+        message,
+        adminUserId: userId,
+        adminDisplayName,
+      })),
+    )
+    .returning();
+
+  res.status(201).json({ sent: notifications.length });
 });
 
 export default router;

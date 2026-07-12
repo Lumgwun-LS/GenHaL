@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -407,6 +408,105 @@ async function postVendorMessage(vendorId: number, message: string): Promise<voi
   }
 }
 
+async function postBulkVendorMessage(
+  message: string,
+  target: { all: true } | { all: false; vendorIds: number[] },
+): Promise<{ sent: number }> {
+  const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(
+      target.all ? { message, all: true } : { message, vendorIds: target.vendorIds },
+    ),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to send message");
+  }
+  return res.json() as Promise<{ sent: number }>;
+}
+
+function BulkMessageDialog({
+  selectedIds,
+  allSelected,
+  totalVendors,
+  onSent,
+}: {
+  selectedIds: number[];
+  allSelected: boolean;
+  totalVendors: number;
+  onSent: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const recipientCount = allSelected ? totalVendors : selectedIds.length;
+  const disabled = recipientCount === 0;
+
+  async function handleSend() {
+    const trimmed = message.trim();
+    if (!trimmed || disabled) return;
+    setSending(true);
+    try {
+      const { sent } = await postBulkVendorMessage(
+        trimmed,
+        allSelected ? { all: true } : { all: false, vendorIds: selectedIds },
+      );
+      toast.success(`Message sent to ${sent} vendor${sent === 1 ? "" : "s"}`);
+      setMessage("");
+      setOpen(false);
+      onSent();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        variant="default"
+        size="sm"
+        className="shrink-0 gap-2"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        data-testid="button-message-selected-vendors"
+      >
+        <Send className="w-4 h-4" />
+        Message {allSelected ? "All Vendors" : `Selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Message {recipientCount} vendor{recipientCount === 1 ? "" : "s"}</DialogTitle>
+          <DialogDescription>
+            Sends the same in-app notification to {allSelected ? "every vendor" : "each selected vendor"}. It will
+            appear in their notification bell.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type your announcement…"
+          className="min-h-28"
+          maxLength={1000}
+          data-testid="textarea-bulk-vendor-message"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSend} disabled={sending || !message.trim() || disabled} data-testid="button-send-bulk-vendor-message">
+            {sending ? "Sending…" : `Send to ${recipientCount}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -519,6 +619,9 @@ export default function AdminPanel() {
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
 
+  const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
+  const [selectAllVendors, setSelectAllVendors] = useState(false);
+
   const { data: vendors, isLoading, error } = useQuery({
     queryKey: ["admin-vendors"],
     queryFn: fetchAdminVendors,
@@ -595,6 +698,21 @@ export default function AdminPanel() {
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
     qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
+  }
+
+  function toggleVendorSelected(id: number, checked: boolean) {
+    setSelectAllVendors(false);
+    setSelectedVendorIds((prev) => (checked ? [...prev, id] : prev.filter((v) => v !== id)));
+  }
+
+  function toggleSelectAllVendors(checked: boolean) {
+    setSelectAllVendors(checked);
+    setSelectedVendorIds(checked ? (vendors?.map((v) => v.id) ?? []) : []);
+  }
+
+  function clearVendorSelection() {
+    setSelectAllVendors(false);
+    setSelectedVendorIds([]);
   }
 
   if (!isAdmin && !isLoading) return <Redirect to="/dashboard" />;
@@ -681,25 +799,33 @@ export default function AdminPanel() {
                 <CardTitle>All Vendors</CardTitle>
                 <CardDescription>Adjust subscription tiers and verification levels. Changes take effect immediately.</CardDescription>
               </div>
-              <ExportFilterPopover
-                onExport={(filters) => {
-                  const params = new URLSearchParams();
-                  if (filters.tier !== ANY) params.set("tier", filters.tier);
-                  if (filters.status !== ANY) params.set("status", filters.status);
-                  if (filters.verificationLevel !== ANY) params.set("verificationLevel", filters.verificationLevel);
-                  if (filters.joinedAfter) params.set("joinedAfter", filters.joinedAfter);
-                  if (filters.joinedBefore) params.set("joinedBefore", filters.joinedBefore);
-                  const qs = params.toString();
-                  const a = document.createElement("a");
-                  a.href = `${BASE_URL}/api/admin/vendors/export${qs ? `?${qs}` : ""}`;
-                  a.download = "";
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  toast.success("CSV download started");
-                  setTimeout(() => qc.invalidateQueries({ queryKey: ["admin-export-logs"] }), 1500);
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <BulkMessageDialog
+                  selectedIds={selectedVendorIds}
+                  allSelected={selectAllVendors}
+                  totalVendors={totalVendors}
+                  onSent={clearVendorSelection}
+                />
+                <ExportFilterPopover
+                  onExport={(filters) => {
+                    const params = new URLSearchParams();
+                    if (filters.tier !== ANY) params.set("tier", filters.tier);
+                    if (filters.status !== ANY) params.set("status", filters.status);
+                    if (filters.verificationLevel !== ANY) params.set("verificationLevel", filters.verificationLevel);
+                    if (filters.joinedAfter) params.set("joinedAfter", filters.joinedAfter);
+                    if (filters.joinedBefore) params.set("joinedBefore", filters.joinedBefore);
+                    const qs = params.toString();
+                    const a = document.createElement("a");
+                    a.href = `${BASE_URL}/api/admin/vendors/export${qs ? `?${qs}` : ""}`;
+                    a.download = "";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    toast.success("CSV download started");
+                    setTimeout(() => qc.invalidateQueries({ queryKey: ["admin-export-logs"] }), 1500);
+                  }}
+                />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
@@ -710,6 +836,20 @@ export default function AdminPanel() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={
+                            totalVendors > 0 && selectedVendorIds.length === totalVendors
+                              ? true
+                              : selectedVendorIds.length > 0
+                                ? "indeterminate"
+                                : false
+                          }
+                          onCheckedChange={(checked) => toggleSelectAllVendors(checked === true)}
+                          aria-label="Select all vendors"
+                          data-testid="checkbox-select-all-vendors"
+                        />
+                      </TableHead>
                       <TableHead>Vendor</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Subscription Tier</TableHead>
@@ -722,13 +862,21 @@ export default function AdminPanel() {
                   <TableBody>
                     {vendors?.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No vendors found.
                         </TableCell>
                       </TableRow>
                     ) : (
                       vendors?.map((vendor) => (
                         <TableRow key={vendor.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedVendorIds.includes(vendor.id)}
+                              onCheckedChange={(checked) => toggleVendorSelected(vendor.id, checked === true)}
+                              aria-label={`Select ${vendor.name}`}
+                              data-testid={`checkbox-select-vendor-${vendor.id}`}
+                            />
+                          </TableCell>
                           <TableCell>
                             <div className="font-medium">{vendor.name}</div>
                             <div className="text-xs text-muted-foreground">{vendor.email}</div>
