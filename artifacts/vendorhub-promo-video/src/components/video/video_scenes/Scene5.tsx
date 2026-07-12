@@ -1,14 +1,14 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
-export const Scene3 = () => {
+export const Scene5 = () => {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
       setTimeout(() => setPhase(1), 500),
       setTimeout(() => setPhase(2), 1200),
-      setTimeout(() => setPhase(3), 2000),
+      setTimeout(() => setPhase(3), 2200),
       setTimeout(() => setPhase(4), 4800), // Exit
     ];
     return () => timers.forEach(t => clearTimeout(t));
@@ -28,15 +28,15 @@ export const Scene3 = () => {
         initial={{ scale: 1.2, opacity: 0 }}
         animate={
           phase >= 4 ? { scale: 1.3, opacity: 0 } :
-          phase >= 1 ? { scale: 1, opacity: 0.4 } :
+          phase >= 1 ? { scale: 1, opacity: 0.6 } :
           { scale: 1.2, opacity: 0 }
         }
         transition={{ duration: 2, ease: "easeOut" }}
       >
         <img 
-          src={`${import.meta.env.BASE_URL}images/education-platform.jpg`}
-          alt="Education Concept"
-          className="w-full h-full object-cover mix-blend-screen"
+          src={`${import.meta.env.BASE_URL}images/ai-marketing.png`}
+          alt="AI Concept"
+          className="w-full h-full object-cover opacity-50 mix-blend-screen"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/80 to-bg-dark/30" />
         <div className="absolute inset-0 bg-gradient-to-r from-bg-dark via-transparent to-bg-dark" />
@@ -45,23 +45,34 @@ export const Scene3 = () => {
       {/* Content Container */}
       <div className="relative z-10 flex flex-col items-center text-center max-w-4xl px-8">
         <motion.div
-          className="overflow-hidden mb-4"
-          initial={{ y: -50, opacity: 0 }}
+          className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-accent mb-8 flex items-center justify-center shadow-[0_0_40px_rgba(127,80,255,0.8)] relative"
+          initial={{ scale: 0, rotate: -180 }}
           animate={
-            phase >= 4 ? { y: -80, opacity: 0 } :
-            phase >= 1 ? { y: 0, opacity: 1 } :
-            { y: -50, opacity: 0 }
+            phase >= 4 ? { scale: 0, rotate: 180 } :
+            phase >= 1 ? { scale: 1, rotate: 0 } :
+            { scale: 0, rotate: -180 }
           }
-          transition={{ duration: 0.6 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20 }}
         >
-          <p className="text-white/80 font-bold tracking-widest uppercase text-lg border border-white/20 px-4 py-1 rounded-full bg-white/5 backdrop-blur-sm">
-            Awajimaa Schools
-          </p>
+          {/* Pulsing rings */}
+          <motion.div 
+            className="absolute inset-0 rounded-full border-2 border-white/50"
+            animate={{ scale: [1, 1.5, 2], opacity: [1, 0.5, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div 
+            className="absolute inset-0 rounded-full border-2 border-accent/50"
+            animate={{ scale: [1, 1.8, 2.5], opacity: [1, 0.3, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "linear", delay: 0.5 }}
+          />
+          
+          {/* Core shape */}
+          <div className="w-8 h-8 rounded-lg bg-white rotate-45" />
         </motion.div>
 
-        <div className="overflow-hidden mb-6">
+        <div className="overflow-hidden mb-4">
           <motion.h2
-            className="text-6xl md:text-8xl font-display font-bold text-white tracking-tight leading-tight"
+            className="text-6xl md:text-8xl font-display font-bold text-white tracking-tight"
             initial={{ y: 120 }}
             animate={
               phase >= 4 ? { y: -120 } :
@@ -70,11 +81,11 @@ export const Scene3 = () => {
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            Empowering <span className="text-gradient-mixed italic">Education.</span>
+            Powered by <span className="text-gradient-mixed italic">AI.</span>
           </motion.h2>
         </div>
 
-        <div className="overflow-hidden h-32">
+        <div className="overflow-hidden h-24">
           <motion.p
             className="text-2xl md:text-3xl text-text-secondary max-w-2xl mx-auto"
             initial={{ y: 50, opacity: 0 }}
@@ -85,28 +96,8 @@ export const Scene3 = () => {
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            For states and institutions. Manage recruitment, academics, bursaries, fees, and security in one unified platform.
+            Awajimaa AI connects the dots. Generating insights, automating logistics, and driving growth across every app.
           </motion.p>
-        </div>
-
-        {/* Floating Modules */}
-        <div className="relative w-full h-32 mt-8 flex justify-center gap-6">
-          {["Academics", "Security", "Fees"].map((item, i) => (
-            <motion.div
-              key={item}
-              className="bg-bg-muted/80 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3 flex items-center shadow-lg"
-              initial={{ y: 50, opacity: 0 }}
-              animate={
-                phase >= 4 ? { y: 100, opacity: 0 } :
-                phase >= 3 ? { y: 0, opacity: 1 } :
-                { y: 50, opacity: 0 }
-              }
-              transition={{ type: "spring", stiffness: 300, damping: 25, delay: phase === 3 ? 0.2 + (i * 0.1) : 0 }}
-            >
-              <div className="w-2 h-2 rounded-full bg-primary mr-3" />
-              <p className="text-white font-medium">{item}</p>
-            </motion.div>
-          ))}
         </div>
       </div>
     </motion.div>

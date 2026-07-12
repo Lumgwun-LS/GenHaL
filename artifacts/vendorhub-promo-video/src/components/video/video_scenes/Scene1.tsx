@@ -9,7 +9,7 @@ export const Scene1 = () => {
       setTimeout(() => setPhase(1), 400),
       setTimeout(() => setPhase(2), 1200),
       setTimeout(() => setPhase(3), 2000),
-      setTimeout(() => setPhase(4), 5000), // Exit
+      setTimeout(() => setPhase(4), 4800), // Exit
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
@@ -34,7 +34,7 @@ export const Scene1 = () => {
             }
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            Command Center
+            VendorHub
           </motion.p>
         </div>
         
@@ -49,7 +49,7 @@ export const Scene1 = () => {
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            One dashboard.<br/>
+            Total commerce.<br/>
             <span className="text-gradient-primary">Total control.</span>
           </motion.h2>
         </div>
@@ -64,7 +64,7 @@ export const Scene1 = () => {
           }
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          Manage inventory, track orders, and monitor your growth without switching tabs.
+          Manage inventory, track orders, and process payments across the premier multivendor platform.
         </motion.p>
       </div>
 

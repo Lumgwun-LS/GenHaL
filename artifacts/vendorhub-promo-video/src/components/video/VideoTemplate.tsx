@@ -7,13 +7,17 @@ import { Scene1 } from './video_scenes/Scene1';
 import { Scene2 } from './video_scenes/Scene2';
 import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
+import { Scene5 } from './video_scenes/Scene5';
+import { Scene6 } from './video_scenes/Scene6';
 
 export const SCENE_DURATIONS = {
   scene0: 4000,
-  scene1: 6000,
-  scene2: 6000,
+  scene1: 5500,
+  scene2: 5500,
   scene3: 5500,
-  scene4: 5000,
+  scene4: 5500,
+  scene5: 5500,
+  scene6: 5000,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -22,6 +26,8 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene2: Scene2,
   scene3: Scene3,
   scene4: Scene4,
+  scene5: Scene5,
+  scene6: Scene6,
 };
 
 const SCENE_START_SEC: Record<string, number> = (() => {
@@ -99,10 +105,10 @@ export default function VideoTemplate({
       <motion.div
         className="absolute w-[40vw] h-[40vw] rounded-full blur-[120px] pointer-events-none"
         animate={{
-          x: currentScene === 0 ? '-10vw' : currentScene === 1 ? '70vw' : currentScene === 2 ? '10vw' : currentScene === 3 ? '60vw' : '50vw',
-          y: currentScene === 0 ? '-10vh' : currentScene === 1 ? '60vh' : currentScene === 2 ? '-20vh' : currentScene === 3 ? '50vh' : '50vh',
+          x: currentScene === 0 ? '-10vw' : currentScene === 1 ? '70vw' : currentScene === 2 ? '10vw' : currentScene === 3 ? '60vw' : currentScene === 4 ? '-10vw' : currentScene === 5 ? '80vw' : '50vw',
+          y: currentScene === 0 ? '-10vh' : currentScene === 1 ? '60vh' : currentScene === 2 ? '-20vh' : currentScene === 3 ? '50vh' : currentScene === 4 ? '-10vh' : currentScene === 5 ? '70vh' : '50vh',
           backgroundColor: currentScene % 2 === 0 ? 'rgba(127, 80, 255, 0.4)' : 'rgba(255, 127, 80, 0.3)',
-          scale: currentScene === 4 ? 2 : 1,
+          scale: currentScene === 6 ? 2 : 1,
         }}
         transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
@@ -111,10 +117,10 @@ export default function VideoTemplate({
       <motion.div
         className="absolute w-[50vw] h-[50vw] rounded-full blur-[150px] pointer-events-none"
         animate={{
-          x: currentScene === 0 ? '80vw' : currentScene === 1 ? '-20vw' : currentScene === 2 ? '80vw' : currentScene === 3 ? '-10vw' : '50vw',
-          y: currentScene === 0 ? '80vh' : currentScene === 1 ? '10vh' : currentScene === 2 ? '80vh' : currentScene === 3 ? '-20vh' : '50vh',
+          x: currentScene === 0 ? '80vw' : currentScene === 1 ? '-20vw' : currentScene === 2 ? '80vw' : currentScene === 3 ? '-10vw' : currentScene === 4 ? '70vw' : currentScene === 5 ? '20vw' : '50vw',
+          y: currentScene === 0 ? '80vh' : currentScene === 1 ? '10vh' : currentScene === 2 ? '80vh' : currentScene === 3 ? '-20vh' : currentScene === 4 ? '90vh' : currentScene === 5 ? '-10vh' : '50vh',
           backgroundColor: currentScene % 2 !== 0 ? 'rgba(127, 80, 255, 0.3)' : 'rgba(255, 127, 80, 0.2)',
-          scale: currentScene === 4 ? 0 : 1,
+          scale: currentScene === 6 ? 0 : 1,
         }}
         transition={{ duration: 2.5, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
@@ -133,12 +139,12 @@ export default function VideoTemplate({
       <motion.div
         className="absolute z-50 font-display font-bold flex items-center gap-2"
         animate={{
-          top: currentScene === 0 ? '50vh' : currentScene === 4 ? '50vh' : '4vh',
-          left: currentScene === 0 ? '50vw' : currentScene === 4 ? '50vw' : '4vw',
-          x: currentScene === 0 ? '-50%' : currentScene === 4 ? '-50%' : '0%',
-          y: currentScene === 0 ? '-50%' : currentScene === 4 ? '-50%' : '0%',
-          scale: currentScene === 0 ? 2 : currentScene === 4 ? 2.5 : 1,
-          opacity: currentScene === 0 ? 0 : currentScene === 4 ? 0 : 1, // Hidden in 0 and 4 as it's part of the scene
+          top: currentScene === 0 ? '50vh' : currentScene === 6 ? '50vh' : '4vh',
+          left: currentScene === 0 ? '50vw' : currentScene === 6 ? '50vw' : '4vw',
+          x: currentScene === 0 ? '-50%' : currentScene === 6 ? '-50%' : '0%',
+          y: currentScene === 0 ? '-50%' : currentScene === 6 ? '-50%' : '0%',
+          scale: currentScene === 0 ? 2 : currentScene === 6 ? 2.5 : 1,
+          opacity: currentScene === 0 ? 0 : currentScene === 6 ? 0 : 1, // Hidden in 0 and 6 as it's part of the scene
         }}
         transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
       >
