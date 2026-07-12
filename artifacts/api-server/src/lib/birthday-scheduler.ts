@@ -309,6 +309,84 @@ export async function resendBirthdayEmail(logId: number): Promise<{ ok: true } |
 }
 
 /**
+ * Retries a failed birthday voice call for a given log row (admin-triggered).
+ * Looks up the vendor fresh (in case the phone number changed), re-places
+ * the call via placeCall, and updates the log row in place with the new
+ * outcome — it does not insert a second row, so the call history stays
+ * one-row-per-attempt-of-the-day.
+ */
+export async function retryBirthdayCall(logId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [log] = await db
+    .select()
+    .from(voiceCallLogsTable)
+    .where(eq(voiceCallLogsTable.id, logId))
+    .limit(1);
+
+  if (!log) {
+    return { ok: false, error: "Call log entry not found." };
+  }
+  if (log.purpose !== "birthday") {
+    return { ok: false, error: "Only birthday calls can be retried here." };
+  }
+  if (log.status !== "failed") {
+    return { ok: false, error: "Only failed calls can be retried." };
+  }
+  if (!log.vendorId) {
+    return { ok: false, error: "This call has no associated vendor." };
+  }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, log.vendorId))
+    .limit(1);
+
+  const phone = vendor?.phone ?? log.phone;
+  if (!phone) {
+    return { ok: false, error: "Vendor has no phone number on file." };
+  }
+  const name = vendor?.name ?? "there";
+
+  const message =
+    `Good morning, ${name}! I'm calling on behalf of the Awa Biz Suite team ` +
+    `to wish you a very happy birthday. We truly value having you with us, ` +
+    `and we hope today brings you joy and everything you deserve. Have a wonderful day!`;
+
+  const result = await placeCall({
+    to: phone,
+    message,
+    purpose: "birthday",
+    vendorId: log.vendorId,
+  });
+
+  // "skipped" means placeCall never actually dialed (e.g. missing
+  // TWILIO_PHONE_NUMBER, invalid E.164 phone) — that's a failed retry
+  // attempt, not a successful one. Only a real Twilio call ("placed")
+  // counts as success. In both failure cases, leave the row's status as
+  // "failed" so the Retry button in the admin UI stays available instead
+  // of silently disappearing.
+  if (result.status !== "placed") {
+    logger.warn(
+      { logId, vendorId: log.vendorId, reason: result.error, twilioStatus: result.status },
+      "[voice-birthday] Manual retry did not succeed",
+    );
+    await db
+      .update(voiceCallLogsTable)
+      .set({ phone, status: "failed", callSid: result.callSid ?? null })
+      .where(eq(voiceCallLogsTable.id, logId));
+    return { ok: false, error: result.error ?? "Call failed to place." };
+  }
+
+  await db
+    .update(voiceCallLogsTable)
+    .set({ phone, status: "ringing", callSid: result.callSid ?? null, initiatedAt: new Date() })
+    .where(eq(voiceCallLogsTable.id, logId));
+
+  logger.info({ logId, vendorId: log.vendorId, result: result.status }, "[voice-birthday] Manual retry result");
+  return { ok: true };
+}
+
+/**
  * Starts the daily birthday scheduler.
  * - Checks every 5 minutes; fires when UTC hour is 08.
  * - `lastRanDate` advances only AFTER a successful run so a DB error at 08:00

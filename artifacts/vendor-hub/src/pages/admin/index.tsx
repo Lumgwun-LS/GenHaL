@@ -608,6 +608,47 @@ function ResendBirthdayEmailButton({ logId, onDone }: { logId: number; onDone: (
   );
 }
 
+async function retryBirthdayCall(logId: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-call-logs/${logId}/retry`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to retry call");
+  }
+}
+
+function RetryVoiceCallButton({ logId, onDone }: { logId: number; onDone: () => void }) {
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      await retryBirthdayCall(logId);
+      toast.success("Birthday call retried");
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to retry call");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-7 gap-1.5 text-xs"
+      onClick={handleRetry}
+      disabled={retrying}
+      data-testid={`button-retry-call-${logId}`}
+    >
+      <PhoneCall className="w-3.5 h-3.5" /> {retrying ? "Retrying…" : "Retry"}
+    </Button>
+  );
+}
+
 const AUDIT_FIELD_ANY = "__any__";
 
 export default function AdminPanel() {
@@ -1090,6 +1131,7 @@ export default function AdminPanel() {
                         <TableHead>Status</TableHead>
                         <TableHead>Duration</TableHead>
                         <TableHead className="text-right">Initiated</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1125,6 +1167,14 @@ export default function AdminPanel() {
                           </TableCell>
                           <TableCell className="text-right text-sm text-muted-foreground">
                             {new Date(log.initiatedAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {log.purpose === "birthday" && log.status === "failed" && (
+                              <RetryVoiceCallButton
+                                logId={log.id}
+                                onDone={() => qc.invalidateQueries({ queryKey: ["admin-voice-call-logs"] })}
+                              />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

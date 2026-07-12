@@ -13,7 +13,7 @@ import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
-import { resendBirthdayEmail } from "../lib/birthday-scheduler";
+import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
 import { sendSlackAlert } from "../lib/slack";
 
 /**
@@ -328,6 +328,27 @@ router.get("/admin/voice-call-logs", async (req, res): Promise<void> => {
     .limit(300);
 
   res.json(logs);
+});
+
+// ─── POST /admin/voice-call-logs/:id/retry ────────────────────────────────────
+
+router.post("/admin/voice-call-logs/:id/retry", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const logId = Number(req.params.id);
+  if (!Number.isInteger(logId) || logId <= 0) {
+    res.status(400).json({ error: "Invalid log id." });
+    return;
+  }
+
+  const result = await retryBirthdayCall(logId);
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
 });
 
 // ─── GET /admin/audit-log ─────────────────────────────────────────────────────
