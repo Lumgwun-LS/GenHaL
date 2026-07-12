@@ -115,10 +115,10 @@ export default function VideoTemplate({
         }}
         transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_0_15px_rgba(127,80,255,0.5)]">
-          <div className="w-3 h-3 bg-white rounded-sm" />
+        <div className="w-8 h-8 rounded-lg overflow-hidden shadow-[0_0_15px_rgba(127,80,255,0.5)]">
+          <img src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`} alt="Awajimaa" className="w-full h-full object-cover" />
         </div>
-        <span className="text-white text-xl tracking-tight">VendorHub</span>
+        <span className="text-white text-xl tracking-tight">Awajimaa</span>
       </motion.div>
 
       {/* Foreground Scenes */}

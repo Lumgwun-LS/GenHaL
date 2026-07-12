@@ -129,7 +129,7 @@ export default function VendorStorefront() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-12 text-center text-sm text-muted-foreground">
-        Powered by Awajimaa Connect Suite
+        Powered by Awa Biz Suite
       </div>
     </div>
   );

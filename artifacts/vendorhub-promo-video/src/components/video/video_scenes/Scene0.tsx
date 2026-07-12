@@ -52,7 +52,7 @@ export const Scene0 = () => {
 
         {/* Core logo */}
         <motion.div
-          className="relative z-10 w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-[0_0_30px_rgba(127,80,255,0.6)]"
+          className="relative z-10 w-24 h-24 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(127,80,255,0.6)]"
           initial={{ scale: 0, rotate: -45 }}
           animate={
             phase >= 3 ? { scale: 5, opacity: 0, rotate: 45 } :
@@ -61,7 +61,7 @@ export const Scene0 = () => {
           }
           transition={{ duration: 1, ease: [0.34, 1.56, 0.64, 1] }}
         >
-          <div className="w-8 h-8 bg-white rounded-md" />
+          <img src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`} alt="Awajimaa" className="w-full h-full object-cover" />
         </motion.div>
       </div>
 
@@ -77,7 +77,7 @@ export const Scene0 = () => {
           }
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         >
-          Vendor<span className="text-gradient-primary">Hub</span>
+          <span className="text-gradient-primary">Awajimaa</span>
         </motion.h1>
       </div>
 

@@ -301,7 +301,7 @@ export default function CreatePost() {
                   <div className="p-4 border-b flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/20"></div>
                     <div>
-                      <div className="font-bold text-sm">Awajimaa Connect Suite</div>
+                      <div className="font-bold text-sm">Awa Biz Suite</div>
                       <div className="text-xs text-muted-foreground">Just now</div>
                     </div>
                   </div>

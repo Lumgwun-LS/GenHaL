@@ -22,7 +22,7 @@ const SERVICE_LINKS: { label: string; url: string }[] = [
   { label: "Awajimaa Hosting", url: "https://www.awajimaahosting.com" },
 ];
 
-const BRAND_NAME = "Awajimaa Connect Suite";
+const BRAND_NAME = "Awa Biz Suite";
 
 export type EmailAction = {
   label: string;

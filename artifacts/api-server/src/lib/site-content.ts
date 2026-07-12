@@ -16,7 +16,7 @@ export const DEFAULT_SITE_CONTENT = {
     badge: "Command Center for Modern Operators",
     heading: "Run your entire business from one terminal.",
     subheading:
-      "Awajimaa Connect Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit.",
+      "Awa Biz Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit.",
     primaryCta: "Get Started",
     secondaryCta: "View Demo",
   },
@@ -35,7 +35,7 @@ export const DEFAULT_SITE_CONTENT = {
   "landing.stats": {
     heading: "Built for operators who hate switching tabs",
     body:
-      "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awajimaa Connect Suite connects your data so an inventory update can automatically trigger a social post.",
+      "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post.",
     bullets: [
       "Zero latency interface",
       "Dark mode optimized for long sessions",
@@ -51,19 +51,19 @@ export const DEFAULT_SITE_CONTENT = {
   },
   "landing.cta": {
     heading: "Ready to take command?",
-    body: "Join thousands of operators running their empires on Awajimaa Connect Suite.",
+    body: "Join thousands of operators running their empires on Awa Biz Suite.",
     buttonLabel: "Start Your Free Trial",
   },
   "site.settings": {
-    siteName: "Awajimaa Connect Suite",
+    siteName: "Awa Biz Suite",
     logoUrl: "/awajimaa-logo.jpg",
     supportEmail: "support@awajimaaapp.io",
     footerTagline:
       "The all-in-one business command centre for vendors, agencies, and multi-brand operators — built for the modern African and global market.",
   },
   "email.birthday": {
-    subject: "🎂 Happy Birthday from Awajimaa Connect Suite!",
-    body: "Happy Birthday, {{name}}! Wishing you a wonderful day from the entire Awajimaa Connect Suite team. We're so grateful to have you with us.",
+    subject: "🎂 Happy Birthday from Awa Biz Suite!",
+    body: "Happy Birthday, {{name}}! Wishing you a wonderful day from the entire Awa Biz Suite team. We're so grateful to have you with us.",
   },
 } as const;
 

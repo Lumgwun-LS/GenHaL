@@ -56,7 +56,7 @@ export const Scene4 = () => {
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            VendorHub handles the rest.
+            Awajimaa handles the rest.
           </motion.p>
         </div>
       </div>

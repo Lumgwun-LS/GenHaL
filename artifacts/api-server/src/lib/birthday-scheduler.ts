@@ -115,7 +115,7 @@ async function runBirthdayCallJob(utcDateStr: string): Promise<void> {
       }
 
       const message =
-        `Good morning, ${vendor.name}! I'm calling on behalf of the Awajimaa Connect Suite team ` +
+        `Good morning, ${vendor.name}! I'm calling on behalf of the Awa Biz Suite team ` +
         `to wish you a very happy birthday. We truly value having you with us, ` +
         `and we hope today brings you joy and everything you deserve. Have a wonderful day!`;
 
@@ -177,7 +177,7 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
 
       const message =
         `🎂 Happy Birthday, ${vendor.name}! ` +
-        `Wishing you a wonderful day from the entire Awajimaa Connect Suite team. ` +
+        `Wishing you a wonderful day from the entire Awa Biz Suite team. ` +
         `We're so grateful to have you with us. 🎉`;
 
       // ── In-app notification (DB index is concurrent-safe fallback) ───────
@@ -207,7 +207,7 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
             </div>
             <h1 style="text-align: center; font-size: 22px; color: #1a1a1a; margin: 0 0 16px;">Happy Birthday, ${escapeHtml(vendor.name)}!</h1>
             <p style="text-align: center; font-size: 15px; line-height: 1.6; color: #444;">
-              Wishing you a wonderful day from the entire Awajimaa Connect Suite team.
+              Wishing you a wonderful day from the entire Awa Biz Suite team.
               We're so grateful to have you with us. 🎉
             </p>`,
         });
@@ -283,7 +283,7 @@ export async function resendBirthdayEmail(logId: number): Promise<{ ok: true } |
       </div>
       <h1 style="text-align: center; font-size: 22px; color: #1a1a1a; margin: 0 0 16px;">Happy Birthday, ${escapeHtml(name)}!</h1>
       <p style="text-align: center; font-size: 15px; line-height: 1.6; color: #444;">
-        Wishing you a wonderful day from the entire Awajimaa Connect Suite team.
+        Wishing you a wonderful day from the entire Awa Biz Suite team.
         We're so grateful to have you with us. 🎉
       </p>`,
   });

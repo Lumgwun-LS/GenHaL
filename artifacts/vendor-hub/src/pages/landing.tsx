@@ -37,7 +37,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded object-cover" />
-            <span className="font-bold text-xl tracking-tight">{settings?.siteName ?? "Awajimaa Connect Suite"}</span>
+            <span className="font-bold text-xl tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/sign-in" className="text-sm font-medium hover:text-primary transition-colors">
@@ -61,7 +61,7 @@ export default function LandingPage() {
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-balance">
               {hero?.subheading ??
-                "Awajimaa Connect Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit."}
+                "Awa Biz Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit."}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 mb-16">
               <Link href="/sign-up" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
@@ -74,7 +74,7 @@ export default function LandingPage() {
             </div>
 
             <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border shadow-2xl relative">
-              <img src="/hero.png" alt="Awajimaa Connect Suite Dashboard" className="object-cover w-full h-full" />
+              <img src="/hero.png" alt="Awa Biz Suite Dashboard" className="object-cover w-full h-full" />
               <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent"></div>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function LandingPage() {
                 <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">{stats?.heading ?? "Built for operators who hate switching tabs"}</h2>
                 <p className="text-lg text-muted-foreground mb-8">
                   {stats?.body ??
-                    "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awajimaa Connect Suite connects your data so an inventory update can automatically trigger a social post."}
+                    "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post."}
                 </p>
                 <ul className="space-y-4">
                   {(stats?.bullets ?? [
@@ -148,7 +148,7 @@ export default function LandingPage() {
           <div className="container mx-auto max-w-3xl relative z-10">
             <h2 className="text-4xl font-bold mb-6">{cta?.heading ?? "Ready to take command?"}</h2>
             <p className="text-primary-foreground/80 text-xl mb-10">
-              {cta?.body ?? "Join thousands of operators running their empires on Awajimaa Connect Suite."}
+              {cta?.body ?? "Join thousands of operators running their empires on Awa Biz Suite."}
             </p>
             <Link href="/sign-up" className="inline-flex h-14 items-center justify-center rounded-md bg-background px-10 text-base font-bold text-foreground shadow-lg transition-colors hover:bg-background/90">
               {cta?.buttonLabel ?? "Start Your Free Trial"}
@@ -165,7 +165,7 @@ export default function LandingPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded object-cover" />
-              <span className="font-bold text-base tracking-tight">{settings?.siteName ?? "Awajimaa Connect Suite"}</span>
+              <span className="font-bold text-base tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
               {settings?.footerTagline ??
@@ -178,7 +178,7 @@ export default function LandingPage() {
             <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Our Products</h4>
             <ul className="space-y-3 text-sm">
               <li>
-                <span className="block font-medium text-foreground">Awajimaa Connect Suite</span>
+                <span className="block font-medium text-foreground">Awa Biz Suite</span>
                 <span className="text-muted-foreground text-xs">Multi-vendor business management platform</span>
               </li>
               <li>
@@ -241,7 +241,7 @@ export default function LandingPage() {
         <div className="border-t">
           <div className="container mx-auto px-4 py-5 flex flex-col md:flex-row justify-between items-center gap-2 text-xs text-muted-foreground">
             <p>
-              © {new Date().getFullYear()} {settings?.siteName ?? "Awajimaa Connect Suite"}. All rights reserved.
+              © {new Date().getFullYear()} {settings?.siteName ?? "Awa Biz Suite"}. All rights reserved.
             </p>
             <p>
               A product of{" "}
