@@ -10,9 +10,10 @@
  */
 import { Router } from "express";
 import twilio from "twilio";
-import { eq } from "drizzle-orm";
-import { db, voiceCallLogsTable, voiceCampaignCallsTable } from "@workspace/db";
+import { eq, gte, sql } from "drizzle-orm";
+import { db, voiceCallLogsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db";
 import { logger } from "../lib/logger";
+import { sendSlackAlert } from "../lib/slack";
 
 const router = Router();
 
@@ -27,16 +28,54 @@ function getExpectedCallbackUrl(): string | null {
   return `https://${domain}/api/voice/status-callback`;
 }
 
+/**
+ * If TWILIO_AUTH_TOKEN is rotated in the Twilio console, every real callback
+ * starts failing signature validation and gets silently 403'd — call
+ * statuses stop updating with no visible symptom other than this rejection
+ * rate climbing. We log every rejection and fire a Slack alert (once per
+ * burst, same pattern as export-burst detection) so an admin notices and
+ * knows to update the TWILIO_AUTH_TOKEN secret to match the current token
+ * in the Twilio console (Console → Account → API keys & tokens).
+ */
+const SIGNATURE_FAILURE_ALERT_THRESHOLD = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3);
+const SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10);
+
+async function recordSignatureFailure(
+  reason: "missing_config" | "missing_signature" | "invalid_signature",
+  callSid: string | undefined,
+): Promise<void> {
+  try {
+    await db.insert(voiceSignatureFailuresTable).values({ reason, callSid: callSid ?? null });
+
+    const windowStart = new Date(Date.now() - SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES * 60 * 1000);
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(voiceSignatureFailuresTable)
+      .where(gte(voiceSignatureFailuresTable.createdAt, windowStart));
+    const count = Number(row?.count ?? 0);
+
+    if (count === SIGNATURE_FAILURE_ALERT_THRESHOLD) {
+      await sendSlackAlert(
+        `:rotating_light: ${count} Twilio voice status-callback requests were rejected for bad/missing signatures in the last ${SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES} minutes. Call status updates are being silently dropped. This usually means the Auth Token was rotated in the Twilio console — check *TWILIO_AUTH_TOKEN* in Replit Secrets against Twilio Console → Account → API keys & tokens and update it.`,
+      );
+    }
+  } catch (err) {
+    logger.error({ err, reason }, "[voice] failed to record signature-failure metric");
+  }
+}
+
 router.post("/voice/status-callback", async (req, res) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const signature = req.header("X-Twilio-Signature");
   const expectedUrl = getExpectedCallbackUrl();
+  const incomingCallSid = typeof req.body?.CallSid === "string" ? req.body.CallSid : undefined;
 
   if (!authToken || !signature || !expectedUrl) {
     logger.warn(
       { hasAuthToken: Boolean(authToken), hasSignature: Boolean(signature), expectedUrl },
       "[voice] status-callback rejected — missing auth token, signature header, or expected URL",
     );
+    await recordSignatureFailure(!authToken ? "missing_config" : "missing_signature", incomingCallSid);
     res.status(403).send("Forbidden");
     return;
   }
@@ -47,6 +86,7 @@ router.post("/voice/status-callback", async (req, res) => {
       { expectedUrl, callSid: req.body?.CallSid },
       "[voice] status-callback rejected — invalid X-Twilio-Signature",
     );
+    await recordSignatureFailure("invalid_signature", incomingCallSid);
     res.status(403).send("Forbidden");
     return;
   }

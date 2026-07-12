@@ -40,6 +40,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 _Populate as you build — sharp edges, "always run X before Y" rules._
 
+- **Twilio Auth Token rotation**: `TWILIO_AUTH_TOKEN` (Replit Secret) must match the Auth Token currently active in the Twilio console. If you ever rotate/roll the token in Twilio (Console → Account → API keys & tokens), update this secret immediately — otherwise every voice status-callback request fails signature validation and gets silently rejected (call statuses stop updating). The API server detects this automatically: a burst of rejected callbacks triggers a Slack alert and a red banner on the Voice Calls tab of the Admin Panel telling you to update the secret.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

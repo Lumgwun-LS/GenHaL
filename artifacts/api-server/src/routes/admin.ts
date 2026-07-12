@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, voiceCampaignsTable, voiceCampaignCallsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -25,6 +25,15 @@ import { sendSlackAlert } from "../lib/slack";
  */
 const EXPORT_ALERT_THRESHOLD = Number(process.env.EXPORT_ALERT_THRESHOLD ?? 5);
 const EXPORT_ALERT_WINDOW_MINUTES = Number(process.env.EXPORT_ALERT_WINDOW_MINUTES ?? 15);
+
+/**
+ * Mirrors the thresholds used in routes/voice-status-callback.ts so the
+ * Admin Panel banner lights up on the same criteria as the Slack alert.
+ */
+const VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3);
+const VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES = Number(
+  process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10,
+);
 
 /**
  * Counts how many exports `adminUserId` has triggered within the alert
@@ -275,6 +284,56 @@ router.get("/admin/export-logs", async (req, res): Promise<void> => {
     .limit(50);
 
   res.json(logs);
+});
+
+// ─── GET /admin/voice/signature-failures ──────────────────────────────────────
+
+/**
+ * Recent rejected Twilio status-callback requests (bad/missing signature).
+ * A sustained stream of these — especially "invalid_signature" — means
+ * TWILIO_AUTH_TOKEN in Secrets no longer matches the token active on the
+ * Twilio account (usually because it was rotated in the Twilio console) and
+ * needs to be updated there.
+ */
+router.get("/admin/voice/signature-failures", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const failures = await db
+    .select()
+    .from(voiceSignatureFailuresTable)
+    .orderBy(desc(voiceSignatureFailuresTable.createdAt))
+    .limit(50);
+
+  res.json(failures);
+});
+
+// ─── GET /admin/voice/signature-failures/alert ────────────────────────────────
+
+router.get("/admin/voice/signature-failures/alert", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const windowStart = new Date(Date.now() - VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES * 60 * 1000);
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)`,
+      lastFailureAt: sql<string>`max(${voiceSignatureFailuresTable.createdAt})`,
+    })
+    .from(voiceSignatureFailuresTable)
+    .where(gte(voiceSignatureFailuresTable.createdAt, windowStart));
+
+  const count = Number(row?.count ?? 0);
+
+  res.json({
+    threshold: VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD,
+    windowMinutes: VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES,
+    count,
+    lastFailureAt: row?.lastFailureAt ?? null,
+    flagged: count >= VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD,
+  });
 });
 
 // ─── GET /admin/birthday-logs ─────────────────────────────────────────────────

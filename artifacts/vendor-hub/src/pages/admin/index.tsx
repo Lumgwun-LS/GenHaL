@@ -265,6 +265,20 @@ async function fetchExportAlerts(): Promise<ExportAlerts> {
   return res.json() as Promise<ExportAlerts>;
 }
 
+type VoiceSignatureFailureAlert = {
+  threshold: number;
+  windowMinutes: number;
+  count: number;
+  lastFailureAt: string | null;
+  flagged: boolean;
+};
+
+async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureAlert> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/alert`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load signature-failure alert status");
+  return res.json() as Promise<VoiceSignatureFailureAlert>;
+}
+
 function formatExportFilters(raw: string): string {
   try {
     const f = JSON.parse(raw) as Record<string, string | undefined>;
@@ -715,6 +729,13 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: voiceSignatureFailureAlert } = useQuery({
+    queryKey: ["admin-voice-signature-failure-alert"],
+    queryFn: fetchVoiceSignatureFailureAlert,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const filteredAuditLog = useMemo(() => {
     if (!auditLog) return auditLog;
     const search = auditVendorSearch.trim().toLowerCase();
@@ -1102,6 +1123,23 @@ export default function AdminPanel() {
                   : <><AlertCircle className="w-4 h-4 shrink-0" /> <span><strong>Almost there.</strong> The Twilio integration is connected — just add <code className="bg-black/10 px-1 rounded text-xs">TWILIO_PHONE_NUMBER</code> (your Twilio from-number in E.164 format, e.g. +12345678900) to Replit Secrets to enable calls.</span></>
                 }
               </div>
+            )}
+
+            {voiceSignatureFailureAlert?.flagged && (
+              <Alert variant="destructive" data-testid="alert-voice-signature-failures">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>Twilio call status updates may be failing</AlertTitle>
+                <AlertDescription>
+                  {voiceSignatureFailureAlert.count} status-callback requests were rejected for bad/missing
+                  signatures in the last {voiceSignatureFailureAlert.windowMinutes} minutes
+                  {voiceSignatureFailureAlert.lastFailureAt
+                    ? ` (last at ${new Date(voiceSignatureFailureAlert.lastFailureAt).toLocaleTimeString()})`
+                    : ""}
+                  . This usually means the Auth Token was rotated in the Twilio console. Update{" "}
+                  <code className="bg-black/10 px-1 rounded text-xs">TWILIO_AUTH_TOKEN</code> in Replit Secrets to
+                  match Twilio Console → Account → API keys &amp; tokens.
+                </AlertDescription>
+              </Alert>
             )}
 
             <Card>
