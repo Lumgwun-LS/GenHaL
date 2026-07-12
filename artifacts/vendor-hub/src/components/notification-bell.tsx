@@ -19,6 +19,8 @@ type VendorNotification = {
   vendorId: number;
   type: string;
   message: string;
+  adminUserId: string | null;
+  adminDisplayName: string | null;
   readAt: string | null;
   createdAt: string;
 };
@@ -101,6 +103,11 @@ export function NotificationBell() {
                 >
                   {typeIcon(n.type)}
                   <div className="flex-1 min-w-0">
+                    {n.type === "general" && n.adminDisplayName && (
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">
+                        From {n.adminDisplayName}
+                      </p>
+                    )}
                     <p className="text-foreground">{n.message}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}

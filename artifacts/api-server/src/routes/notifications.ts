@@ -6,7 +6,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { vendorNotificationsTable, vendorsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS ?? "")
@@ -93,9 +93,26 @@ router.post("/vendors/:id/notifications", async (req, res): Promise<void> => {
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
+  // Resolve the sending admin's display name from Clerk so the vendor (and
+  // admin history) can see who sent the message. Fall back gracefully if
+  // Clerk lookup fails — the message should still send.
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
   const [notification] = await db
     .insert(vendorNotificationsTable)
-    .values({ vendorId: id, type: "general", message })
+    .values({ vendorId: id, type: "general", message, adminUserId: userId, adminDisplayName })
     .returning();
 
   res.status(201).json(notification);

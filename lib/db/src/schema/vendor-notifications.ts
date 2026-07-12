@@ -18,6 +18,8 @@ export const vendorNotificationsTable = pgTable("vendor_notifications", {
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   type: text("type").notNull(),       // "birthday" | "tier_change" | "general"
   message: text("message").notNull(),
+  adminUserId: text("admin_user_id"),           // Clerk user id of sender, for admin-originated notifications (e.g. "general")
+  adminDisplayName: text("admin_display_name"), // Resolved display name at send time, so history reads correctly even if the admin's Clerk profile changes later
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
