@@ -36,18 +36,23 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushNotificationsAsync(): Promise<string | null> {
+  console.log('[push] registerForPushNotificationsAsync: Device.isDevice =', Device.isDevice);
   if (!Device.isDevice) {
     // Push tokens require a physical device (or aren't meaningful on web).
+    console.log('[push] Skipping registration: not a physical device.');
     return null;
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('[push] existing permission status =', existingStatus);
   let finalStatus = existingStatus;
   if (existingStatus !== 'granted') {
     const { status } = await Notifications.requestPermissionsAsync();
+    console.log('[push] requested permission, result =', status);
     finalStatus = status;
   }
   if (finalStatus !== 'granted') {
+    console.log('[push] Permission not granted, aborting registration.');
     return null;
   }
 
@@ -60,6 +65,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
   try {
     const { data } = await Notifications.getExpoPushTokenAsync();
+    console.log('[push] Got Expo push token:', data);
     return data;
   } catch (err) {
     console.warn('[push] Failed to get Expo push token', err);

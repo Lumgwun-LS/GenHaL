@@ -156,6 +156,14 @@ async function performMobileHandshake({
     vendor = created;
   }
 
+  // The account type (and the feature set it grants) is decided once, at
+  // vendor creation, and is persisted on the vendor row from then on. A
+  // returning vendor re-running onboarding (e.g. after a cleared session)
+  // must NOT be able to silently change their own feature access just by
+  // submitting a different `userType` in this request body — always issue
+  // the session against the vendor's persisted type, never the request's.
+  const effectiveUserType = vendor.awajimaaUserType ?? userType;
+
   const secret = process.env.SESSION_SECRET!;
   const jti = randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -164,7 +172,7 @@ async function performMobileHandshake({
     {
       vendorId: vendor.id,
       awajimaaUserId: clerkUserId,
-      awajimaaUserType: userType,
+      awajimaaUserType: effectiveUserType,
       source: "mobile-app",
       jti,
     },
@@ -175,7 +183,7 @@ async function performMobileHandshake({
   await db.insert(externalUserSessionsTable).values({
     vendorId: vendor.id,
     awajimaaUserId: clerkUserId,
-    awajimaaUserType: userType,
+    awajimaaUserType: effectiveUserType,
     source: "mobile-app",
     jti,
     isRevoked: "false",
@@ -186,7 +194,7 @@ async function performMobileHandshake({
     token,
     expiresAt: expiresAt.toISOString(),
     vendorId: vendor.id,
-    features: FEATURE_ACCESS[userType] ?? [],
+    features: FEATURE_ACCESS[effectiveUserType] ?? [],
     vendor: {
       id: vendor.id,
       name: vendor.name,

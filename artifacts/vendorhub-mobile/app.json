@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Awajimaa Connect Suite",
-    "slug": "awajimaaconnectsuite",
+    "slug": "awajimaa-apps",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.awajimaaconnectsuite.app"
     },
     "android": {
-      "package": "com.awajimaaconnectsuite.app"
+      "package": "com.awajimaaconnectsuite.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -32,11 +33,26 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "pickFirst": ["META-INF/versions/9/OSGI-INF/MANIFEST.MF"]
+            }
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d487516e-b621-4ca6-b15a-0a7b9106b0f4"
+      }
     }
   }
 }

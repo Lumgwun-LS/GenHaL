@@ -12,6 +12,7 @@ import { ErrorView } from '@/components/ErrorView';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AnimatedListItem } from '@/components/AnimatedListItem';
 import {
+  getGetExternalAnalyticsSummaryQueryKey,
   getListExternalOrdersQueryKey,
   useGetExternalAnalyticsSummary,
   useListExternalOrders,
@@ -81,7 +82,10 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const canOrders = features.includes('orders');
-  const summaryQuery = useGetExternalAnalyticsSummary();
+  const canAnalytics = features.includes('analytics');
+  const summaryQuery = useGetExternalAnalyticsSummary({
+    query: { enabled: canAnalytics, queryKey: getGetExternalAnalyticsSummaryQueryKey() },
+  });
   const ordersQuery = useListExternalOrders({
     query: { enabled: canOrders, queryKey: getListExternalOrdersQueryKey() },
   });
@@ -90,15 +94,15 @@ export default function DashboardScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
-      summaryQuery.refetch(),
+      canAnalytics ? summaryQuery.refetch() : Promise.resolve(),
       canOrders ? ordersQuery.refetch() : Promise.resolve(),
       paymentsQuery.refetch(),
     ]);
     setRefreshing(false);
-  }, [summaryQuery, ordersQuery, paymentsQuery, canOrders]);
+  }, [summaryQuery, ordersQuery, paymentsQuery, canOrders, canAnalytics]);
 
-  const isLoading = summaryQuery.isLoading || paymentsQuery.isLoading;
-  const hasError = summaryQuery.isError || paymentsQuery.isError;
+  const isLoading = (canAnalytics && summaryQuery.isLoading) || paymentsQuery.isLoading;
+  const hasError = (canAnalytics && summaryQuery.isError) || paymentsQuery.isError;
 
   if (isLoading) return <LoadingView />;
   if (hasError) {

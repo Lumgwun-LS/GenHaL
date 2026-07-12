@@ -1,0 +1,114 @@
+{
+  "project_info": {
+    "project_number": "27071081121",
+    "project_id": "awajimaa-app-18798",
+    "storage_bucket": "awajimaa-app-18798.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27071081121:android:2114af6329cbd6a43c1ee0",
+        "android_client_info": {
+          "package_name": "com.LSG.awajimaaapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "27071081121-qcbq1bako7ugm9hk6tarstbf99b456bv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLA4_ZDBxM4tYpnA7y7fBlQL1tqPfvjX4"
+        },
+        {
+          "current_key": "AIzaSyCln-atkcU7LJvw8mp-ht38hvwyZ6TxHbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "100344816136114369460",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27071081121:android:e2692021b59062443c1ee0",
+        "android_client_info": {
+          "package_name": "com.awajimaaconnectsuite.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "27071081121-qcbq1bako7ugm9hk6tarstbf99b456bv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLA4_ZDBxM4tYpnA7y7fBlQL1tqPfvjX4"
+        },
+        {
+          "current_key": "AIzaSyCln-atkcU7LJvw8mp-ht38hvwyZ6TxHbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "100344816136114369460",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27071081121:android:fef66abb28ac9f783c1ee0",
+        "android_client_info": {
+          "package_name": "com.awajimaapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "27071081121-id033pi2odq246l8i26l9sindr5qv7qd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.awajimaapp",
+            "certificate_hash": "98c254b347da7a7f0ebc8185da7b35e9450d8b23"
+          }
+        },
+        {
+          "client_id": "27071081121-qcbq1bako7ugm9hk6tarstbf99b456bv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLA4_ZDBxM4tYpnA7y7fBlQL1tqPfvjX4"
+        },
+        {
+          "current_key": "AIzaSyCln-atkcU7LJvw8mp-ht38hvwyZ6TxHbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "100344816136114369460",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

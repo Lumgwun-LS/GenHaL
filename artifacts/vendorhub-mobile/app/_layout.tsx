@@ -63,10 +63,13 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
-      <ClerkLoaded>
-        <SafeAreaProvider>
-          <ErrorBoundary>
+    <ErrorBoundary>
+      <ClerkProvider
+        publishableKey={clerkPublishableKey}
+        tokenCache={tokenCache}
+      >
+        <ClerkLoaded>
+          <SafeAreaProvider>
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 <GestureHandlerRootView>
@@ -76,9 +79,9 @@ export default function RootLayout() {
                 </GestureHandlerRootView>
               </AuthProvider>
             </QueryClientProvider>
-          </ErrorBoundary>
-        </SafeAreaProvider>
-      </ClerkLoaded>
-    </ClerkProvider>
+          </SafeAreaProvider>
+        </ClerkLoaded>
+      </ClerkProvider>
+    </ErrorBoundary>
   );
 }
