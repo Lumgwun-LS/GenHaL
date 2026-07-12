@@ -343,8 +343,11 @@ export default function Social() {
                 
                 {post.mediaUrls?.[0] && (
                   <div className="w-full aspect-video rounded-md bg-muted mb-4 overflow-hidden border">
-                    {/* Simplified media preview */}
-                    <img src={post.mediaUrls[0]} alt="Post media" className="w-full h-full object-cover" />
+                    {post.mediaType === "video" ? (
+                      <video src={post.mediaUrls[0]} controls loop className="w-full h-full object-cover bg-black" />
+                    ) : (
+                      <img src={post.mediaUrls[0]} alt="Post media" className="w-full h-full object-cover" />
+                    )}
                   </div>
                 )}
                 

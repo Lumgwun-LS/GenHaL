@@ -728,6 +728,28 @@ export const GenerateAiImageResponse = zod.object({
 
 
 /**
+ * @summary Generate a short AI video for a post
+ */
+export const GenerateAiVideoBody = zod.object({
+  "vendorId": zod.number(),
+  "prompt": zod.string(),
+  "style": zod.string().optional(),
+  "industry": zod.string().optional(),
+  "captionText": zod.string().optional()
+})
+
+export const GenerateAiVideoResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string(),
+  "result": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Generate AI caption/copy for a post
  */
 export const GenerateAiCaptionBody = zod.object({

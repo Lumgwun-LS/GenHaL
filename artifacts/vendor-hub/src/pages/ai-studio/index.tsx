@@ -2,7 +2,7 @@ import { useListAiGenerations } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Image as ImageIcon, MessageSquare, Download } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Video as VideoIcon, MessageSquare, Download } from "lucide-react";
 
 export default function AiStudio() {
   const { data: generations, isLoading } = useListAiGenerations();
@@ -23,6 +23,10 @@ export default function AiStudio() {
             <ImageIcon className="w-4 h-4 mr-2" />
             Generate Image
           </Button>
+          <Button variant="outline">
+            <VideoIcon className="w-4 h-4 mr-2" />
+            Generate Video
+          </Button>
         </div>
       </div>
 
@@ -38,15 +42,19 @@ export default function AiStudio() {
         ) : (
           generations?.map((gen) => (
             <Card key={gen.id} className="overflow-hidden flex flex-col group">
-              {gen.type === 'image' ? (
+              {gen.type === 'image' || gen.type === 'video' ? (
                 <div className="aspect-square bg-muted relative group">
                   {gen.result ? (
-                    <img src={gen.result} alt={gen.prompt} className="w-full h-full object-cover" />
+                    gen.type === 'video' ? (
+                      <video src={gen.result} controls loop className="w-full h-full object-cover bg-black" />
+                    ) : (
+                      <img src={gen.result} alt={gen.prompt} className="w-full h-full object-cover" />
+                    )
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-foreground">Generating...</div>
                   )}
                   {gen.result && (
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none group-hover:pointer-events-auto">
                       <Button variant="secondary" size="icon"><Download className="w-4 h-4" /></Button>
                     </div>
                   )}

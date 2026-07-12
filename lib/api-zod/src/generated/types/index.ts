@@ -11,6 +11,7 @@ export * from './adminDemographicsAnalyticsRange';
 export * from './aiCaptionRequest';
 export * from './aiGeneration';
 export * from './aiImageRequest';
+export * from './aiVideoRequest';
 export * from './analyticsOverview';
 export * from './analyticsOverviewRecentActivityItem';
 export * from './campaignSendResult';

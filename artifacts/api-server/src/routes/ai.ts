@@ -4,11 +4,14 @@ import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
+import { generateVideoBuffer } from "../lib/video-generation";
 import {
   GenerateAiImageBody,
+  GenerateAiVideoBody,
   GenerateAiCaptionBody,
   ListAiGenerationsQueryParams,
   GenerateAiImageResponse,
+  GenerateAiVideoResponse,
   GenerateAiCaptionResponse,
   ListAiGenerationsResponse,
 } from "@workspace/api-zod";
@@ -16,6 +19,17 @@ import {
 const router: IRouter = Router();
 
 const MAX_PROMPT_LEN = 500;
+const MAX_CAPTION_OVERLAY_LEN = 500;
+
+/** Shared with /ai/generate-video so the still frame it's built from matches the image endpoint's style. */
+function buildImagePrompt(prompt: string, style?: string, industry?: string): string {
+  return [
+    prompt,
+    style ? `Style: ${style}` : "",
+    industry ? `Industry: ${industry}` : "",
+    "Wide 16:9 social media post image, professional marketing quality.",
+  ].filter(Boolean).join(". ");
+}
 
 /**
  * Resolves the calling Clerk user to their own vendor row (or confirms admin status).
@@ -41,12 +55,7 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
   if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
 
-  const fullPrompt = [
-    prompt,
-    style ? `Style: ${style}` : "",
-    industry ? `Industry: ${industry}` : "",
-    "Wide 16:9 social media post image, professional marketing quality.",
-  ].filter(Boolean).join(". ");
+  const fullPrompt = buildImagePrompt(prompt, style, industry);
 
   let result: string;
   let status: "completed" | "failed" = "completed";
@@ -68,6 +77,50 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
 
   if (status === "failed") { res.status(502).json(GenerateAiImageResponse.parse(generation)); return; }
   res.json(GenerateAiImageResponse.parse(generation));
+});
+
+/**
+ * Generates a short (~6s) video for a post: an AI product image, brought to
+ * life with a Ken Burns zoom/pan and the post's caption burned in as a text
+ * overlay. There's no supported text-to-video model available server-side
+ * (see media-generation skill — OpenAI/Gemini AI Integrations don't support
+ * video output), so this builds a real, relevant mp4 from the same
+ * AI-generated image rather than mocking a placeholder clip.
+ */
+router.post("/ai/generate-video", async (req, res): Promise<void> => {
+  const parsed = GenerateAiVideoBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, prompt, style, industry, captionText } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+  if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+  if (captionText && captionText.length > MAX_CAPTION_OVERLAY_LEN) { res.status(400).json({ error: `Caption must be ${MAX_CAPTION_OVERLAY_LEN} characters or fewer.` }); return; }
+
+  const fullPrompt = buildImagePrompt(prompt, style, industry);
+
+  let result: string;
+  let status: "completed" | "failed" = "completed";
+  try {
+    const imageBuffer = await generateImageBuffer(fullPrompt, "1024x1024");
+    const videoBuffer = await generateVideoBuffer(imageBuffer, captionText ?? prompt);
+    result = `data:video/mp4;base64,${videoBuffer.toString("base64")}`;
+  } catch (err) {
+    status = "failed";
+    result = `Video generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
+
+  const [generation] = await db.insert(aiGenerationsTable).values({
+    vendorId,
+    type: "video",
+    prompt: fullPrompt,
+    result,
+    status,
+  }).returning();
+
+  if (status === "failed") { res.status(502).json(GenerateAiVideoResponse.parse(generation)); return; }
+  res.json(GenerateAiVideoResponse.parse(generation));
 });
 
 router.post("/ai/generate-caption", async (req, res): Promise<void> => {

@@ -556,6 +556,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiGeneration"
 
+  /ai/generate-video:
+    post:
+      operationId: generateAiVideo
+      tags: [ai]
+      summary: Generate a short AI video for a post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiVideoRequest"
+      responses:
+        "200":
+          description: Generated video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneration"
+
   /ai/generate-caption:
     post:
       operationId: generateAiCaption
@@ -2333,6 +2352,21 @@ components:
         style:
           type: string
         industry:
+          type: string
+
+    AiVideoRequest:
+      type: object
+      required: [vendorId, prompt]
+      properties:
+        vendorId:
+          type: integer
+        prompt:
+          type: string
+        style:
+          type: string
+        industry:
+          type: string
+        captionText:
           type: string
 
     AiCaptionRequest:

@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send } from "lucide-react";
-import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useSubmitPostForReview, useListSocialAccounts } from "@workspace/api-client-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send } from "lucide-react";
+import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useGenerateAiVideo, useSubmitPostForReview, useListSocialAccounts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -48,6 +48,7 @@ export default function CreatePost() {
   const [, setLocation] = useLocation();
 
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
   const [selectedAccountByPlatform, setSelectedAccountByPlatform] = useState<Record<string, number>>({});
 
   const { data: products } = useListProducts({ vendorId: 1 });
@@ -56,6 +57,7 @@ export default function CreatePost() {
   const updatePost = useUpdatePost();
   const generateCaption = useGenerateAiCaption();
   const generateImage = useGenerateAiImage();
+  const generateVideo = useGenerateAiVideo();
   const submitForReviewMutation = useSubmitPostForReview();
   const queryClient = useQueryClient();
 
@@ -85,9 +87,26 @@ export default function CreatePost() {
       const result = await generateImage.mutateAsync({ data: { vendorId: 1, prompt: caption } });
       if (result.status === "failed") { toast.error(result.result ?? "Image generation failed"); return; }
       setGeneratedImage(result.result ?? null);
+      setGeneratedVideo(null);
       toast.success("Image generated — review before publishing");
     } catch {
       toast.error("Failed to generate image");
+    }
+  };
+
+  const handleGenerateVideo = async () => {
+    if (!caption.trim()) {
+      toast.error("Write a caption first so the video matches your post");
+      return;
+    }
+    try {
+      const result = await generateVideo.mutateAsync({ data: { vendorId: 1, prompt: caption, captionText: caption } });
+      if (result.status === "failed") { toast.error(result.result ?? "Video generation failed"); return; }
+      setGeneratedVideo(result.result ?? null);
+      setGeneratedImage(null);
+      toast.success("Video generated — review before publishing");
+    } catch {
+      toast.error("Failed to generate video");
     }
   };
 
@@ -152,7 +171,11 @@ export default function CreatePost() {
           socialAccountIds: selectedPlatforms.map((id) => selectedAccountByPlatform[id] ?? 0),
           productIds: selectedProductIds,
           linkMode,
-          ...(generatedImage ? { mediaUrls: [generatedImage] } : {}),
+          ...(generatedVideo
+            ? { mediaUrls: [generatedVideo], mediaType: "video" }
+            : generatedImage
+              ? { mediaUrls: [generatedImage], mediaType: "image" }
+              : {}),
           ...(scheduledDate ? { scheduledAt: scheduledDate.toISOString() } : {}),
         }
       });
@@ -264,13 +287,20 @@ export default function CreatePost() {
               />
               <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateImage} disabled={generateImage.isPending}>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateImage} disabled={generateImage.isPending || generateVideo.isPending}>
                     {generateImage.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
                     AI Image
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateVideo} disabled={generateImage.isPending || generateVideo.isPending}>
+                    {generateVideo.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <VideoIcon className="w-4 h-4 mr-2" />}
+                    AI Video
                   </Button>
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
+              {generateVideo.isPending && (
+                <p className="mt-2 text-xs text-muted-foreground">Generating a short video from an AI product image — this can take up to a minute…</p>
+              )}
               {generatedImage && (
                 <div className="mt-3 relative">
                   <img src={generatedImage} alt="AI generated" className="w-full rounded-md border aspect-video object-cover" />
@@ -279,6 +309,19 @@ export default function CreatePost() {
                     size="sm"
                     className="absolute top-2 right-2 h-7 px-2"
                     onClick={() => setGeneratedImage(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+              {generatedVideo && (
+                <div className="mt-3 relative">
+                  <video src={generatedVideo} controls loop className="w-full rounded-md border aspect-video object-cover bg-black" />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="absolute top-2 right-2 h-7 px-2"
+                    onClick={() => setGeneratedVideo(null)}
                   >
                     Remove
                   </Button>

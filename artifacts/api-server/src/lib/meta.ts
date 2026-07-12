@@ -140,6 +140,23 @@ export async function publishFacebookPhotoPost(
   return { externalPostId: json.post_id, externalUrl: `https://www.facebook.com/${json.post_id}` };
 }
 
+/** Publishes a video + caption to a Facebook Page by uploading the video bytes directly (no public URL needed). */
+export async function publishFacebookVideoPost(
+  pageId: string,
+  pageAccessToken: string,
+  videoBuffer: Buffer,
+  caption: string,
+): Promise<PublishResult> {
+  const form = new FormData();
+  form.append("description", caption);
+  form.append("access_token", pageAccessToken);
+  form.append("source", new Blob([new Uint8Array(videoBuffer)], { type: "video/mp4" }), "post.mp4");
+  const res = await fetch(`${GRAPH_BASE}/${pageId}/videos`, { method: "POST", body: form });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok || !json.id) throw new Error(json?.error?.message || "Facebook rejected the video post");
+  return { externalPostId: json.id, externalUrl: `https://www.facebook.com/${json.id}` };
+}
+
 /**
  * Publishes an image + caption to an Instagram Business account. Instagram's
  * Content Publishing API only accepts a publicly reachable image URL for the

@@ -295,6 +295,14 @@ export interface AiImageRequest {
   industry?: string;
 }
 
+export interface AiVideoRequest {
+  vendorId: number;
+  prompt: string;
+  style?: string;
+  industry?: string;
+  captionText?: string;
+}
+
 export interface AiCaptionRequest {
   vendorId: number;
   topic: string;

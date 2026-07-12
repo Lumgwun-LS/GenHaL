@@ -24,6 +24,7 @@ import type {
   AiCaptionRequest,
   AiGeneration,
   AiImageRequest,
+  AiVideoRequest,
   AnalyticsOverview,
   CampaignSendResult,
   DeletionEligibility,
@@ -2046,6 +2047,76 @@ export const useGenerateAiImage = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGenerateAiImageMutationOptions(options));
+    }
+
+export const getGenerateAiVideoUrl = () => {
+
+
+
+
+  return `/api/ai/generate-video`
+}
+
+/**
+ * @summary Generate a short AI video for a post
+ */
+export const generateAiVideo = async (aiVideoRequest: AiVideoRequest, options?: RequestInit): Promise<AiGeneration> => {
+
+  return customFetch<AiGeneration>(getGenerateAiVideoUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiVideoRequest)
+  }
+);}
+
+
+
+
+export const getGenerateAiVideoMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAiVideo>>, TError,{data: BodyType<AiVideoRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateAiVideo>>, TError,{data: BodyType<AiVideoRequest>}, TContext> => {
+
+const mutationKey = ['generateAiVideo'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateAiVideo>>, {data: BodyType<AiVideoRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateAiVideo(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateAiVideoMutationResult = NonNullable<Awaited<ReturnType<typeof generateAiVideo>>>
+    export type GenerateAiVideoMutationBody = BodyType<AiVideoRequest>
+    export type GenerateAiVideoMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate a short AI video for a post
+ */
+export const useGenerateAiVideo = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAiVideo>>, TError,{data: BodyType<AiVideoRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateAiVideo>>,
+        TError,
+        {data: BodyType<AiVideoRequest>},
+        TContext
+      > => {
+      return useMutation(getGenerateAiVideoMutationOptions(options));
     }
 
 export const getGenerateAiCaptionUrl = () => {

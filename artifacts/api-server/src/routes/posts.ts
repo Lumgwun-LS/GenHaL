@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { eq, and, gt, desc, inArray } from "drizzle-orm";
 import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postPublicationsTable } from "@workspace/db";
 import { decrypt } from "../lib/encryption";
-import { publishFacebookFeedPost, publishFacebookPhotoPost, publishInstagramPhotoPost } from "../lib/meta";
+import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
 import {
   ListPostsQueryParams,
   CreatePostBody,
@@ -243,10 +243,10 @@ function normalizePlatformKey(platform: string): string {
   return p;
 }
 
-function bufferFromDataUri(dataUri: string): Buffer | null {
-  const match = /^data:image\/[a-zA-Z+.-]+;base64,(.+)$/.exec(dataUri);
+function bufferFromDataUri(dataUri: string): { buffer: Buffer; kind: "image" | "video" } | null {
+  const match = /^data:(image|video)\/[a-zA-Z0-9+.-]+;base64,(.+)$/.exec(dataUri);
   if (!match) return null;
-  return Buffer.from(match[1], "base64");
+  return { buffer: Buffer.from(match[2], "base64"), kind: match[1] as "image" | "video" };
 }
 
 interface PublishOutcome {
@@ -325,9 +325,11 @@ async function publishToPlatform(
 
     if (platformKey === "facebook") {
       if (media) {
-        const buffer = media.startsWith("data:") ? bufferFromDataUri(media) : null;
-        if (buffer) {
-          const result = await publishFacebookPhotoPost(account.accountId!, accessToken, buffer, caption);
+        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        if (decoded) {
+          const result = decoded.kind === "video"
+            ? await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption)
+            : await publishFacebookPhotoPost(account.accountId!, accessToken, decoded.buffer, caption);
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
         if (/^https?:\/\//.test(media)) {
@@ -346,13 +348,14 @@ async function publishToPlatform(
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
     }
 
-    // Instagram Content Publishing requires a publicly reachable image URL — a
-    // base64 data: URI (how in-app AI-generated images are stored today) can't
-    // be used, so that case fails with a clear, specific reason rather than
-    // silently dropping the image or lying about success.
-    if (!media) throw new Error("Instagram posts require an image. Add one before publishing.");
+    // Instagram Content Publishing requires a publicly reachable image URL (it
+    // has no direct-video-upload path either) — a base64 data: URI (how
+    // in-app AI-generated images/videos are stored today) can't be used, so
+    // that case fails with a clear, specific reason rather than silently
+    // dropping the media or lying about success.
+    if (!media) throw new Error("Instagram posts require an image or video. Add one before publishing.");
     if (!/^https?:\/\//.test(media)) {
-      throw new Error("Instagram requires a publicly hosted image URL. This post's image was generated in-app and isn't hosted online yet — attach a hosted image URL to publish to Instagram.");
+      throw new Error("Instagram requires a publicly hosted media URL. This post's image/video was generated in-app and isn't hosted online yet — attach a hosted URL to publish to Instagram.");
     }
     const result = await publishInstagramPhotoPost(account.accountId!, accessToken, media, caption);
     return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
