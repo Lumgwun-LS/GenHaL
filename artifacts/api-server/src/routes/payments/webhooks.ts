@@ -306,6 +306,83 @@ async function markWebhookFailed(
 
 // ── Shared business logic (used by live webhooks and admin retry) ────────────
 
+type PaymentUpdateOutcome =
+  | { outcome: "not_found" }
+  | { outcome: "conflict" }
+  | {
+      outcome: "updated";
+      payment: { vendorId: number; amount: string; currency: string; orderId: number | null };
+    };
+
+/**
+ * Transitions a payment's status via providerReference, but refuses to resurrect a
+ * payment the vendor has already cancelled (see POST /external/payments/:id/cancel
+ * and /:id/retry, which mark a payment "cancelled" without touching the provider's
+ * checkout session). Without this guard, a customer completing payment on a stale
+ * link after the vendor cancelled or retried it would silently flip the row back to
+ * "paid" — contradicting the vendor's action and risking double-crediting an order
+ * that already has a successful retry payment.
+ *
+ * On conflict: the "cancelled" status is preserved, the attempted transition is
+ * recorded on the row's metadata for audit/admin review, and a Slack alert fires.
+ * The caller should still treat this as `matched: true` for the webhook pipeline
+ * (the event WAS handled — deliberately as a no-op) rather than as an error to retry.
+ */
+async function applyPaymentStatusTransition(
+  reference: string,
+  newStatus: "paid" | "failed",
+  provider: string,
+): Promise<PaymentUpdateOutcome> {
+  const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.providerReference, reference));
+  if (!existing) return { outcome: "not_found" };
+
+  if (existing.status === "cancelled") {
+    const meta = (existing.metadata ?? {}) as Record<string, unknown>;
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...meta,
+          reconciliationConflict: {
+            attemptedStatus: newStatus,
+            provider,
+            detectedAt: new Date().toISOString(),
+          },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.providerReference, reference));
+
+    console.warn(
+      `[webhook] payment reconciliation conflict — payment=${existing.id} vendor=${existing.vendorId} ` +
+      `reference=${reference} provider=${provider} attemptedStatus=${newStatus} — kept status=cancelled`,
+    );
+
+    await sendSlackAlert(
+      `⚠️ *Payment reconciliation conflict*\n` +
+      `• Payment #${existing.id} (vendor ${existing.vendorId}) was already *cancelled* locally, but ${provider} just reported it as *${newStatus}*.\n` +
+      `• Reference: \`${reference}\`\n` +
+      `• Status was NOT changed — review manually. This can happen if a customer completed payment on a stale link after the vendor cancelled or retried it.`,
+    );
+
+    return { outcome: "conflict" };
+  }
+
+  const [updated] = await db
+    .update(paymentsTable)
+    .set({ status: newStatus, updatedAt: new Date() })
+    .where(eq(paymentsTable.providerReference, reference))
+    .returning({
+      vendorId: paymentsTable.vendorId,
+      amount: paymentsTable.amount,
+      currency: paymentsTable.currency,
+      orderId: paymentsTable.orderId,
+    });
+
+  if (!updated) return { outcome: "not_found" };
+  return { outcome: "updated", payment: updated };
+}
+
 /**
  * Applies the business-logic side effects for a Stripe event. Idempotent-ish: safe to re-run.
  *
@@ -362,13 +439,15 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       // ── Regular order checkout path ─────────────────────────────────
       const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
 
-      const [updatedPayment] = await db.update(paymentsTable)
-        .set({ status: "paid", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, session.id))
-        .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+      const result = await applyPaymentStatusTransition(session.id, "paid", "stripe");
+      if (result.outcome === "conflict") {
+        return { matched: true };
+      }
+
+      const updatedPayment = result.outcome === "updated" ? result.payment : null;
 
       let orderMatched = true;
-      if (orderId) {
+      if (orderId && updatedPayment) {
         const [updatedOrder] = await db.update(ordersTable)
           .set({ paymentStatus: "paid", updatedAt: new Date() })
           .where(eq(ordersTable.id, orderId))
@@ -571,10 +650,11 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       );
     } else {
       const orderId = expiredSession.metadata?.orderId ? parseInt(expiredSession.metadata.orderId) : null;
-      const [updatedPayment] = await db.update(paymentsTable)
-        .set({ status: "failed", updatedAt: new Date() })
-        .where(eq(paymentsTable.providerReference, expiredSession.id))
-        .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+      const expiredResult = await applyPaymentStatusTransition(expiredSession.id, "failed", "stripe");
+      if (expiredResult.outcome === "conflict") {
+        return { matched: true };
+      }
+      const updatedPayment = expiredResult.outcome === "updated" ? expiredResult.payment : null;
 
       if (updatedPayment) {
         await notifyVendorPaymentStatus(updatedPayment.vendorId, "failed", updatedPayment.amount, updatedPayment.currency);
@@ -607,13 +687,14 @@ async function processPaystackEvent(event: {
     const { reference, metadata } = event.data;
     const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
-    const [updatedPayment] = await db.update(paymentsTable)
-      .set({ status: "paid", updatedAt: new Date() })
-      .where(eq(paymentsTable.providerReference, reference))
-      .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+    const result = await applyPaymentStatusTransition(reference, "paid", "paystack");
+    if (result.outcome === "conflict") {
+      return { matched: true };
+    }
+    const updatedPayment = result.outcome === "updated" ? result.payment : null;
 
     let orderMatched = true;
-    if (orderId) {
+    if (orderId && updatedPayment) {
       const [updatedOrder] = await db.update(ordersTable)
         .set({ paymentStatus: "paid", updatedAt: new Date() })
         .where(eq(ordersTable.id, orderId))
@@ -654,20 +735,21 @@ async function processFlutterwaveEvent(event: {
   const orderId = meta?.orderId ? parseInt(meta.orderId) : null;
 
   if (status !== "successful") {
-    await db.update(paymentsTable)
-      .set({ status: "failed", updatedAt: new Date() })
-      .where(eq(paymentsTable.providerReference, reference));
-    console.info(`[flutterwave webhook] non-successful status=${status} reference=${reference}`);
+    const failedResult = await applyPaymentStatusTransition(reference, "failed", "flutterwave");
+    if (failedResult.outcome !== "conflict") {
+      console.info(`[flutterwave webhook] non-successful status=${status} reference=${reference}`);
+    }
     return { matched: true };
   }
 
-  const [updatedPayment] = await db.update(paymentsTable)
-    .set({ status: "paid", updatedAt: new Date() })
-    .where(eq(paymentsTable.providerReference, reference))
-    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+  const result = await applyPaymentStatusTransition(reference, "paid", "flutterwave");
+  if (result.outcome === "conflict") {
+    return { matched: true };
+  }
+  const updatedPayment = result.outcome === "updated" ? result.payment : null;
 
   let orderMatched = true;
-  if (orderId) {
+  if (orderId && updatedPayment) {
     const [updatedOrder] = await db.update(ordersTable)
       .set({ paymentStatus: "paid", updatedAt: new Date() })
       .where(eq(ordersTable.id, orderId))
@@ -710,17 +792,16 @@ async function processNombaEvent(event: {
   }
 
   if (!success) {
-    await db.update(paymentsTable)
-      .set({ status: "failed", updatedAt: new Date() })
-      .where(eq(paymentsTable.providerReference, reference));
+    await applyPaymentStatusTransition(reference, "failed", "nomba");
     console.info(`[nomba webhook] non-success status=${status} reference=${reference}`);
     return { matched: true };
   }
 
-  const [updatedPayment] = await db.update(paymentsTable)
-    .set({ status: "paid", updatedAt: new Date() })
-    .where(eq(paymentsTable.providerReference, reference))
-    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency, orderId: paymentsTable.orderId });
+  const result = await applyPaymentStatusTransition(reference, "paid", "nomba");
+  if (result.outcome === "conflict") {
+    return { matched: true };
+  }
+  const updatedPayment = result.outcome === "updated" ? result.payment : null;
 
   if (updatedPayment?.orderId) {
     await db.update(ordersTable)
@@ -771,10 +852,11 @@ async function processRemitaEvent(event: { rrr: string }): Promise<{ matched: bo
     return { matched: true };
   }
 
-  const [updatedPayment] = await db.update(paymentsTable)
-    .set({ status: "paid", updatedAt: new Date() })
-    .where(eq(paymentsTable.providerReference, rrr))
-    .returning({ vendorId: paymentsTable.vendorId, amount: paymentsTable.amount, currency: paymentsTable.currency, orderId: paymentsTable.orderId });
+  const result = await applyPaymentStatusTransition(rrr, "paid", "remita");
+  if (result.outcome === "conflict") {
+    return { matched: true };
+  }
+  const updatedPayment = result.outcome === "updated" ? result.payment : null;
 
   if (updatedPayment?.orderId) {
     await db.update(ordersTable)

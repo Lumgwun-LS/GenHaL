@@ -52,6 +52,10 @@ vi.mock("@workspace/db", () => ({
             const row = webhookEventRows.get(whereArg.val as string);
             return Promise.resolve(row ? [row] : []);
           }
+          if (table === paymentsTableRef) {
+            const row = paymentRows.find((p) => p.providerReference === whereArg.val);
+            return Promise.resolve(row ? [row] : []);
+          }
           return Promise.resolve([]);
         },
       }),
@@ -393,5 +397,59 @@ describe("POST /payments/stripe/webhook — checkout.session.expired", () => {
     expect(body).toMatchObject({ received: true });
     expect(paymentRows[0].status).toBe("failed");
     expect(notifyVendorPaymentStatusMock).toHaveBeenCalledWith(9, "failed", "50.00", "USD");
+  });
+});
+
+describe("POST /payments/stripe/webhook — cancelled payment reconciliation conflict", () => {
+  it("does not resurrect a vendor-cancelled payment when checkout.session.completed arrives late", async () => {
+    paymentRows = [
+      { providerReference: "cs_cancelled_order", vendorId: 9, amount: "50.00", currency: "USD", status: "cancelled" },
+    ];
+    notifyVendorPaymentStatusMock.mockClear();
+    sendSlackAlertMock.mockClear();
+
+    const { status, body } = await postWebhook({
+      id: "evt_late_completed",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_cancelled_order",
+          metadata: { orderId: "123" },
+        },
+      },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ received: true });
+    // Status must stay "cancelled" — a late webhook must never silently flip it back to paid.
+    expect(paymentRows[0].status).toBe("cancelled");
+    expect(notifyVendorPaymentStatusMock).not.toHaveBeenCalled();
+    expect(sendSlackAlertMock).toHaveBeenCalledTimes(1);
+    expect(sendSlackAlertMock.mock.calls[0][0]).toMatch(/reconciliation conflict/i);
+  });
+
+  it("does not resurrect a vendor-cancelled payment when checkout.session.expired arrives late", async () => {
+    paymentRows = [
+      { providerReference: "cs_cancelled_order_2", vendorId: 9, amount: "25.00", currency: "USD", status: "cancelled" },
+    ];
+    notifyVendorPaymentStatusMock.mockClear();
+    sendSlackAlertMock.mockClear();
+
+    const { status, body } = await postWebhook({
+      id: "evt_late_expired",
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: "cs_cancelled_order_2",
+          metadata: { orderId: "123" },
+        },
+      },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ received: true });
+    expect(paymentRows[0].status).toBe("cancelled");
+    expect(notifyVendorPaymentStatusMock).not.toHaveBeenCalled();
+    expect(sendSlackAlertMock).toHaveBeenCalledTimes(1);
   });
 });
