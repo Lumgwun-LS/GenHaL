@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { CheckCircle2, Zap, Building2, Rocket, Loader2, ArrowUpCircle } from "lucide-react";
+import { CheckCircle2, Zap, Building2, Rocket, Loader2, ArrowUpCircle, RefreshCw } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -77,6 +77,56 @@ interface Props {
   currentTier: string;
   /** Called after a successful redirect URL is obtained so the parent can re-fetch. */
   onUpgradeInitiated?: () => void;
+}
+
+export type SyncResult = { synced: boolean; reason?: string; currentTier: string };
+
+/** Calls the sync endpoint that reconciles the vendor's tier directly against Stripe. */
+export async function syncSubscriptionStatus(vendorId: number): Promise<SyncResult> {
+  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/subscription/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error ?? "Could not refresh billing status.");
+  }
+  return data as SyncResult;
+}
+
+export function RefreshBillingStatusButton({
+  vendorId,
+  onSynced,
+}: {
+  vendorId: number;
+  onSynced?: (result: SyncResult) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleRefresh() {
+    setLoading(true);
+    try {
+      const result = await syncSubscriptionStatus(vendorId);
+      onSynced?.(result);
+      if (result.synced) {
+        toast.success(`Billing status updated — you're now on the ${result.currentTier} plan.`);
+      } else {
+        toast.info(result.reason ?? "Your billing status is already up to date.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Network error — could not refresh billing status.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button size="sm" variant="outline" disabled={loading} onClick={handleRefresh}>
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+      {loading ? null : "Refresh billing status"}
+    </Button>
+  );
 }
 
 export function ManageBillingButton({ vendorId, currentTier }: { vendorId: number; currentTier: string }) {
@@ -174,7 +224,10 @@ export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitia
               You're on the Enterprise plan. Manage billing details, invoices, or cancel below.
             </CardDescription>
           </div>
-          <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
+          <div className="flex items-center gap-2">
+            <RefreshBillingStatusButton vendorId={vendorId} onSynced={() => onUpgradeInitiated?.()} />
+            <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
+          </div>
         </CardHeader>
       </Card>
     );
@@ -192,7 +245,10 @@ export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitia
             Unlock direct payment routing and more by upgrading your subscription.
           </CardDescription>
         </div>
-        <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
+        <div className="flex items-center gap-2">
+          <RefreshBillingStatusButton vendorId={vendorId} onSynced={() => onUpgradeInitiated?.()} />
+          <ManageBillingButton vendorId={vendorId} currentTier={currentTier} />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

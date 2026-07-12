@@ -2,7 +2,7 @@ import { useGetVendor, useListSocialAccounts, useListOrders, getGetVendorQueryKe
 import { useParams, Link } from "wouter";
 import { useState, useEffect } from "react";
 import VendorPaymentAccounts from "@/components/vendor-payment-accounts";
-import UpgradePlanCard from "@/components/upgrade-plan-card";
+import UpgradePlanCard, { syncSubscriptionStatus } from "@/components/upgrade-plan-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,18 +73,35 @@ export default function VendorDetail() {
   const [saving, setSaving] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
 
-  // Handle Stripe Checkout return — show a toast and refresh vendor data
+  // Handle Stripe Checkout return. The webhook that normally applies the new
+  // tier can be dropped or delayed, so rather than trust the success_url
+  // param at face value we call the sync endpoint to reconcile against
+  // Stripe directly — most cases self-heal here without the vendor ever
+  // noticing anything went wrong.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const upgrade = params.get("upgrade");
     const tier = params.get("tier");
     if (upgrade === "success" && tier) {
-      toast.success(`🎉 You're now on the ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan! Your payment accounts are now unlocked.`);
       // Remove params from URL without a full reload
-      const clean = window.location.pathname;
-      window.history.replaceState({}, "", clean);
-      // Invalidate vendor query so the new tier is reflected immediately
-      void queryClient.invalidateQueries({ queryKey: getGetVendorQueryKey(id) });
+      window.history.replaceState({}, "", window.location.pathname);
+      void (async () => {
+        try {
+          const result = await syncSubscriptionStatus(id);
+          if (result.synced) {
+            toast.success(`🎉 You're now on the ${result.currentTier.charAt(0).toUpperCase() + result.currentTier.slice(1)} plan! Your payment accounts are now unlocked.`);
+          } else if (result.currentTier === tier) {
+            // Webhook had already applied it by the time we checked.
+            toast.success(`🎉 You're now on the ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan! Your payment accounts are now unlocked.`);
+          } else {
+            toast.info("Payment received — your billing status is still being confirmed. Use \"Refresh billing status\" below if it doesn't update shortly.");
+          }
+        } catch {
+          toast.info("Payment received — your billing status is still being confirmed. Use \"Refresh billing status\" below if it doesn't update shortly.");
+        } finally {
+          void queryClient.invalidateQueries({ queryKey: getGetVendorQueryKey(id) });
+        }
+      })();
     } else if (upgrade === "cancelled") {
       toast.info("Upgrade cancelled — no charge was made.");
       window.history.replaceState({}, "", window.location.pathname);
