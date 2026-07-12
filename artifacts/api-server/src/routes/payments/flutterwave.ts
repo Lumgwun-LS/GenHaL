@@ -6,7 +6,7 @@ import { resolveGatewayField } from "../../lib/platform-gateways";
 
 const router = Router();
 
-const FLUTTERWAVE_BASE = "https://api.flutterwave.com/v3";
+export const FLUTTERWAVE_BASE = "https://api.flutterwave.com/v3";
 
 /**
  * POST /payments/flutterwave/checkout

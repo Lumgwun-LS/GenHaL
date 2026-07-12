@@ -6,9 +6,9 @@ import { resolveGatewayField } from "../../lib/platform-gateways";
 
 const router = Router();
 
-const NOMBA_BASE = "https://api.nomba.com/v1";
+export const NOMBA_BASE = "https://api.nomba.com/v1";
 
-async function getNombaCreds(): Promise<{ accountId: string; clientId: string; clientSecret: string } | null> {
+export async function getNombaCreds(): Promise<{ accountId: string; clientId: string; clientSecret: string } | null> {
   const [accountId, clientId, clientSecret] = await Promise.all([
     resolveGatewayField("nomba", "accountId"),
     resolveGatewayField("nomba", "clientId"),
@@ -19,7 +19,7 @@ async function getNombaCreds(): Promise<{ accountId: string; clientId: string; c
 }
 
 /** Exchanges Nomba client credentials for a short-lived access token. */
-async function issueNombaToken(creds: { accountId: string; clientId: string; clientSecret: string }): Promise<string> {
+export async function issueNombaToken(creds: { accountId: string; clientId: string; clientSecret: string }): Promise<string> {
   const response = await fetch(`${NOMBA_BASE}/auth/token/issue`, {
     method: "POST",
     headers: {

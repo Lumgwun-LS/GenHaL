@@ -5,8 +5,8 @@ import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
-import flutterwaveRouter from "./flutterwave";
-import nombaRouter from "./nomba";
+import flutterwaveRouter, { FLUTTERWAVE_BASE } from "./flutterwave";
+import nombaRouter, { NOMBA_BASE, getNombaCreds, issueNombaToken } from "./nomba";
 import remitaRouter from "./remita";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField } from "../../lib/platform-gateways";
@@ -94,6 +94,84 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       res.status(502).json({ error: `Paystack refund error: ${data.message}` });
       return;
     }
+  } else if (payment.provider === "flutterwave") {
+    const flutterwaveKey = await resolveGatewayField("flutterwave", "secretKey");
+    if (!flutterwaveKey) {
+      res.status(503).json({ error: "Flutterwave is not configured. Add a platform Flutterwave key in Admin \u2192 Payment Gateways." });
+      return;
+    }
+
+    // The providerReference is the tx_ref we generated at checkout — Flutterwave's
+    // refund endpoint needs the numeric transaction id, so resolve it first.
+    const verifyResponse = await fetch(
+      `${FLUTTERWAVE_BASE}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(payment.providerReference)}`,
+      { headers: { Authorization: `Bearer ${flutterwaveKey}` } },
+    );
+    const verifyData = (await verifyResponse.json().catch(() => ({}))) as {
+      status?: string;
+      message?: string;
+      data?: { id?: number };
+    };
+    if (verifyData.status !== "success" || !verifyData.data?.id) {
+      res.status(502).json({ error: `Flutterwave error: could not resolve transaction (${verifyData.message ?? "not found"})` });
+      return;
+    }
+
+    const refundResponse = await fetch(`${FLUTTERWAVE_BASE}/transactions/${verifyData.data.id}/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${flutterwaveKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const refundData = (await refundResponse.json().catch(() => ({}))) as { status?: string; message?: string };
+    if (refundData.status !== "success") {
+      res.status(502).json({ error: `Flutterwave refund error: ${refundData.message ?? "refund failed"}` });
+      return;
+    }
+  } else if (payment.provider === "nomba") {
+    const creds = await getNombaCreds();
+    if (!creds) {
+      res.status(503).json({ error: "Nomba is not configured. Add a platform Nomba key in Admin \u2192 Payment Gateways." });
+      return;
+    }
+
+    let accessToken: string;
+    try {
+      accessToken = await issueNombaToken(creds);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ error: `Nomba auth failed: ${msg}` });
+      return;
+    }
+
+    const refundResponse = await fetch(`${NOMBA_BASE}/transactions/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        accountId: creds.accountId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ order: { orderReference: payment.providerReference } }),
+    });
+    const refundData = (await refundResponse.json().catch(() => ({}))) as {
+      code?: string;
+      description?: string;
+      message?: string;
+    };
+    if (!refundResponse.ok) {
+      res.status(502).json({ error: `Nomba refund error: ${refundData.description ?? refundData.message ?? "refund failed"}` });
+      return;
+    }
+  } else if (payment.provider === "remita") {
+    // Remita has no generic refund API — reversals must be requested directly
+    // with Remita/the bank and reconciled manually. Tell the admin clearly
+    // instead of pretending this succeeded or calling it "unknown provider".
+    res.status(501).json({
+      error: "Remita does not support refunds via API. Contact Remita support to reverse this transaction, then update the payment status manually.",
+    });
+    return;
   } else {
     res.status(400).json({ error: `Unknown provider '${payment.provider}'` });
     return;
