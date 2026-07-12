@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send } from "lucide-react";
@@ -249,6 +250,18 @@ async function fetchExportLogs(): Promise<ExportLog[]> {
   const res = await fetch(`${BASE_URL}/api/admin/export-logs`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load export history");
   return res.json() as Promise<ExportLog[]>;
+}
+
+type ExportAlerts = {
+  threshold: number;
+  windowMinutes: number;
+  flagged: { adminUserId: string; count: number; lastExportAt: string }[];
+};
+
+async function fetchExportAlerts(): Promise<ExportAlerts> {
+  const res = await fetch(`${BASE_URL}/api/admin/export-alerts`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load export alerts");
+  return res.json() as Promise<ExportAlerts>;
 }
 
 function formatExportFilters(raw: string): string {
@@ -551,6 +564,13 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
+  const { data: exportAlerts } = useQuery({
+    queryKey: ["admin-export-alerts"],
+    queryFn: fetchExportAlerts,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const filteredAuditLog = useMemo(() => {
     if (!auditLog) return auditLog;
     const search = auditVendorSearch.trim().toLowerCase();
@@ -762,6 +782,21 @@ export default function AdminPanel() {
               <CardDescription>Recent CSV downloads of vendor data, for compliance tracking.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
+              {exportAlerts && exportAlerts.flagged.length > 0 && (
+                <div className="p-4 pb-0">
+                  {exportAlerts.flagged.map((f) => (
+                    <Alert key={f.adminUserId} variant="destructive" className="mb-3" data-testid={`alert-export-burst-${f.adminUserId}`}>
+                      <ShieldAlert className="h-4 w-4" />
+                      <AlertTitle>Unusual export activity detected</AlertTitle>
+                      <AlertDescription>
+                        Admin <span className="font-mono">{f.adminUserId}</span> has downloaded the vendor export{" "}
+                        <strong>{f.count} times</strong> in the last {exportAlerts.windowMinutes} minutes (threshold:{" "}
+                        {exportAlerts.threshold}). Last download {new Date(f.lastExportAt).toLocaleTimeString()}.
+                      </AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
               {exportLogsLoading ? (
                 <div className="p-8 text-center text-muted-foreground">Loading export history…</div>
               ) : !exportLogs?.length ? (
