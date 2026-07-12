@@ -23,20 +23,23 @@ import {
 type PaymentSettingsBody = {
   stripeEnabled?: boolean;
   paystackEnabled?: boolean;
+  remitaEnabled?: boolean;
+  flutterwaveEnabled?: boolean;
+  nombaEnabled?: boolean;
   defaultCurrency?: string;
 };
+
+const BOOLEAN_GATEWAY_FIELDS = ["stripeEnabled", "paystackEnabled", "remitaEnabled", "flutterwaveEnabled", "nombaEnabled"] as const;
 
 function parsePaymentSettings(body: unknown): { data: PaymentSettingsBody } | { error: string } {
   if (typeof body !== "object" || body === null) return { error: "Request body must be an object" };
   const b = body as Record<string, unknown>;
   const out: PaymentSettingsBody = {};
-  if ("stripeEnabled" in b) {
-    if (typeof b.stripeEnabled !== "boolean") return { error: "stripeEnabled must be a boolean" };
-    out.stripeEnabled = b.stripeEnabled;
-  }
-  if ("paystackEnabled" in b) {
-    if (typeof b.paystackEnabled !== "boolean") return { error: "paystackEnabled must be a boolean" };
-    out.paystackEnabled = b.paystackEnabled;
+  for (const field of BOOLEAN_GATEWAY_FIELDS) {
+    if (field in b) {
+      if (typeof b[field] !== "boolean") return { error: `${field} must be a boolean` };
+      out[field] = b[field] as boolean;
+    }
   }
   if ("defaultCurrency" in b) {
     if (typeof b.defaultCurrency !== "string" || b.defaultCurrency.length !== 3) return { error: "defaultCurrency must be a 3-letter currency code" };
@@ -211,6 +214,16 @@ router.patch("/vendors/:id/payment-settings", async (req, res): Promise<void> =>
   const params = GetVendorParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
+  // Admin-only: which gateways a vendor can accept is a platform-level control decision,
+  // not something the vendor themselves (or any other authenticated user) may self-serve.
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) {
+    res.status(403).json({ error: "Only platform admins may change payment gateway settings." });
+    return;
+  }
+
   const parsed = parsePaymentSettings(req.body);
   if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
 
@@ -226,6 +239,9 @@ router.patch("/vendors/:id/payment-settings", async (req, res): Promise<void> =>
     id: vendor.id,
     stripeEnabled: vendor.stripeEnabled,
     paystackEnabled: vendor.paystackEnabled,
+    remitaEnabled: vendor.remitaEnabled,
+    flutterwaveEnabled: vendor.flutterwaveEnabled,
+    nombaEnabled: vendor.nombaEnabled,
     defaultCurrency: vendor.defaultCurrency,
   });
 });

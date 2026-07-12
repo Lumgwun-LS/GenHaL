@@ -1727,6 +1727,12 @@ components:
           type: boolean
         paystackEnabled:
           type: boolean
+        remitaEnabled:
+          type: boolean
+        flutterwaveEnabled:
+          type: boolean
+        nombaEnabled:
+          type: boolean
         defaultCurrency:
           type: string
         brandTheme:

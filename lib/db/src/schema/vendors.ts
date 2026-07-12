@@ -23,6 +23,9 @@ export const vendorsTable = pgTable("vendors", {
   // Payment gateway settings — admin-configurable per vendor
   stripeEnabled: boolean("stripe_enabled").notNull().default(false),
   paystackEnabled: boolean("paystack_enabled").notNull().default(false),
+  remitaEnabled: boolean("remita_enabled").notNull().default(false),
+  flutterwaveEnabled: boolean("flutterwave_enabled").notNull().default(false),
+  nombaEnabled: boolean("nomba_enabled").notNull().default(false),
   defaultCurrency: text("default_currency").notNull().default("USD"),
   // Subscription & verification — controls which premium features are unlocked
   subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise

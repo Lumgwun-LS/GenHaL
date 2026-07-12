@@ -27,6 +27,9 @@ export interface Vendor {
   createdAt: string;
   stripeEnabled?: boolean;
   paystackEnabled?: boolean;
+  remitaEnabled?: boolean;
+  flutterwaveEnabled?: boolean;
+  nombaEnabled?: boolean;
   defaultCurrency?: string;
   brandTheme?: string;
   /** @nullable */

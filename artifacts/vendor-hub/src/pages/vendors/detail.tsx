@@ -64,6 +64,9 @@ export default function VendorDetail() {
 
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [paystackEnabled, setPaystackEnabled] = useState(false);
+  const [remitaEnabled, setRemitaEnabled] = useState(false);
+  const [flutterwaveEnabled, setFlutterwaveEnabled] = useState(false);
+  const [nombaEnabled, setNombaEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
@@ -92,6 +95,9 @@ export default function VendorDetail() {
     if (vendor) {
       setStripeEnabled(vendor.stripeEnabled ?? false);
       setPaystackEnabled(vendor.paystackEnabled ?? false);
+      setRemitaEnabled(vendor.remitaEnabled ?? false);
+      setFlutterwaveEnabled(vendor.flutterwaveEnabled ?? false);
+      setNombaEnabled(vendor.nombaEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
       setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
@@ -150,7 +156,14 @@ export default function VendorDetail() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ stripeEnabled, paystackEnabled, defaultCurrency }),
+        body: JSON.stringify({
+          stripeEnabled,
+          paystackEnabled,
+          remitaEnabled,
+          flutterwaveEnabled,
+          nombaEnabled,
+          defaultCurrency,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
@@ -341,6 +354,42 @@ export default function VendorDetail() {
                   id="paystack-toggle"
                   checked={paystackEnabled}
                   onCheckedChange={setPaystackEnabled}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="remita-toggle" className="text-sm font-medium">Remita</Label>
+                  <p className="text-xs text-muted-foreground">Accept payments via Remita</p>
+                </div>
+                <Switch
+                  id="remita-toggle"
+                  checked={remitaEnabled}
+                  onCheckedChange={setRemitaEnabled}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="flutterwave-toggle" className="text-sm font-medium">Flutterwave</Label>
+                  <p className="text-xs text-muted-foreground">Accept payments via Flutterwave</p>
+                </div>
+                <Switch
+                  id="flutterwave-toggle"
+                  checked={flutterwaveEnabled}
+                  onCheckedChange={setFlutterwaveEnabled}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="nomba-toggle" className="text-sm font-medium">Nomba</Label>
+                  <p className="text-xs text-muted-foreground">Accept payments via Nomba</p>
+                </div>
+                <Switch
+                  id="nomba-toggle"
+                  checked={nombaEnabled}
+                  onCheckedChange={setNombaEnabled}
                 />
               </div>
 

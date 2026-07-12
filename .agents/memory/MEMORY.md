@@ -32,3 +32,5 @@
 - [Export-burst alerting pattern](export-burst-alerting.md) — rolling-window count + fire-Slack-alert-once-at-threshold-crossing, plus a HAVING-count endpoint for a persistent UI banner; generalizes to any "same actor doing X too often" alert.
 - [Admin sender attribution pattern](admin-sender-attribution.md) — resolve Clerk display name at write time and persist it on the row (not just admin_user_id), so history stays readable even if the admin's Clerk profile later changes.
 - [Twilio Auth Token rotation detection](twilio-token-rotation-detection.md) — signature-verified webhooks fail closed/silently on secret rotation; detect via rejection-rate burst alert + admin UI banner, not per-request.
+
+- [Per-vendor gateway enable flags](vendorhub-gateway-enable-flags.md) — new payment gateways need a vendorsTable.<gateway>Enabled boolean checked in the checkout route, mirroring stripeEnabled/paystackEnabled.

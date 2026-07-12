@@ -83,6 +83,10 @@ router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor.nombaEnabled) {
+    res.status(403).json({ error: "This vendor is not enabled for Nomba payments." });
+    return;
+  }
 
   const creds = await getNombaCreds();
   if (!creds) {
