@@ -26,3 +26,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 PAYMENT_CREDS_ENCRYPTION_KEY = "7c22693e3b2512f1852b12bdd4a2a8f5343fdb7a830046509b21be9abd62b8ac"
+AWAJIMAA_BACKEND_URL = "https://api.awajimaaapp.io"
