@@ -68,12 +68,17 @@ export default function LandingPage() {
                 {hero?.primaryCta ?? "Get Started"}
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
-              <Button variant="outline" size="lg" className="h-12 px-8">
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-12 px-8"
+                onClick={() => document.getElementById("demo-preview")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              >
                 {hero?.secondaryCta ?? "View Demo"}
               </Button>
             </div>
 
-            <div className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border shadow-2xl relative">
+            <div id="demo-preview" className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border shadow-2xl relative">
               <img src="/hero.png" alt="Awa Biz Suite Dashboard" className="object-cover w-full h-full" />
               <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent"></div>
             </div>
