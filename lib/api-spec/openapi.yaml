@@ -492,6 +492,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/Post"
 
+  /posts/{id}/schedule:
+    post:
+      operationId: schedulePost
+      tags: [posts]
+      summary: Schedule an approved post to auto-publish at a future date/time
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulePostInput"
+      responses:
+        "200":
+          description: Post scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/{id}/cancel-schedule:
+    post:
+      operationId: cancelPostSchedule
+      tags: [posts]
+      summary: Cancel a pending schedule and send the post back to draft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post moved back to draft, schedule cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
   # ─── AI CONTENT ───────────────────────────────────────────────────────────
   /ai/generate-image:
     post:
@@ -2220,6 +2264,13 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/PostPublication"
+
+    SchedulePostInput:
+      type: object
+      required: [scheduledAt]
+      properties:
+        scheduledAt:
+          type: string
 
     PostUpdate:
       type: object

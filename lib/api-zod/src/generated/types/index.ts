@@ -91,6 +91,7 @@ export * from './salesAnalytics';
 export * from './salesAnalyticsRevenueByDayItem';
 export * from './salesAnalyticsRevenueByVendorItem';
 export * from './salesAnalyticsTopProductsItem';
+export * from './schedulePostInput';
 export * from './smsCampaign';
 export * from './smsCampaignInput';
 export * from './smsCampaignUpdate';

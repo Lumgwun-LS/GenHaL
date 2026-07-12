@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send } from "lucide-react";
 import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useSubmitPostForReview, useListSocialAccounts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
@@ -30,6 +30,12 @@ function normalizePlatformKey(platform: string): string {
   return p;
 }
 
+/** Converts a Date to the value a <input type="datetime-local"> expects, in the browser's local timezone. */
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
@@ -37,6 +43,8 @@ export default function CreatePost() {
   const [linkMode, setLinkMode] = useState<LinkMode>("none");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState(() => toDatetimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
   const [, setLocation] = useLocation();
 
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -111,7 +119,7 @@ export default function CreatePost() {
     setSelectedProductIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   };
 
-  const handlePublish = async (submitForReview: boolean) => {
+  const handlePublish = async (mode: "draft" | "review" | "schedule") => {
     if (!caption || selectedPlatforms.length === 0) {
       toast.error("Please enter a caption and select at least one platform");
       return;
@@ -126,6 +134,14 @@ export default function CreatePost() {
       toast.error(`You have multiple ${label} accounts connected — choose which one this post goes to.`);
       return;
     }
+    let scheduledDate: Date | null = null;
+    if (mode === "schedule") {
+      scheduledDate = new Date(scheduledAt);
+      if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now()) {
+        toast.error("Pick a date/time in the future to schedule this post");
+        return;
+      }
+    }
 
     try {
       const post = await createPost.mutateAsync({
@@ -137,6 +153,7 @@ export default function CreatePost() {
           productIds: selectedProductIds,
           linkMode,
           ...(generatedImage ? { mediaUrls: [generatedImage] } : {}),
+          ...(scheduledDate ? { scheduledAt: scheduledDate.toISOString() } : {}),
         }
       });
 
@@ -151,12 +168,15 @@ export default function CreatePost() {
 
       // AI-drafted posts must be approved by a vendor/admin before publishing —
       // this only moves the post to "pending_review", it never publishes directly.
-      if (submitForReview) {
+      // Scheduled posts skip review — a vendor scheduling their own post for a
+      // chosen time is the approval, and the background job publishes it
+      // automatically once scheduledAt arrives.
+      if (mode === "review") {
         await submitForReviewMutation.mutateAsync({ id: post.id });
       }
 
       queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
-      toast.success(submitForReview ? "Post submitted for review" : "Draft saved");
+      toast.success(mode === "schedule" ? `Scheduled for ${scheduledDate!.toLocaleString()}` : mode === "review" ? "Post submitted for review" : "Draft saved");
       if (!post.shareToken) setLocation("/social");
     } catch (e) {
       toast.error("Failed to save post");
@@ -333,14 +353,46 @@ export default function CreatePost() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="w-4 h-4" /> Schedule for later
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={scheduleEnabled} onCheckedChange={(v) => setScheduleEnabled(!!v)} />
+                Publish automatically at a future date/time instead of submitting for review
+              </label>
+              {scheduleEnabled && (
+                <input
+                  type="datetime-local"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  min={toDatetimeLocalValue(new Date(Date.now() + 60 * 1000))}
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex flex-col gap-2 items-end">
-            <p className="text-xs text-muted-foreground">Posts need approval before they go live — even AI-drafted ones.</p>
+            <p className="text-xs text-muted-foreground">
+              {scheduleEnabled ? "Scheduled posts publish automatically — no separate review step." : "Posts need approval before they go live — even AI-drafted ones."}
+            </p>
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => handlePublish(false)}>Save Draft</Button>
-              <Button onClick={() => handlePublish(true)}>
-                <CalendarClock className="w-4 h-4 mr-2" />
-                Submit for Review
-              </Button>
+              <Button variant="outline" onClick={() => handlePublish("draft")}>Save Draft</Button>
+              {scheduleEnabled ? (
+                <Button onClick={() => handlePublish("schedule")}>
+                  <CalendarClock className="w-4 h-4 mr-2" />
+                  Schedule Post
+                </Button>
+              ) : (
+                <Button onClick={() => handlePublish("review")}>
+                  <Send className="w-4 h-4 mr-2" />
+                  Submit for Review
+                </Button>
+              )}
             </div>
           </div>
         </div>

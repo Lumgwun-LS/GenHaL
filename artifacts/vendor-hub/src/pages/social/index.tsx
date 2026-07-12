@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   useListPosts,
   useSubmitPostForReview,
   useApprovePost,
   useRequestPostChanges,
   usePublishPost,
+  useSchedulePost,
+  useCancelPostSchedule,
+  useUpdatePost,
   useListSocialAccounts,
   useCreateSocialAccount,
   useDeleteSocialAccount,
@@ -17,9 +20,70 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+
+/** Converts a Date to the value a <input type="datetime-local"> expects, in the browser's local timezone. */
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** A datetime-local input's value is naive local time with no offset — new Date(value) already parses it as local time. */
+function fromDatetimeLocalValue(value: string): Date {
+  return new Date(value);
+}
+
+function ScheduleDialog({
+  postId,
+  trigger,
+  title,
+  initialValue,
+  onConfirm,
+  confirmLabel,
+}: {
+  postId: number;
+  trigger: ReactNode;
+  title: string;
+  initialValue?: Date;
+  onConfirm: (postId: number, date: Date) => Promise<void>;
+  confirmLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const minValue = toDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
+  const [value, setValue] = useState(() => toDatetimeLocalValue(initialValue ?? new Date(Date.now() + 60 * 60 * 1000)));
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    const date = fromDatetimeLocalValue(value);
+    if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
+      toast.error("Pick a date/time in the future");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onConfirm(postId, date);
+      setOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <label className="text-sm text-muted-foreground">Publish at</label>
+          <Input type="datetime-local" min={minValue} value={value} onChange={(e) => setValue(e.target.value)} />
+          <Button className="w-full" onClick={handleConfirm} disabled={submitting}>{confirmLabel}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
@@ -152,6 +216,9 @@ export default function Social() {
   const approvePost = useApprovePost();
   const requestChanges = useRequestPostChanges();
   const publishPost = usePublishPost();
+  const schedulePost = useSchedulePost();
+  const cancelSchedule = useCancelPostSchedule();
+  const updatePost = useUpdatePost();
   const [publishResults, setPublishResults] = useState<Record<number, { platform: string; status: string; externalUrl?: string | null; errorMessage?: string | null }[]>>({});
 
   const invalidatePosts = () => queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
@@ -167,6 +234,18 @@ export default function Social() {
   const handleRequestChanges = async (id: number) => {
     try { await requestChanges.mutateAsync({ id }); invalidatePosts(); toast.success("Sent back for edits"); }
     catch { toast.error("Failed to request changes"); }
+  };
+  const handleSchedule = async (id: number, date: Date) => {
+    try { await schedulePost.mutateAsync({ id, data: { scheduledAt: date.toISOString() } }); invalidatePosts(); toast.success(`Scheduled for ${date.toLocaleString()}`); }
+    catch (err: any) { toast.error(err?.data?.error ?? "Failed to schedule post"); }
+  };
+  const handleReschedule = async (id: number, date: Date) => {
+    try { await updatePost.mutateAsync({ id, data: { scheduledAt: date.toISOString() } }); invalidatePosts(); toast.success(`Rescheduled for ${date.toLocaleString()}`); }
+    catch { toast.error("Failed to reschedule post"); }
+  };
+  const handleCancelSchedule = async (id: number) => {
+    try { await cancelSchedule.mutateAsync({ id }); invalidatePosts(); toast.success("Schedule cancelled — post moved back to draft"); }
+    catch (err: any) { toast.error(err?.data?.error ?? "Failed to cancel schedule"); }
   };
   const handlePublish = async (id: number) => {
     try {
@@ -270,8 +349,8 @@ export default function Social() {
                 )}
                 
                 <div className="flex items-center text-xs text-muted-foreground pt-4 border-t mb-3">
-                  {post.scheduledAt ? (
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Scheduled: {new Date(post.scheduledAt).toLocaleString()}</span>
+                  {post.status === "scheduled" && post.scheduledAt ? (
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Publishes automatically {new Date(post.scheduledAt).toLocaleString()}</span>
                   ) : post.publishedAt ? (
                     <span>Published: {new Date(post.publishedAt).toLocaleDateString()}</span>
                   ) : (
@@ -318,9 +397,41 @@ export default function Social() {
                     </>
                   )}
                   {post.status === "approved" && (
-                    <Button size="sm" className="flex-1" onClick={() => handlePublish(post.id)}>
-                      Publish Now
-                    </Button>
+                    <>
+                      <ScheduleDialog
+                        postId={post.id}
+                        title="Schedule this post"
+                        confirmLabel="Schedule"
+                        onConfirm={handleSchedule}
+                        trigger={
+                          <Button size="sm" variant="outline" className="flex-1">
+                            <CalendarClock className="w-3.5 h-3.5 mr-1.5" /> Schedule
+                          </Button>
+                        }
+                      />
+                      <Button size="sm" className="flex-1" onClick={() => handlePublish(post.id)}>
+                        Publish Now
+                      </Button>
+                    </>
+                  )}
+                  {post.status === "scheduled" && (
+                    <>
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => handleCancelSchedule(post.id)}>
+                        <CalendarX className="w-3.5 h-3.5 mr-1.5" /> Cancel
+                      </Button>
+                      <ScheduleDialog
+                        postId={post.id}
+                        title="Reschedule this post"
+                        confirmLabel="Reschedule"
+                        initialValue={post.scheduledAt ? new Date(post.scheduledAt) : undefined}
+                        onConfirm={handleReschedule}
+                        trigger={
+                          <Button size="sm" className="flex-1">
+                            <CalendarClock className="w-3.5 h-3.5 mr-1.5" /> Reschedule
+                          </Button>
+                        }
+                      />
+                    </>
                   )}
                 </div>
               </CardContent>

@@ -261,6 +261,10 @@ export type PostWithPublications = Post & {
   publications: PostPublication[];
 };
 
+export interface SchedulePostInput {
+  scheduledAt: string;
+}
+
 export interface PostUpdate {
   caption?: string;
   platforms?: string[];

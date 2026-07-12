@@ -89,6 +89,7 @@ import type {
   ProductUpdate,
   PublishPost502,
   SalesAnalytics,
+  SchedulePostInput,
   SmsCampaign,
   SmsCampaignInput,
   SmsCampaignUpdate,
@@ -1834,6 +1835,147 @@ export const useRequestPostChanges = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRequestPostChangesMutationOptions(options));
+    }
+
+export const getSchedulePostUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/schedule`
+}
+
+/**
+ * @summary Schedule an approved post to auto-publish at a future date/time
+ */
+export const schedulePost = async (id: number,
+    schedulePostInput: SchedulePostInput, options?: RequestInit): Promise<Post> => {
+
+  return customFetch<Post>(getSchedulePostUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(schedulePostInput)
+  }
+);}
+
+
+
+
+export const getSchedulePostMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext> => {
+
+const mutationKey = ['schedulePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof schedulePost>>, {id: number;data: BodyType<SchedulePostInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  schedulePost(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SchedulePostMutationResult = NonNullable<Awaited<ReturnType<typeof schedulePost>>>
+    export type SchedulePostMutationBody = BodyType<SchedulePostInput>
+    export type SchedulePostMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Schedule an approved post to auto-publish at a future date/time
+ */
+export const useSchedulePost = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof schedulePost>>,
+        TError,
+        {id: number;data: BodyType<SchedulePostInput>},
+        TContext
+      > => {
+      return useMutation(getSchedulePostMutationOptions(options));
+    }
+
+export const getCancelPostScheduleUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/cancel-schedule`
+}
+
+/**
+ * @summary Cancel a pending schedule and send the post back to draft
+ */
+export const cancelPostSchedule = async (id: number, options?: RequestInit): Promise<Post> => {
+
+  return customFetch<Post>(getCancelPostScheduleUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCancelPostScheduleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPostSchedule>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelPostSchedule>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelPostSchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelPostSchedule>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelPostSchedule(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelPostScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof cancelPostSchedule>>>
+
+    export type CancelPostScheduleMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a pending schedule and send the post back to draft
+ */
+export const useCancelPostSchedule = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPostSchedule>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelPostSchedule>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelPostScheduleMutationOptions(options));
     }
 
 export const getGenerateAiImageUrl = () => {

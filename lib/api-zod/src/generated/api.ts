@@ -647,6 +647,66 @@ export const RequestPostChangesResponse = zod.object({
 
 
 /**
+ * @summary Schedule an approved post to auto-publish at a future date/time
+ */
+export const SchedulePostParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SchedulePostBody = zod.object({
+  "scheduledAt": zod.string()
+})
+
+export const SchedulePostResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "caption": zod.string(),
+  "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
+  "status": zod.string(),
+  "mediaUrls": zod.array(zod.string()).optional(),
+  "mediaType": zod.string().nullish(),
+  "scheduledAt": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "hashtags": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
+  "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Cancel a pending schedule and send the post back to draft
+ */
+export const CancelPostScheduleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CancelPostScheduleResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "caption": zod.string(),
+  "platforms": zod.array(zod.string()),
+  "socialAccountIds": zod.array(zod.number()).optional().describe('Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means \"not explicitly chosen\".'),
+  "status": zod.string(),
+  "mediaUrls": zod.array(zod.string()).optional(),
+  "mediaType": zod.string().nullish(),
+  "scheduledAt": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "hashtags": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
+  "engagementData": zod.string().nullish(),
+  "productIds": zod.array(zod.number()).optional(),
+  "linkMode": zod.string().optional(),
+  "shareToken": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Generate an AI image for a post
  */
 export const GenerateAiImageBody = zod.object({

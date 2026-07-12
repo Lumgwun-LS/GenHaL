@@ -18,6 +18,9 @@ import {
   GetPostResponse,
   UpdatePostResponse,
   ListScheduledPostsResponse,
+  SchedulePostParams,
+  SchedulePostBody,
+  CancelPostScheduleParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -368,28 +371,18 @@ function serializePublication(row: typeof postPublicationsTable.$inferSelect) {
   return { ...row, publishedAt: row.publishedAt.toISOString() };
 }
 
-router.post("/posts/:id/publish", async (req, res): Promise<void> => {
-  const params = PublishPostParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [existing] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
-  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
-  const authed = await resolveAuthedVendor(req);
-  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
-
-  // Atomically claim the post for publishing: the WHERE clause guards the
-  // transition on the status column itself, so two concurrent publish clicks
-  // (or a double-submit) can't both pass and both post the same content twice
-  // to the same live account.
-  const [claimed] = await db
-    .update(postsTable)
-    .set({ status: "publishing" })
-    .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
-    .returning();
-  if (!claimed) {
-    res.status(409).json({ error: `Cannot publish a post with status "${existing.status}". It must be approved first, and can't already be publishing.` });
-    return;
-  }
-
+/**
+ * Runs the actual per-platform publish attempts for a post that has already
+ * been atomically claimed (moved to status "publishing"), then resolves that
+ * claim to "published" or back to "approved". Shared by the manual /publish
+ * route and the scheduled-post auto-publisher so both go through exactly one
+ * code path — a claimed post is never left stuck in "publishing".
+ */
+export async function executeClaimedPublish(claimed: typeof postsTable.$inferSelect): Promise<{
+  post: typeof postsTable.$inferSelect | undefined;
+  publications: ReturnType<typeof serializePublication>[];
+  anySucceeded: boolean;
+}> {
   const vendorAccounts = await db.select().from(socialAccountsTable).where(and(eq(socialAccountsTable.vendorId, claimed.vendorId), eq(socialAccountsTable.status, "active")));
 
   const outcomes: PublishOutcome[] = [];
@@ -421,21 +414,94 @@ router.post("/posts/:id/publish", async (req, res): Promise<void> => {
 
   const anySucceeded = outcomes.some((o) => o.status === "success");
   // Resolve the "publishing" claim: back to "approved" on total failure (so the
-  // vendor can fix the connection and retry), or "published" if at least one
-  // platform went live. Guarded on status="publishing" for the same reason as
-  // the initial claim — nothing else should have moved this post in between.
+  // vendor can fix the connection and retry — manually, or by rescheduling), or
+  // "published" if at least one platform went live. Guarded on status="publishing"
+  // for the same reason as the initial claim — nothing else should have moved
+  // this post in between.
   const [post] = await db
     .update(postsTable)
     .set(anySucceeded ? { status: "published", publishedAt: new Date() } : { status: "approved" })
     .where(and(eq(postsTable.id, claimed.id), eq(postsTable.status, "publishing")))
     .returning();
 
-  const publications = insertedPublications.map(serializePublication);
+  return { post, publications: insertedPublications.map(serializePublication), anySucceeded };
+}
+
+router.post("/posts/:id/publish", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+
+  // Atomically claim the post for publishing: the WHERE clause guards the
+  // transition on the status column itself, so two concurrent publish clicks
+  // (or a double-submit) can't both pass and both post the same content twice
+  // to the same live account.
+  const [claimed] = await db
+    .update(postsTable)
+    .set({ status: "publishing" })
+    .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
+    .returning();
+  if (!claimed) {
+    res.status(409).json({ error: `Cannot publish a post with status "${existing.status}". It must be approved first, and can't already be publishing.` });
+    return;
+  }
+
+  const { post, publications, anySucceeded } = await executeClaimedPublish(claimed);
   if (!anySucceeded) {
     res.status(502).json({ error: "Publishing failed on every selected platform.", publications });
     return;
   }
   res.json({ ...GetPostResponse.parse(serializePost(post!)), publications });
+});
+
+/**
+ * Schedules an approved post to auto-publish at a future date/time. Only
+ * "approved" posts may be scheduled — the same review gate that guards the
+ * immediate /publish route — so a scheduled post is guaranteed to have
+ * already passed review by the time the background job picks it up.
+ */
+router.post("/posts/:id/schedule", async (req, res): Promise<void> => {
+  const params = SchedulePostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const parsed = SchedulePostBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const scheduledDate = new Date(parsed.data.scheduledAt);
+  if (Number.isNaN(scheduledDate.getTime())) { res.status(400).json({ error: "scheduledAt must be a valid date/time" }); return; }
+  if (scheduledDate.getTime() <= Date.now()) { res.status(400).json({ error: "scheduledAt must be in the future" }); return; }
+
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+
+  const [post] = await db
+    .update(postsTable)
+    .set({ status: "scheduled", scheduledAt: scheduledDate })
+    .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
+    .returning();
+  if (!post) { res.status(409).json({ error: `Cannot schedule a post with status "${existing.status}". It must be approved first.` }); return; }
+  res.json(GetPostResponse.parse(serializePost(post)));
+});
+
+/** Cancels a pending schedule, clearing scheduledAt and sending the post back to draft so it can be re-reviewed before going out any other way. */
+router.post("/posts/:id/cancel-schedule", async (req, res): Promise<void> => {
+  const params = CancelPostScheduleParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+
+  const [post] = await db
+    .update(postsTable)
+    .set({ status: "draft", scheduledAt: null })
+    .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "scheduled")))
+    .returning();
+  if (!post) { res.status(409).json({ error: `Cannot cancel a schedule on a post with status "${existing.status}".` }); return; }
+  res.json(GetPostResponse.parse(serializePost(post)));
 });
 
 router.get("/posts/:id/publications", async (req, res): Promise<void> => {
