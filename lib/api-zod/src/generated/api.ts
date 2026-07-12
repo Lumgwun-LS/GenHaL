@@ -1954,7 +1954,8 @@ export const ListExternalPaymentsResponseItem = zod.object({
   "amount": zod.number(),
   "currency": zod.string(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
 })
 export const ListExternalPaymentsResponse = zod.array(ListExternalPaymentsResponseItem)
 
@@ -1998,6 +1999,42 @@ export const InitializeExternalPaymentBody = zod.object({
 })
 
 export const InitializeExternalPaymentResponse = zod.object({
+  "provider": zod.string(),
+  "paymentId": zod.number(),
+  "url": zod.string().nullable(),
+  "reference": zod.string()
+})
+
+
+/**
+ * @summary Cancel a pending or failed payment (e.g. a stale checkout the vendor no longer wants)
+ */
+export const CancelExternalPaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CancelExternalPaymentResponse = zod.object({
+  "id": zod.number(),
+  "orderId": zod.number().nullish(),
+  "vendorId": zod.number(),
+  "provider": zod.string(),
+  "providerReference": zod.string(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Retry checkout for a pending or failed payment by starting a fresh session for the same order
+ */
+export const RetryExternalPaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryExternalPaymentResponse = zod.object({
   "provider": zod.string(),
   "paymentId": zod.number(),
   "url": zod.string().nullable(),

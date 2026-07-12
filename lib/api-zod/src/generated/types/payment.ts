@@ -17,4 +17,5 @@ export interface Payment {
   currency: string;
   status: string;
   createdAt: string;
+  updatedAt?: string;
 }

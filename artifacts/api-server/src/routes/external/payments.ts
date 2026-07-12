@@ -13,12 +13,15 @@
  */
 
 import { Router } from "express";
-import { db, paymentsTable, vendorsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, ordersTable, paymentsTable, vendorsTable } from "@workspace/db";
+import { and, eq, desc } from "drizzle-orm";
 import { requireExternalAuth } from "../../middlewares/requireExternalAuth";
 import Stripe from "stripe";
 import crypto from "crypto";
 import { resolveStripeKey, resolvePaystackKey } from "../../lib/vendor-keys";
+
+/** Statuses from which a payment can still be cancelled or retried. */
+const OPEN_STATUSES = new Set(["pending", "failed"]);
 
 const router = Router();
 router.use(requireExternalAuth);
@@ -55,45 +58,39 @@ function selectProvider(
   return null;
 }
 
-router.post("/payments/initialize", async (req, res): Promise<void> => {
-  const { vendorId } = req.externalUser!;
+type InitializeInput = {
+  orderId?: number | null;
+  amount: number;
+  currency?: string;
+  email?: string;
+  callbackUrl?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+  description?: string;
+};
 
-  const {
-    orderId,
-    amount,
-    currency: reqCurrency,
-    email,
-    callbackUrl,
-    successUrl,
-    cancelUrl,
-    description,
-  } = req.body as {
-    orderId?: number;
-    amount: number;
-    currency?: string;
-    email?: string;
-    callbackUrl?: string;
-    successUrl?: string;
-    cancelUrl?: string;
-    description?: string;
-  };
+type InitializeResult =
+  | { ok: true; body: { provider: "stripe" | "paystack"; paymentId: number; url: string | null; reference: string } }
+  | { ok: false; status: number; error: string };
 
-  if (!amount) {
-    res.status(400).json({ error: "amount is required" });
-    return;
-  }
+/**
+ * Shared checkout-initiation logic used by both a fresh checkout
+ * (POST /payments/initialize) and a retry of an existing payment
+ * (POST /payments/:id/retry).
+ */
+async function initializeCheckout(vendorId: number, input: InitializeInput): Promise<InitializeResult> {
+  const { orderId, amount, currency: reqCurrency, email, callbackUrl, successUrl, cancelUrl, description } = input;
+
+  if (!amount) return { ok: false, status: 400, error: "amount is required" };
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor) return { ok: false, status: 404, error: "Vendor not found" };
 
   const currency = (reqCurrency ?? vendor.defaultCurrency ?? "USD").toUpperCase();
   const provider = selectProvider(currency, vendor);
 
   if (!provider) {
-    res.status(503).json({
-      error: "No payment gateway is enabled for this vendor. Contact the vendor admin.",
-    });
-    return;
+    return { ok: false, status: 503, error: "No payment gateway is enabled for this vendor. Contact the vendor admin." };
   }
 
   if (provider === "stripe") {
@@ -101,9 +98,7 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
     try {
       stripeKey = await resolveStripeKey(vendorId, vendor);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(503).json({ error: msg });
-      return;
+      return { ok: false, status: 503, error: err instanceof Error ? err.message : String(err) };
     }
 
     const stripe = new Stripe(stripeKey);
@@ -139,20 +134,17 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
       metadata: { sessionId: session.id, sessionUrl: session.url, source: "awajimaa" },
     }).returning();
 
-    res.json({ provider: "stripe", paymentId: payment!.id, url: session.url, reference: session.id });
-    return;
+    return { ok: true, body: { provider: "stripe", paymentId: payment!.id, url: session.url, reference: session.id } };
   }
 
   // ── Paystack ──────────────────────────────────────────────────────────────
-  if (!email) { res.status(400).json({ error: "email is required for Paystack payments" }); return; }
+  if (!email) return { ok: false, status: 400, error: "email is required for Paystack payments" };
 
   let paystackKey: string;
   try {
     paystackKey = await resolvePaystackKey(vendorId, vendor);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(503).json({ error: msg });
-    return;
+    return { ok: false, status: 503, error: err instanceof Error ? err.message : String(err) };
   }
 
   const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
@@ -182,8 +174,7 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
   };
 
   if (!paystackData.status || !paystackData.data) {
-    res.status(502).json({ error: `Paystack error: ${paystackData.message}` });
-    return;
+    return { ok: false, status: 502, error: `Paystack error: ${paystackData.message}` };
   }
 
   const { authorization_url, reference } = paystackData.data;
@@ -199,7 +190,97 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
     metadata: { reference, authorization_url, source: "awajimaa" },
   }).returning();
 
-  res.json({ provider: "paystack", paymentId: payment!.id, url: authorization_url, reference });
+  return { ok: true, body: { provider: "paystack", paymentId: payment!.id, url: authorization_url, reference } };
+}
+
+router.post("/payments/initialize", async (req, res): Promise<void> => {
+  const { vendorId } = req.externalUser!;
+  const result = await initializeCheckout(vendorId, req.body ?? {});
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json(result.body);
+});
+
+/**
+ * POST /external/payments/:id/cancel
+ * Cancels a pending or failed payment the vendor started but no longer wants
+ * (e.g. a stale checkout with no webhook confirmation after 24h). Does not
+ * touch the underlying provider session — it simply stops the app from
+ * treating it as an open payment; the provider session will separately
+ * expire on its own.
+ */
+router.post("/payments/:id/cancel", async (req, res): Promise<void> => {
+  const { vendorId } = req.externalUser!;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid payment id" }); return; }
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.vendorId, vendorId)));
+
+  if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (!OPEN_STATUSES.has(payment.status)) {
+    res.status(409).json({ error: `Payment is ${payment.status} and can no longer be cancelled` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(paymentsTable)
+    .set({ status: "cancelled" })
+    .where(eq(paymentsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
+/**
+ * POST /external/payments/:id/retry
+ * Starts a brand-new checkout session for the same order/amount/currency as
+ * an existing pending or failed payment, then marks the original as
+ * cancelled (superseded) so it stops showing as an open payment.
+ */
+router.post("/payments/:id/retry", async (req, res): Promise<void> => {
+  const { vendorId } = req.externalUser!;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid payment id" }); return; }
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.vendorId, vendorId)));
+
+  if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (!OPEN_STATUSES.has(payment.status)) {
+    res.status(409).json({ error: `Payment is ${payment.status} and can no longer be retried` });
+    return;
+  }
+
+  let email: string | undefined;
+  let description: string | undefined;
+  if (payment.orderId) {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, payment.orderId));
+    if (order) {
+      email = order.customerEmail;
+      description = `Order #${order.id} — ${order.customerName}`;
+    }
+  }
+
+  const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+  if (!email && typeof meta.email === "string") email = meta.email;
+
+  const result = await initializeCheckout(vendorId, {
+    orderId: payment.orderId,
+    amount: Number(payment.amount),
+    currency: payment.currency,
+    email,
+    description,
+  });
+
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+
+  await db.update(paymentsTable).set({ status: "cancelled" }).where(eq(paymentsTable.id, id));
+
+  res.json(result.body);
 });
 
 export default router;

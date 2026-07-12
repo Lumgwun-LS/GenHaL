@@ -1623,6 +1623,56 @@ paths:
         "503":
           description: No payment gateway available
 
+  /external/payments/{id}/cancel:
+    post:
+      operationId: cancelExternalPayment
+      tags: [external]
+      summary: Cancel a pending or failed payment (e.g. a stale checkout the vendor no longer wants)
+      security: [{ externalBearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          description: Payment not found
+        "409":
+          description: Payment is not in a cancellable state
+
+  /external/payments/{id}/retry:
+    post:
+      operationId: retryExternalPayment
+      tags: [external]
+      summary: Retry checkout for a pending or failed payment by starting a fresh session for the same order
+      security: [{ externalBearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: New checkout initialized; original payment is marked cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPaymentInitializeResponse"
+        "404":
+          description: Payment not found
+        "409":
+          description: Payment is not in a retryable state
+        "503":
+          description: No payment gateway available
+
 components:
   securitySchemes:
     externalBearerAuth:
@@ -2406,6 +2456,8 @@ components:
         status:
           type: string
         createdAt:
+          type: string
+        updatedAt:
           type: string
 
     # ─── EXTERNAL (AWAJIMAA BRIDGE) ─────────────────────────────────────────

@@ -5999,3 +5999,143 @@ export const useInitializeExternalPayment = <TError = ErrorType<void>,
       return useMutation(getInitializeExternalPaymentMutationOptions(options));
     }
 
+export const getCancelExternalPaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/external/payments/${id}/cancel`
+}
+
+/**
+ * @summary Cancel a pending or failed payment (e.g. a stale checkout the vendor no longer wants)
+ */
+export const cancelExternalPayment = async (id: number, options?: RequestInit): Promise<Payment> => {
+
+  return customFetch<Payment>(getCancelExternalPaymentUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCancelExternalPaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelExternalPayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelExternalPayment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelExternalPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelExternalPayment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelExternalPayment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelExternalPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof cancelExternalPayment>>>
+
+    export type CancelExternalPaymentMutationError = ErrorType<void>
+
+    /**
+ * @summary Cancel a pending or failed payment (e.g. a stale checkout the vendor no longer wants)
+ */
+export const useCancelExternalPayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelExternalPayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelExternalPayment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelExternalPaymentMutationOptions(options));
+    }
+
+export const getRetryExternalPaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/external/payments/${id}/retry`
+}
+
+/**
+ * @summary Retry checkout for a pending or failed payment by starting a fresh session for the same order
+ */
+export const retryExternalPayment = async (id: number, options?: RequestInit): Promise<ExternalPaymentInitializeResponse> => {
+
+  return customFetch<ExternalPaymentInitializeResponse>(getRetryExternalPaymentUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRetryExternalPaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryExternalPayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryExternalPayment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryExternalPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryExternalPayment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryExternalPayment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryExternalPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof retryExternalPayment>>>
+
+    export type RetryExternalPaymentMutationError = ErrorType<void>
+
+    /**
+ * @summary Retry checkout for a pending or failed payment by starting a fresh session for the same order
+ */
+export const useRetryExternalPayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryExternalPayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryExternalPayment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryExternalPaymentMutationOptions(options));
+    }
+
