@@ -10,6 +10,7 @@ import { db } from "@workspace/db";
 import { platformPaymentCredentialsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "./encryption";
+import { sendSlackAlert } from "./slack";
 
 export const GATEWAY_PROVIDERS = ["stripe", "paystack", "remita", "flutterwave", "nomba"] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
@@ -200,10 +201,22 @@ export async function savePlatformCredentials(
   if (existing) {
     await db
       .update(platformPaymentCredentialsTable)
-      .set({ credentialsEncrypted: encrypted, testPassed: true, updatedAt: new Date() })
+      .set({
+        credentialsEncrypted: encrypted,
+        testPassed: true,
+        updatedAt: new Date(),
+        lastCheckedAt: new Date(),
+        lastFailureReason: null,
+        failingSince: null,
+      })
       .where(eq(platformPaymentCredentialsTable.provider, provider));
   } else {
-    await db.insert(platformPaymentCredentialsTable).values({ provider, credentialsEncrypted: encrypted, testPassed: true });
+    await db.insert(platformPaymentCredentialsTable).values({
+      provider,
+      credentialsEncrypted: encrypted,
+      testPassed: true,
+      lastCheckedAt: new Date(),
+    });
   }
 
   return { testPassed: true, liveVerification: def.liveVerification };
@@ -226,6 +239,9 @@ export async function listPlatformGatewayStatus(): Promise<
     testPassed: boolean;
     maskedValues: Record<string, string | null>;
     updatedAt: string | null;
+    lastCheckedAt: string | null;
+    lastFailureReason: string | null;
+    failingSince: string | null;
   }>
 > {
   const rows = await db.select().from(platformPaymentCredentialsTable);
@@ -257,6 +273,9 @@ export async function listPlatformGatewayStatus(): Promise<
       testPassed: row?.testPassed ?? false,
       maskedValues,
       updatedAt: row?.updatedAt?.toISOString() ?? null,
+      lastCheckedAt: row?.lastCheckedAt?.toISOString() ?? null,
+      lastFailureReason: row?.lastFailureReason ?? null,
+      failingSince: row?.failingSince?.toISOString() ?? null,
     };
   });
 }
@@ -267,4 +286,89 @@ export async function testPlatformCredentials(providerRaw: string, creds: Record
   const def = GATEWAY_DEFS[provider];
   await def.test(creds);
   return { liveVerification: def.liveVerification };
+}
+
+export interface RecheckResult {
+  provider: GatewayProvider;
+  checked: boolean; // false if nothing is configured for this provider
+  testPassed: boolean;
+  becameFailing: boolean; // true only on the pass -> fail transition
+  recovered: boolean; // true only on the fail -> pass transition
+  error?: string;
+}
+
+/**
+ * Re-runs a configured provider's live `test()` against its stored
+ * credentials and updates `testPassed`/failure bookkeeping accordingly.
+ * Unlike `savePlatformCredentials`, this never throws on failure — it
+ * records the outcome instead, since it's meant to run unattended.
+ */
+export async function recheckPlatformCredentials(provider: GatewayProvider): Promise<RecheckResult> {
+  const def = GATEWAY_DEFS[provider];
+  const [row] = await db
+    .select()
+    .from(platformPaymentCredentialsTable)
+    .where(eq(platformPaymentCredentialsTable.provider, provider))
+    .limit(1);
+
+  if (!row) {
+    return { provider, checked: false, testPassed: false, becameFailing: false, recovered: false };
+  }
+
+  let creds: Record<string, string>;
+  try {
+    creds = JSON.parse(decrypt(row.credentialsEncrypted)) as Record<string, string>;
+  } catch {
+    creds = {};
+  }
+
+  const wasPassing = row.testPassed;
+
+  try {
+    await def.test(creds);
+    await db
+      .update(platformPaymentCredentialsTable)
+      .set({ testPassed: true, lastCheckedAt: new Date(), lastFailureReason: null, failingSince: null })
+      .where(eq(platformPaymentCredentialsTable.provider, provider));
+
+    const recovered = !wasPassing;
+    if (recovered) {
+      await sendSlackAlert(
+        `:white_check_mark: *${def.label}* platform gateway credentials are working again after previously failing.`,
+      );
+    }
+    return { provider, checked: true, testPassed: true, becameFailing: false, recovered };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const becameFailing = wasPassing;
+
+    await db
+      .update(platformPaymentCredentialsTable)
+      .set({
+        testPassed: false,
+        lastCheckedAt: new Date(),
+        lastFailureReason: message,
+        failingSince: row.failingSince ?? new Date(),
+      })
+      .where(eq(platformPaymentCredentialsTable.provider, provider));
+
+    if (becameFailing) {
+      await sendSlackAlert(
+        `:rotating_light: *${def.label}* platform gateway credentials just started failing: ${message}\n` +
+          `This key previously worked — it may have been revoked, expired, or rotated on the provider's side. ` +
+          `Update it from Admin \u2192 Payment Gateways.`,
+      );
+    }
+
+    return { provider, checked: true, testPassed: false, becameFailing, recovered: false, error: message };
+  }
+}
+
+/** Rechecks every configured provider's credentials. Used by the health scheduler and the admin "re-test all" action. */
+export async function recheckAllPlatformCredentials(): Promise<RecheckResult[]> {
+  const results: RecheckResult[] = [];
+  for (const provider of GATEWAY_PROVIDERS) {
+    results.push(await recheckPlatformCredentials(provider));
+  }
+  return results;
 }

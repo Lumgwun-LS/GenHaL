@@ -18,6 +18,12 @@ export const platformPaymentCredentialsTable = pgTable("platform_payment_credent
   provider: text("provider").notNull().unique(), // "stripe" | "paystack" | "remita" | "flutterwave" | "nomba"
   credentialsEncrypted: text("credentials_encrypted").notNull(), // iv:authTag:ciphertext hex of a JSON blob
   testPassed: boolean("test_passed").notNull().default(false),
+  // Populated by the periodic recheck job (and manual re-test), separately from
+  // the save-time test above — lets the admin UI tell "never verified" apart
+  // from "was working, then started failing later" (a stale/revoked key).
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  lastFailureReason: text("last_failure_reason"), // null while passing
+  failingSince: timestamp("failing_since", { withTimezone: true }), // null while passing; set on first post-save failure
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

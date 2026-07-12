@@ -34,3 +34,4 @@
 - [Twilio Auth Token rotation detection](twilio-token-rotation-detection.md) — signature-verified webhooks fail closed/silently on secret rotation; detect via rejection-rate burst alert + admin UI banner, not per-request.
 
 - [Per-vendor gateway enable flags](vendorhub-gateway-enable-flags.md) — new payment gateways need a vendorsTable.<gateway>Enabled boolean checked in the checkout route, mirroring stripeEnabled/paystackEnabled.
+- [Platform gateway credential health recheck](gateway-health-recheck.md) — periodic re-test of saved gateway keys (not just at save time) with pass/fail transition Slack alerts and admin UI banner.

@@ -14,6 +14,8 @@ import {
   savePlatformCredentials,
   removePlatformCredentials,
   testPlatformCredentials,
+  recheckPlatformCredentials,
+  recheckAllPlatformCredentials,
 } from "../lib/platform-gateways";
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
@@ -113,6 +115,38 @@ router.post("/admin/payment-gateways/:provider/test", async (req, res): Promise<
     const msg = err instanceof Error ? err.message : String(err);
     res.status(422).json({ ok: false, provider, testPassed: false, error: msg });
   }
+});
+
+// ─── POST /admin/payment-gateways/recheck ────────────────────────────────────
+// Re-tests every configured provider's stored credentials on demand (the same
+// check the 15-minute background scheduler runs) and returns the fresh status
+// list so the UI can update immediately.
+
+router.post("/admin/payment-gateways/recheck", async (req, res): Promise<void> => {
+  if (!requireAdmin(req, res)) return;
+
+  await recheckAllPlatformCredentials();
+  const gateways = await listPlatformGatewayStatus();
+  res.json({ ok: true, gateways });
+});
+
+// ─── POST /admin/payment-gateways/:provider/recheck ──────────────────────────
+
+router.post("/admin/payment-gateways/:provider/recheck", async (req, res): Promise<void> => {
+  if (!requireAdmin(req, res)) return;
+
+  const { provider } = req.params;
+  if (!GATEWAY_PROVIDERS.includes(provider as (typeof GATEWAY_PROVIDERS)[number])) {
+    res.status(400).json({ error: `Unknown provider '${provider}'` });
+    return;
+  }
+
+  const result = await recheckPlatformCredentials(provider as (typeof GATEWAY_PROVIDERS)[number]);
+  if (!result.checked) {
+    res.status(400).json({ error: `${provider} has no stored credentials to recheck` });
+    return;
+  }
+  res.json({ ok: true, ...result });
 });
 
 export default router;
