@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Redirect } from "wouter";
 import SiteEditor from "./site-editor";
 import PaymentGatewaysPanel from "./payment-gateways";
+import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -1357,6 +1358,9 @@ export default function AdminPanel() {
           <TabsTrigger value="payment-gateways" className="flex items-center gap-2">
             <CreditCard className="w-4 h-4" /> Payment Gateways
           </TabsTrigger>
+          <TabsTrigger value="billing-sync" className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" /> Billing Sync
+          </TabsTrigger>
           <TabsTrigger value="site-editor" className="flex items-center gap-2">
             <Layout className="w-4 h-4" /> Site Editor
           </TabsTrigger>
@@ -2070,6 +2074,11 @@ export default function AdminPanel() {
         {/* ── Payment Gateways tab ─────────────────────────────────────── */}
         <TabsContent value="payment-gateways">
           <PaymentGatewaysPanel />
+        </TabsContent>
+
+        {/* ── Billing Sync tab ───────────────────────────────────────── */}
+        <TabsContent value="billing-sync">
+          <BillingSyncPanel />
         </TabsContent>
 
         {/* ── Site Editor tab ────────────────────────────────────────── */}

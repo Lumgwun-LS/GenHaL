@@ -20,6 +20,7 @@ import vendorPaymentCredentialsRouter from "./vendor-payment-credentials";
 import adminRouter from "./admin";
 import adminAnalyticsRouter from "./admin-analytics";
 import adminPaymentGatewaysRouter from "./admin-payment-gateways";
+import adminBillingSyncRouter from "./admin-billing-sync";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
@@ -82,5 +83,6 @@ router.use(subscriptionUpgradeRouter);
 router.use(adminRouter);
 router.use(adminAnalyticsRouter);
 router.use(adminPaymentGatewaysRouter);
+router.use(adminBillingSyncRouter);
 
 export default router;

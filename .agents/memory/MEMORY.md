@@ -50,3 +50,4 @@
 - [Dev DB drift runs deeper than one migration](dev-db-drift-depth.md) — a "column X does not exist" crash is often the first of several un-applied migrations on tables that query joins; check all of them together before fixing.
 - [Reconciliation must go both directions](vendorhub-subscription-reconcile-downgrade.md) — the Stripe tier-sync job/route now also downgrades to free when no active subscription is found, reusing the cancellation notification+email helper.
 - [vi.mock module path must match import path exactly](vitest-mock-module-path-exact.md) — a test that mocks `@workspace/db` won't intercept code importing the same table from `@workspace/db/schema`; import from whichever path the test already mocks.
+- [Job run status pattern](job-run-status-pattern.md) — shared job_run_status table + helper gives any silent scheduler an admin-visible last-run/failing-banner story; reuse instead of inventing a bespoke table per job.
