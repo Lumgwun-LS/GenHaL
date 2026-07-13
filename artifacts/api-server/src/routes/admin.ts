@@ -595,6 +595,44 @@ router.get("/admin/message-history", async (req, res): Promise<void> => {
   res.json(messages);
 });
 
+// ─── GET /admin/tier-change-history ──────────────────────────────────────────
+// Admin-facing view of every vendor subscription plan upgrade/downgrade —
+// via the Stripe Customer Portal, cancellation, refund, reconciliation, or an
+// admin manually editing a vendor's tier. Sourced from the same
+// vendorNotificationsTable rows vendors see (type="tier_change"), filtered to
+// rows that carry structured previousTier/newTier (excludes unrelated
+// tier_change rows like a verificationLevel-only edit).
+
+router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const changes = await db
+    .select({
+      id: vendorNotificationsTable.id,
+      vendorId: vendorNotificationsTable.vendorId,
+      vendorName: vendorsTable.name,
+      previousTier: vendorNotificationsTable.previousTier,
+      newTier: vendorNotificationsTable.newTier,
+      message: vendorNotificationsTable.message,
+      createdAt: vendorNotificationsTable.createdAt,
+    })
+    .from(vendorNotificationsTable)
+    .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))
+    .where(
+      and(
+        eq(vendorNotificationsTable.type, "tier_change"),
+        sql`${vendorNotificationsTable.previousTier} IS NOT NULL`,
+        sql`${vendorNotificationsTable.newTier} IS NOT NULL`,
+      ),
+    )
+    .orderBy(desc(vendorNotificationsTable.createdAt))
+    .limit(200);
+
+  res.json(changes);
+});
+
 // ─── GET /admin/site-content ─────────────────────────────────────────────────
 
 router.get("/admin/site-content", async (req, res): Promise<void> => {

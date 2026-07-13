@@ -15,12 +15,23 @@ import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
 import { SUBSCRIPTION_PLANS } from "../routes/subscription-upgrade";
 
-/** Inserts the in-app "tier_change" notification vendors see for any downgrade to free. */
-export async function insertTierChangeNotification(vendorId: number, message: string): Promise<void> {
+/**
+ * Inserts the in-app "tier_change" notification vendors see for any downgrade to free.
+ * `previousTier`/`newTier` are stored alongside the human-readable message so the admin
+ * panel's plan-change history can render a clean table without parsing `message`.
+ */
+export async function insertTierChangeNotification(
+  vendorId: number,
+  message: string,
+  previousTier: string,
+  newTier: string,
+): Promise<void> {
   await db.insert(vendorNotificationsTable).values({
     vendorId,
     type: "tier_change",
     message,
+    previousTier,
+    newTier,
   });
 }
 

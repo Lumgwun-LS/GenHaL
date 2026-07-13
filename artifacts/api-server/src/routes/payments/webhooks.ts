@@ -381,6 +381,11 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
         const subscriptionId =
           typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
 
+        const [vendorBeforeUpgrade] = await db
+          .select({ subscriptionTier: vendorsTable.subscriptionTier })
+          .from(vendorsTable)
+          .where(eq(vendorsTable.id, upgradeVendorId));
+
         const [updated] = await db
           .update(vendorsTable)
           .set({
@@ -395,6 +400,22 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
           console.info(
             `[stripe webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} session=${session.id}`,
           );
+
+          // Record the checkout-driven upgrade in plan-change history too — the
+          // customer.subscription.updated event that follows this checkout can
+          // arrive with the tier already matching (previousTier === newTier by
+          // the time it's processed), which would silently skip the notification
+          // that event handler writes. Recording it here guarantees every
+          // checkout-driven upgrade shows up, regardless of webhook event ordering.
+          const previousTier = vendorBeforeUpgrade?.subscriptionTier ?? "free";
+          if (previousTier !== upgradeTier) {
+            await insertTierChangeNotification(
+              upgradeVendorId,
+              `Your plan was upgraded from ${previousTier} to ${upgradeTier}.`,
+              previousTier,
+              upgradeTier,
+            );
+          }
         } else {
           console.warn(
             `[stripe webhook] subscription upgrade — vendor ${upgradeVendorId} not found for session=${session.id}`,
@@ -490,6 +511,8 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
             message: isUpgrade
               ? `Your plan was upgraded from ${previousTier} to ${newTier} via the billing portal.`
               : `Your plan was downgraded from ${previousTier} to ${newTier} via the billing portal.`,
+            previousTier,
+            newTier,
           });
 
           if (vendorBefore.email) {
@@ -542,6 +565,8 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       await insertTierChangeNotification(
         updated.id,
         `Your ${previousTier} subscription was cancelled, so your account has been moved back to the Free tier.`,
+        previousTier,
+        "free",
       );
 
       if (vendorBefore.email) {
@@ -596,6 +621,8 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
     await insertTierChangeNotification(
       vendor.id,
       `Your ${previousTier} plan payment was refunded, so your account has been moved back to the Free tier.`,
+      previousTier,
+      "free",
     );
 
     console.warn(

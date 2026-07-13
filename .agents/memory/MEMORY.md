@@ -51,3 +51,4 @@
 - [Reconciliation must go both directions](vendorhub-subscription-reconcile-downgrade.md) — the Stripe tier-sync job/route now also downgrades to free when no active subscription is found, reusing the cancellation notification+email helper.
 - [vi.mock module path must match import path exactly](vitest-mock-module-path-exact.md) — a test that mocks `@workspace/db` won't intercept code importing the same table from `@workspace/db/schema`; import from whichever path the test already mocks.
 - [Job run status pattern](job-run-status-pattern.md) — shared job_run_status table + helper gives any silent scheduler an admin-visible last-run/failing-banner story; reuse instead of inventing a bespoke table per job.
+- [Admin plan-change history](vendorhub-tier-change-history.md) — vendorNotificationsTable has structured previousTier/newTier columns (not just a message string) so admin views can filter/render tier_change rows without parsing text.

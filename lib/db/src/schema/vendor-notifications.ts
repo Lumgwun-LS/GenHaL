@@ -20,6 +20,8 @@ export const vendorNotificationsTable = pgTable("vendor_notifications", {
   message: text("message").notNull(),
   adminUserId: text("admin_user_id"),           // Clerk user id of sender, for admin-originated notifications (e.g. "general")
   adminDisplayName: text("admin_display_name"), // Resolved display name at send time, so history reads correctly even if the admin's Clerk profile changes later
+  previousTier: text("previous_tier"), // Structured tier values for "tier_change" notifications caused by an actual subscriptionTier change, so the admin panel can render a clean history without parsing `message`. Null for other notification types (e.g. birthday, general) or tier_change rows for a different field (e.g. verificationLevel).
+  newTier: text("new_tier"),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

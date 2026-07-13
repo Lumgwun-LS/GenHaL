@@ -83,6 +83,12 @@ vi.mock("@workspace/db", () => ({
   ordersTable: {},
   vendorsTable: vendorsTableRef,
   webhookEventsTable: webhookEventsTableRef,
+  vendorNotificationsTable: {},
+}));
+
+vi.mock("../../../lib/subscription-notifications", () => ({
+  insertTierChangeNotification: vi.fn(async () => {}),
+  sendSubscriptionCancelledEmail: vi.fn(async () => {}),
 }));
 
 vi.mock("drizzle-orm", () => ({

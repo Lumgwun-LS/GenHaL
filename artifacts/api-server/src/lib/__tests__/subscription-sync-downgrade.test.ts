@@ -10,7 +10,7 @@ import type { Vendor } from "@workspace/db/schema";
 let vendorRows: Vendor[] = [];
 const vendorsTableRef = { id: "vendors.id" };
 
-const notifications: Array<{ vendorId: number; message: string }> = [];
+const notifications: Array<{ vendorId: number; message: string; previousTier?: string; newTier?: string }> = [];
 const emails: Array<{ email: string; vendorName: string; previousTier: string }> = [];
 
 vi.mock("@workspace/db", () => ({
@@ -50,8 +50,8 @@ vi.mock("../vendor-keys", () => ({
 }));
 
 vi.mock("../subscription-notifications", () => ({
-  insertTierChangeNotification: (vendorId: number, message: string) => {
-    notifications.push({ vendorId, message });
+  insertTierChangeNotification: (vendorId: number, message: string, previousTier?: string, newTier?: string) => {
+    notifications.push({ vendorId, message, previousTier, newTier });
     return Promise.resolve();
   },
   sendSubscriptionCancelledEmail: (email: string, vendorName: string, previousTier: string) => {

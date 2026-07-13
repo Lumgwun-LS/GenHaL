@@ -1151,6 +1151,22 @@ async function fetchMessageHistory(): Promise<MessageHistoryEntry[]> {
   return res.json() as Promise<MessageHistoryEntry[]>;
 }
 
+type PlanChangeEntry = {
+  id: number;
+  vendorId: number;
+  vendorName: string | null;
+  previousTier: string | null;
+  newTier: string | null;
+  message: string;
+  createdAt: string;
+};
+
+async function fetchTierChangeHistory(): Promise<PlanChangeEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/tier-change-history`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load plan change history");
+  return res.json() as Promise<PlanChangeEntry[]>;
+}
+
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -1161,6 +1177,8 @@ export default function AdminPanel() {
   const [auditBefore, setAuditBefore] = useState("");
 
   const [messageVendorSearch, setMessageVendorSearch] = useState("");
+
+  const [planChangeVendorSearch, setPlanChangeVendorSearch] = useState("");
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
   const [selectAllVendors, setSelectAllVendors] = useState(false);
@@ -1216,6 +1234,12 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
+  const { data: planChangeHistory, isLoading: planChangeHistoryLoading } = useQuery({
+    queryKey: ["admin-tier-change-history"],
+    queryFn: fetchTierChangeHistory,
+    enabled: isAdmin,
+  });
+
   const { data: exportAlerts } = useQuery({
     queryKey: ["admin-export-alerts"],
     queryFn: fetchExportAlerts,
@@ -1266,6 +1290,15 @@ export default function AdminPanel() {
       (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase().includes(search),
     );
   }, [messageHistory, messageVendorSearch]);
+
+  const filteredPlanChangeHistory = useMemo(() => {
+    if (!planChangeHistory) return planChangeHistory;
+    const search = planChangeVendorSearch.trim().toLowerCase();
+    if (!search) return planChangeHistory;
+    return planChangeHistory.filter((entry) =>
+      (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase().includes(search),
+    );
+  }, [planChangeHistory, planChangeVendorSearch]);
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
@@ -1351,6 +1384,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="plan-changes" className="flex items-center gap-2">
+            <ArrowRight className="w-4 h-4" /> Plan Changes
           </TabsTrigger>
           <TabsTrigger value="messages" className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4" /> Messages
@@ -1973,6 +2009,88 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
                           {new Date(entry.changedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Plan Changes tab ─────────────────────────────────────────── */}
+        <TabsContent value="plan-changes">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowRight className="w-5 h-5 text-primary" /> Plan Change History
+              </CardTitle>
+              <CardDescription>
+                Every vendor subscription tier upgrade or downgrade — via the billing portal, cancellation, refund, automatic reconciliation, or a manual edit from this panel.
+              </CardDescription>
+              <div className="flex flex-wrap items-end gap-3 pt-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Vendor name</Label>
+                  <Input
+                    placeholder="Search vendor…"
+                    className="h-8 w-44 text-xs"
+                    value={planChangeVendorSearch}
+                    onChange={(e) => setPlanChangeVendorSearch(e.target.value)}
+                  />
+                </div>
+                {planChangeVendorSearch.trim() !== "" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setPlanChangeVendorSearch("")}
+                  >
+                    Clear filter
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {planChangeHistoryLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading plan change history…</div>
+              ) : !planChangeHistory?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <ArrowRight className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No plan changes recorded yet.</p>
+                  <p className="text-xs mt-1">Upgrades and downgrades — from the billing portal, cancellations, refunds, or reconciliation — will appear here.</p>
+                </div>
+              ) : !filteredPlanChangeHistory?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <ArrowRight className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No entries match your filter.</p>
+                  <p className="text-xs mt-1">Try a different vendor name.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Change</TableHead>
+                      <TableHead className="text-right">When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPlanChangeHistory.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Badge variant="secondary" className="text-xs capitalize">{entry.previousTier}</Badge>
+                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <Badge variant="default" className="text-xs capitalize">{entry.newTier}</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {new Date(entry.createdAt).toLocaleString()}
                         </TableCell>
                       </TableRow>
                     ))}

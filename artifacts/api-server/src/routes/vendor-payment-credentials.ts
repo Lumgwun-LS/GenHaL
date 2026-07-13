@@ -366,12 +366,14 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     }
 
     // Notify the vendor in-app about each field that actually changed
-    const notificationRows: { vendorId: number; type: string; message: string }[] = [];
+    const notificationRows: { vendorId: number; type: string; message: string; previousTier?: string; newTier?: string }[] = [];
     if (subscriptionTier && subscriptionTier !== before.subscriptionTier) {
       notificationRows.push({
         vendorId: id,
         type: "tier_change",
         message: `Your subscription tier changed from ${before.subscriptionTier} to ${subscriptionTier}.`,
+        previousTier: before.subscriptionTier,
+        newTier: subscriptionTier,
       });
     }
     if (verificationLevel && verificationLevel !== before.verificationLevel) {

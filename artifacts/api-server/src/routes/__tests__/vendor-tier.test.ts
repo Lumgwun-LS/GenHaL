@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Shared mock state ────────────────────────────────────────────────────────
 
 // Track what the "transaction" committed
-const committed: Array<{ vendorUpdate: Record<string, unknown>; auditRows: unknown[] }> = [];
+const committed: Array<{ vendorUpdate: Record<string, unknown>; auditRows: unknown[]; notificationRows: unknown[] }> = [];
 
 // Controls whether the audit insert throws on the next call
 let failNextAuditInsert = false;
@@ -50,6 +50,7 @@ vi.mock("@workspace/db", () => {
   const buildTx = (vendorOverrides: Record<string, unknown> = {}) => {
     const capturedUpdate: Record<string, unknown> = {};
     const capturedAuditRows: unknown[] = [];
+    const capturedNotificationRows: unknown[] = [];
 
     return {
       select: () => ({
@@ -69,17 +70,27 @@ vi.mock("@workspace/db", () => {
           };
         },
       }),
+      // `table` distinguishes adminAuditLogTable rows (shape: { field, oldValue, newValue })
+      // from vendorNotificationsTable rows (shape: { type, message }) — both are inserted
+      // in the same transaction by the route under test.
       insert: () => ({
         values: async (rows: unknown) => {
           if (failNextAuditInsert) {
             failNextAuditInsert = false;
             throw new Error("Simulated audit insert failure");
           }
-          capturedAuditRows.push(...(Array.isArray(rows) ? rows : [rows]));
+          const list = Array.isArray(rows) ? rows : [rows];
+          const isNotificationRow = (r: unknown) => !!r && typeof r === "object" && "type" in r;
+          if (list.every(isNotificationRow)) {
+            capturedNotificationRows.push(...list);
+          } else {
+            capturedAuditRows.push(...list);
+          }
         },
       }),
       _capturedUpdate: capturedUpdate,
       _capturedAuditRows: capturedAuditRows,
+      _capturedNotificationRows: capturedNotificationRows,
     };
   };
 
@@ -94,6 +105,7 @@ vi.mock("@workspace/db", () => {
           committed.push({
             vendorUpdate: tx._capturedUpdate,
             auditRows: tx._capturedAuditRows,
+            notificationRows: tx._capturedNotificationRows,
           });
           return result;
         } catch (err) {
@@ -111,6 +123,7 @@ vi.mock("@workspace/db/schema", () => ({
   vendorsTable: { id: "id" },
   vendorPaymentCredentialsTable: {},
   adminAuditLogTable: {},
+  vendorNotificationsTable: {},
 }));
 
 // ── Mock drizzle-orm helpers ─────────────────────────────────────────────────

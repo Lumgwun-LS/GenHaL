@@ -54,6 +54,8 @@ export async function applyVendorTierUpgrade(
     return { applied: false, reason: "already up to date", tier };
   }
 
+  const previousTier = vendor.subscriptionTier;
+
   const [updated] = await db
     .update(vendorsTable)
     .set({
@@ -68,6 +70,18 @@ export async function applyVendorTierUpgrade(
   console.info(
     `[subscription sync] source=${source} vendor=${vendorId} tier=${tier} subscription=${stripeSubscriptionId ?? "n/a"} featureUnlocked=${featureUnlocked}`,
   );
+
+  // Record the tier change for the admin plan-change history whenever the
+  // tier itself actually moved (a subscription-id-only refresh at the same
+  // tier is not a plan change and shouldn't show up there).
+  if (updated && previousTier !== tier) {
+    await insertTierChangeNotification(
+      vendorId,
+      `Your plan was upgraded from ${previousTier} to ${tier}.`,
+      previousTier,
+      tier,
+    );
+  }
 
   return { applied: !!updated, tier };
 }
@@ -104,6 +118,8 @@ async function applyVendorTierDowngrade(vendor: Vendor, source: string): Promise
   await insertTierChangeNotification(
     vendor.id,
     `Your ${previousTier} subscription is no longer active, so your account has been moved back to the Free tier.`,
+    previousTier,
+    "free",
   );
 
   if (vendor.email) {
