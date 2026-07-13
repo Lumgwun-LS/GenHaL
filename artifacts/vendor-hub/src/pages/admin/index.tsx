@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
@@ -600,6 +600,7 @@ function BulkMessageDialog({
   totalVendors: number;
   onSent: () => void;
 }) {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -619,6 +620,7 @@ function BulkMessageDialog({
       toast.success(`Message sent to ${sent} vendor${sent === 1 ? "" : "s"}`);
       setMessage("");
       setOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin-message-history"] });
       onSent();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
@@ -670,6 +672,7 @@ function BulkMessageDialog({
 }
 
 function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } }) {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -683,6 +686,7 @@ function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } 
       toast.success(`Message sent to ${vendor.name}`);
       setMessage("");
       setOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin-message-history"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
     } finally {
@@ -813,6 +817,22 @@ function RetryVoiceCallButton({ logId, onDone }: { logId: number; onDone: () => 
 
 const AUDIT_FIELD_ANY = "__any__";
 
+type MessageHistoryEntry = {
+  id: number;
+  vendorId: number;
+  vendorName: string | null;
+  message: string;
+  adminUserId: string | null;
+  adminDisplayName: string | null;
+  createdAt: string;
+};
+
+async function fetchMessageHistory(): Promise<MessageHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/message-history`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load message history");
+  return res.json() as Promise<MessageHistoryEntry[]>;
+}
+
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -821,6 +841,8 @@ export default function AdminPanel() {
   const [auditFieldFilter, setAuditFieldFilter] = useState(AUDIT_FIELD_ANY);
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
+
+  const [messageVendorSearch, setMessageVendorSearch] = useState("");
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
   const [selectAllVendors, setSelectAllVendors] = useState(false);
@@ -870,6 +892,12 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
+  const { data: messageHistory, isLoading: messageHistoryLoading } = useQuery({
+    queryKey: ["admin-message-history"],
+    queryFn: fetchMessageHistory,
+    enabled: isAdmin,
+  });
+
   const { data: exportAlerts } = useQuery({
     queryKey: ["admin-export-alerts"],
     queryFn: fetchExportAlerts,
@@ -904,6 +932,15 @@ export default function AdminPanel() {
 
   const auditFiltersActive =
     auditVendorSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
+
+  const filteredMessageHistory = useMemo(() => {
+    if (!messageHistory) return messageHistory;
+    const search = messageVendorSearch.trim().toLowerCase();
+    if (!search) return messageHistory;
+    return messageHistory.filter((entry) =>
+      (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase().includes(search),
+    );
+  }, [messageHistory, messageVendorSearch]);
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-vendors"] });
@@ -989,6 +1026,9 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" /> Messages
           </TabsTrigger>
           <TabsTrigger value="payment-gateways" className="flex items-center gap-2">
             <CreditCard className="w-4 h-4" /> Payment Gateways
@@ -1581,6 +1621,94 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
                           {new Date(entry.changedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Messages tab ─────────────────────────────────────────────── */}
+        <TabsContent value="messages">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" /> Message History
+              </CardTitle>
+              <CardDescription>
+                Every message an admin has sent to a vendor, whether via a single vendor's page or a bulk announcement.
+              </CardDescription>
+              <div className="flex flex-wrap items-end gap-3 pt-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Vendor name</Label>
+                  <Input
+                    placeholder="Search vendor…"
+                    className="h-8 w-44 text-xs"
+                    value={messageVendorSearch}
+                    onChange={(e) => setMessageVendorSearch(e.target.value)}
+                  />
+                </div>
+                {messageVendorSearch.trim() !== "" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setMessageVendorSearch("")}
+                  >
+                    Clear filter
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {messageHistoryLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading message history…</div>
+              ) : !messageHistory?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No messages sent yet.</p>
+                  <p className="text-xs mt-1">Messages sent from a vendor's page or the bulk-message tool will appear here.</p>
+                </div>
+              ) : !filteredMessageHistory?.length ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No messages match your filter.</p>
+                  <p className="text-xs mt-1">Try a different vendor name.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Message</TableHead>
+                      <TableHead>Sent by</TableHead>
+                      <TableHead className="text-right">When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMessageHistory.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                        </TableCell>
+                        <TableCell className="max-w-md">
+                          <p className="text-sm whitespace-pre-wrap break-words">{entry.message}</p>
+                        </TableCell>
+                        <TableCell>
+                          {entry.adminDisplayName ? (
+                            <span className="text-xs">{entry.adminDisplayName}</span>
+                          ) : entry.adminUserId ? (
+                            <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Unknown</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {new Date(entry.createdAt).toLocaleString()}
                         </TableCell>
                       </TableRow>
                     ))}

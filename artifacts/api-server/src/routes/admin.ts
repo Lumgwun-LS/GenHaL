@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -539,6 +539,46 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
     .limit(50);
 
   res.json(entries);
+});
+
+// ─── GET /admin/message-history ──────────────────────────────────────────────
+// Admin-facing view of every "general" (admin-authored) message sent to
+// vendors — via the per-vendor compose dialog or the bulk-message tool.
+// Optional ?vendorId= filters to a single vendor's history.
+
+router.get("/admin/message-history", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const conditions: SQL[] = [eq(vendorNotificationsTable.type, "general")];
+
+  if (req.query.vendorId !== undefined) {
+    const vendorId = Number(req.query.vendorId);
+    if (!Number.isInteger(vendorId) || vendorId <= 0) {
+      res.status(400).json({ error: "Invalid vendorId." });
+      return;
+    }
+    conditions.push(eq(vendorNotificationsTable.vendorId, vendorId));
+  }
+
+  const messages = await db
+    .select({
+      id: vendorNotificationsTable.id,
+      vendorId: vendorNotificationsTable.vendorId,
+      vendorName: vendorsTable.name,
+      message: vendorNotificationsTable.message,
+      adminUserId: vendorNotificationsTable.adminUserId,
+      adminDisplayName: vendorNotificationsTable.adminDisplayName,
+      createdAt: vendorNotificationsTable.createdAt,
+    })
+    .from(vendorNotificationsTable)
+    .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))
+    .where(and(...conditions))
+    .orderBy(desc(vendorNotificationsTable.createdAt))
+    .limit(200);
+
+  res.json(messages);
 });
 
 // ─── GET /admin/site-content ─────────────────────────────────────────────────
