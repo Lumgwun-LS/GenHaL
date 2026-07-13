@@ -1,10 +1,14 @@
 /**
- * Shared logic for applying a vendor subscription-tier upgrade.
+ * Shared logic for reconciling a vendor's subscription tier against Stripe,
+ * in both directions: applying a missed upgrade, and catching a missed
+ * cancellation/lapse that should have downgraded the vendor back to free.
  *
  * Used by:
- *  - the Stripe webhook handler (checkout.session.completed), the normal path
+ *  - the Stripe webhook handlers (checkout.session.completed for upgrades,
+ *    customer.subscription.deleted / charge.refunded for downgrades), the
+ *    normal path
  *  - the on-demand /subscription/sync endpoint, which reconciles directly
- *    against the Stripe API when the webhook was never delivered (extended
+ *    against the Stripe API when a webhook was never delivered (extended
  *    server downtime, dropped delivery attempts, etc.)
  *  - the periodic subscription-sync background job (subscription-sync-scheduler.ts),
  *    which runs the same reconciliation without waiting for a vendor to visit
@@ -15,6 +19,7 @@ import { db } from "@workspace/db";
 import { vendorsTable, type Vendor } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { canAddPaymentKeys } from "./vendor-keys";
+import { insertTierChangeNotification, sendSubscriptionCancelledEmail } from "./subscription-notifications";
 
 const VALID_TIERS = ["starter", "pro", "enterprise"];
 const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
@@ -67,6 +72,47 @@ export async function applyVendorTierUpgrade(
   return { applied: !!updated, tier };
 }
 
+/**
+ * Drops a vendor back to the free tier when Stripe no longer shows an
+ * active/trialing paid subscription for them, and fires the same in-app
+ * notification + email a vendor gets from the cancellation/refund webhook
+ * paths (see subscription-notifications.ts) — this is the reconciliation
+ * equivalent of a `customer.subscription.deleted` webhook that never
+ * arrived.
+ */
+async function applyVendorTierDowngrade(vendor: Vendor, source: string): Promise<ApplyUpgradeResult> {
+  const previousTier = vendor.subscriptionTier;
+
+  const [updated] = await db
+    .update(vendorsTable)
+    .set({
+      subscriptionTier: "free",
+      stripeSubscriptionId: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(vendorsTable.id, vendor.id))
+    .returning({ id: vendorsTable.id });
+
+  if (!updated) {
+    return { applied: false, reason: `vendor ${vendor.id} not found` };
+  }
+
+  console.info(
+    `[subscription sync] source=${source} vendor=${vendor.id} tier=free (downgraded from ${previousTier}) — no active Stripe subscription found`,
+  );
+
+  await insertTierChangeNotification(
+    vendor.id,
+    `Your ${previousTier} subscription is no longer active, so your account has been moved back to the Free tier.`,
+  );
+
+  if (vendor.email) {
+    await sendSubscriptionCancelledEmail(vendor.email, vendor.name, previousTier);
+  }
+
+  return { applied: true, tier: "free" };
+}
+
 export interface ReconcileResult {
   synced: boolean;
   reason?: string;
@@ -74,13 +120,18 @@ export interface ReconcileResult {
 }
 
 /**
- * Reconciles a single vendor's tier directly against the Stripe API and
- * applies any upgrade found via applyVendorTierUpgrade. Shared by:
+ * Reconciles a single vendor's tier directly against the Stripe API.
+ * Applies any upgrade found via applyVendorTierUpgrade, or — if the vendor
+ * is on a paid tier in our DB but Stripe shows no active/trialing
+ * subscription — downgrades them back to free via applyVendorTierDowngrade,
+ * mirroring what a customer.subscription.deleted webhook would have done had
+ * it actually been delivered. Shared by:
  *  - POST /vendors/:id/subscription/sync (vendor/UI-triggered, source="manual-sync")
  *  - the periodic background job (source="scheduled-sync")
  *
- * No-op (synced: false) if the vendor has no stripeCustomerId yet, or no
- * active/trialing paid subscription is found on Stripe.
+ * No-op (synced: false) if the vendor has no stripeCustomerId yet, or is
+ * already on the tier that matches what Stripe shows (free & no subscription,
+ * or paid & matching active subscription).
  */
 export async function reconcileVendorSubscription(
   vendor: Vendor,
@@ -147,6 +198,19 @@ export async function reconcileVendorSubscription(
   }
 
   if (!bestTier) {
+    // No active/trialing subscription found on Stripe. If the vendor is
+    // still sitting on a paid tier in our DB, this is the mirror image of a
+    // missed upgrade: a cancellation/expiration webhook (customer.subscription.deleted,
+    // charge.refunded, etc.) never arrived or was dropped, and the vendor has
+    // kept paid features indefinitely. Reconcile downward too, not just up.
+    if (vendor.subscriptionTier !== "free") {
+      const downgrade = await applyVendorTierDowngrade(vendor, source);
+      return {
+        synced: downgrade.applied,
+        reason: downgrade.applied ? "No active Stripe subscription found — downgraded to free." : downgrade.reason,
+        currentTier: downgrade.applied ? "free" : vendor.subscriptionTier,
+      };
+    }
     return { synced: false, reason: "No paid subscription found on Stripe for this vendor.", currentTier: vendor.subscriptionTier };
   }
 

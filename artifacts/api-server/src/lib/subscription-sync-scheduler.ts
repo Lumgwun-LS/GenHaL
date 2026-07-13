@@ -50,7 +50,9 @@ async function tick(): Promise<void> {
         syncedCount++;
         logger.info(
           { vendorId: vendor.id, tier: result.currentTier },
-          "[subscription-sync-scheduler] Caught a missed subscription upgrade",
+          result.currentTier === "free"
+            ? "[subscription-sync-scheduler] Caught a missed subscription cancellation — downgraded to free"
+            : "[subscription-sync-scheduler] Caught a missed subscription upgrade",
         );
       }
     } catch (err) {

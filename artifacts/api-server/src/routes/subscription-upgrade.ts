@@ -324,11 +324,15 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
 });
 
 // ─── POST /vendors/:id/subscription/sync ─────────────────────────────────────
-// Reconciles the vendor's tier directly against Stripe. Covers the case
-// where checkout.session.completed was never delivered — dropped entirely,
-// or all of Stripe's retry attempts were exhausted before the server came
-// back up. Vendors can trigger this themselves ("Refresh billing status")
-// and it can also be polled after returning from Stripe Checkout.
+// Reconciles the vendor's tier directly against Stripe, in both directions.
+// Covers the case where checkout.session.completed was never delivered —
+// dropped entirely, or all of Stripe's retry attempts were exhausted before
+// the server came back up — as well as the mirror case where
+// customer.subscription.deleted / charge.refunded was missed and the vendor
+// is still sitting on a stale paid tier after their subscription actually
+// lapsed or was cancelled. Vendors can trigger this themselves ("Refresh
+// billing status") and it can also be polled after returning from Stripe
+// Checkout.
 
 router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> => {
   const id = Number(req.params.id);

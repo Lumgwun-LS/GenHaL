@@ -29,37 +29,9 @@ import { notifyVendorPaymentStatus } from "../../lib/push";
 import { sendEmail } from "../../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../../lib/email-branding";
 import { SUBSCRIPTION_PLANS } from "../subscription-upgrade";
+import { insertTierChangeNotification, sendSubscriptionCancelledEmail } from "../../lib/subscription-notifications";
 
 const router = Router();
-
-/** Sends the vendor a confirmation email when their subscription is cancelled and they're downgraded to free. */
-async function sendSubscriptionCancelledEmail(email: string, vendorName: string, previousTier: string): Promise<void> {
-  const plan = SUBSCRIPTION_PLANS.find((p) => p.tier === previousTier);
-  const featuresHtml = plan
-    ? `
-      <p style="font-size: 14px; line-height: 1.6; color: #444;">You'll no longer have access to ${escapeHtml(plan.name)} features, including:</p>
-      <ul style="font-size: 14px; line-height: 1.8; color: #444; padding-left: 20px;">
-        ${plan.features.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}
-      </ul>`
-    : "";
-
-  const html = wrapVendorEmail({
-    bodyHtml: `
-      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your subscription has been cancelled</h1>
-      <p style="font-size: 14px; line-height: 1.6; color: #444;">
-        Hi ${escapeHtml(vendorName)}, your VendorHub subscription has been cancelled and your account has been moved back to the Free tier.
-      </p>
-      ${featuresHtml}
-      <p style="font-size: 14px; line-height: 1.6; color: #444;">
-        You can resubscribe at any time from your dashboard to get these features back.
-      </p>`,
-  });
-
-  const result = await sendEmail({ to: email, subject: "Your VendorHub subscription was cancelled", html });
-  if (result.status !== "sent") {
-    console.warn(`[stripe webhook] subscription cancelled email did not send — reason=${result.error}`);
-  }
-}
 
 /** Rank used only to decide "upgrade" vs "downgrade" wording in the notice. */
 const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
@@ -567,11 +539,10 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       );
 
       const previousTier = vendorBefore.subscriptionTier;
-      await db.insert(vendorNotificationsTable).values({
-        vendorId: updated.id,
-        type: "tier_change",
-        message: `Your ${previousTier} subscription was cancelled, so your account has been moved back to the Free tier.`,
-      });
+      await insertTierChangeNotification(
+        updated.id,
+        `Your ${previousTier} subscription was cancelled, so your account has been moved back to the Free tier.`,
+      );
 
       if (vendorBefore.email) {
         await sendSubscriptionCancelledEmail(vendorBefore.email, vendorBefore.name, previousTier);
@@ -622,11 +593,10 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       .set({ subscriptionTier: "free", updatedAt: new Date() })
       .where(eq(vendorsTable.id, vendor.id));
 
-    await db.insert(vendorNotificationsTable).values({
-      vendorId: vendor.id,
-      type: "tier_change",
-      message: `Your ${previousTier} plan payment was refunded, so your account has been moved back to the Free tier.`,
-    });
+    await insertTierChangeNotification(
+      vendor.id,
+      `Your ${previousTier} plan payment was refunded, so your account has been moved back to the Free tier.`,
+    );
 
     console.warn(
       `[stripe webhook] charge.refunded — vendor=${vendor.id} downgraded from ${previousTier} to free — charge=${charge.id} customer=${customerId}`,
