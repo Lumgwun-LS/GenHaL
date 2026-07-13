@@ -49,7 +49,7 @@ export default function Scene5() {
         transition={{ delay: 1.2, duration: 0.8 }}
       >
         Everything you need. One dashboard. <br/>
-        <span className="text-white font-semibold mt-[1vh] inline-block">Welcome to Awajimaa VendorHub.</span>
+        <span className="text-white font-semibold mt-[1vh] inline-block">Welcome to Awajimaa Biz Suite.</span>
       </motion.p>
     </motion.div>
   );
