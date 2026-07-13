@@ -19,9 +19,26 @@ type ShopProduct = {
   inStock: boolean;
 };
 
+type PaymentProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba";
+
+const PROVIDER_LABELS: Record<PaymentProvider, string> = {
+  paystack: "Paystack",
+  stripe: "Card (Stripe)",
+  flutterwave: "Flutterwave",
+  nomba: "Nomba",
+  remita: "Remita",
+};
+
 type ShopLink = {
   linkMode: "interest" | "checkout";
-  vendor: { id: number; name: string; logoUrl: string | null; brandTheme: string };
+  vendor: {
+    id: number;
+    name: string;
+    logoUrl: string | null;
+    brandTheme: string;
+    defaultCurrency: string;
+    availableProviders: PaymentProvider[];
+  };
   products: ShopProduct[];
 };
 
@@ -47,6 +64,7 @@ export default function ShopLinkPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | null>(null);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
@@ -88,9 +106,16 @@ export default function ShopLinkPage() {
     }
   };
 
+  const providers = link.vendor.availableProviders;
+  const activeProvider = selectedProvider && providers.includes(selectedProvider) ? selectedProvider : providers[0];
+
   const submitCheckout = async () => {
     if (!name || !email) {
       toast.error("Please enter your name and email");
+      return;
+    }
+    if (!activeProvider) {
+      toast.error("This vendor has no payment method configured yet.");
       return;
     }
     const items = link.products
@@ -110,6 +135,7 @@ export default function ShopLinkPage() {
           email,
           phone: phone || undefined,
           items,
+          provider: activeProvider,
         }),
       });
       const data = await res.json();
@@ -218,9 +244,35 @@ export default function ShopLinkPage() {
                 </div>
               )}
 
+              {link.linkMode === "checkout" && providers.length > 1 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-xs font-medium text-muted-foreground">Pay with</div>
+                  <div className="flex flex-wrap gap-2">
+                    {providers.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setSelectedProvider(p)}
+                        className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                          activeProvider === p
+                            ? "border-primary bg-primary/10 text-primary font-medium"
+                            : "border-input text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {PROVIDER_LABELS[p]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {link.linkMode === "checkout" && providers.length === 0 && (
+                <p className="text-sm text-destructive">This vendor has no payment method configured yet.</p>
+              )}
+
               <Button
                 className="w-full"
-                disabled={submitting}
+                disabled={submitting || (link.linkMode === "checkout" && providers.length === 0)}
                 onClick={link.linkMode === "checkout" ? submitCheckout : submitInterest}
               >
                 {submitting ? (

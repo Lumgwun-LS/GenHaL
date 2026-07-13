@@ -24,11 +24,31 @@ import {
   paymentsTable,
 } from "@workspace/db";
 import { resolveStripeKey, resolvePaystackKey } from "../lib/vendor-keys";
+import { createRemitaCheckout } from "./payments/remita";
+import { createFlutterwaveCheckout } from "./payments/flutterwave";
+import { createNombaCheckout } from "./payments/nomba";
 
 const router: IRouter = Router();
 
 const PAYSTACK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "KES"]);
 const PAYSTACK_BASE = "https://api.paystack.co";
+
+type GatewayVendor = {
+  stripeEnabled: boolean;
+  paystackEnabled: boolean;
+  remitaEnabled: boolean;
+  flutterwaveEnabled: boolean;
+  nombaEnabled: boolean;
+};
+
+type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba";
+
+const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "flutterwave", "nomba", "remita"];
+
+/** Every gateway the vendor has enabled, in the order customers should see them. */
+function enabledProviders(vendor: GatewayVendor): PostLinkProvider[] {
+  return ALL_PROVIDERS.filter((p) => vendor[`${p}Enabled` as const]);
+}
 
 /**
  * Post-checkout redirect always goes back to the shop link itself — never a
@@ -41,15 +61,12 @@ function shopLinkUrl(token: string): string | null {
   return `https://${domain}/p/${token}`;
 }
 
-function selectProvider(
-  currency: string,
-  vendor: { stripeEnabled: boolean; paystackEnabled: boolean },
-): "stripe" | "paystack" | null {
+/** Default pick when the customer didn't choose (or chose something invalid). */
+function selectProvider(currency: string, vendor: GatewayVendor): PostLinkProvider | null {
   const wantsPaystack = PAYSTACK_CURRENCIES.has(currency.toUpperCase());
   if (wantsPaystack && vendor.paystackEnabled) return "paystack";
-  if (vendor.stripeEnabled) return "stripe";
-  if (vendor.paystackEnabled) return "paystack";
-  return null;
+  const available = enabledProviders(vendor);
+  return available[0] ?? null;
 }
 
 async function loadLink(token: string) {
@@ -72,7 +89,14 @@ router.get("/public/post-links/:token", async (req, res): Promise<void> => {
   const { post, vendor, products } = link;
   res.json({
     linkMode: post.linkMode,
-    vendor: { id: vendor.id, name: vendor.name, logoUrl: vendor.logoUrl, brandTheme: vendor.brandTheme },
+    vendor: {
+      id: vendor.id,
+      name: vendor.name,
+      logoUrl: vendor.logoUrl,
+      brandTheme: vendor.brandTheme,
+      defaultCurrency: vendor.defaultCurrency ?? "USD",
+      availableProviders: enabledProviders(vendor),
+    },
     products: products.map((p) => ({
       id: p.id,
       name: p.name,
@@ -118,11 +142,12 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
   if (link.post.linkMode !== "checkout") { res.status(400).json({ error: "This link does not accept checkout" }); return; }
 
-  const { name, email, phone, items } = req.body as {
+  const { name, email, phone, items, provider: requestedProvider } = req.body as {
     name?: string;
     email?: string;
     phone?: string;
     items?: { productId: number; quantity: number }[];
+    provider?: string;
   };
 
   if (!name || !email || !items?.length) {
@@ -182,7 +207,11 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   );
 
   const currency = (link.vendor.defaultCurrency ?? "USD").toUpperCase();
-  const provider = selectProvider(currency, link.vendor);
+  const available = enabledProviders(link.vendor);
+  const provider: PostLinkProvider | null =
+    requestedProvider && available.includes(requestedProvider as PostLinkProvider)
+      ? (requestedProvider as PostLinkProvider)
+      : selectProvider(currency, link.vendor);
 
   if (!provider) {
     res.status(503).json({ error: "This vendor has no payment method configured yet." });
@@ -196,6 +225,52 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   }
 
   try {
+    if (provider === "remita") {
+      const result = await createRemitaCheckout({
+        orderId: order!.id,
+        vendorId: link.vendor.id,
+        amount: totalAmount,
+        currency,
+        payerName: name,
+        payerEmail: email,
+        payerPhone: phone,
+        description: `Order #${order!.id}`,
+      });
+      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+      res.json({ orderId: order!.id, provider: "remita", url: result.url });
+      return;
+    }
+
+    if (provider === "flutterwave") {
+      const result = await createFlutterwaveCheckout({
+        orderId: order!.id,
+        vendorId: link.vendor.id,
+        amount: totalAmount,
+        currency,
+        email,
+        redirectUrl,
+        description: `Order #${order!.id}`,
+      });
+      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+      res.json({ orderId: order!.id, provider: "flutterwave", url: result.url });
+      return;
+    }
+
+    if (provider === "nomba") {
+      const result = await createNombaCheckout({
+        orderId: order!.id,
+        vendorId: link.vendor.id,
+        amount: totalAmount,
+        currency,
+        email,
+        callbackUrl: redirectUrl,
+        description: `Order #${order!.id}`,
+      });
+      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+      res.json({ orderId: order!.id, provider: "nomba", url: result.url });
+      return;
+    }
+
     if (provider === "stripe") {
       const stripeKey = await resolveStripeKey(link.vendor.id, link.vendor);
       const stripe = new Stripe(stripeKey);

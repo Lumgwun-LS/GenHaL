@@ -46,52 +46,44 @@ export async function issueNombaToken(creds: { accountId: string; clientId: stri
   return data.data.access_token;
 }
 
+export interface NombaCheckoutInput {
+  orderId?: number | null;
+  vendorId: number;
+  amount: number;
+  currency?: string;
+  email?: string;
+  callbackUrl: string;
+  description?: string;
+}
+
+export type NombaCheckoutResult =
+  | { ok: true; paymentId: number; reference: string; url: string }
+  | { ok: false; status: number; error: string };
+
 /**
- * POST /payments/nomba/checkout
- * Creates a Nomba hosted checkout order and returns the checkout link.
- * Credentials come from the admin-configured platform gateway (DB), with an
- * env-var fallback — same resolution path used by refunds/webhooks.
- *
- * Body: { orderId, vendorId, amount, currency, email, callbackUrl }
+ * Shared Nomba checkout-initiation logic, used by both the direct
+ * POST /payments/nomba/checkout route and the customer-facing shop-link
+ * checkout in routes/public-post-links.ts.
  *
  * Webhook handling for Nomba lives in ./webhooks.ts, alongside the other
  * providers' DB-outage-resilient pipeline (buffering, dedup, retry).
  */
-router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
-  const {
-    orderId,
-    vendorId,
-    amount,
-    currency = "NGN",
-    email,
-    callbackUrl,
-    description,
-  } = req.body as {
-    orderId?: number;
-    vendorId: number;
-    amount: number;
-    currency?: string;
-    email?: string;
-    callbackUrl: string;
-    description?: string;
-  };
+export async function createNombaCheckout(input: NombaCheckoutInput): Promise<NombaCheckoutResult> {
+  const { orderId, vendorId, amount, currency = "NGN", email, callbackUrl, description } = input;
 
   if (!vendorId || !amount || !callbackUrl) {
-    res.status(400).json({ error: "vendorId, amount and callbackUrl are required" });
-    return;
+    return { ok: false, status: 400, error: "vendorId, amount and callbackUrl are required" };
   }
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor) return { ok: false, status: 404, error: "Vendor not found" };
   if (!vendor.nombaEnabled) {
-    res.status(403).json({ error: "This vendor is not enabled for Nomba payments." });
-    return;
+    return { ok: false, status: 403, error: "This vendor is not enabled for Nomba payments." };
   }
 
   const creds = await getNombaCreds();
   if (!creds) {
-    res.status(503).json({ error: "Nomba is not configured. Add a platform Nomba key in Admin \u2192 Payment Gateways." });
-    return;
+    return { ok: false, status: 503, error: "Nomba is not configured. Add a platform Nomba key in Admin \u2192 Payment Gateways." };
   }
 
   let accessToken: string;
@@ -99,8 +91,7 @@ router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
     accessToken = await issueNombaToken(creds);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.status(502).json({ error: `Nomba auth failed: ${msg}` });
-    return;
+    return { ok: false, status: 502, error: `Nomba auth failed: ${msg}` };
   }
 
   const orderReference = `nomba_${vendorId}_${orderId ?? "adhoc"}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
@@ -132,8 +123,7 @@ router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
   };
 
   if (!response.ok || !data.data?.checkoutLink) {
-    res.status(502).json({ error: `Nomba error: ${data.description ?? data.message ?? "checkout order failed"}` });
-    return;
+    return { ok: false, status: 502, error: `Nomba error: ${data.description ?? data.message ?? "checkout order failed"}` };
   }
 
   const [payment] = await db.insert(paymentsTable).values({
@@ -147,7 +137,21 @@ router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
     metadata: { orderReference, checkoutLink: data.data.checkoutLink },
   }).returning();
 
-  res.json({ paymentId: payment!.id, reference: orderReference, url: data.data.checkoutLink });
+  return { ok: true, paymentId: payment!.id, reference: orderReference, url: data.data.checkoutLink };
+}
+
+/**
+ * POST /payments/nomba/checkout
+ * Creates a Nomba hosted checkout order and returns the checkout link.
+ * Credentials come from the admin-configured platform gateway (DB), with an
+ * env-var fallback — same resolution path used by refunds/webhooks.
+ *
+ * Body: { orderId, vendorId, amount, currency, email, callbackUrl }
+ */
+router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
+  const result = await createNombaCheckout(req.body ?? {});
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });
 
 export default router;

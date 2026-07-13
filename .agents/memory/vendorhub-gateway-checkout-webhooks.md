@@ -18,3 +18,11 @@ what's actually live in production (the shadowed per-file webhook routes would s
 Remita has no webhook signing — its callback is treated only as a "check now" trigger, and the
 real confirmation comes from querying Remita's own status API with the merchantId/apiKey hash
 before marking a payment paid.
+
+Each `routes/payments/<provider>.ts` checkout route should export a plain `create<Provider>Checkout(input)`
+function (vendor-enabled check + credential resolution + provider API call + payments row insert,
+returning `{ok:true,...}|{ok:false,status,error}`) that its own router handler calls, so any other
+checkout surface (e.g. the public shop-link route) can reuse the exact same validation instead of
+re-deriving it. The public/customer-facing checkout in `routes/public-post-links.ts` lists
+`vendor.<provider>Enabled` gateways as customer-visible options via a shared `enabledProviders()`
+helper, not just Stripe/Paystack — extend that array (and its GET response) when adding a gateway.

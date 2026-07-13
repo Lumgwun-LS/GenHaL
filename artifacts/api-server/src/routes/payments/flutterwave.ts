@@ -8,52 +8,44 @@ const router = Router();
 
 export const FLUTTERWAVE_BASE = "https://api.flutterwave.com/v3";
 
+export interface FlutterwaveCheckoutInput {
+  orderId?: number | null;
+  vendorId: number;
+  amount: number;
+  currency?: string;
+  email: string;
+  redirectUrl: string;
+  description?: string;
+}
+
+export type FlutterwaveCheckoutResult =
+  | { ok: true; paymentId: number; reference: string; url: string }
+  | { ok: false; status: number; error: string };
+
 /**
- * POST /payments/flutterwave/checkout
- * Creates a Flutterwave Standard payment link and returns it.
- * Credentials come from the admin-configured platform gateway (DB), with an
- * env-var fallback — same resolution path used by refunds/webhooks.
- *
- * Body: { orderId, vendorId, amount, currency, email, redirectUrl }
+ * Shared Flutterwave checkout-initiation logic, used by both the direct
+ * POST /payments/flutterwave/checkout route and the customer-facing
+ * shop-link checkout in routes/public-post-links.ts.
  *
  * Webhook handling for Flutterwave lives in ./webhooks.ts, alongside the
  * other providers' DB-outage-resilient pipeline (buffering, dedup, retry).
  */
-router.post("/payments/flutterwave/checkout", async (req, res): Promise<void> => {
-  const {
-    orderId,
-    vendorId,
-    amount,
-    currency = "NGN",
-    email,
-    redirectUrl,
-    description,
-  } = req.body as {
-    orderId?: number;
-    vendorId: number;
-    amount: number;
-    currency?: string;
-    email: string;
-    redirectUrl: string;
-    description?: string;
-  };
+export async function createFlutterwaveCheckout(input: FlutterwaveCheckoutInput): Promise<FlutterwaveCheckoutResult> {
+  const { orderId, vendorId, amount, currency = "NGN", email, redirectUrl, description } = input;
 
   if (!vendorId || !amount || !email || !redirectUrl) {
-    res.status(400).json({ error: "vendorId, amount, email and redirectUrl are required" });
-    return;
+    return { ok: false, status: 400, error: "vendorId, amount, email and redirectUrl are required" };
   }
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor) return { ok: false, status: 404, error: "Vendor not found" };
   if (!vendor.flutterwaveEnabled) {
-    res.status(403).json({ error: "This vendor is not enabled for Flutterwave payments." });
-    return;
+    return { ok: false, status: 403, error: "This vendor is not enabled for Flutterwave payments." };
   }
 
   const secretKey = await resolveGatewayField("flutterwave", "secretKey");
   if (!secretKey) {
-    res.status(503).json({ error: "Flutterwave is not configured. Add a platform Flutterwave key in Admin \u2192 Payment Gateways." });
-    return;
+    return { ok: false, status: 503, error: "Flutterwave is not configured. Add a platform Flutterwave key in Admin \u2192 Payment Gateways." };
   }
 
   // tx_ref must be unique per transaction — Flutterwave uses it as their reference
@@ -86,8 +78,7 @@ router.post("/payments/flutterwave/checkout", async (req, res): Promise<void> =>
   };
 
   if (data.status !== "success" || !data.data?.link) {
-    res.status(502).json({ error: `Flutterwave error: ${data.message}` });
-    return;
+    return { ok: false, status: 502, error: `Flutterwave error: ${data.message}` };
   }
 
   const [payment] = await db.insert(paymentsTable).values({
@@ -101,7 +92,21 @@ router.post("/payments/flutterwave/checkout", async (req, res): Promise<void> =>
     metadata: { txRef, link: data.data.link },
   }).returning();
 
-  res.json({ paymentId: payment!.id, reference: txRef, url: data.data.link });
+  return { ok: true, paymentId: payment!.id, reference: txRef, url: data.data.link };
+}
+
+/**
+ * POST /payments/flutterwave/checkout
+ * Creates a Flutterwave Standard payment link and returns it.
+ * Credentials come from the admin-configured platform gateway (DB), with an
+ * env-var fallback — same resolution path used by refunds/webhooks.
+ *
+ * Body: { orderId, vendorId, amount, currency, email, redirectUrl }
+ */
+router.post("/payments/flutterwave/checkout", async (req, res): Promise<void> => {
+  const result = await createFlutterwaveCheckout(req.body ?? {});
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });
 
 export default router;

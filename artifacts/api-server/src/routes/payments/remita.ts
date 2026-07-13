@@ -34,56 +34,46 @@ function requestHash(creds: RemitaCreds, orderId: string, amount: string): strin
     .digest("hex");
 }
 
+export interface RemitaCheckoutInput {
+  orderId?: number | null;
+  vendorId: number;
+  amount: number;
+  currency?: string;
+  payerName: string;
+  payerEmail: string;
+  payerPhone?: string;
+  description?: string;
+}
+
+export type RemitaCheckoutResult =
+  | { ok: true; paymentId: number; reference: string; url: string }
+  | { ok: false; status: number; error: string };
+
 /**
- * POST /payments/remita/checkout
- * Initializes a Remita RRR (Retrieval Reference Number) and returns the
- * hosted checkout URL vendors redirect customers to.
- * Credentials come from the admin-configured platform gateway (DB), with an
- * env-var fallback — same resolution path used by refunds/webhooks.
+ * Shared Remita checkout-initiation logic, used by both the direct
+ * POST /payments/remita/checkout route and the customer-facing shop-link
+ * checkout in routes/public-post-links.ts.
  *
  * Note: Remita does not send signed webhooks, so payment confirmation is
  * done by the admin "retry"/reconciliation query-back flow in ./webhooks.ts
  * rather than trusting an inbound payload — see that file's Remita handler.
- *
- * Body: { orderId, vendorId, amount, currency, payerName, payerEmail, payerPhone }
  */
-router.post("/payments/remita/checkout", async (req, res): Promise<void> => {
-  const {
-    orderId,
-    vendorId,
-    amount,
-    currency = "NGN",
-    payerName,
-    payerEmail,
-    payerPhone,
-    description,
-  } = req.body as {
-    orderId?: number;
-    vendorId: number;
-    amount: number;
-    currency?: string;
-    payerName: string;
-    payerEmail: string;
-    payerPhone?: string;
-    description?: string;
-  };
+export async function createRemitaCheckout(input: RemitaCheckoutInput): Promise<RemitaCheckoutResult> {
+  const { orderId, vendorId, amount, currency = "NGN", payerName, payerEmail, payerPhone, description } = input;
 
   if (!vendorId || !amount || !payerName || !payerEmail) {
-    res.status(400).json({ error: "vendorId, amount, payerName and payerEmail are required" });
-    return;
+    return { ok: false, status: 400, error: "vendorId, amount, payerName and payerEmail are required" };
   }
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor) return { ok: false, status: 404, error: "Vendor not found" };
   if (!vendor.remitaEnabled) {
-    res.status(403).json({ error: "This vendor is not enabled for Remita payments." });
-    return;
+    return { ok: false, status: 403, error: "This vendor is not enabled for Remita payments." };
   }
 
   const creds = await getRemitaCreds();
   if (!creds) {
-    res.status(503).json({ error: "Remita is not configured. Add a platform Remita key in Admin \u2192 Payment Gateways." });
-    return;
+    return { ok: false, status: 503, error: "Remita is not configured. Add a platform Remita key in Admin \u2192 Payment Gateways." };
   }
 
   // orderId sent to Remita must be unique per attempt
@@ -119,8 +109,7 @@ router.post("/payments/remita/checkout", async (req, res): Promise<void> => {
 
   // Remita's success statuscode is "025"
   if (data.statuscode !== "025" || !data.RRR) {
-    res.status(502).json({ error: `Remita error: ${data.responseMsg ?? data.message ?? "payment init failed"}` });
-    return;
+    return { ok: false, status: 502, error: `Remita error: ${data.responseMsg ?? data.message ?? "payment init failed"}` };
   }
 
   const checkoutUrl = `https://login.remita.net/payment/v1/remita/ecomm/${creds.merchantId}/${data.RRR}/${hash}`;
@@ -136,7 +125,22 @@ router.post("/payments/remita/checkout", async (req, res): Promise<void> => {
     metadata: { rrr: data.RRR, remitaOrderId, checkoutUrl },
   }).returning();
 
-  res.json({ paymentId: payment!.id, reference: data.RRR, url: checkoutUrl });
+  return { ok: true, paymentId: payment!.id, reference: data.RRR, url: checkoutUrl };
+}
+
+/**
+ * POST /payments/remita/checkout
+ * Initializes a Remita RRR (Retrieval Reference Number) and returns the
+ * hosted checkout URL vendors redirect customers to.
+ * Credentials come from the admin-configured platform gateway (DB), with an
+ * env-var fallback — same resolution path used by refunds/webhooks.
+ *
+ * Body: { orderId, vendorId, amount, currency, payerName, payerEmail, payerPhone }
+ */
+router.post("/payments/remita/checkout", async (req, res): Promise<void> => {
+  const result = await createRemitaCheckout(req.body ?? {});
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });
 
 export default router;
