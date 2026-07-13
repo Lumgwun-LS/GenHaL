@@ -178,3 +178,37 @@ export function isTwilioConfigured(): boolean {
   // Check TWILIO_PHONE_NUMBER is present. The Replit connector handles auth.
   return Boolean(process.env.TWILIO_PHONE_NUMBER);
 }
+
+export type TwilioCallSnapshot = {
+  status: string;
+  durationSeconds?: number;
+};
+
+/**
+ * Fetches a call's current status straight from Twilio's REST API (not the
+ * status-callback webhook). Used by the backfill/reconciliation job to
+ * recover calls whose status-callback POSTs were rejected while
+ * TWILIO_AUTH_TOKEN was stale — this path goes through the Replit connector
+ * (outbound, API-key based) rather than webhook signature validation, so it
+ * still works even during the window the callback was failing.
+ */
+export async function fetchCallStatus(callSid: string): Promise<TwilioCallSnapshot | null> {
+  const accountSid = await getAccountSid();
+  const res = await connectors().proxy(
+    "twilio",
+    `/2010-04-01/Accounts/${accountSid}/Calls/${callSid}.json`,
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "(no body)");
+    throw new Error(`Twilio Calls/${callSid}.json returned ${res.status}: ${text}`);
+  }
+  const data = (await res.json()) as { status: string; duration?: string | null };
+  return {
+    status: data.status,
+    durationSeconds:
+      typeof data.duration === "string" && data.duration.trim() !== "" && !Number.isNaN(Number(data.duration))
+        ? Number(data.duration)
+        : undefined,
+  };
+}

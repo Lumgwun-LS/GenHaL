@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
@@ -438,6 +438,78 @@ async function saveVoiceSignatureFailureAlertSettings(value: { threshold: number
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to save alert settings");
   }
+}
+
+type VoiceBackfillStatus = {
+  ranAt: string | null;
+  triggeredBy: string;
+  checked: number;
+  updated: number;
+  failed: number;
+};
+
+async function fetchVoiceBackfillStatus(): Promise<VoiceBackfillStatus> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-backfill`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load backfill status");
+  return res.json() as Promise<VoiceBackfillStatus>;
+}
+
+async function runVoiceBackfillNow(): Promise<VoiceBackfillStatus> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-backfill/run`, { method: "POST", credentials: "include" });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to run backfill");
+  }
+  return res.json() as Promise<VoiceBackfillStatus>;
+}
+
+function VoiceBackfillCard({ status }: { status: VoiceBackfillStatus }) {
+  const qc = useQueryClient();
+  const [running, setRunning] = useState(false);
+
+  const handleRun = async () => {
+    setRunning(true);
+    try {
+      await runVoiceBackfillNow();
+      await qc.invalidateQueries({ queryKey: ["admin-voice-backfill"] });
+      await qc.invalidateQueries({ queryKey: ["admin-voice-call-logs"] });
+    } catch {
+      // surfaced implicitly by stale status remaining on-screen
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <RefreshCw className="w-4 h-4 text-primary" /> Call Status Backfill
+          </CardTitle>
+          <CardDescription>
+            Recovers calls stuck mid-status because their Twilio callback was rejected (e.g. during a Twilio Auth
+            Token rotation). Runs automatically every 5 minutes.
+          </CardDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={handleRun} disabled={running} data-testid="button-run-voice-backfill">
+          {running ? "Running…" : "Run now"}
+        </Button>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        {status.ranAt ? (
+          <p>
+            Last ran {new Date(status.ranAt).toLocaleString()} ({status.triggeredBy === "system" ? "automatic" : `by ${status.triggeredBy}`}) —{" "}
+            found <strong className="text-foreground">{status.checked}</strong> stuck call{status.checked === 1 ? "" : "s"},
+            fixed <strong className="text-foreground">{status.updated}</strong>
+            {status.failed > 0 ? `, ${status.failed} failed to reconcile` : ""}.
+          </p>
+        ) : (
+          <p>Hasn't run yet — it will run automatically within 5 minutes of the server starting.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function VoiceSignatureFailureAlertSettingsDialog({ threshold, windowMinutes }: { threshold: number; windowMinutes: number }) {
@@ -1157,6 +1229,13 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: voiceBackfillStatus } = useQuery({
+    queryKey: ["admin-voice-backfill"],
+    queryFn: fetchVoiceBackfillStatus,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const filteredAuditLog = useMemo(() => {
     if (!auditLog) return auditLog;
     const search = auditVendorSearch.trim().toLowerCase();
@@ -1636,6 +1715,8 @@ export default function AdminPanel() {
                 </AlertDescription>
               </Alert>
             )}
+
+            {voiceBackfillStatus && <VoiceBackfillCard status={voiceBackfillStatus} />}
 
             <Card>
               <CardHeader>

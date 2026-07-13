@@ -16,6 +16,7 @@ import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
 import { retryCampaignCall } from "./voice-campaigns";
 import { sendSlackAlert } from "../lib/slack";
+import { runVoiceBackfill, getVoiceBackfillLastRun } from "../lib/voice-backfill";
 
 /**
  * Export-burst detection: if the same admin downloads the vendor CSV export
@@ -671,6 +672,32 @@ router.get("/admin/voice-campaigns/scheduled", async (req, res): Promise<void> =
     .orderBy(asc(voiceCampaignsTable.scheduledAt));
 
   res.json(rows);
+});
+
+// ─── GET /admin/voice-backfill ─────────────────────────────────────────────────
+// Reconciliation job that recovers calls stuck in a non-terminal status
+// because their Twilio status-callback was rejected while TWILIO_AUTH_TOKEN
+// was stale. Runs automatically every 5 minutes; this endpoint reports the
+// last run outcome so admins can confirm it actually caught up.
+
+router.get("/admin/voice-backfill", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const lastRun = await getVoiceBackfillLastRun();
+  res.json(lastRun);
+});
+
+// ─── POST /admin/voice-backfill/run ────────────────────────────────────────────
+
+router.post("/admin/voice-backfill/run", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const result = await runVoiceBackfill(userId);
+  res.json(result);
 });
 
 // ─── GET /admin/voice-status ──────────────────────────────────────────────────

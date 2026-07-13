@@ -73,6 +73,13 @@ export const DEFAULT_SITE_CONTENT = {
     threshold: Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3),
     windowMinutes: Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10),
   },
+  "admin.voiceBackfillLastRun": {
+    ranAt: null as string | null,
+    triggeredBy: "system" as string,
+    checked: 0,
+    updated: 0,
+    failed: 0,
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -136,6 +143,14 @@ const voiceSignatureFailureAlertSettingsSchema = z.object({
   windowMinutes: z.number().int().min(1).max(1440),
 });
 
+const voiceBackfillLastRunSchema = z.object({
+  ranAt: z.string().nullable(),
+  triggeredBy: z.string().max(200),
+  checked: z.number().int().min(0),
+  updated: z.number().int().min(0),
+  failed: z.number().int().min(0),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -145,6 +160,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "email.birthday": emailSchema,
   "admin.exportAlertSettings": exportAlertSettingsSchema,
   "admin.voiceSignatureFailureAlertSettings": voiceSignatureFailureAlertSettingsSchema,
+  "admin.voiceBackfillLastRun": voiceBackfillLastRunSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

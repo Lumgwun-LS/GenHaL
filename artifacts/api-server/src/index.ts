@@ -7,6 +7,7 @@ import { startPendingReminderScheduler } from "./lib/pending-reminders";
 import { startGatewayHealthScheduler } from "./lib/gateway-health-scheduler";
 import { startSubscriptionSyncScheduler } from "./lib/subscription-sync-scheduler";
 import { startPostScheduler } from "./lib/post-scheduler";
+import { startVoiceBackfillScheduler } from "./lib/voice-backfill";
 
 const rawPort = process.env["PORT"];
 
@@ -36,4 +37,5 @@ app.listen(port, (err) => {
   startGatewayHealthScheduler();
   startSubscriptionSyncScheduler();
   startPostScheduler();
+  startVoiceBackfillScheduler();
 });
