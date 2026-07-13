@@ -251,6 +251,40 @@ function bufferFromDataUri(dataUri: string): { buffer: Buffer; kind: "image" | "
   return { buffer: Buffer.from(match[2], "base64"), kind: match[1] as "image" | "video" };
 }
 
+/**
+ * Resolves a post's media entry (a `data:` URI, or a publicly hosted URL —
+ * AI-generated images/videos are now stored in object storage and referenced
+ * by URL, not embedded as base64) into raw bytes for platforms that need a
+ * direct byte upload (Facebook, LinkedIn, X/Twitter). Instagram is the one
+ * platform that wants the URL itself, not bytes, and is handled separately.
+ */
+async function resolveMediaBuffer(media: string): Promise<{ buffer: Buffer; kind: "image" | "video" } | null> {
+  if (media.startsWith("data:")) return bufferFromDataUri(media);
+  if (!/^https?:\/\//.test(media)) return null;
+  const res = await fetch(media);
+  if (!res.ok) throw new Error(`Failed to fetch post media (status ${res.status})`);
+  const contentType = res.headers.get("content-type") ?? "";
+  const kind: "image" | "video" | null = contentType.startsWith("video/") ? "video" : contentType.startsWith("image/") ? "image" : null;
+  if (!kind) throw new Error(`Could not determine media type for the post's hosted media (content-type: "${contentType}")`);
+  return { buffer: Buffer.from(await res.arrayBuffer()), kind };
+}
+
+/**
+ * Cheaply determines whether a hosted media URL is an image or a video via
+ * its Content-Type, without downloading the body. Used before choosing which
+ * Facebook Graph API endpoint to post to — posting a video to the photos
+ * endpoint (or vice versa) fails, so this must be checked first rather than
+ * assumed from the fact that it's a URL.
+ */
+async function probeHostedMediaKind(url: string): Promise<"image" | "video" | null> {
+  const res = await fetch(url, { method: "HEAD" });
+  if (!res.ok) return null;
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.startsWith("video/")) return "video";
+  if (contentType.startsWith("image/")) return "image";
+  return null;
+}
+
 interface PublishOutcome {
   platform: string;
   socialAccountId: number | null;
@@ -327,15 +361,20 @@ async function publishToPlatform(
 
     if (platformKey === "facebook") {
       if (media) {
-        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
-        if (decoded) {
-          const result = decoded.kind === "video"
-            ? await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption)
-            : await publishFacebookPhotoPost(account.accountId!, accessToken, decoded.buffer, caption);
-          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
-        }
         if (/^https?:\/\//.test(media)) {
-          // Facebook's photo endpoint also accepts a hosted URL directly.
+          // AI-generated images AND videos are both hosted URLs now — probe
+          // which one this is before picking an endpoint. Videos must go
+          // through publishFacebookVideoPost (which needs the raw bytes);
+          // only images can use the cheap URL-passthrough /photos call.
+          const kind = await probeHostedMediaKind(media);
+          if (kind === "video") {
+            const decoded = await resolveMediaBuffer(media);
+            if (!decoded) throw new Error("Failed to download the post's hosted video for Facebook publishing");
+            const result = await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption);
+            return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+          }
+          // Facebook's photo endpoint accepts a hosted URL directly — no need
+          // to download and re-upload the bytes ourselves.
           const res = await fetch(`https://graph.facebook.com/v21.0/${account.accountId}/photos`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -345,6 +384,13 @@ async function publishToPlatform(
           if (!res.ok || !json.post_id) throw new Error(json?.error?.message || "Facebook rejected the photo post");
           return { ...base, status: "success", externalPostId: json.post_id, externalUrl: `https://www.facebook.com/${json.post_id}`, errorMessage: null };
         }
+        const decoded = bufferFromDataUri(media);
+        if (decoded) {
+          const result = decoded.kind === "video"
+            ? await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption)
+            : await publishFacebookPhotoPost(account.accountId!, accessToken, decoded.buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+        }
       }
       const result = await publishFacebookFeedPost(account.accountId!, accessToken, caption);
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
@@ -352,7 +398,10 @@ async function publishToPlatform(
 
     if (platformKey === "linkedin") {
       if (media) {
-        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        // Resolves either a data: URI or a hosted URL (AI-generated images are
+        // now stored in object storage and referenced by URL) to bytes — the
+        // Posts API's image upload step needs the bytes either way.
+        const decoded = await resolveMediaBuffer(media);
         if (decoded?.kind === "image") {
           const result = await publishLinkedInImagePost(account.accountId!, accessToken, decoded.buffer, caption);
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
@@ -360,10 +409,7 @@ async function publishToPlatform(
         if (decoded?.kind === "video") {
           throw new Error("LinkedIn video publishing isn't wired up yet — remove the video or post the caption only.");
         }
-        // A hosted URL (not a data: URI) has no direct "attach by URL" support in the
-        // Posts API without a separate asset-registration step for that URL — fail
-        // clearly rather than silently posting caption-only.
-        throw new Error("LinkedIn image publishing currently supports AI-generated images only, not externally hosted URLs.");
+        throw new Error("Couldn't read this post's image/video to publish it to LinkedIn.");
       }
       const result = await publishLinkedInTextPost(account.accountId!, accessToken, caption);
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
@@ -374,7 +420,7 @@ async function publishToPlatform(
       // leading "@" to build the tweet permalink.
       const username = (account.accountName ?? "").replace(/^@/, "");
       if (media) {
-        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        const decoded = await resolveMediaBuffer(media);
         if (decoded?.kind === "image") {
           const result = await publishTweetWithImage(username, accessToken, decoded.buffer, caption);
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
@@ -382,20 +428,21 @@ async function publishToPlatform(
         if (decoded?.kind === "video") {
           throw new Error("X/Twitter video publishing isn't wired up yet — remove the video or post the caption only.");
         }
-        throw new Error("X/Twitter image publishing currently supports AI-generated images only, not externally hosted URLs.");
+        throw new Error("Couldn't read this post's image/video to publish it to X/Twitter.");
       }
       const result = await publishTweet(username, accessToken, caption);
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
     }
 
-    // Instagram Content Publishing requires a publicly reachable image URL (it
-    // has no direct-video-upload path either) — a base64 data: URI (how
-    // in-app AI-generated images/videos are stored today) can't be used, so
-    // that case fails with a clear, specific reason rather than silently
-    // dropping the media or lying about success.
+    // Instagram Content Publishing requires a publicly reachable image URL —
+    // it has no direct byte-upload path (unlike Facebook's Page photo
+    // endpoint). AI-generated images are now stored in object storage and
+    // referenced by a real https:// URL, so this succeeds for them; a
+    // leftover base64 data: URI (or any other non-URL value) still fails
+    // clearly instead of silently dropping the media or lying about success.
     if (!media) throw new Error("Instagram posts require an image or video. Add one before publishing.");
     if (!/^https?:\/\//.test(media)) {
-      throw new Error("Instagram requires a publicly hosted media URL. This post's image/video was generated in-app and isn't hosted online yet — attach a hosted URL to publish to Instagram.");
+      throw new Error("Instagram requires a publicly hosted media URL. This post's image/video isn't hosted online — regenerate it or attach a hosted URL to publish to Instagram.");
     }
     const result = await publishInstagramPhotoPost(account.accountId!, accessToken, media, caption);
     return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };

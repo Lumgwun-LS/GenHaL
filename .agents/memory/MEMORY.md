@@ -53,3 +53,4 @@
 - [Job run status pattern](job-run-status-pattern.md) — shared job_run_status table + helper gives any silent scheduler an admin-visible last-run/failing-banner story; reuse instead of inventing a bespoke table per job.
 - [Admin plan-change history](vendorhub-tier-change-history.md) — vendorNotificationsTable has structured previousTier/newTier columns (not just a message string) so admin views can filter/render tier_change rows without parsing text.
 - [VendorHub social OAuth publish providers](vendorhub-social-oauth-providers.md) — Meta, LinkedIn, and X/Twitter share one add-a-provider recipe across lib/<provider>.ts, social-oauth.ts, posts.ts, and the Social Hub UI; none refresh tokens yet.
+- [VendorHub generated media storage](vendorhub-generated-media-storage.md) — AI-generated post images/videos are stored in object storage with a public URL, not base64; Instagram publishing needs a real URL, unlike Facebook's direct upload.

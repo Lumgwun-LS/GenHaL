@@ -30,6 +30,7 @@ import publicVendorsRouter from "./public-vendors";
 import publicPostLinksRouter from "./public-post-links";
 import voiceStatusCallbackRouter from "./voice-status-callback";
 import voiceTtsAudioRouter from "./voice-tts-audio";
+import mediaRouter from "./media";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -54,6 +55,9 @@ router.use(voiceStatusCallbackRouter);
 
 // ElevenLabs-generated call audio — public, Twilio fetches this mid-call
 router.use(voiceTtsAudioRouter);
+
+// AI-generated post media — public, Instagram/other platforms fetch this server-to-server
+router.use(mediaRouter);
 
 // External / Awajimaa bridge — has its own auth (API key + JWT), no Clerk required
 router.use("/external", externalRouter);

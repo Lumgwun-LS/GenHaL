@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { generateVideoBuffer } from "../lib/video-generation";
+import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import {
   GenerateAiImageBody,
   GenerateAiVideoBody,
@@ -61,7 +62,11 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   let status: "completed" | "failed" = "completed";
   try {
     const buffer = await generateImageBuffer(fullPrompt, "1024x1024");
-    result = `data:image/png;base64,${buffer.toString("base64")}`;
+    // Stored in object storage (not a base64 data: URI) so the resulting URL is
+    // publicly fetchable — Instagram's Content Publishing API requires that for
+    // the post's image, and a data: URI could never satisfy it.
+    const { publicUrl } = await storeGeneratedMedia(buffer, "image/png");
+    result = publicUrl;
   } catch (err) {
     status = "failed";
     result = `Image generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
@@ -105,7 +110,10 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   try {
     const imageBuffer = await generateImageBuffer(fullPrompt, "1024x1024");
     const videoBuffer = await generateVideoBuffer(imageBuffer, captionText ?? prompt);
-    result = `data:video/mp4;base64,${videoBuffer.toString("base64")}`;
+    // Stored in object storage (not a base64 data: URI) for the same reason as
+    // generate-image — a publicly fetchable URL is what platform publish APIs need.
+    const { publicUrl } = await storeGeneratedMedia(videoBuffer, "video/mp4");
+    result = publicUrl;
   } catch (err) {
     status = "failed";
     result = `Video generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
