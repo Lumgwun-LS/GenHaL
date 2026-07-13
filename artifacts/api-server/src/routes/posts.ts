@@ -6,6 +6,7 @@ import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postP
 import { decrypt } from "../lib/encryption";
 import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
 import { publishLinkedInTextPost, publishLinkedInImagePost } from "../lib/linkedin";
+import { publishTweet, publishTweetWithImage } from "../lib/twitter";
 import {
   ListPostsQueryParams,
   CreatePostBody,
@@ -288,9 +289,9 @@ function resolveTargetAccount(
 }
 
 /**
- * Publishes a single platform's leg of a post. Only Facebook/Instagram have a
- * real OAuth-connected publish path today (via Meta Graph API); every other
- * platform fails clearly instead of silently pretending to succeed.
+ * Publishes a single platform's leg of a post. Facebook/Instagram (Meta Graph
+ * API), LinkedIn, and X/Twitter have real OAuth-connected publish paths today;
+ * every other platform fails clearly instead of silently pretending to succeed.
  */
 async function publishToPlatform(
   platformKey: string,
@@ -310,7 +311,7 @@ async function publishToPlatform(
     };
   }
 
-  if (platformKey !== "facebook" && platformKey !== "instagram" && platformKey !== "linkedin") {
+  if (platformKey !== "facebook" && platformKey !== "instagram" && platformKey !== "linkedin" && platformKey !== "twitter") {
     return {
       ...base,
       status: "failed",
@@ -365,6 +366,25 @@ async function publishToPlatform(
         throw new Error("LinkedIn image publishing currently supports AI-generated images only, not externally hosted URLs.");
       }
       const result = await publishLinkedInTextPost(account.accountId!, accessToken, caption);
+      return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+    }
+
+    if (platformKey === "twitter") {
+      // accountName is stored as "@username" (see social-oauth.ts) — strip the
+      // leading "@" to build the tweet permalink.
+      const username = (account.accountName ?? "").replace(/^@/, "");
+      if (media) {
+        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        if (decoded?.kind === "image") {
+          const result = await publishTweetWithImage(username, accessToken, decoded.buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+        }
+        if (decoded?.kind === "video") {
+          throw new Error("X/Twitter video publishing isn't wired up yet — remove the video or post the caption only.");
+        }
+        throw new Error("X/Twitter image publishing currently supports AI-generated images only, not externally hosted URLs.");
+      }
+      const result = await publishTweet(username, accessToken, caption);
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
     }
 

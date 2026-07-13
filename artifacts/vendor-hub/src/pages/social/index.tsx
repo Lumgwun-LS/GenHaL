@@ -87,7 +87,7 @@ function ScheduleDialog({
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
-const MANUAL_ONLY_PLATFORMS = ["TikTok", "X (Twitter)"];
+const MANUAL_ONLY_PLATFORMS = ["TikTok"];
 
 function ConnectedAccounts() {
   const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: 1 });
@@ -103,7 +103,8 @@ function ConnectedAccounts() {
     const result = params.get("social_connect");
     if (result === "success") {
       const count = params.get("count");
-      const provider = params.get("provider") === "linkedin" ? "LinkedIn" : "Facebook/Instagram";
+      const providerParam = params.get("provider");
+      const provider = providerParam === "linkedin" ? "LinkedIn" : providerParam === "twitter" ? "X" : "Facebook/Instagram";
       toast.success(`Connected ${count ?? ""} ${provider} account${count === "1" ? "" : "s"}`.trim());
       queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
       window.history.replaceState({}, "", window.location.pathname);
@@ -120,6 +121,10 @@ function ConnectedAccounts() {
 
   const handleConnectLinkedIn = () => {
     window.location.href = `${BASE_URL}/api/social/oauth/linkedin/start`;
+  };
+
+  const handleConnectTwitter = () => {
+    window.location.href = `${BASE_URL}/api/social/oauth/twitter/start`;
   };
 
   const handleConnect = async () => {
@@ -158,6 +163,9 @@ function ConnectedAccounts() {
           <Button size="sm" onClick={handleConnectLinkedIn}>
             <Linkedin className="w-3.5 h-3.5 mr-1.5" /> Connect LinkedIn
           </Button>
+          <Button size="sm" onClick={handleConnectTwitter}>
+            <Twitter className="w-3.5 h-3.5 mr-1.5" /> Connect X
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><Plus className="w-3.5 h-3.5 mr-1" /> Add manually</Button>
@@ -166,7 +174,7 @@ function ConnectedAccounts() {
               <DialogHeader><DialogTitle>Register another account</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Live OAuth publishing is only wired up for Facebook/Instagram so far — these platforms are label-only until they get a real connection.
+                  Live OAuth publishing is wired up for Facebook/Instagram, LinkedIn, and X — TikTok is label-only until it gets a real connection.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {MANUAL_ONLY_PLATFORMS.map((p) => (
@@ -196,7 +204,7 @@ function ConnectedAccounts() {
               <div key={a.id} className="flex items-center gap-2 rounded-full border pl-3 pr-1 py-1 text-sm">
                 <span className="font-medium">{a.platform}</span>
                 <span className="text-muted-foreground">{a.accountName}</span>
-                {a.connectedVia === "oauth_meta" && (
+                {(a.connectedVia === "oauth_meta" || a.connectedVia === "oauth_linkedin" || a.connectedVia === "oauth_twitter") && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Live</Badge>
                 )}
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDisconnect(a.id)}>

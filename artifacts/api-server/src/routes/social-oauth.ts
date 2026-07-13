@@ -28,6 +28,13 @@ import {
   exchangeCodeForAccessToken as exchangeLinkedInCodeForAccessToken,
   fetchLinkedInProfile,
 } from "../lib/linkedin";
+import {
+  isTwitterConfigured,
+  buildTwitterAuthUrl,
+  generatePkcePair,
+  exchangeCodeForAccessToken as exchangeTwitterCodeForAccessToken,
+  fetchTwitterProfile,
+} from "../lib/twitter";
 import { encrypt } from "../lib/encryption";
 
 const router: IRouter = Router();
@@ -47,6 +54,11 @@ function frontendSocialUrl(req: import("express").Request, query: string): strin
 function linkedInRedirectUriFor(req: import("express").Request): string {
   const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || req.get("host");
   return `https://${domain}/api/social/oauth/linkedin/callback`;
+}
+
+function twitterRedirectUriFor(req: import("express").Request): string {
+  const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || req.get("host");
+  return `https://${domain}/api/social/oauth/twitter/callback`;
 }
 
 async function resolveVendorId(req: import("express").Request): Promise<number | null> {
@@ -247,6 +259,87 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
     res.redirect(frontendSocialUrl(req, "?social_connect=success&count=1&provider=linkedin"));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to connect LinkedIn account";
+    res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(message)}`));
+  }
+});
+
+router.get("/social/oauth/twitter/start", async (req, res): Promise<void> => {
+  if (!isTwitterConfigured()) {
+    res.status(503).json({ error: "X/Twitter connection is not configured. Ask an admin to add X_CLIENT_ID and X_CLIENT_SECRET." });
+    return;
+  }
+  const vendorId = await resolveVendorId(req);
+  if (!vendorId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
+
+  // X's PKCE flow needs the code_verifier again at the callback, but the
+  // callback is a separate request/redirect — we embed it in the signed state
+  // JWT alongside vendorId rather than stashing it server-side, so it survives
+  // without needing sticky sessions.
+  const { codeVerifier, codeChallenge } = generatePkcePair();
+  const state = jwt.sign({ vendorId, codeVerifier }, secret, { expiresIn: STATE_TTL_SECONDS });
+  const authUrl = buildTwitterAuthUrl(state, twitterRedirectUriFor(req), codeChallenge);
+  res.redirect(authUrl);
+});
+
+router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => {
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const state = typeof req.query.state === "string" ? req.query.state : null;
+  const oauthError = typeof req.query.error_description === "string" ? req.query.error_description : null;
+
+  if (oauthError) { res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(oauthError)}`)); return; }
+  if (!code || !state) { res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Missing%20code%20or%20state")); return; }
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
+
+  let statePayload: { vendorId: number; codeVerifier: string };
+  try {
+    statePayload = jwt.verify(state, secret) as { vendorId: number; codeVerifier: string };
+  } catch {
+    res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20expired%2C%20please%20try%20again"));
+    return;
+  }
+
+  const currentVendorId = await resolveVendorId(req);
+  if (!currentVendorId || currentVendorId !== statePayload.vendorId) {
+    res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20does%20not%20match%20your%20account"));
+    return;
+  }
+
+  try {
+    const redirectUri = twitterRedirectUriFor(req);
+    const { accessToken, expiresInSeconds } = await exchangeTwitterCodeForAccessToken(code, redirectUri, statePayload.codeVerifier);
+    const profile = await fetchTwitterProfile(accessToken);
+    const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
+
+    const [existing] = await db
+      .select({ id: socialAccountsTable.id })
+      .from(socialAccountsTable)
+      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "X (Twitter)"), eq(socialAccountsTable.accountId, profile.userId)));
+
+    const values = {
+      vendorId: currentVendorId,
+      platform: "X (Twitter)",
+      accountName: `@${profile.username}`,
+      accountId: profile.userId,
+      profileUrl: `https://twitter.com/${profile.username}`,
+      status: "active",
+      connectedVia: "oauth_twitter",
+      accessTokenEncrypted: encrypt(accessToken),
+      tokenExpiresAt,
+    };
+    if (existing) {
+      await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));
+    } else {
+      await db.insert(socialAccountsTable).values(values);
+    }
+
+    res.redirect(frontendSocialUrl(req, "?social_connect=success&count=1&provider=twitter"));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to connect X account";
     res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(message)}`));
   }
 });
