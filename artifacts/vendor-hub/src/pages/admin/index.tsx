@@ -557,6 +557,137 @@ function ExportFilterPopover({ onExport }: { onExport: (filters: ExportFilters) 
   );
 }
 
+function vendorMatchesFilters(vendor: AdminVendor, filters: ExportFilters): boolean {
+  if (filters.tier !== ANY && vendor.subscriptionTier !== filters.tier) return false;
+  if (filters.status !== ANY && vendor.status !== filters.status) return false;
+  if (filters.verificationLevel !== ANY && vendor.verificationLevel !== filters.verificationLevel) return false;
+  const createdAt = new Date(vendor.createdAt);
+  if (filters.joinedAfter) {
+    const after = new Date(filters.joinedAfter);
+    if (!isNaN(after.getTime()) && createdAt < after) return false;
+  }
+  if (filters.joinedBefore) {
+    const before = new Date(new Date(filters.joinedBefore).getTime() + 24 * 60 * 60 * 1000 - 1);
+    if (!isNaN(before.getTime()) && createdAt > before) return false;
+  }
+  return true;
+}
+
+function TargetByFilterPopover({
+  vendors,
+  onApply,
+}: {
+  vendors: AdminVendor[];
+  onApply: (vendorIds: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filters, setFilters] = useState<ExportFilters>(EMPTY_FILTERS);
+
+  function update<K extends keyof ExportFilters>(key: K, value: ExportFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
+
+  const filtersActive =
+    filters.tier !== ANY || filters.status !== ANY || filters.verificationLevel !== ANY || filters.joinedAfter !== "" || filters.joinedBefore !== "";
+  const matchCount = vendors.filter((v) => vendorMatchesFilters(v, filters)).length;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="shrink-0 gap-2" data-testid="button-target-by-filter">
+          <ShieldAlert className="w-4 h-4" />
+          Filter &amp; Select
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-4">
+        <div className="space-y-1">
+          <p className="text-xs font-medium">Select vendors matching…</p>
+          <p className="text-xs text-muted-foreground">Pre-selects vendors below so you can send them a bulk message.</p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Subscription Tier</Label>
+          <Select value={filters.tier} onValueChange={(v) => update("tier", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any tier</SelectItem>
+              {TIERS.map((t) => (
+                <SelectItem key={t} value={t} className="text-xs">{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <Select value={filters.status} onValueChange={(v) => update("status", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any status</SelectItem>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s} className="text-xs">{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Verification Level</Label>
+          <Select value={filters.verificationLevel} onValueChange={(v) => update("verificationLevel", v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY} className="text-xs">Any level</SelectItem>
+              {LEVELS.map((l) => (
+                <SelectItem key={l} value={l} className="text-xs">{l.charAt(0).toUpperCase() + l.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Joined after</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={filters.joinedAfter}
+              onChange={(e) => update("joinedAfter", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Joined before</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={filters.joinedBefore}
+              onChange={(e) => update("joinedBefore", e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            data-testid="button-clear-target-filter"
+          >
+            Clear
+          </Button>
+          <Button
+            size="sm"
+            className="text-xs"
+            disabled={!filtersActive || matchCount === 0}
+            onClick={() => {
+              onApply(vendors.filter((v) => vendorMatchesFilters(v, filters)).map((v) => v.id));
+              setOpen(false);
+            }}
+            data-testid="button-apply-target-filter"
+          >
+            Select {matchCount} vendor{matchCount === 1 ? "" : "s"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 async function postVendorMessage(vendorId: number, message: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/notifications`, {
     method: "POST",
@@ -1053,6 +1184,18 @@ export default function AdminPanel() {
                 <CardDescription>Adjust subscription tiers and verification levels. Changes take effect immediately.</CardDescription>
               </div>
               <div className="flex items-center gap-2">
+                <TargetByFilterPopover
+                  vendors={vendors ?? []}
+                  onApply={(vendorIds) => {
+                    setSelectAllVendors(false);
+                    setSelectedVendorIds(vendorIds);
+                    toast.success(
+                      vendorIds.length > 0
+                        ? `Selected ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter`
+                        : "No vendors matched that filter",
+                    );
+                  }}
+                />
                 <BulkMessageDialog
                   selectedIds={selectedVendorIds}
                   allSelected={selectAllVendors}
