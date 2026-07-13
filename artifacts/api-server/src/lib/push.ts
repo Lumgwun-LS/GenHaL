@@ -5,10 +5,23 @@
  *
  * Docs: https://docs.expo.dev/push-notifications/sending-notifications/
  */
-import { db, vendorPushTokensTable } from "@workspace/db";
+import { db, vendorPushTokensTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const EXPO_PUSH_API = "https://exp.host/--/api/v2/push/send";
+
+/**
+ * Push notification categories a vendor can individually mute from the
+ * mobile Account tab. Each maps to a boolean column on vendorsTable that
+ * defaults to true, so adding a new category never silently changes
+ * existing behavior for vendors who haven't touched the setting.
+ */
+export type PushCategory = "payments" | "voice_campaigns";
+
+const PUSH_CATEGORY_COLUMN = {
+  payments: vendorsTable.pushPaymentAlertsEnabled,
+  voice_campaigns: vendorsTable.pushVoiceCampaignAlertsEnabled,
+} as const;
 
 interface PushMessage {
   to: string;
@@ -57,13 +70,32 @@ async function sendExpoPushMessages(messages: PushMessage[]): Promise<void> {
   }
 }
 
-/** Sends a push notification to every device a vendor has registered. */
+/**
+ * Sends a push notification to every device a vendor has registered.
+ * When `category` is given, the vendor's per-category preference is
+ * checked first and the send is skipped entirely if they've muted it.
+ * Omitting `category` sends unconditionally (used for uncategorized/
+ * account-level pushes, if any).
+ */
 export async function sendPushToVendor(
   vendorId: number,
   title: string,
   body: string,
   data?: Record<string, unknown>,
+  category?: PushCategory,
 ): Promise<void> {
+  if (category) {
+    const column = PUSH_CATEGORY_COLUMN[category];
+    const [vendor] = await db
+      .select({ enabled: column })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, vendorId))
+      .limit(1);
+    // Default to sending if the vendor row can't be found — that's an
+    // unexpected state, not an explicit opt-out.
+    if (vendor && vendor.enabled === false) return;
+  }
+
   const tokens = await db
     .select({ expoPushToken: vendorPushTokensTable.expoPushToken })
     .from(vendorPushTokensTable)
@@ -108,5 +140,5 @@ export async function notifyVendorPaymentStatus(
 
   await sendPushToVendor(vendorId, copy[status].title, copy[status].body, {
     screen: "payments",
-  });
+  }, "payments");
 }

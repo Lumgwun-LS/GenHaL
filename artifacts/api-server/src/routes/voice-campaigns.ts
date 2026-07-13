@@ -238,6 +238,7 @@ async function notifyCampaignFinished(
       `Voice campaign ${terminalStatus === "completed" ? "finished" : "failed"}`,
       `"${campaign.name}" ${terminalStatus === "completed" ? "finished" : "failed"}: ${summary}.`,
       { screen: "voice-campaigns", campaignId: campaign.id },
+      "voice_campaigns",
     );
   } catch (err) {
     logger.error({ err, campaignId: campaign.id, vendorId }, "[voice] Failed to send campaign-finished notification");

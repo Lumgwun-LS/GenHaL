@@ -44,6 +44,33 @@ export default function AccountScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingCategory, setIsTogglingCategory] = useState<
+    'payments' | 'voiceCampaigns' | null
+  >(null);
+
+  const paymentAlertsEnabled = vendor?.pushPaymentAlertsEnabled ?? true;
+  const voiceCampaignAlertsEnabled = vendor?.pushVoiceCampaignAlertsEnabled ?? true;
+
+  const handleToggleCategory = async (
+    key: 'payments' | 'voiceCampaigns',
+    next: boolean,
+  ) => {
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    setIsTogglingCategory(key);
+    try {
+      await updateProfile(
+        key === 'payments'
+          ? { pushPaymentAlertsEnabled: next }
+          : { pushVoiceCampaignAlertsEnabled: next },
+      );
+    } catch {
+      Alert.alert('Could not save', 'Please try again.');
+    } finally {
+      setIsTogglingCategory(null);
+    }
+  };
   const [name, setName] = useState(vendor?.name ?? '');
   const [phone, setPhone] = useState(vendor?.phone ?? '');
   const [address, setAddress] = useState(vendor?.address ?? '');
@@ -277,6 +304,60 @@ export default function AccountScreen() {
               />
             )}
           </View>
+
+          {pushAlertsEnabled && (
+            <>
+              <View
+                style={[
+                  styles.toggleRow,
+                  styles.toggleSubRow,
+                  { borderTopColor: colors.border },
+                ]}
+              >
+                <View style={styles.toggleTextWrap}>
+                  <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                    Payment alerts
+                  </Text>
+                  <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                    Get notified when a payment is received, fails, or is refunded.
+                  </Text>
+                </View>
+                {isTogglingCategory === 'payments' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Switch
+                    value={paymentAlertsEnabled}
+                    onValueChange={(next) => void handleToggleCategory('payments', next)}
+                    disabled={isTogglingCategory !== null}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor="#FFFFFF"
+                  />
+                )}
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextWrap}>
+                  <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                    Voice campaign alerts
+                  </Text>
+                  <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                    Get notified when one of your voice campaigns finishes.
+                  </Text>
+                </View>
+                {isTogglingCategory === 'voiceCampaigns' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Switch
+                    value={voiceCampaignAlertsEnabled}
+                    onValueChange={(next) => void handleToggleCategory('voiceCampaigns', next)}
+                    disabled={isTogglingCategory !== null}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor="#FFFFFF"
+                  />
+                )}
+              </View>
+            </>
+          )}
         </Card>
       </AnimatedListItem>
 
@@ -464,6 +545,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     marginTop: 8,
+  },
+  toggleSubRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   toggleTextWrap: {
     flex: 1,

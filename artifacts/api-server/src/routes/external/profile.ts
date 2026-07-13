@@ -35,7 +35,10 @@ router.get("/profile", async (req, res) => {
  */
 router.patch("/profile", async (req, res) => {
   const { vendorId } = req.externalUser!;
-  const { name, phone, address, description, logoUrl, gender, country, state, city } = req.body as {
+  const {
+    name, phone, address, description, logoUrl, gender, country, state, city,
+    pushPaymentAlertsEnabled, pushVoiceCampaignAlertsEnabled,
+  } = req.body as {
     name?: string;
     phone?: string;
     address?: string;
@@ -45,6 +48,8 @@ router.patch("/profile", async (req, res) => {
     country?: string;
     state?: string;
     city?: string;
+    pushPaymentAlertsEnabled?: boolean;
+    pushVoiceCampaignAlertsEnabled?: boolean;
   };
 
   const [updated] = await db
@@ -59,6 +64,8 @@ router.patch("/profile", async (req, res) => {
       ...(country !== undefined && { country }),
       ...(state !== undefined && { state }),
       ...(city !== undefined && { city }),
+      ...(pushPaymentAlertsEnabled !== undefined && { pushPaymentAlertsEnabled }),
+      ...(pushVoiceCampaignAlertsEnabled !== undefined && { pushVoiceCampaignAlertsEnabled }),
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendorId))

@@ -40,4 +40,6 @@ export interface Vendor {
   state?: string | null;
   /** @nullable */
   city?: string | null;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }

@@ -43,3 +43,4 @@
 - [Export-burst soft block/acknowledge pattern](export-burst-block.md) — derive "still blocked" from comparing a stored ack timestamp against the timestamp of the event that crossed the threshold, not a plain boolean flag.
 - [Admin panel tab pattern](vendorhub-admin-tab-pattern.md) — new admin history/log views follow the audit-log tab recipe: typed fetch fn + useQuery(enabled: isAdmin) + client-side filter useMemo + Table in a TabsContent.
 - [Voice call retry dual-table sync](vendorhub-voice-retry-dual-table.md) — campaign calls live in both voice_call_logs and voice_campaign_calls; any retry/status-mutation must update both or the two views of the same call drift apart.
+- [VendorHub push notification categories](vendorhub-push-categories.md) — per-category opt-out (payments, voice campaigns) is per-vendor boolean columns, default true, checked inside shared sendPushToVendor via a category param.

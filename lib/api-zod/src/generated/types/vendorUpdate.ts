@@ -21,4 +21,6 @@ export interface VendorUpdate {
   country?: string;
   state?: string;
   city?: string;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }

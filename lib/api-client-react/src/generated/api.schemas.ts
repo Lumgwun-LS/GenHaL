@@ -43,6 +43,8 @@ export interface Vendor {
   state?: string | null;
   /** @nullable */
   city?: string | null;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }
 
 export interface VendorOnboardingInput {
@@ -79,6 +81,8 @@ export interface VendorUpdate {
   country?: string;
   state?: string;
   city?: string;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }
 
 export interface DeletionEligibility {
@@ -531,6 +535,8 @@ export interface ExternalProfileUpdate {
   country?: string;
   state?: string;
   city?: string;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }
 
 export interface ExternalAnalyticsSummary {

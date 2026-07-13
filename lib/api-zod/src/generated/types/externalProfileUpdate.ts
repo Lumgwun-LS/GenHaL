@@ -16,4 +16,6 @@ export interface ExternalProfileUpdate {
   country?: string;
   state?: string;
   city?: string;
+  pushPaymentAlertsEnabled?: boolean;
+  pushVoiceCampaignAlertsEnabled?: boolean;
 }

@@ -49,7 +49,9 @@ export const ListVendorsResponseItem = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
 
@@ -91,7 +93,9 @@ export const CreateVendorResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 
@@ -130,7 +134,9 @@ export const OnboardVendorResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 
@@ -178,7 +184,9 @@ export const GetVendorResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 
@@ -203,7 +211,9 @@ export const UpdateVendorBody = zod.object({
   "gender": zod.string().optional(),
   "country": zod.string().optional(),
   "state": zod.string().optional(),
-  "city": zod.string().optional()
+  "city": zod.string().optional(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -229,7 +239,9 @@ export const UpdateVendorResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 
@@ -1973,7 +1985,9 @@ export const GetExternalProfileResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 }),
   "features": zod.array(zod.string())
 })
@@ -1991,7 +2005,9 @@ export const UpdateExternalProfileBody = zod.object({
   "gender": zod.string().optional(),
   "country": zod.string().optional(),
   "state": zod.string().optional(),
-  "city": zod.string().optional()
+  "city": zod.string().optional(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 export const UpdateExternalProfileResponse = zod.object({
@@ -2017,7 +2033,9 @@ export const UpdateExternalProfileResponse = zod.object({
   "gender": zod.string().nullish(),
   "country": zod.string().nullish(),
   "state": zod.string().nullish(),
-  "city": zod.string().nullish()
+  "city": zod.string().nullish(),
+  "pushPaymentAlertsEnabled": zod.boolean().optional(),
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
 })
 
 

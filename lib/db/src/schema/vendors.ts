@@ -37,6 +37,10 @@ export const vendorsTable = pgTable("vendors", {
   dateOfBirth: date("date_of_birth"),
   // Voice — opt-out of birthday & campaign calls (default opted in)
   voiceCallOptOut: boolean("voice_call_opt_out").notNull().default(false),
+  // Push notification categories — vendor-controlled, default on for everyone
+  // so adding a new category never silently changes existing behavior.
+  pushPaymentAlertsEnabled: boolean("push_payment_alerts_enabled").notNull().default(true),
+  pushVoiceCampaignAlertsEnabled: boolean("push_voice_campaign_alerts_enabled").notNull().default(true),
   // Demographics — self-reported by the vendor, used for admin analytics
   gender: text("gender"), // male|female|other|prefer_not_to_say
   country: text("country"),

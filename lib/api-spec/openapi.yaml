@@ -1843,6 +1843,10 @@ components:
           type: ["string", "null"]
         city:
           type: ["string", "null"]
+        pushPaymentAlertsEnabled:
+          type: boolean
+        pushVoiceCampaignAlertsEnabled:
+          type: boolean
 
     VendorOnboardingInput:
       type: object
@@ -1911,6 +1915,10 @@ components:
           type: string
         city:
           type: string
+        pushPaymentAlertsEnabled:
+          type: boolean
+        pushVoiceCampaignAlertsEnabled:
+          type: boolean
 
     DeletionEligibility:
       type: object
@@ -2745,6 +2753,10 @@ components:
           type: string
         city:
           type: string
+        pushPaymentAlertsEnabled:
+          type: boolean
+        pushVoiceCampaignAlertsEnabled:
+          type: boolean
 
     ExternalAnalyticsSummary:
       type: object
