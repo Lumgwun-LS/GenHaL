@@ -21,14 +21,16 @@ export default function Scene5() {
       </div>
 
       <motion.div
-        className="w-[8vw] h-[8vw] mb-[3vh] rounded-[2vw] bg-gradient-to-br from-[#8A2BE2] to-[#00E5FF] flex items-center justify-center shadow-[0_0_50px_rgba(138,43,226,0.4)]"
+        className="w-[8vw] h-[8vw] mb-[3vh] rounded-[2vw] overflow-hidden shadow-[0_0_50px_rgba(138,43,226,0.4)] border border-white/10"
         initial={{ scale: 0, rotate: 90 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 100 }}
       >
-        <svg className="w-[4vw] h-[4vw] text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
+        <img
+          src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`}
+          alt="Awajimaa"
+          className="w-full h-full object-cover"
+        />
       </motion.div>
 
       <motion.h1
@@ -47,7 +49,7 @@ export default function Scene5() {
         transition={{ delay: 1.2, duration: 0.8 }}
       >
         Everything you need. One dashboard. <br/>
-        <span className="text-white font-semibold mt-[1vh] inline-block">Welcome to VendorHub.</span>
+        <span className="text-white font-semibold mt-[1vh] inline-block">Welcome to Awajimaa VendorHub.</span>
       </motion.p>
     </motion.div>
   );

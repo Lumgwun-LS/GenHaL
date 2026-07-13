@@ -86,6 +86,25 @@ export default function VideoTemplate({
         transition={{ duration: 4, ease: 'easeInOut' }}
       />
 
+      {/* Persistent brand mark -- stays in the corner across every scene */}
+      <motion.div
+        className="absolute top-[4vh] left-[4vw] z-40 flex items-center gap-[0.8vw]"
+        initial={{ opacity: 0, y: '-2vh' }}
+        animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="w-[2.4vw] h-[2.4vw] rounded-[0.6vw] overflow-hidden border border-white/15 shadow-[0_0_20px_rgba(138,43,226,0.35)]">
+          <img
+            src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`}
+            alt="Awajimaa"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <span className="text-[1vw] font-display font-semibold tracking-wide text-white/80">
+          Awajimaa
+        </span>
+      </motion.div>
+
       <AnimatePresence mode="popLayout">
         {SceneComponent && <SceneComponent key={currentSceneKey} />}
       </AnimatePresence>
