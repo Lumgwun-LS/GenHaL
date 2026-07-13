@@ -47,3 +47,4 @@
 - [Voice call-status backfill/reconciliation](voice-call-status-backfill.md) — stuck call statuses self-heal via a timed job hitting Twilio's REST API directly, bypassing the webhook signature path that caused the stall.
 - [VendorHub LinkedIn OAuth](vendorhub-linkedin-oauth.md) — second real per-vendor social OAuth provider (personal profile only, no video); TikTok/X still manual-only; platform-constraints.ts shows format guidance in compose UI.
 - [Orval + db dist staleness](orval-db-dist-staleness.md) — after other work merges schema/openapi changes, run `tsc -b` in lib/db and lib/api-zod and `pnpm --filter @workspace/api-spec run codegen` before trusting typecheck errors as real.
+- [Dev DB drift runs deeper than one migration](dev-db-drift-depth.md) — a "column X does not exist" crash is often the first of several un-applied migrations on tables that query joins; check all of them together before fixing.
