@@ -13,12 +13,13 @@ export const socialAccountsTable = pgTable("social_accounts", {
   avatarUrl: text("avatar_url"),
   status: text("status").notNull().default("active"),
   followersCount: integer("followers_count"),
-  // OAuth-connected accounts (currently: Meta/Facebook Pages + linked Instagram
-  // Business accounts) store their long-lived page access token here, encrypted
-  // the same way vendor payment credentials are (see lib/encryption.ts). Manually
-  // registered accounts (legacy "just note the handle" flow) leave this null and
-  // can never be used for live publishing.
-  connectedVia: text("connected_via").notNull().default("manual"), // manual | oauth_meta
+  // OAuth-connected accounts (Meta/Facebook Pages + linked Instagram Business
+  // accounts, or a LinkedIn member profile) store their long-lived access token
+  // here, encrypted the same way vendor payment credentials are (see
+  // lib/encryption.ts). Manually registered accounts (legacy "just note the
+  // handle" flow, still used for TikTok/X which have no OAuth flow yet) leave
+  // this null and can never be used for live publishing.
+  connectedVia: text("connected_via").notNull().default("manual"), // manual | oauth_meta | oauth_linkedin
   accessTokenEncrypted: text("access_token_encrypted"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

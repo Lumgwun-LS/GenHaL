@@ -5,6 +5,7 @@ import { eq, and, gt, desc, inArray } from "drizzle-orm";
 import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postPublicationsTable } from "@workspace/db";
 import { decrypt } from "../lib/encryption";
 import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
+import { publishLinkedInTextPost, publishLinkedInImagePost } from "../lib/linkedin";
 import {
   ListPostsQueryParams,
   CreatePostBody,
@@ -309,7 +310,7 @@ async function publishToPlatform(
     };
   }
 
-  if (platformKey !== "facebook" && platformKey !== "instagram") {
+  if (platformKey !== "facebook" && platformKey !== "instagram" && platformKey !== "linkedin") {
     return {
       ...base,
       status: "failed",
@@ -345,6 +346,25 @@ async function publishToPlatform(
         }
       }
       const result = await publishFacebookFeedPost(account.accountId!, accessToken, caption);
+      return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+    }
+
+    if (platformKey === "linkedin") {
+      if (media) {
+        const decoded = media.startsWith("data:") ? bufferFromDataUri(media) : null;
+        if (decoded?.kind === "image") {
+          const result = await publishLinkedInImagePost(account.accountId!, accessToken, decoded.buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+        }
+        if (decoded?.kind === "video") {
+          throw new Error("LinkedIn video publishing isn't wired up yet — remove the video or post the caption only.");
+        }
+        // A hosted URL (not a data: URI) has no direct "attach by URL" support in the
+        // Posts API without a separate asset-registration step for that URL — fail
+        // clearly rather than silently posting caption-only.
+        throw new Error("LinkedIn image publishing currently supports AI-generated images only, not externally hosted URLs.");
+      }
+      const result = await publishLinkedInTextPost(account.accountId!, accessToken, caption);
       return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
     }
 

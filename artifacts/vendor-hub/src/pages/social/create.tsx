@@ -23,6 +23,17 @@ const PLATFORMS = [
   { id: 'tiktok', label: 'TikTok', color: 'bg-teal-600' }
 ];
 
+// Mirrors artifacts/api-server/src/lib/platform-constraints.ts — kept as a small
+// frontend copy so Compose can show format guidance without a network round trip.
+// Purely informational: publishing still relies on each platform's own API validation.
+const PLATFORM_SPECS: Record<string, { captionMax: number; image: string; video: string }> = {
+  facebook: { captionMax: 63206, image: "Square (1:1) or portrait (4:5)", video: "Up to ~4hr, 1:1 or 4:5 crops preview best" },
+  instagram: { captionMax: 2200, image: "Square (1:1) or portrait (4:5)", video: "Vertical (9:16), up to 90s, needs a public URL to publish" },
+  twitter: { captionMax: 280, image: "Landscape (16:9)", video: "Landscape (16:9), up to ~2m20s" },
+  linkedin: { captionMax: 3000, image: "Landscape (1.91:1)", video: "16:9 or 1:1, up to 10 min — first 3s matter (autoplays muted)" },
+  tiktok: { captionMax: 2200, image: "Vertical (9:16)", video: "Full-bleed vertical (9:16), up to 10 min" },
+};
+
 /** Mirrors the server's normalizePlatformKey so account.platform ("Facebook", "X (Twitter)", ...) matches a PLATFORMS id. */
 function normalizePlatformKey(platform: string): string {
   const p = platform.trim().toLowerCase();
@@ -266,6 +277,24 @@ export default function CreatePost() {
               )}
               {selectedPlatforms.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-2">Connect accounts from the Social Hub to publish for real once approved.</p>
+              )}
+              {selectedPlatforms.length > 0 && (
+                <div className="mt-3 space-y-2 rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Format guidance — each platform crops/plays media differently:</p>
+                  {selectedPlatforms.map((id) => {
+                    const spec = PLATFORM_SPECS[id];
+                    if (!spec) return null;
+                    const label = PLATFORMS.find((p) => p.id === id)?.label ?? id;
+                    return (
+                      <div key={id} className="text-xs leading-relaxed">
+                        <span className="font-semibold">{label}:</span>{" "}
+                        <span className="text-muted-foreground">
+                          image {spec.image} · video {spec.video} · caption up to {spec.captionMax.toLocaleString()} chars
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>

@@ -87,7 +87,7 @@ function ScheduleDialog({
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
-const MANUAL_ONLY_PLATFORMS = ["TikTok", "X (Twitter)", "LinkedIn"];
+const MANUAL_ONLY_PLATFORMS = ["TikTok", "X (Twitter)"];
 
 function ConnectedAccounts() {
   const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: 1 });
@@ -103,7 +103,8 @@ function ConnectedAccounts() {
     const result = params.get("social_connect");
     if (result === "success") {
       const count = params.get("count");
-      toast.success(`Connected ${count ?? ""} Facebook/Instagram account${count === "1" ? "" : "s"}`.trim());
+      const provider = params.get("provider") === "linkedin" ? "LinkedIn" : "Facebook/Instagram";
+      toast.success(`Connected ${count ?? ""} ${provider} account${count === "1" ? "" : "s"}`.trim());
       queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
       window.history.replaceState({}, "", window.location.pathname);
     } else if (result === "error") {
@@ -115,6 +116,10 @@ function ConnectedAccounts() {
 
   const handleConnectMeta = () => {
     window.location.href = `${BASE_URL}/api/social/oauth/meta/start`;
+  };
+
+  const handleConnectLinkedIn = () => {
+    window.location.href = `${BASE_URL}/api/social/oauth/linkedin/start`;
   };
 
   const handleConnect = async () => {
@@ -149,6 +154,9 @@ function ConnectedAccounts() {
         <div className="flex gap-2">
           <Button size="sm" onClick={handleConnectMeta}>
             <Facebook className="w-3.5 h-3.5 mr-1.5" /> Connect Facebook / Instagram
+          </Button>
+          <Button size="sm" onClick={handleConnectLinkedIn}>
+            <Linkedin className="w-3.5 h-3.5 mr-1.5" /> Connect LinkedIn
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

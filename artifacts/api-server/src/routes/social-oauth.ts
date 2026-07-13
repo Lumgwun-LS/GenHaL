@@ -22,6 +22,12 @@ import {
   exchangeForLongLivedUserToken,
   listManagedPages,
 } from "../lib/meta";
+import {
+  isLinkedInConfigured,
+  buildLinkedInAuthUrl,
+  exchangeCodeForAccessToken as exchangeLinkedInCodeForAccessToken,
+  fetchLinkedInProfile,
+} from "../lib/linkedin";
 import { encrypt } from "../lib/encryption";
 
 const router: IRouter = Router();
@@ -36,6 +42,11 @@ function redirectUriFor(req: import("express").Request): string {
 function frontendSocialUrl(req: import("express").Request, query: string): string {
   const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || req.get("host");
   return `https://${domain}/social${query}`;
+}
+
+function linkedInRedirectUriFor(req: import("express").Request): string {
+  const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || req.get("host");
+  return `https://${domain}/api/social/oauth/linkedin/callback`;
 }
 
 async function resolveVendorId(req: import("express").Request): Promise<number | null> {
@@ -160,6 +171,82 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
     res.redirect(frontendSocialUrl(req, `?social_connect=success&count=${connectedCount}`));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to connect Facebook account";
+    res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(message)}`));
+  }
+});
+
+router.get("/social/oauth/linkedin/start", async (req, res): Promise<void> => {
+  if (!isLinkedInConfigured()) {
+    res.status(503).json({ error: "LinkedIn connection is not configured. Ask an admin to add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET." });
+    return;
+  }
+  const vendorId = await resolveVendorId(req);
+  if (!vendorId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
+
+  const state = jwt.sign({ vendorId }, secret, { expiresIn: STATE_TTL_SECONDS });
+  const authUrl = buildLinkedInAuthUrl(state, linkedInRedirectUriFor(req));
+  res.redirect(authUrl);
+});
+
+router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> => {
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const state = typeof req.query.state === "string" ? req.query.state : null;
+  const oauthError = typeof req.query.error_description === "string" ? req.query.error_description : null;
+
+  if (oauthError) { res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(oauthError)}`)); return; }
+  if (!code || !state) { res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Missing%20code%20or%20state")); return; }
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
+
+  let statePayload: { vendorId: number };
+  try {
+    statePayload = jwt.verify(state, secret) as { vendorId: number };
+  } catch {
+    res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20expired%2C%20please%20try%20again"));
+    return;
+  }
+
+  const currentVendorId = await resolveVendorId(req);
+  if (!currentVendorId || currentVendorId !== statePayload.vendorId) {
+    res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20does%20not%20match%20your%20account"));
+    return;
+  }
+
+  try {
+    const redirectUri = linkedInRedirectUriFor(req);
+    const { accessToken, expiresInSeconds } = await exchangeLinkedInCodeForAccessToken(code, redirectUri);
+    const profile = await fetchLinkedInProfile(accessToken);
+    const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
+
+    const [existing] = await db
+      .select({ id: socialAccountsTable.id })
+      .from(socialAccountsTable)
+      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "LinkedIn"), eq(socialAccountsTable.accountId, profile.memberId)));
+
+    const values = {
+      vendorId: currentVendorId,
+      platform: "LinkedIn",
+      accountName: profile.name,
+      accountId: profile.memberId,
+      profileUrl: null,
+      status: "active",
+      connectedVia: "oauth_linkedin",
+      accessTokenEncrypted: encrypt(accessToken),
+      tokenExpiresAt,
+    };
+    if (existing) {
+      await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));
+    } else {
+      await db.insert(socialAccountsTable).values(values);
+    }
+
+    res.redirect(frontendSocialUrl(req, "?social_connect=success&count=1&provider=linkedin"));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to connect LinkedIn account";
     res.redirect(frontendSocialUrl(req, `?social_connect=error&message=${encodeURIComponent(message)}`));
   }
 });
