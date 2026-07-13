@@ -32,13 +32,14 @@ async function getExportAlertSettings(): Promise<{ threshold: number; windowMinu
 }
 
 /**
- * Mirrors the thresholds used in routes/voice-status-callback.ts so the
- * Admin Panel banner lights up on the same criteria as the Slack alert.
+ * Mirrors the thresholds used in routes/voice-status-callback.ts (both read
+ * the same site-content override) so the Admin Panel banner lights up on
+ * the same criteria as the Slack alert.
  */
-const VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3);
-const VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES = Number(
-  process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10,
-);
+async function getVoiceSignatureFailureAlertSettings(): Promise<{ threshold: number; windowMinutes: number }> {
+  const raw = await getSiteContentBlock("admin.voiceSignatureFailureAlertSettings");
+  return raw as { threshold: number; windowMinutes: number };
+}
 
 /**
  * Counts how many exports `adminUserId` has triggered within the alert
@@ -421,7 +422,8 @@ router.get("/admin/voice/signature-failures/alert", async (req, res): Promise<vo
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const windowStart = new Date(Date.now() - VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES * 60 * 1000);
+  const { threshold, windowMinutes } = await getVoiceSignatureFailureAlertSettings();
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
   const [row] = await db
     .select({
       count: sql<number>`count(*)`,
@@ -433,11 +435,11 @@ router.get("/admin/voice/signature-failures/alert", async (req, res): Promise<vo
   const count = Number(row?.count ?? 0);
 
   res.json({
-    threshold: VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD,
-    windowMinutes: VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES,
+    threshold,
+    windowMinutes,
     count,
     lastFailureAt: row?.lastFailureAt ?? null,
-    flagged: count >= VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD,
+    flagged: count >= threshold,
   });
 });
 

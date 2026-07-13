@@ -427,6 +427,117 @@ async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureA
   return res.json() as Promise<VoiceSignatureFailureAlert>;
 }
 
+async function saveVoiceSignatureFailureAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save alert settings");
+  }
+}
+
+function VoiceSignatureFailureAlertSettingsDialog({ threshold, windowMinutes }: { threshold: number; windowMinutes: number }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState(String(threshold));
+  const [windowInput, setWindowInput] = useState(String(windowMinutes));
+  const [saving, setSaving] = useState(false);
+
+  function openDialog() {
+    setThresholdInput(String(threshold));
+    setWindowInput(String(windowMinutes));
+    setOpen(true);
+  }
+
+  async function handleSave() {
+    const t = Number(thresholdInput);
+    const w = Number(windowInput);
+    if (!Number.isInteger(t) || t < 1 || t > 1000) {
+      toast.error("Threshold must be a whole number between 1 and 1000.");
+      return;
+    }
+    if (!Number.isInteger(w) || w < 1 || w > 1440) {
+      toast.error("Window must be a whole number of minutes between 1 and 1440.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveVoiceSignatureFailureAlertSettings({ threshold: t, windowMinutes: w });
+      toast.success("Signature-failure alert threshold updated.");
+      qc.invalidateQueries({ queryKey: ["admin-voice-signature-failure-alert"] });
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => (next ? openDialog() : setOpen(false))}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={openDialog}
+        data-testid="button-edit-voice-signature-failure-alert-settings"
+      >
+        <Bell className="w-3.5 h-3.5" />
+        Alert Settings
+      </Button>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Signature-failure alert settings</DialogTitle>
+          <DialogDescription>
+            Warn admins when this many Twilio status-callback requests are rejected for bad/missing signatures
+            within the window below — usually a sign the Auth Token was rotated in the Twilio console.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Threshold (failures)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={1000}
+              className="h-8 text-xs"
+              value={thresholdInput}
+              onChange={(e) => setThresholdInput(e.target.value)}
+              data-testid="input-voice-signature-failure-alert-threshold"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Window (minutes)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={1440}
+              className="h-8 text-xs"
+              value={windowInput}
+              onChange={(e) => setWindowInput(e.target.value)}
+              data-testid="input-voice-signature-failure-alert-window"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving}
+            data-testid="button-save-voice-signature-failure-alert-settings"
+          >
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function formatExportFilters(raw: string): string {
   try {
     const f = JSON.parse(raw) as Record<string, string | undefined>;
@@ -1497,6 +1608,15 @@ export default function AdminPanel() {
                   ? <><CheckCircle2 className="w-4 h-4 shrink-0" /> <span><strong>Twilio connected.</strong> Birthday calls at 06:00 UTC and vendor campaigns are active.</span></>
                   : <><AlertCircle className="w-4 h-4 shrink-0" /> <span><strong>Almost there.</strong> The Twilio integration is connected — just add <code className="bg-black/10 px-1 rounded text-xs">TWILIO_PHONE_NUMBER</code> (your Twilio from-number in E.164 format, e.g. +12345678900) to Replit Secrets to enable calls.</span></>
                 }
+              </div>
+            )}
+
+            {voiceSignatureFailureAlert && (
+              <div className="flex items-center justify-end">
+                <VoiceSignatureFailureAlertSettingsDialog
+                  threshold={voiceSignatureFailureAlert.threshold}
+                  windowMinutes={voiceSignatureFailureAlert.windowMinutes}
+                />
               </div>
             )}
 

@@ -14,6 +14,7 @@ import { eq, gte, sql } from "drizzle-orm";
 import { db, voiceCallLogsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { sendSlackAlert } from "../lib/slack";
+import { getSiteContentBlock } from "../lib/site-content";
 
 const router = Router();
 
@@ -36,9 +37,17 @@ function getExpectedCallbackUrl(): string | null {
  * burst, same pattern as export-burst detection) so an admin notices and
  * knows to update the TWILIO_AUTH_TOKEN secret to match the current token
  * in the Twilio console (Console → Account → API keys & tokens).
+ *
+ * Threshold and window are editable from the Admin Panel (persisted via the
+ * site-content store under "admin.voiceSignatureFailureAlertSettings") so
+ * operators can tune sensitivity without a redeploy; the env vars read in
+ * site-content.ts are only the fallback default until an admin saves an
+ * override.
  */
-const SIGNATURE_FAILURE_ALERT_THRESHOLD = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3);
-const SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES = Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10);
+async function getSignatureFailureAlertSettings(): Promise<{ threshold: number; windowMinutes: number }> {
+  const raw = await getSiteContentBlock("admin.voiceSignatureFailureAlertSettings");
+  return raw as { threshold: number; windowMinutes: number };
+}
 
 async function recordSignatureFailure(
   reason: "missing_config" | "missing_signature" | "invalid_signature",
@@ -47,16 +56,17 @@ async function recordSignatureFailure(
   try {
     await db.insert(voiceSignatureFailuresTable).values({ reason, callSid: callSid ?? null });
 
-    const windowStart = new Date(Date.now() - SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES * 60 * 1000);
+    const { threshold, windowMinutes } = await getSignatureFailureAlertSettings();
+    const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
     const [row] = await db
       .select({ count: sql<number>`count(*)` })
       .from(voiceSignatureFailuresTable)
       .where(gte(voiceSignatureFailuresTable.createdAt, windowStart));
     const count = Number(row?.count ?? 0);
 
-    if (count === SIGNATURE_FAILURE_ALERT_THRESHOLD) {
+    if (count === threshold) {
       await sendSlackAlert(
-        `:rotating_light: ${count} Twilio voice status-callback requests were rejected for bad/missing signatures in the last ${SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES} minutes. Call status updates are being silently dropped. This usually means the Auth Token was rotated in the Twilio console — check *TWILIO_AUTH_TOKEN* in Replit Secrets against Twilio Console → Account → API keys & tokens and update it.`,
+        `:rotating_light: ${count} Twilio voice status-callback requests were rejected for bad/missing signatures in the last ${windowMinutes} minutes. Call status updates are being silently dropped. This usually means the Auth Token was rotated in the Twilio console — check *TWILIO_AUTH_TOKEN* in Replit Secrets against Twilio Console → Account → API keys & tokens and update it.`,
       );
     }
   } catch (err) {

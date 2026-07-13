@@ -69,6 +69,10 @@ export const DEFAULT_SITE_CONTENT = {
     threshold: Number(process.env.EXPORT_ALERT_THRESHOLD ?? 5),
     windowMinutes: Number(process.env.EXPORT_ALERT_WINDOW_MINUTES ?? 15),
   },
+  "admin.voiceSignatureFailureAlertSettings": {
+    threshold: Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_THRESHOLD ?? 3),
+    windowMinutes: Number(process.env.VOICE_SIGNATURE_FAILURE_ALERT_WINDOW_MINUTES ?? 10),
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -127,6 +131,11 @@ const exportAlertSettingsSchema = z.object({
   windowMinutes: z.number().int().min(1).max(1440),
 });
 
+const voiceSignatureFailureAlertSettingsSchema = z.object({
+  threshold: z.number().int().min(1).max(1000),
+  windowMinutes: z.number().int().min(1).max(1440),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -135,6 +144,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "site.settings": settingsSchema,
   "email.birthday": emailSchema,
   "admin.exportAlertSettings": exportAlertSettingsSchema,
+  "admin.voiceSignatureFailureAlertSettings": voiceSignatureFailureAlertSettingsSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */
