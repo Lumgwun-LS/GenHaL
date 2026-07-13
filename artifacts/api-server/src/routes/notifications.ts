@@ -7,6 +7,8 @@ import { db } from "@workspace/db";
 import { vendorNotificationsTable, vendorsTable } from "@workspace/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
+import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS ?? "")
@@ -135,13 +137,15 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
     new Set(rawIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isInteger(n))),
   );
 
-  let targetVendors: { id: number }[];
+  let targetVendors: { id: number; name: string; email: string }[];
   if (all) {
-    targetVendors = await db.select({ id: vendorsTable.id }).from(vendorsTable);
+    targetVendors = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
+      .from(vendorsTable);
   } else {
     if (vendorIds.length === 0) { res.status(400).json({ error: "Select at least one vendor" }); return; }
     targetVendors = await db
-      .select({ id: vendorsTable.id })
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
       .from(vendorsTable)
       .where(inArray(vendorsTable.id, vendorIds));
   }
@@ -175,7 +179,30 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
     )
     .returning();
 
-  res.status(201).json({ sent: notifications.length });
+  // In-app notification is always created above; also email each vendor so
+  // time-sensitive announcements aren't missed by vendors who aren't logged in.
+  // Emailing is best-effort — a mail failure never blocks the in-app send above.
+  let emailsSent = 0;
+  await Promise.all(
+    targetVendors.map(async (v) => {
+      if (!v.email) return;
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from VendorHub</h1>
+          <p style="font-size: 14px; line-height: 1.6; color: #444;">Hi ${escapeHtml(v.name)},</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #444; white-space: pre-wrap;">${escapeHtml(message)}</p>
+        `,
+      });
+      const result = await sendEmail({
+        to: v.email,
+        subject: "Announcement from VendorHub",
+        html,
+      });
+      if (result.status === "sent") emailsSent += 1;
+    }),
+  );
+
+  res.status(201).json({ sent: notifications.length, emailsSent, emailAttempted: targetVendors.length });
 });
 
 export default router;

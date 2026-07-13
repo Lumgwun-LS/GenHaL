@@ -573,7 +573,7 @@ async function postVendorMessage(vendorId: number, message: string): Promise<voi
 async function postBulkVendorMessage(
   message: string,
   target: { all: true } | { all: false; vendorIds: number[] },
-): Promise<{ sent: number }> {
+): Promise<{ sent: number; emailsSent: number; emailAttempted: number }> {
   const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -586,7 +586,7 @@ async function postBulkVendorMessage(
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to send message");
   }
-  return res.json() as Promise<{ sent: number }>;
+  return res.json() as Promise<{ sent: number; emailsSent: number; emailAttempted: number }>;
 }
 
 function BulkMessageDialog({
@@ -613,11 +613,14 @@ function BulkMessageDialog({
     if (!trimmed || disabled) return;
     setSending(true);
     try {
-      const { sent } = await postBulkVendorMessage(
+      const { sent, emailsSent } = await postBulkVendorMessage(
         trimmed,
         allSelected ? { all: true } : { all: false, vendorIds: selectedIds },
       );
-      toast.success(`Message sent to ${sent} vendor${sent === 1 ? "" : "s"}`);
+      toast.success(
+        `Message sent to ${sent} vendor${sent === 1 ? "" : "s"}` +
+          (emailsSent > 0 ? ` — email also sent to ${emailsSent} of them` : " (email not sent — SMTP isn't configured)"),
+      );
       setMessage("");
       setOpen(false);
       qc.invalidateQueries({ queryKey: ["admin-message-history"] });
@@ -647,7 +650,7 @@ function BulkMessageDialog({
           <DialogTitle>Message {recipientCount} vendor{recipientCount === 1 ? "" : "s"}</DialogTitle>
           <DialogDescription>
             Sends the same in-app notification to {allSelected ? "every vendor" : "each selected vendor"}. It will
-            appear in their notification bell.
+            appear in their notification bell, and we'll also email each vendor a copy of the announcement.
           </DialogDescription>
         </DialogHeader>
         <Textarea
