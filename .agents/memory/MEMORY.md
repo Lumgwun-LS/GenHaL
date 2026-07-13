@@ -45,3 +45,5 @@
 - [Voice call retry dual-table sync](vendorhub-voice-retry-dual-table.md) — campaign calls live in both voice_call_logs and voice_campaign_calls; any retry/status-mutation must update both or the two views of the same call drift apart.
 - [VendorHub push notification categories](vendorhub-push-categories.md) — per-category opt-out (payments, voice campaigns) is per-vendor boolean columns, default true, checked inside shared sendPushToVendor via a category param.
 - [Voice call-status backfill/reconciliation](voice-call-status-backfill.md) — stuck call statuses self-heal via a timed job hitting Twilio's REST API directly, bypassing the webhook signature path that caused the stall.
+- [VendorHub LinkedIn OAuth](vendorhub-linkedin-oauth.md) — second real per-vendor social OAuth provider (personal profile only, no video); TikTok/X still manual-only; platform-constraints.ts shows format guidance in compose UI.
+- [Orval + db dist staleness](orval-db-dist-staleness.md) — after other work merges schema/openapi changes, run `tsc -b` in lib/db and lib/api-zod and `pnpm --filter @workspace/api-spec run codegen` before trusting typecheck errors as real.
