@@ -14,6 +14,7 @@ import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
+import { retryCampaignCall } from "./voice-campaigns";
 import { sendSlackAlert } from "../lib/slack";
 
 /**
@@ -506,7 +507,17 @@ router.post("/admin/voice-call-logs/:id/retry", async (req, res): Promise<void> 
     return;
   }
 
-  const result = await retryBirthdayCall(logId);
+  const [log] = await db
+    .select({ purpose: voiceCallLogsTable.purpose })
+    .from(voiceCallLogsTable)
+    .where(eq(voiceCallLogsTable.id, logId))
+    .limit(1);
+  if (!log) {
+    res.status(404).json({ error: "Call log entry not found." });
+    return;
+  }
+
+  const result = log.purpose === "campaign" ? await retryCampaignCall(logId) : await retryBirthdayCall(logId);
   if (!result.ok) {
     res.status(400).json({ error: result.error });
     return;

@@ -908,7 +908,7 @@ function ResendBirthdayEmailButton({ logId, onDone }: { logId: number; onDone: (
   );
 }
 
-async function retryBirthdayCall(logId: number): Promise<void> {
+async function retryVoiceCall(logId: number): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/admin/voice-call-logs/${logId}/retry`, {
     method: "POST",
     credentials: "include",
@@ -919,14 +919,14 @@ async function retryBirthdayCall(logId: number): Promise<void> {
   }
 }
 
-function RetryVoiceCallButton({ logId, onDone }: { logId: number; onDone: () => void }) {
+function RetryVoiceCallButton({ logId, purpose, onDone }: { logId: number; purpose: string; onDone: () => void }) {
   const [retrying, setRetrying] = useState(false);
 
   async function handleRetry() {
     setRetrying(true);
     try {
-      await retryBirthdayCall(logId);
-      toast.success("Birthday call retried");
+      await retryVoiceCall(logId);
+      toast.success(purpose === "campaign" ? "Campaign call retried" : "Birthday call retried");
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to retry call");
@@ -1582,9 +1582,10 @@ export default function AdminPanel() {
                             {new Date(log.initiatedAt).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right">
-                            {log.purpose === "birthday" && log.status === "failed" && (
+                            {log.status === "failed" && (
                               <RetryVoiceCallButton
                                 logId={log.id}
+                                purpose={log.purpose}
                                 onDone={() => qc.invalidateQueries({ queryKey: ["admin-voice-call-logs"] })}
                               />
                             )}

@@ -86,6 +86,102 @@ export async function runCampaignCalls(
 }
 
 /**
+ * Retries a failed campaign voice call for a given voice_call_logs row
+ * (admin-triggered). Mirrors retryBirthdayCall's shape but re-derives the
+ * campaign script (with the lead's name substituted) instead of a fixed
+ * birthday message, and keeps voice_campaign_calls in sync alongside
+ * voice_call_logs since campaign calls are tracked in both tables.
+ */
+export async function retryCampaignCall(logId: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [log] = await db
+    .select()
+    .from(voiceCallLogsTable)
+    .where(eq(voiceCallLogsTable.id, logId))
+    .limit(1);
+
+  if (!log) {
+    return { ok: false, error: "Call log entry not found." };
+  }
+  if (log.purpose !== "campaign") {
+    return { ok: false, error: "Only campaign calls can be retried here." };
+  }
+  if (log.status !== "failed") {
+    return { ok: false, error: "Only failed calls can be retried." };
+  }
+  if (!log.campaignId) {
+    return { ok: false, error: "This call has no associated campaign." };
+  }
+
+  const [campaign] = await db
+    .select()
+    .from(voiceCampaignsTable)
+    .where(eq(voiceCampaignsTable.id, log.campaignId))
+    .limit(1);
+  if (!campaign) {
+    return { ok: false, error: "Campaign no longer exists." };
+  }
+
+  // The per-lead row (leadName, etc.) lives in voice_campaign_calls, not on
+  // the voice_call_logs row itself — look up the matching one (same
+  // campaign + phone, most recent) so the retried call still gets the
+  // lead's name substituted into the script.
+  const [campaignCall] = await db
+    .select()
+    .from(voiceCampaignCallsTable)
+    .where(and(eq(voiceCampaignCallsTable.campaignId, log.campaignId), eq(voiceCampaignCallsTable.phone, log.phone)))
+    .orderBy(desc(voiceCampaignCallsTable.initiatedAt))
+    .limit(1);
+
+  const leadName = campaignCall?.leadName ?? "there";
+  const script = campaign.script.replace(/\{\{name\}\}/gi, leadName);
+
+  const result = await placeCall({
+    to: log.phone,
+    message: script,
+    purpose: "campaign",
+    vendorId: campaign.vendorId,
+    campaignId: campaign.id,
+  });
+
+  // Mirror the outcome mapping used by the original campaign call loop:
+  // voice_call_logs uses "queued"/"failed", voice_campaign_calls uses
+  // "ringing"/"failed". "skipped" (e.g. misconfigured Twilio) counts as a
+  // failed retry, not success — the row stays "failed" so Retry remains
+  // available instead of silently disappearing.
+  if (result.status !== "placed") {
+    logger.warn(
+      { logId, campaignId: log.campaignId, reason: result.error, twilioStatus: result.status },
+      "[voice-campaign] Manual retry did not succeed",
+    );
+    await db
+      .update(voiceCallLogsTable)
+      .set({ status: "failed", callSid: result.callSid ?? null })
+      .where(eq(voiceCallLogsTable.id, logId));
+    if (campaignCall) {
+      await db
+        .update(voiceCampaignCallsTable)
+        .set({ status: "failed", callSid: result.callSid ?? null })
+        .where(eq(voiceCampaignCallsTable.id, campaignCall.id));
+    }
+    return { ok: false, error: result.error ?? "Call failed to place." };
+  }
+
+  await db
+    .update(voiceCallLogsTable)
+    .set({ status: "queued", callSid: result.callSid ?? null, initiatedAt: new Date() })
+    .where(eq(voiceCallLogsTable.id, logId));
+  if (campaignCall) {
+    await db
+      .update(voiceCampaignCallsTable)
+      .set({ status: "ringing", callSid: result.callSid ?? null, initiatedAt: new Date() })
+      .where(eq(voiceCampaignCallsTable.id, campaignCall.id));
+  }
+
+  logger.info({ logId, campaignId: log.campaignId, result: result.status }, "[voice-campaign] Manual retry result");
+  return { ok: true };
+}
+
+/**
  * Notifies the vendor (in-app + email) once an auto-launched or manually
  * launched campaign reaches a terminal state. Best-effort: failures here are
  * logged, not thrown, so a notification hiccup never re-marks the campaign
