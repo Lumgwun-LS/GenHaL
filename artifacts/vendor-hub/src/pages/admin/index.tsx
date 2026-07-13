@@ -256,13 +256,31 @@ async function fetchExportLogs(): Promise<ExportLog[]> {
 type ExportAlerts = {
   threshold: number;
   windowMinutes: number;
-  flagged: { adminUserId: string; count: number; lastExportAt: string }[];
+  flagged: {
+    adminUserId: string;
+    count: number;
+    lastExportAt: string;
+    blocked: boolean;
+    acknowledgedAt: string | null;
+    acknowledgedBy: string | null;
+  }[];
 };
 
 async function fetchExportAlerts(): Promise<ExportAlerts> {
   const res = await fetch(`${BASE_URL}/api/admin/export-alerts`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load export alerts");
   return res.json() as Promise<ExportAlerts>;
+}
+
+async function acknowledgeExportBurst(adminUserId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/acknowledge`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to clear the flag");
+  }
 }
 
 async function saveExportAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
@@ -276,6 +294,37 @@ async function saveExportAlertSettings(value: { threshold: number; windowMinutes
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to save alert settings");
   }
+}
+
+function AcknowledgeExportBurstButton({ adminUserId }: { adminUserId: string }) {
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
+  async function handleClick() {
+    setSaving(true);
+    try {
+      await acknowledgeExportBurst(adminUserId);
+      toast.success(`Cleared the export flag for ${adminUserId}. Exports are unblocked.`);
+      qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to clear the flag");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-xs shrink-0"
+      onClick={handleClick}
+      disabled={saving}
+      data-testid={`button-acknowledge-export-burst-${adminUserId}`}
+    >
+      {saving ? "Clearing…" : "Acknowledge & unblock"}
+    </Button>
+  );
 }
 
 function ExportAlertSettingsDialog({ threshold, windowMinutes }: { threshold: number; windowMinutes: number }) {
@@ -968,7 +1017,7 @@ export default function AdminPanel() {
                   onSent={clearVendorSelection}
                 />
                 <ExportFilterPopover
-                  onExport={(filters) => {
+                  onExport={async (filters) => {
                     const params = new URLSearchParams();
                     if (filters.tier !== ANY) params.set("tier", filters.tier);
                     if (filters.status !== ANY) params.set("status", filters.status);
@@ -976,14 +1025,38 @@ export default function AdminPanel() {
                     if (filters.joinedAfter) params.set("joinedAfter", filters.joinedAfter);
                     if (filters.joinedBefore) params.set("joinedBefore", filters.joinedBefore);
                     const qs = params.toString();
-                    const a = document.createElement("a");
-                    a.href = `${BASE_URL}/api/admin/vendors/export${qs ? `?${qs}` : ""}`;
-                    a.download = "";
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    toast.success("CSV download started");
-                    setTimeout(() => qc.invalidateQueries({ queryKey: ["admin-export-logs"] }), 1500);
+                    const url = `${BASE_URL}/api/admin/vendors/export${qs ? `?${qs}` : ""}`;
+
+                    // Fetch first (rather than a bare anchor navigation) so a
+                    // 429 mid-burst block surfaces as a toast instead of
+                    // silently downloading an error page as "export.csv".
+                    try {
+                      const res = await fetch(url, { credentials: "include" });
+                      if (res.status === 429) {
+                        const body = (await res.json().catch(() => ({}))) as { error?: string };
+                        toast.error(body.error ?? "Exports are paused for this account. Ask another admin to review.");
+                        qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+                        return;
+                      }
+                      if (!res.ok) {
+                        toast.error("Export failed.");
+                        return;
+                      }
+                      const blob = await res.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = blobUrl;
+                      a.download = `vendors-export-${new Date().toISOString().slice(0, 10)}.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(blobUrl);
+                      toast.success("CSV download started");
+                      qc.invalidateQueries({ queryKey: ["admin-export-logs"] });
+                      qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+                    } catch {
+                      toast.error("Export failed.");
+                    }
                   }}
                 />
               </div>
@@ -1097,15 +1170,27 @@ export default function AdminPanel() {
             </CardHeader>
             <CardContent className="p-0">
               {exportAlerts && exportAlerts.flagged.length > 0 && (
-                <div className="p-4 pb-0">
+                <div className="p-4 pb-0 space-y-3">
                   {exportAlerts.flagged.map((f) => (
-                    <Alert key={f.adminUserId} variant="destructive" className="mb-3" data-testid={`alert-export-burst-${f.adminUserId}`}>
+                    <Alert key={f.adminUserId} variant="destructive" data-testid={`alert-export-burst-${f.adminUserId}`}>
                       <ShieldAlert className="h-4 w-4" />
-                      <AlertTitle>Unusual export activity detected</AlertTitle>
+                      <AlertTitle>
+                        {f.blocked ? "Exports paused — unusual export activity" : "Unusual export activity detected"}
+                      </AlertTitle>
                       <AlertDescription>
-                        Admin <span className="font-mono">{f.adminUserId}</span> has downloaded the vendor export{" "}
-                        <strong>{f.count} times</strong> in the last {exportAlerts.windowMinutes} minutes (threshold:{" "}
-                        {exportAlerts.threshold}). Last download {new Date(f.lastExportAt).toLocaleTimeString()}.
+                        <div className="flex items-start justify-between gap-3">
+                          <span>
+                            Admin <span className="font-mono">{f.adminUserId}</span> has downloaded the vendor export{" "}
+                            <strong>{f.count} times</strong> in the last {exportAlerts.windowMinutes} minutes (threshold:{" "}
+                            {exportAlerts.threshold}). Last download {new Date(f.lastExportAt).toLocaleTimeString()}.
+                            {f.blocked
+                              ? " Further exports from this account are blocked until this is reviewed."
+                              : f.acknowledgedAt
+                                ? ` Cleared by ${f.acknowledgedBy} at ${new Date(f.acknowledgedAt).toLocaleTimeString()}.`
+                                : ""}
+                          </span>
+                          {f.blocked && <AcknowledgeExportBurstButton adminUserId={f.adminUserId} />}
+                        </div>
                       </AlertDescription>
                     </Alert>
                   ))}

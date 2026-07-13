@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -56,9 +56,49 @@ async function checkExportBurst(adminUserId: string): Promise<void> {
   const count = Number(row?.count ?? 0);
   if (count === threshold) {
     await sendSlackAlert(
-      `:rotating_light: Admin *${adminUserId}* has downloaded the vendor data export ${count} times in the last ${windowMinutes} minutes. Review the Export History in the Admin Panel to confirm this is expected.`,
+      `:rotating_light: Admin *${adminUserId}* has downloaded the vendor data export ${count} times in the last ${windowMinutes} minutes. Further exports from this account are paused until another admin reviews and clears it in the Admin Panel.`,
     );
   }
+}
+
+/**
+ * Determines whether `adminUserId` is currently mid-burst and should be
+ * blocked from exporting further. An admin is blocked once their export
+ * count within the rolling window reaches the threshold, and stays blocked
+ * until either:
+ *  - another admin acknowledges the flag *after* the export that crossed
+ *    the threshold (an ack that predates the crossing doesn't clear a new
+ *    burst — it must be a fresh review), or
+ *  - enough time passes that the crossing export ages out of the window.
+ */
+async function getExportBurstStatus(
+  adminUserId: string,
+): Promise<{ blocked: boolean; count: number; threshold: number; windowMinutes: number; flaggedAt: Date | null }> {
+  const { threshold, windowMinutes } = await getExportAlertSettings();
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+  const recent = await db
+    .select({ exportedAt: adminExportLogsTable.exportedAt })
+    .from(adminExportLogsTable)
+    .where(and(eq(adminExportLogsTable.adminUserId, adminUserId), gte(adminExportLogsTable.exportedAt, windowStart)))
+    .orderBy(desc(adminExportLogsTable.exportedAt));
+
+  const count = recent.length;
+  if (count < threshold) {
+    return { blocked: false, count, threshold, windowMinutes, flaggedAt: null };
+  }
+
+  // The export that pushed the count to `threshold` (i.e. the Nth most
+  // recent one) is the moment this burst became flagged.
+  const flaggedAt = recent[threshold - 1]!.exportedAt;
+
+  const [ack] = await db
+    .select()
+    .from(adminExportAcknowledgmentsTable)
+    .where(eq(adminExportAcknowledgmentsTable.adminUserId, adminUserId));
+
+  const cleared = Boolean(ack) && ack!.acknowledgedAt >= flaggedAt;
+  return { blocked: !cleared, count, threshold, windowMinutes, flaggedAt };
 }
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
@@ -133,6 +173,18 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const burstStatus = await getExportBurstStatus(userId);
+  if (burstStatus.blocked) {
+    res.status(429).json({
+      error:
+        "Exports from this account are paused after unusually frequent downloads. Ask another admin to review and clear the flag in the Admin Panel's Export History before exporting again.",
+      count: burstStatus.count,
+      threshold: burstStatus.threshold,
+      windowMinutes: burstStatus.windowMinutes,
+    });
+    return;
+  }
 
   const { tier, status, verificationLevel, joinedAfter, joinedBefore } = req.query as {
     tier?: string;
@@ -269,11 +321,57 @@ router.get("/admin/export-alerts", async (req, res): Promise<void> => {
     .groupBy(adminExportLogsTable.adminUserId)
     .having(sql`count(*) >= ${threshold}`);
 
+  const acknowledgments = await db.select().from(adminExportAcknowledgmentsTable);
+  const ackByAdmin = new Map(acknowledgments.map((a) => [a.adminUserId, a]));
+
+  const enriched = await Promise.all(
+    flagged.map(async (f) => {
+      const status = await getExportBurstStatus(f.adminUserId);
+      const ack = ackByAdmin.get(f.adminUserId);
+      return {
+        ...f,
+        count: Number(f.count),
+        blocked: status.blocked,
+        acknowledgedAt: ack?.acknowledgedAt ?? null,
+        acknowledgedBy: ack?.acknowledgedBy ?? null,
+      };
+    }),
+  );
+
   res.json({
     threshold,
     windowMinutes,
-    flagged: flagged.map((f) => ({ ...f, count: Number(f.count) })),
+    flagged: enriched,
   });
+});
+
+// ─── POST /admin/export-alerts/:adminUserId/acknowledge ───────────────────────
+
+/**
+ * Clears a flagged export burst for `adminUserId`, unblocking further
+ * exports from that account. Recorded as an upsert keyed by adminUserId so
+ * only the latest review matters for the block check above.
+ */
+router.post("/admin/export-alerts/:adminUserId/acknowledge", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const targetAdminUserId = req.params.adminUserId;
+  if (!targetAdminUserId) {
+    res.status(400).json({ error: "Missing admin user id." });
+    return;
+  }
+
+  await db
+    .insert(adminExportAcknowledgmentsTable)
+    .values({ adminUserId: targetAdminUserId, acknowledgedBy: userId, acknowledgedAt: new Date() })
+    .onConflictDoUpdate({
+      target: adminExportAcknowledgmentsTable.adminUserId,
+      set: { acknowledgedAt: new Date(), acknowledgedBy: userId },
+    });
+
+  res.json({ success: true });
 });
 
 // ─── GET /admin/export-logs ────────────────────────────────────────────────────

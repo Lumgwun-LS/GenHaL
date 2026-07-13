@@ -25,5 +25,6 @@ export * from "./site-content";
 export * from "./account-deletion-requests";
 export * from "./pending-reminder-logs";
 export * from "./admin-export-logs";
+export * from "./admin-export-acknowledgments";
 export * from "./voice-signature-failures";
 export * from "./post-publications";
