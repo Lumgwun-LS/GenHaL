@@ -79,7 +79,17 @@ interface Props {
   onUpgradeInitiated?: () => void;
 }
 
-export type SyncResult = { synced: boolean; reason?: string; currentTier: string };
+export type SyncResult = {
+  synced: boolean;
+  reason?: string;
+  currentTier: string;
+  /** True when the server served a cached/in-flight result instead of hitting Stripe again. */
+  throttled?: boolean;
+  /** Cooldown window (ms) the server enforces between real Stripe round-trips for this vendor. */
+  cooldownMs?: number;
+};
+
+const DEFAULT_COOLDOWN_MS = 20_000;
 
 /** Calls the sync endpoint that reconciles the vendor's tier directly against Stripe. */
 export async function syncSubscriptionStatus(vendorId: number): Promise<SyncResult> {
@@ -103,13 +113,34 @@ export function RefreshBillingStatusButton({
   onSynced?: (result: SyncResult) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  // Cooldown mirrors the server-side throttle (see subscription-upgrade.ts)
+  // so repeated clicks are visibly disabled instead of silently re-firing
+  // requests. Counts down once per second while > 0.
+  const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
+
+  function startCooldown(ms: number) {
+    const seconds = Math.max(1, Math.ceil(ms / 1000));
+    setCooldownSecondsLeft(seconds);
+    const interval = setInterval(() => {
+      setCooldownSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
   async function handleRefresh() {
     setLoading(true);
     try {
       const result = await syncSubscriptionStatus(vendorId);
       onSynced?.(result);
-      if (result.synced) {
+      startCooldown(result.cooldownMs ?? DEFAULT_COOLDOWN_MS);
+      if (result.throttled) {
+        toast.info(result.reason ?? "Already checked recently — showing the latest known billing status.");
+      } else if (result.synced) {
         toast.success(`Billing status updated — you're now on the ${result.currentTier} plan.`);
       } else {
         toast.info(result.reason ?? "Your billing status is already up to date.");
@@ -121,10 +152,22 @@ export function RefreshBillingStatusButton({
     }
   }
 
+  const onCooldown = cooldownSecondsLeft > 0;
+
   return (
-    <Button size="sm" variant="outline" disabled={loading} onClick={handleRefresh}>
-      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-      {loading ? null : "Refresh billing status"}
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={loading || onCooldown}
+      onClick={handleRefresh}
+      title={onCooldown ? `You can refresh again in ${cooldownSecondsLeft}s` : undefined}
+    >
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+      )}
+      {loading ? null : onCooldown ? `Refresh available in ${cooldownSecondsLeft}s` : "Refresh billing status"}
     </Button>
   );
 }

@@ -32,6 +32,29 @@ import { reconcileVendorSubscription } from "../lib/subscription-sync";
 
 const router = Router();
 
+// ─── Sync throttling ──────────────────────────────────────────────────────────
+// The sync endpoint makes several live Stripe API calls (subscriptions.list,
+// checkout.sessions.list, subscriptions.retrieve). A vendor mashing "Refresh
+// billing status" or reloading the post-checkout success page repeatedly
+// must not multiply those calls. We keep a tiny in-memory per-vendor state:
+//  - `inFlight`: while a reconcile is running, concurrent requests just await
+//    the same promise instead of starting a second one against Stripe.
+//  - `lastRunAt` + COOLDOWN_MS: once a reconcile finishes, further requests
+//    within the cooldown window get the cached last result instead of
+//    re-hitting Stripe.
+// This is per-process, in-memory state (acceptable here: it's a soft
+// UX/cost guard, not a correctness guarantee — worst case on a restart or
+// multi-instance deploy is one extra Stripe round-trip, not a serving bug).
+const SYNC_COOLDOWN_MS = 20_000;
+
+interface VendorSyncState {
+  lastResult: import("../lib/subscription-sync").ReconcileResult;
+  lastRunAt: number;
+  inFlight: Promise<import("../lib/subscription-sync").ReconcileResult> | null;
+}
+
+const vendorSyncState = new Map<number, VendorSyncState>();
+
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
 export const SUBSCRIPTION_PLANS = [
@@ -327,6 +350,25 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
     return;
   }
 
+  const now = Date.now();
+  const existing = vendorSyncState.get(id);
+
+  // A reconcile is already running for this vendor — piggyback on it instead
+  // of starting a second concurrent round-trip to Stripe.
+  if (existing?.inFlight) {
+    const result = await existing.inFlight;
+    res.json({ ...result, throttled: true, cooldownMs: SYNC_COOLDOWN_MS });
+    return;
+  }
+
+  // A reconcile just finished — serve the cached result rather than hitting
+  // Stripe again until the cooldown window elapses.
+  if (existing && now - existing.lastRunAt < SYNC_COOLDOWN_MS) {
+    const retryAfterMs = SYNC_COOLDOWN_MS - (now - existing.lastRunAt);
+    res.json({ ...existing.lastResult, throttled: true, cooldownMs: SYNC_COOLDOWN_MS, retryAfterMs });
+    return;
+  }
+
   const stripeKey = await resolveGatewayField("stripe", "secretKey");
   if (!stripeKey) {
     res.status(503).json({ error: "Stripe is not configured on this platform." });
@@ -335,9 +377,20 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
 
   const stripe = new Stripe(stripeKey);
 
-  const result = await reconcileVendorSubscription(vendor, stripe, "manual-sync");
+  const fallbackResult = existing?.lastResult ?? { synced: false, currentTier: vendor.subscriptionTier };
+  const syncPromise = reconcileVendorSubscription(vendor, stripe, "manual-sync");
+  vendorSyncState.set(id, { lastResult: fallbackResult, lastRunAt: now, inFlight: syncPromise });
 
-  res.json(result);
+  try {
+    const result = await syncPromise;
+    vendorSyncState.set(id, { lastResult: result, lastRunAt: Date.now(), inFlight: null });
+    res.json({ ...result, throttled: false, cooldownMs: SYNC_COOLDOWN_MS });
+  } catch (err) {
+    // Don't leave a stuck in-flight lock behind on failure — let the vendor
+    // retry immediately rather than being stuck in a false cooldown.
+    vendorSyncState.set(id, { lastResult: fallbackResult, lastRunAt: 0, inFlight: null });
+    throw err;
+  }
 });
 
 export default router;
