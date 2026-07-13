@@ -14,4 +14,7 @@ description: How instant phone alerts for payment status changes are implemented
 Vendors need instant awareness of payment outcomes without keeping the app open; reusing the existing webhook-driven status-update path (rather than a separate poller) keeps a single source of truth for "payment status changed."
 
 ## Gotcha
-Expo Go (SDK 53+) does not support *remote* push notifications — only local ones. Real testing of end-to-end delivery requires an EAS development/production build with `extra.eas.projectId` set in `app.json` (not yet configured as of this writing).
+Expo Go (SDK 53+) does not support *remote* push notifications — only local ones. Real testing of end-to-end delivery requires an EAS development/production build (`extra.eas.projectId` is set in `app.json`).
+
+## Gotcha: new push category needs a client-side tap route too
+Adding a new `PushCategory` (server-side dispatch + `data.screen` value) is not enough — `usePushNotifications`'s notification-tap listener only routes screens it explicitly recognizes. Forgot this once for `voice-campaigns`: the push sent fine but tapping it did nothing until the listener's if/else was extended. Whenever a new `data.screen` value is introduced server-side, grep the mobile tap-listener and add a matching branch (even if it just routes to the nearest relevant tab — the app doesn't have a screen for every category yet).

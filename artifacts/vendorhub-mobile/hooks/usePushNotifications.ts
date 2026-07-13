@@ -3,8 +3,10 @@
  * api-server in sync with the current push token so vendors get instant
  * alerts (e.g. payment status changes) on their phone.
  *
- * Also listens for notification taps and routes to the relevant screen —
- * currently every push we send links back to the Payments tab.
+ * Also listens for notification taps and routes to the relevant screen:
+ * payment pushes open the Payments tab, voice-campaign pushes open the
+ * Account tab (where campaign alert settings live — the app has no
+ * standalone campaign detail screen yet).
  *
  * Registration only happens when both:
  *  - `signedIn` is true (there's a VendorHub session to attach the token to)
@@ -141,12 +143,16 @@ export function usePushNotifications(signedIn: boolean): UsePushNotificationsRes
     };
   }, [shouldBeRegistered]);
 
-  // Tapping a notification opens the Payments tab.
+  // Tapping a notification routes to the screen it's about.
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const screen = response.notification.request.content.data?.screen;
       if (screen === 'payments') {
         router.push('/(tabs)/payments');
+      } else if (screen === 'voice-campaigns') {
+        // No standalone campaign screen yet; Account tab surfaces campaign
+        // alert settings and is the closest relevant destination.
+        router.push('/(tabs)/account');
       }
     });
     return () => subscription.remove();
