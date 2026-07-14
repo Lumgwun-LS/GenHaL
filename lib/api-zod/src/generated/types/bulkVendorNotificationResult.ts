@@ -5,6 +5,7 @@
  * VendorHub - Multivendor Social Media, Sales & Inventory Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkVendorNotificationEmailFailure } from './bulkVendorNotificationEmailFailure';
 
 export interface BulkVendorNotificationResult {
   /** Number of in-app notifications created */
@@ -13,4 +14,6 @@ export interface BulkVendorNotificationResult {
   emailsSent: number;
   /** Number of vendors an announcement email was attempted for */
   emailAttempted: number;
+  /** Vendors who did not get the announcement email, with why */
+  failures: BulkVendorNotificationEmailFailure[];
 }

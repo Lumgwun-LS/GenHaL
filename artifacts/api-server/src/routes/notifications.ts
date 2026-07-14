@@ -193,11 +193,22 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
   // time-sensitive announcements aren't missed by vendors who aren't logged in.
   // Vendors who opted out of announcement emails still get the in-app notification,
   // just no email. Emailing is best-effort — a mail failure never blocks the in-app send above.
+  //
+  // Track exactly which vendors did NOT get the email, and why, so admins can
+  // follow up manually instead of only seeing an aggregate count.
+  type EmailFailure = { vendorId: number; vendorName: string; reason: "opted_out" | "no_email" | "send_failed" };
+  const failures: EmailFailure[] = targetVendors
+    .filter((v) => v.announcementEmailOptOut)
+    .map((v) => ({ vendorId: v.id, vendorName: v.name, reason: "opted_out" as const }));
+
   const emailEligibleVendors = targetVendors.filter((v) => !v.announcementEmailOptOut);
   let emailsSent = 0;
   await Promise.all(
     emailEligibleVendors.map(async (v) => {
-      if (!v.email) return;
+      if (!v.email) {
+        failures.push({ vendorId: v.id, vendorName: v.name, reason: "no_email" });
+        return;
+      }
       const html = wrapVendorEmail({
         bodyHtml: `
           <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from VendorHub</h1>
@@ -210,11 +221,20 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
         subject: "Announcement from VendorHub",
         html,
       });
-      if (result.status === "sent") emailsSent += 1;
+      if (result.status === "sent") {
+        emailsSent += 1;
+      } else {
+        failures.push({ vendorId: v.id, vendorName: v.name, reason: "send_failed" });
+      }
     }),
   );
 
-  res.status(201).json({ sent: notifications.length, emailsSent, emailAttempted: emailEligibleVendors.length });
+  res.status(201).json({
+    sent: notifications.length,
+    emailsSent,
+    emailAttempted: emailEligibleVendors.length,
+    failures,
+  });
 });
 
 export default router;

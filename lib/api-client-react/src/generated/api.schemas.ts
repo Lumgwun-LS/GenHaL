@@ -137,6 +137,25 @@ export interface BulkVendorNotificationInput {
   all?: boolean;
 }
 
+/**
+ * opted_out = vendor opted out of announcement emails, no_email = vendor has no email address on file, send_failed = the email was attempted but delivery failed
+ */
+export type BulkVendorNotificationEmailFailureReason = typeof BulkVendorNotificationEmailFailureReason[keyof typeof BulkVendorNotificationEmailFailureReason];
+
+
+export const BulkVendorNotificationEmailFailureReason = {
+  opted_out: 'opted_out',
+  no_email: 'no_email',
+  send_failed: 'send_failed',
+} as const;
+
+export interface BulkVendorNotificationEmailFailure {
+  vendorId: number;
+  vendorName: string;
+  /** opted_out = vendor opted out of announcement emails, no_email = vendor has no email address on file, send_failed = the email was attempted but delivery failed */
+  reason: BulkVendorNotificationEmailFailureReason;
+}
+
 export interface BulkVendorNotificationResult {
   /** Number of in-app notifications created */
   sent: number;
@@ -144,6 +163,8 @@ export interface BulkVendorNotificationResult {
   emailsSent: number;
   /** Number of vendors an announcement email was attempted for */
   emailAttempted: number;
+  /** Vendors who did not get the announcement email, with why */
+  failures: BulkVendorNotificationEmailFailure[];
 }
 
 export interface AdminMessageHistoryEntry {

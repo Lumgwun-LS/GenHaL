@@ -2583,7 +2583,12 @@ export const CreateBulkVendorNotificationsBody = zod.object({
 export const CreateBulkVendorNotificationsResponse = zod.object({
   "sent": zod.number().describe('Number of in-app notifications created'),
   "emailsSent": zod.number().describe('Number of announcement emails successfully delivered'),
-  "emailAttempted": zod.number().describe('Number of vendors an announcement email was attempted for')
+  "emailAttempted": zod.number().describe('Number of vendors an announcement email was attempted for'),
+  "failures": zod.array(zod.object({
+  "vendorId": zod.number(),
+  "vendorName": zod.string(),
+  "reason": zod.enum(['opted_out', 'no_email', 'send_failed']).describe('opted_out = vendor opted out of announcement emails, no_email = vendor has no email address on file, send_failed = the email was attempted but delivery failed\n')
+})).describe('Vendors who did not get the announcement email, with why')
 })
 
 

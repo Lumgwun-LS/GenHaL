@@ -19,6 +19,8 @@ export * from './analyticsOverviewRecentActivityItem';
 export * from './branch';
 export * from './branchInput';
 export * from './branchUpdate';
+export * from './bulkVendorNotificationEmailFailure';
+export * from './bulkVendorNotificationEmailFailureReason';
 export * from './bulkVendorNotificationInput';
 export * from './bulkVendorNotificationResult';
 export * from './campaignSendResult';

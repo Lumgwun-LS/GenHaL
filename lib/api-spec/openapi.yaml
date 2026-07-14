@@ -2728,7 +2728,7 @@ components:
 
     BulkVendorNotificationResult:
       type: object
-      required: [sent, emailsSent, emailAttempted]
+      required: [sent, emailsSent, emailAttempted, failures]
       properties:
         sent:
           type: integer
@@ -2739,6 +2739,27 @@ components:
         emailAttempted:
           type: integer
           description: Number of vendors an announcement email was attempted for
+        failures:
+          type: array
+          description: Vendors who did not get the announcement email, with why
+          items:
+            $ref: "#/components/schemas/BulkVendorNotificationEmailFailure"
+
+    BulkVendorNotificationEmailFailure:
+      type: object
+      required: [vendorId, vendorName, reason]
+      properties:
+        vendorId:
+          type: integer
+        vendorName:
+          type: string
+        reason:
+          type: string
+          enum: [opted_out, no_email, send_failed]
+          description: >
+            opted_out = vendor opted out of announcement emails,
+            no_email = vendor has no email address on file,
+            send_failed = the email was attempted but delivery failed
 
     AdminMessageHistoryEntry:
       type: object

@@ -975,6 +975,21 @@ function TargetByFilterPopover({
   );
 }
 
+type BulkEmailFailure = { vendorId: number; vendorName: string; reason: "opted_out" | "no_email" | "send_failed" };
+
+function emailFailureReasonLabel(reason: BulkEmailFailure["reason"]): string {
+  switch (reason) {
+    case "opted_out":
+      return "Opted out of announcement emails";
+    case "no_email":
+      return "No email on file";
+    case "send_failed":
+      return "Email failed to send";
+    default:
+      return reason;
+  }
+}
+
 function BulkMessageDialog({
   selectedIds,
   allSelected,
@@ -989,6 +1004,12 @@ function BulkMessageDialog({
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [lastResult, setLastResult] = useState<{
+    sent: number;
+    emailsSent: number;
+    emailAttempted: number;
+    failures: BulkEmailFailure[];
+  } | null>(null);
   const { mutateAsync: sendBulkMessage, isPending: sending } = useCreateBulkVendorNotifications();
 
   const recipientCount = allSelected ? totalVendors : selectedIds.length;
@@ -998,7 +1019,7 @@ function BulkMessageDialog({
     const trimmed = message.trim();
     if (!trimmed || disabled) return;
     try {
-      const { sent, emailsSent } = await sendBulkMessage({
+      const { sent, emailsSent, emailAttempted, failures } = await sendBulkMessage({
         data: allSelected ? { message: trimmed, all: true } : { message: trimmed, vendorIds: selectedIds },
       });
       toast.success(
@@ -1006,21 +1027,36 @@ function BulkMessageDialog({
           (emailsSent > 0 ? ` — email also sent to ${emailsSent} of them` : " (email not sent — SMTP isn't configured)"),
       );
       setMessage("");
-      setOpen(false);
       qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
       onSent();
+      if (failures.length > 0) {
+        // Keep the dialog open so the admin can see exactly who to follow up with.
+        setLastResult({ sent, emailsSent, emailAttempted, failures });
+      } else {
+        setLastResult(null);
+        setOpen(false);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setLastResult(null);
+      }}
+    >
       <Button
         variant="default"
         size="sm"
         className="shrink-0 gap-2"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setLastResult(null);
+          setOpen(true);
+        }}
         disabled={disabled}
         data-testid="button-message-selected-vendors"
       >
@@ -1028,29 +1064,71 @@ function BulkMessageDialog({
         Message {allSelected ? "All Vendors" : `Selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
       </Button>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Message {recipientCount} vendor{recipientCount === 1 ? "" : "s"}</DialogTitle>
-          <DialogDescription>
-            Sends the same in-app notification to {allSelected ? "every vendor" : "each selected vendor"}. It will
-            appear in their notification bell, and we'll also email each vendor a copy of the announcement.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type your announcement…"
-          className="min-h-28"
-          maxLength={1000}
-          data-testid="textarea-bulk-vendor-message"
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
-            Cancel
-          </Button>
-          <Button onClick={handleSend} disabled={sending || !message.trim() || disabled} data-testid="button-send-bulk-vendor-message">
-            {sending ? "Sending…" : `Send to ${recipientCount}`}
-          </Button>
-        </DialogFooter>
+        {lastResult ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{lastResult.failures.length} vendor{lastResult.failures.length === 1 ? "" : "s"} didn't get the email</DialogTitle>
+              <DialogDescription>
+                The in-app notification was sent to all {lastResult.sent} vendor{lastResult.sent === 1 ? "" : "s"}, but{" "}
+                {lastResult.failures.length} of them didn't receive the announcement email.
+              </DialogDescription>
+            </DialogHeader>
+            <ul
+              className="max-h-64 overflow-y-auto space-y-2 border rounded-md p-2"
+              data-testid="list-bulk-message-email-failures"
+            >
+              {lastResult.failures.map((f) => (
+                <li
+                  key={f.vendorId}
+                  className="flex items-center justify-between gap-2 text-xs"
+                  data-testid={`row-bulk-message-email-failure-${f.vendorId}`}
+                >
+                  <span className="font-medium truncate">{f.vendorName}</span>
+                  <Badge variant="secondary" className="shrink-0">
+                    {emailFailureReasonLabel(f.reason)}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setLastResult(null);
+                  setOpen(false);
+                }}
+                data-testid="button-close-bulk-message-email-failures"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Message {recipientCount} vendor{recipientCount === 1 ? "" : "s"}</DialogTitle>
+              <DialogDescription>
+                Sends the same in-app notification to {allSelected ? "every vendor" : "each selected vendor"}. It will
+                appear in their notification bell, and we'll also email each vendor a copy of the announcement.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type your announcement…"
+              className="min-h-28"
+              maxLength={1000}
+              data-testid="textarea-bulk-vendor-message"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
+                Cancel
+              </Button>
+              <Button onClick={handleSend} disabled={sending || !message.trim() || disabled} data-testid="button-send-bulk-vendor-message">
+                {sending ? "Sending…" : `Send to ${recipientCount}`}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -135,6 +135,7 @@ describe("POST /vendors/notifications/bulk — email fan-out", () => {
     expect(res.body.sent).toBe(2);
     expect(res.body.emailAttempted).toBe(2);
     expect(res.body.emailsSent).toBe(1);
+    expect(res.body.failures).toEqual([{ vendorId: 2, vendorName: "Vendor Two", reason: "no_email" }]);
 
     expect(sentEmails).toHaveLength(1);
     expect(sentEmails[0].to).toBe("one@example.com");
@@ -176,7 +177,44 @@ describe("POST /vendors/notifications/bulk — email fan-out", () => {
 
     expect(res.body.emailAttempted).toBe(1);
     expect(res.body.emailsSent).toBe(1);
+    expect(res.body.failures).toEqual([{ vendorId: 2, vendorName: "Vendor Two", reason: "opted_out" }]);
     expect(sentEmails).toHaveLength(1);
     expect(sentEmails[0].to).toBe("one@example.com");
+  });
+
+  it("reports a send_failed reason when the mailer reports failure instead of skipping silently", async () => {
+    vendorRows = [
+      { id: 1, name: "Vendor One", email: "one@example.com", announcementEmailOptOut: false },
+      { id: 3, name: "Vendor Three", email: "three@example.com", announcementEmailOptOut: false },
+    ];
+
+    const mailerModule = await import("../../lib/mailer");
+    const originalSendEmail = mailerModule.sendEmail;
+    (mailerModule as unknown as { sendEmail: typeof originalSendEmail }).sendEmail = (opts: {
+      to: string;
+      subject: string;
+      html: string;
+    }) => {
+      sentEmails.push(opts);
+      if (opts.to === "three@example.com") return Promise.resolve({ status: "failed" as const, error: "boom" });
+      return Promise.resolve({ status: "sent" as const });
+    };
+
+    try {
+      const router = await loadRouterHandler();
+      const handler = findBulkHandler(router);
+
+      const req = { body: { message: "Scheduled maintenance tonight", all: true } };
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(201);
+      expect(res.body.emailAttempted).toBe(2);
+      expect(res.body.emailsSent).toBe(1);
+      expect(res.body.failures).toEqual([{ vendorId: 3, vendorName: "Vendor Three", reason: "send_failed" }]);
+    } finally {
+      (mailerModule as unknown as { sendEmail: typeof originalSendEmail }).sendEmail = originalSendEmail;
+    }
   });
 });
