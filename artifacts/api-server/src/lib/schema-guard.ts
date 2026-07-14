@@ -27,6 +27,11 @@ interface ExpectedColumn {
   usedBy: string;
 }
 
+interface ExpectedTable {
+  table: string;
+  usedBy: string;
+}
+
 // Columns known to be required by scheduled background jobs. Add an entry
 // here whenever a new migration introduces a column a scheduler depends on —
 // it turns a silent per-tick crash into a loud, one-time startup warning.
@@ -40,6 +45,16 @@ const EXPECTED_COLUMNS: ExpectedColumn[] = [
   { table: "platform_payment_credentials", column: "last_checked_at", usedBy: "subscription-sync-scheduler, gateway-health-scheduler" },
   { table: "platform_payment_credentials", column: "last_failure_reason", usedBy: "subscription-sync-scheduler, gateway-health-scheduler" },
   { table: "platform_payment_credentials", column: "failing_since", usedBy: "subscription-sync-scheduler, gateway-health-scheduler" },
+  { table: "social_accounts", column: "connected_via", usedBy: "social OAuth publish, social-account-health-scheduler" },
+  { table: "social_accounts", column: "access_token_encrypted", usedBy: "social OAuth publish, social-account-health-scheduler" },
+  { table: "social_accounts", column: "token_expires_at", usedBy: "social OAuth publish, social-account-health-scheduler" },
+];
+
+// Whole tables known to be required by scheduled background jobs, for
+// migrations that introduce a new table rather than just a column.
+const EXPECTED_TABLES: ExpectedTable[] = [
+  { table: "job_run_status", usedBy: "subscription-sync-scheduler (recordJobRun), and any other scheduler using the shared job-run-status helper" },
+  { table: "post_publications", usedBy: "social OAuth publish, post publishing pipeline" },
 ];
 
 /**
@@ -53,19 +68,25 @@ export async function runSchemaDriftGuard(): Promise<void> {
       sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
     );
     const present = new Set(rows.rows.map((r) => `${r.table_name}.${r.column_name}`));
+    const presentTables = new Set(rows.rows.map((r) => r.table_name));
 
-    const missing = EXPECTED_COLUMNS.filter((c) => !present.has(`${c.table}.${c.column}`));
-    if (missing.length === 0) {
+    const missingColumns = EXPECTED_COLUMNS.filter((c) => !present.has(`${c.table}.${c.column}`));
+    const missingTables = EXPECTED_TABLES.filter((t) => !presentTables.has(t.table));
+
+    if (missingColumns.length === 0 && missingTables.length === 0) {
       logger.info("[schema-guard] No known schema drift detected");
       return;
     }
 
-    const lines = missing.map((c) => `- ${c.table}.${c.column} (breaks: ${c.usedBy})`);
-    const message = `[schema-guard] Missing ${missing.length} expected column(s) — a migration was written but never applied to this database. Affected background jobs will fail on every tick until this is fixed:\n${lines.join("\n")}`;
+    const columnLines = missingColumns.map((c) => `- ${c.table}.${c.column} (breaks: ${c.usedBy})`);
+    const tableLines = missingTables.map((t) => `- ${t.table} (breaks: ${t.usedBy})`);
+    const allLines = [...columnLines, ...tableLines];
+    const totalMissing = missingColumns.length + missingTables.length;
+    const message = `[schema-guard] Missing ${totalMissing} expected column(s)/table(s) — a migration was written but never applied to this database. Affected background jobs will fail on every tick until this is fixed:\n${allLines.join("\n")}`;
 
-    logger.error({ missing }, message);
+    logger.error({ missingColumns, missingTables }, message);
     await sendSlackAlert(
-      `:rotating_light: Schema drift detected on startup — ${missing.length} expected column(s) missing:\n${lines.join("\n")}\n\nApply the corresponding migration(s) in lib/db/migrations to the dev DB (or re-publish for production).`,
+      `:rotating_light: Schema drift detected on startup — ${totalMissing} expected column(s)/table(s) missing:\n${allLines.join("\n")}\n\nApply the corresponding migration(s) in lib/db/migrations to the dev DB (or re-publish for production).`,
     );
   } catch (err) {
     // Never let the guard itself take down startup.
