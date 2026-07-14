@@ -6,8 +6,31 @@ import { Button } from "@/components/ui/button";
 import { 
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
-  Command, Play
+  Command, Play, MapPin, Phone
 } from "lucide-react";
+import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
+
+const SOCIAL_LINKS = [
+  { name: "Instagram", href: "https://www.instagram.com/lumgwunsolutionsgroup", icon: FaInstagram },
+  { name: "Facebook", href: "https://web.facebook.com/LUMGWUNSOLUTIONS/", icon: FaFacebook },
+  { name: "X", href: "https://x.com/awajimaaApp", icon: FaXTwitter },
+  { name: "LinkedIn", href: "https://www.linkedin.com/company/lumgwun-solutions-group/", icon: FaLinkedin },
+  { name: "TikTok", href: "https://tiktok.com/@lumgwun.solutions", icon: FaTiktok },
+  { name: "Telegram", href: "https://t.me/AwaApp", icon: FaTelegram },
+];
+
+const OFFICES = [
+  {
+    label: "Nigeria HQ",
+    lines: ["Pyale Workhub", "21 Bekwere Wosu Street", "D-Line, Diobu, Port Harcourt", "Rivers State, Nigeria"],
+  },
+  {
+    label: "United States",
+    lines: ["16501 Shady Grove Road, Suite 8885", "Gaithersburg, MD 20898", "USA"],
+  },
+];
+
+const PHONE_NUMBERS = ["+1 917 821 8640", "+234 703 884 3102"];
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -320,7 +343,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-border/50 bg-card/30 backdrop-blur">
-        <div className="container mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="container mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
@@ -331,6 +354,20 @@ export default function LandingPage() {
               {settings?.footerTagline ??
                 "The all-in-one business command centre for vendors, agencies, and multi-brand operators — built for the modern African and global market."}
             </p>
+            <div className="flex items-center gap-3">
+              {SOCIAL_LINKS.map(({ name, href, icon: Icon }) => (
+                <a
+                  key={name}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={name}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-background/50 text-muted-foreground transition-all hover:text-primary hover:border-primary/50 hover:scale-105"
+                >
+                  <Icon className="h-4 w-4" />
+                </a>
+              ))}
+            </div>
           </div>
 
           {/* Our Products */}
@@ -378,6 +415,43 @@ export default function LandingPage() {
                   </a>
                 </div>
               ) : null}
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div className="space-y-6">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Contact</h4>
+            <div className="space-y-4 text-sm">
+              {OFFICES.map((office) => (
+                <div key={office.label} className="flex gap-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-foreground">{office.label}</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {office.lines.map((line, i) => (
+                        <React.Fragment key={i}>
+                          {line}
+                          {i < office.lines.length - 1 ? <br /> : null}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Phone className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                <div className="space-y-1">
+                  {PHONE_NUMBERS.map((num) => (
+                    <a
+                      key={num}
+                      href={`tel:${num.replace(/\s/g, "")}`}
+                      className="block text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {num}
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
