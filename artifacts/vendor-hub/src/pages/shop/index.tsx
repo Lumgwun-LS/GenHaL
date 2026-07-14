@@ -29,6 +29,8 @@ const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   remita: "Remita",
 };
 
+type UnavailableProvider = { provider: PaymentProvider; label: string; reason: string };
+
 type ShopLink = {
   linkMode: "interest" | "checkout";
   vendor: {
@@ -38,6 +40,7 @@ type ShopLink = {
     brandTheme: string;
     defaultCurrency: string;
     availableProviders: PaymentProvider[];
+    unavailableProviders: UnavailableProvider[];
   };
   products: ShopProduct[];
 };
@@ -107,6 +110,7 @@ export default function ShopLinkPage() {
   };
 
   const providers = link.vendor.availableProviders;
+  const unavailableProviders = link.vendor.unavailableProviders;
   const activeProvider = selectedProvider && providers.includes(selectedProvider) ? selectedProvider : providers[0];
 
   const submitCheckout = async () => {
@@ -266,8 +270,22 @@ export default function ShopLinkPage() {
                 </div>
               )}
 
+              {link.linkMode === "checkout" && unavailableProviders.length > 0 && (
+                <div className="space-y-1 pt-1">
+                  {unavailableProviders.map((u) => (
+                    <p key={u.provider} className="text-xs text-muted-foreground">
+                      <span className="line-through">{u.label}</span> isn't available right now — {u.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+
               {link.linkMode === "checkout" && providers.length === 0 && (
-                <p className="text-sm text-destructive">This vendor has no payment method configured yet.</p>
+                <p className="text-sm text-destructive">
+                  {unavailableProviders.length > 0
+                    ? "None of this vendor's payment methods are working right now. Please check back later."
+                    : "This vendor has no payment method configured yet."}
+                </p>
               )}
 
               <Button

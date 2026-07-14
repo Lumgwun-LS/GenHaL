@@ -32,6 +32,15 @@ async function fetchBrandThemes(): Promise<BrandTheme[]> {
   return res.json();
 }
 
+type GatewayAvailability = { provider: string; available: boolean; reason: string | null };
+
+async function fetchPaymentAvailability(vendorId: number): Promise<GatewayAvailability[]> {
+  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/payment-availability`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load payment availability");
+  const data = await res.json();
+  return data.gateways ?? [];
+}
+
 /** Only ever render http(s) links — blocks javascript:/data: URLs stored on a vendor's website field. */
 function safeExternalUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -61,6 +70,12 @@ export default function VendorDetail() {
   const { data: socials } = useListSocialAccounts({ vendorId: id });
   const { data: orders } = useListOrders({ vendorId: id });
   const { data: brandThemes } = useQuery({ queryKey: ["brand-themes"], queryFn: fetchBrandThemes });
+  const { data: paymentAvailability } = useQuery({
+    queryKey: ["vendor-payment-availability", id],
+    queryFn: () => fetchPaymentAvailability(id),
+    enabled: !!id,
+  });
+  const unavailableByProvider = new Map((paymentAvailability ?? []).filter((g) => !g.available).map((g) => [g.provider, g.reason]));
 
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [paystackEnabled, setPaystackEnabled] = useState(false);
@@ -381,64 +396,89 @@ export default function VendorDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="stripe-toggle" className="text-sm font-medium">Stripe</Label>
-                  <p className="text-xs text-muted-foreground">Accept card payments via Stripe</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="stripe-toggle" className="text-sm font-medium">Stripe</Label>
+                    <p className="text-xs text-muted-foreground">Accept card payments via Stripe</p>
+                  </div>
+                  <Switch
+                    id="stripe-toggle"
+                    checked={stripeEnabled}
+                    onCheckedChange={setStripeEnabled}
+                  />
                 </div>
-                <Switch
-                  id="stripe-toggle"
-                  checked={stripeEnabled}
-                  onCheckedChange={setStripeEnabled}
-                />
+                {stripeEnabled && unavailableByProvider.has("stripe") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("stripe")}</p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="paystack-toggle" className="text-sm font-medium">Paystack</Label>
-                  <p className="text-xs text-muted-foreground">Accept payments via Paystack</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="paystack-toggle" className="text-sm font-medium">Paystack</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via Paystack</p>
+                  </div>
+                  <Switch
+                    id="paystack-toggle"
+                    checked={paystackEnabled}
+                    onCheckedChange={setPaystackEnabled}
+                  />
                 </div>
-                <Switch
-                  id="paystack-toggle"
-                  checked={paystackEnabled}
-                  onCheckedChange={setPaystackEnabled}
-                />
+                {paystackEnabled && unavailableByProvider.has("paystack") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("paystack")}</p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="remita-toggle" className="text-sm font-medium">Remita</Label>
-                  <p className="text-xs text-muted-foreground">Accept payments via Remita</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="remita-toggle" className="text-sm font-medium">Remita</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via Remita</p>
+                  </div>
+                  <Switch
+                    id="remita-toggle"
+                    checked={remitaEnabled}
+                    onCheckedChange={setRemitaEnabled}
+                  />
                 </div>
-                <Switch
-                  id="remita-toggle"
-                  checked={remitaEnabled}
-                  onCheckedChange={setRemitaEnabled}
-                />
+                {remitaEnabled && unavailableByProvider.has("remita") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("remita")}</p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="flutterwave-toggle" className="text-sm font-medium">Flutterwave</Label>
-                  <p className="text-xs text-muted-foreground">Accept payments via Flutterwave</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="flutterwave-toggle" className="text-sm font-medium">Flutterwave</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via Flutterwave</p>
+                  </div>
+                  <Switch
+                    id="flutterwave-toggle"
+                    checked={flutterwaveEnabled}
+                    onCheckedChange={setFlutterwaveEnabled}
+                  />
                 </div>
-                <Switch
-                  id="flutterwave-toggle"
-                  checked={flutterwaveEnabled}
-                  onCheckedChange={setFlutterwaveEnabled}
-                />
+                {flutterwaveEnabled && unavailableByProvider.has("flutterwave") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("flutterwave")}</p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="nomba-toggle" className="text-sm font-medium">Nomba</Label>
-                  <p className="text-xs text-muted-foreground">Accept payments via Nomba</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="nomba-toggle" className="text-sm font-medium">Nomba</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via Nomba</p>
+                  </div>
+                  <Switch
+                    id="nomba-toggle"
+                    checked={nombaEnabled}
+                    onCheckedChange={setNombaEnabled}
+                  />
                 </div>
-                <Switch
-                  id="nomba-toggle"
-                  checked={nombaEnabled}
-                  onCheckedChange={setNombaEnabled}
-                />
+                {nombaEnabled && unavailableByProvider.has("nomba") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("nomba")}</p>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -13,9 +13,18 @@ import { db } from "@workspace/db";
 import { vendorsTable, vendorPaymentCredentialsTable, adminAuditLogTable, vendorNotificationsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, maskEncryptedKey } from "../lib/encryption";
-import { canAddPaymentKeys } from "../lib/vendor-keys";
+import { canAddPaymentKeys, getPaymentMethodAvailability } from "../lib/vendor-keys";
+import { GATEWAY_PROVIDERS, type GatewayProvider } from "../lib/platform-gateways";
 import { getAuth, clerkClient } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
+
+const GATEWAY_ENABLED_FIELD: Record<GatewayProvider, keyof Vendor> = {
+  stripe: "stripeEnabled",
+  paystack: "paystackEnabled",
+  remita: "remitaEnabled",
+  flutterwave: "flutterwaveEnabled",
+  nomba: "nombaEnabled",
+};
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
 function isAdmin(userId: string): boolean {
@@ -116,6 +125,37 @@ router.get("/vendors/:id/payment-credentials", async (req, res): Promise<void> =
       testPassed: creds?.paystackTestPassed ?? false,
     },
   });
+});
+
+// ─── GET /vendors/:id/payment-availability ───────────────────────────────────
+
+/**
+ * Lets a vendor (or an admin) see, before sharing a shop link, which of
+ * their *enabled* gateways will actually work right now vs. are enabled but
+ * have no working credentials behind them (platform key missing/failing, or
+ * their own key not yet test-passed).
+ */
+router.get("/vendors/:id/payment-availability", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendor = await getVendorOr404(res, id);
+  if (!vendor) return;
+
+  if (!canManageVendor(userId, vendor)) {
+    res.status(403).json({ error: "You do not have permission to view this vendor's payment availability" });
+    return;
+  }
+
+  const enabled = GATEWAY_PROVIDERS.filter((p) => Boolean(vendor[GATEWAY_ENABLED_FIELD[p]]));
+  const gateways = await Promise.all(
+    enabled.map((provider) => getPaymentMethodAvailability(provider, id, vendor)),
+  );
+
+  res.json({ gateways });
 });
 
 // ─── PUT /vendors/:id/payment-credentials ────────────────────────────────────

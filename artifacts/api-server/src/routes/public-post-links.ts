@@ -23,7 +23,8 @@ import {
   leadsTable,
   paymentsTable,
 } from "@workspace/db";
-import { resolveStripeKey, resolvePaystackKey } from "../lib/vendor-keys";
+import { resolveStripeKey, resolvePaystackKey, getPaymentMethodAvailability, type TierCheckable } from "../lib/vendor-keys";
+import { GATEWAY_DEFS } from "../lib/platform-gateways";
 import { createRemitaCheckout } from "./payments/remita";
 import { createFlutterwaveCheckout } from "./payments/flutterwave";
 import { createNombaCheckout } from "./payments/nomba";
@@ -33,7 +34,7 @@ const router: IRouter = Router();
 const PAYSTACK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "KES"]);
 const PAYSTACK_BASE = "https://api.paystack.co";
 
-type GatewayVendor = {
+type GatewayVendor = TierCheckable & {
   stripeEnabled: boolean;
   paystackEnabled: boolean;
   remitaEnabled: boolean;
@@ -50,6 +51,28 @@ function enabledProviders(vendor: GatewayVendor): PostLinkProvider[] {
   return ALL_PROVIDERS.filter((p) => vendor[`${p}Enabled` as const]);
 }
 
+export type UnavailableProvider = { provider: PostLinkProvider; label: string; reason: string };
+
+/**
+ * Splits the vendor's enabled gateways into ones that will actually work at
+ * checkout right now vs. ones that are enabled but have no working platform
+ * (or vendor-owned) credentials behind them — so both the shop-link page and
+ * the vendor can see *why* an enabled method isn't offered, instead of only
+ * discovering it via a generic 503 after "Continue to payment".
+ */
+async function resolveProviderAvailability(
+  vendor: GatewayVendor,
+  vendorId: number,
+): Promise<{ available: PostLinkProvider[]; unavailable: UnavailableProvider[] }> {
+  const enabled = enabledProviders(vendor);
+  const results = await Promise.all(enabled.map((p) => getPaymentMethodAvailability(p, vendorId, vendor)));
+  const available = results.filter((r) => r.available).map((r) => r.provider);
+  const unavailable = results
+    .filter((r): r is typeof r & { reason: string } => !r.available)
+    .map((r) => ({ provider: r.provider, label: GATEWAY_DEFS[r.provider].label, reason: r.reason ?? "Not available." }));
+  return { available, unavailable };
+}
+
 /**
  * Post-checkout redirect always goes back to the shop link itself — never a
  * client-supplied URL. Accepting an unauthenticated client's successUrl/
@@ -61,11 +84,10 @@ function shopLinkUrl(token: string): string | null {
   return `https://${domain}/p/${token}`;
 }
 
-/** Default pick when the customer didn't choose (or chose something invalid). */
-function selectProvider(currency: string, vendor: GatewayVendor): PostLinkProvider | null {
+/** Default pick when the customer didn't choose (or chose something invalid). Only picks among providers that are actually available. */
+function selectProvider(currency: string, available: PostLinkProvider[]): PostLinkProvider | null {
   const wantsPaystack = PAYSTACK_CURRENCIES.has(currency.toUpperCase());
-  if (wantsPaystack && vendor.paystackEnabled) return "paystack";
-  const available = enabledProviders(vendor);
+  if (wantsPaystack && available.includes("paystack")) return "paystack";
   return available[0] ?? null;
 }
 
@@ -87,6 +109,7 @@ router.get("/public/post-links/:token", async (req, res): Promise<void> => {
   const link = await loadLink(req.params.token);
   if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
   const { post, vendor, products } = link;
+  const { available, unavailable } = await resolveProviderAvailability(vendor, vendor.id);
   res.json({
     linkMode: post.linkMode,
     vendor: {
@@ -95,7 +118,8 @@ router.get("/public/post-links/:token", async (req, res): Promise<void> => {
       logoUrl: vendor.logoUrl,
       brandTheme: vendor.brandTheme,
       defaultCurrency: vendor.defaultCurrency ?? "USD",
-      availableProviders: enabledProviders(vendor),
+      availableProviders: available,
+      unavailableProviders: unavailable,
     },
     products: products.map((p) => ({
       id: p.id,
@@ -182,6 +206,41 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   }
 
   const totalAmount = orderItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const currency = (link.vendor.defaultCurrency ?? "USD").toUpperCase();
+
+  // Resolve availability — and reject before creating an order — so a
+  // customer never gets a generic 503 after we've already recorded an order
+  // for them, and always sees the specific reason a chosen method won't work.
+  const { available, unavailable } = await resolveProviderAvailability(link.vendor, link.vendor.id);
+
+  let provider: PostLinkProvider | null = null;
+  if (requestedProvider) {
+    if (available.includes(requestedProvider as PostLinkProvider)) {
+      provider = requestedProvider as PostLinkProvider;
+    } else {
+      const badReason = unavailable.find((u) => u.provider === requestedProvider);
+      res.status(503).json({
+        error: badReason
+          ? `${badReason.label} isn't available right now: ${badReason.reason}`
+          : "The selected payment method is not available for this vendor.",
+      });
+      return;
+    }
+  } else {
+    provider = selectProvider(currency, available);
+  }
+
+  if (!provider) {
+    res.status(503).json({
+      error:
+        unavailable.length > 0
+          ? `This vendor's payment method${unavailable.length > 1 ? "s aren't" : " isn't"} working right now: ${unavailable
+              .map((u) => `${u.label} (${u.reason})`)
+              .join("; ")}`
+          : "This vendor has no payment method configured yet.",
+    });
+    return;
+  }
 
   const [order] = await db.insert(ordersTable).values({
     vendorId: link.vendor.id,
@@ -205,18 +264,6 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
       totalPrice: (i.quantity * i.unitPrice).toString(),
     })),
   );
-
-  const currency = (link.vendor.defaultCurrency ?? "USD").toUpperCase();
-  const available = enabledProviders(link.vendor);
-  const provider: PostLinkProvider | null =
-    requestedProvider && available.includes(requestedProvider as PostLinkProvider)
-      ? (requestedProvider as PostLinkProvider)
-      : selectProvider(currency, link.vendor);
-
-  if (!provider) {
-    res.status(503).json({ error: "This vendor has no payment method configured yet." });
-    return;
-  }
 
   const redirectUrl = shopLinkUrl(req.params.token);
   if (!redirectUrl) {
