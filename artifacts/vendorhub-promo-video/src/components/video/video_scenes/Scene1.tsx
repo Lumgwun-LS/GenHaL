@@ -64,7 +64,7 @@ export const Scene1 = () => {
           }
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          Manage inventory, track orders, and process payments across the premier multivendor platform.
+          Manage inventory, run AI voice campaigns, and track multi-branch finances across the premier multivendor platform.
         </motion.p>
       </div>
 
@@ -125,6 +125,25 @@ export const Scene1 = () => {
             <div className="w-3/4 h-full bg-warning rounded-full" />
           </div>
           <p className="text-white font-semibold text-[0.8vw]">Low stock: Wireless Earbuds</p>
+        </motion.div>
+
+        <motion.div
+          className="absolute top-[10%] -right-[4vw] w-[15vw] bg-bg-muted/90 backdrop-blur-xl border border-white/10 rounded-[1vw] p-[1.2vw] shadow-xl"
+          initial={{ x: 50, opacity: 0, scale: 0.9 }}
+          animate={
+            phase >= 4 ? { x: 100, opacity: 0 } :
+            phase >= 3 ? { x: 0, opacity: 1, scale: 1 } :
+            { x: 50, opacity: 0, scale: 0.9 }
+          }
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: phase === 3 ? 0.4 : 0 }}
+        >
+          <div className="flex items-center gap-[0.8vw] mb-[0.6vw]">
+            <div className="w-[1.8vw] h-[1.8vw] rounded-full bg-primary/20 flex items-center justify-center">
+              <div className="w-[0.8vw] h-[0.8vw] rounded-full bg-primary" />
+            </div>
+            <p className="text-text-secondary text-[0.8vw] font-medium">Voice Campaign</p>
+          </div>
+          <p className="text-white font-semibold text-[0.9vw]">Calling 1,240 leads...</p>
         </motion.div>
       </div>
     </motion.div>

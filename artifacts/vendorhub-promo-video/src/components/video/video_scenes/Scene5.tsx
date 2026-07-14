@@ -70,9 +70,9 @@ export const Scene5 = () => {
           <div className="w-[2vw] h-[2vw] rounded-[0.5vw] bg-white rotate-45" />
         </motion.div>
 
-        <div className="overflow-hidden mb-[1vw]">
+        <div className="overflow-hidden mb-[1vw] w-full text-center">
           <motion.h2
-            className="text-[5vw] font-display font-bold text-white tracking-tight"
+            className="text-[4.2vw] font-display font-bold text-white tracking-tight"
             initial={{ y: 120 }}
             animate={
               phase >= 4 ? { y: -120 } :
@@ -81,7 +81,7 @@ export const Scene5 = () => {
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            Powered by <span className="text-gradient-mixed italic">AI.</span>
+            Powered by Awajimaa <span className="text-gradient-mixed italic">AI.</span>
           </motion.h2>
         </div>
 
