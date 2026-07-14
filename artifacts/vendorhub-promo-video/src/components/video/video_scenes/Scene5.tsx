@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
 export const Scene5 = () => {
@@ -9,7 +9,8 @@ export const Scene5 = () => {
       setTimeout(() => setPhase(1), 500),
       setTimeout(() => setPhase(2), 1200),
       setTimeout(() => setPhase(3), 2200),
-      setTimeout(() => setPhase(4), 4800), // Exit
+      setTimeout(() => setPhase(4), 5800), // swap to ecosystem line
+      setTimeout(() => setPhase(5), 10200), // Exit
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
@@ -27,7 +28,7 @@ export const Scene5 = () => {
         className="absolute inset-0 z-0 overflow-hidden"
         initial={{ scale: 1.2, opacity: 0 }}
         animate={
-          phase >= 4 ? { scale: 1.3, opacity: 0 } :
+          phase >= 5 ? { scale: 1.3, opacity: 0 } :
           phase >= 1 ? { scale: 1, opacity: 0.6 } :
           { scale: 1.2, opacity: 0 }
         }
@@ -48,7 +49,7 @@ export const Scene5 = () => {
           className="w-[5vw] h-[5vw] rounded-full bg-gradient-to-r from-primary to-accent mb-[2vw] flex items-center justify-center shadow-[0_0_2vw_rgba(127,80,255,0.8)] relative"
           initial={{ scale: 0, rotate: -180 }}
           animate={
-            phase >= 4 ? { scale: 0, rotate: 180 } :
+            phase >= 5 ? { scale: 0, rotate: 180 } :
             phase >= 1 ? { scale: 1, rotate: 0 } :
             { scale: 0, rotate: -180 }
           }
@@ -75,7 +76,7 @@ export const Scene5 = () => {
             className="text-[4.2vw] font-display font-bold text-white tracking-tight"
             initial={{ y: 120 }}
             animate={
-              phase >= 4 ? { y: -120 } :
+              phase >= 5 ? { y: -120 } :
               phase >= 2 ? { y: 0 } :
               { y: 120 }
             }
@@ -85,19 +86,36 @@ export const Scene5 = () => {
           </motion.h2>
         </div>
 
-        <div className="overflow-hidden h-[6vw]">
-          <motion.p
-            className="text-[1.5vw] text-text-secondary max-w-[40vw] mx-auto"
-            initial={{ y: 50, opacity: 0 }}
-            animate={
-              phase >= 4 ? { y: -50, opacity: 0 } :
-              phase >= 3 ? { y: 0, opacity: 1 } :
-              { y: 50, opacity: 0 }
-            }
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          >
-            Awajimaa AI connects the dots. Generating insights, automating logistics, and driving growth across every app.
-          </motion.p>
+        <div className="relative w-full flex items-center justify-center min-h-[3.5vw]">
+          <AnimatePresence mode="wait">
+            {phase === 3 && (
+              <motion.p
+                key="subtext-1"
+                className="text-[1.5vw] text-text-secondary max-w-[40vw] mx-auto"
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -30, opacity: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                Awajimaa AI connects the dots. Generating insights, automating logistics, and driving growth across every app.
+              </motion.p>
+            )}
+            {phase === 4 && (
+              <motion.p
+                key="subtext-2"
+                className="text-[1.3vw] leading-relaxed text-text-secondary max-w-[46vw] mx-auto"
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -30, opacity: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                The Awajimaa AI is a core part of the Unified Civictech, Fintech &amp; Super App called the{' '}
+                <span className="text-white font-semibold">Awajimaa App</span> — an intelligent platform for
+                reporting and responding to emergencies, commerce, and education. The WeChat of Africa, and the
+                digital infrastructure that will power states and organizations across Africa and beyond.
+              </motion.p>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>

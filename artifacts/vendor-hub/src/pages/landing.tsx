@@ -259,6 +259,35 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Ecosystem Section */}
+        <section className="py-28 border-t border-border/50 relative overflow-hidden bg-background/50">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-primary/5 blur-[160px] rounded-full pointer-events-none" />
+          <div className="container mx-auto px-6 max-w-4xl relative z-10 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            >
+              <Badge className="border-primary/30 bg-primary/10 text-primary px-4 py-1.5 text-xs font-bold uppercase tracking-wider mb-6">
+                <Sparkles className="w-3.5 h-3.5 mr-2" /> The Ecosystem
+              </Badge>
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+              className="text-3xl md:text-4xl font-extrabold tracking-tight mb-6 text-balance"
+            >
+              Powered by Awajimaa <span className="text-primary">AI</span>
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+              className="text-lg text-muted-foreground leading-relaxed font-medium max-w-3xl mx-auto"
+            >
+              The Awajimaa AI is a core part of the Unified Civictech, Fintech, & Super App called the{" "}
+              <span className="text-foreground font-bold">Awajimaa App</span> — an intelligent platform for
+              reporting and responding to emergencies, commerce, and education. The WeChat of Africa, and the
+              digital infrastructure that will power states and organizations across Africa and beyond.
+            </motion.p>
+          </div>
+        </section>
+
         {/* CTA */}
         <section className="py-32 relative overflow-hidden border-t border-primary/20">
           <div className="absolute inset-0 bg-primary/5" />

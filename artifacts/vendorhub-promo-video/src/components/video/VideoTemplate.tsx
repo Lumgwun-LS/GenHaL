@@ -16,7 +16,7 @@ export const SCENE_DURATIONS = {
   scene2: 5500,
   scene3: 5500,
   scene4: 5500,
-  scene5: 5500,
+  scene5: 11000,
   scene6: 5000,
 };
 
