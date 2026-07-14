@@ -21,12 +21,16 @@ export const openai = new OpenAI({
 
 export async function generateImageBuffer(
   prompt: string,
-  size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
+  size: "1024x1024" | "1536x1024" | "1024x1536" | "auto" | "512x512" | "256x256" = "1024x1024",
+  quality: "low" | "medium" | "high" | "auto" = "high"
 ): Promise<Buffer> {
   const response = await openai.images.generate({
     model: "gpt-image-1",
     prompt,
-    size,
+    // gpt-image-1 only accepts 1024x1024 / 1536x1024 / 1024x1536 / auto — the
+    // legacy 512x512 / 256x256 sizes are DALL-E-2-only and unsupported here.
+    size: size === "512x512" || size === "256x256" ? "1024x1024" : size,
+    quality,
   });
   const base64 = response.data?.[0]?.b64_json ?? "";
   return Buffer.from(base64, "base64");

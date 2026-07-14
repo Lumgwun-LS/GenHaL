@@ -61,7 +61,11 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   let result: string;
   let status: "completed" | "failed" = "completed";
   try {
-    const buffer = await generateImageBuffer(fullPrompt, "1024x1024");
+    // 1536x1024 landscape at "high" quality matches the wide 16:9 social post
+    // framing requested in buildImagePrompt and is gpt-image-1's sharpest tier
+    // (vs. the previous unset-quality/square default, which rendered soft and
+    // cropped the composition to a square).
+    const buffer = await generateImageBuffer(fullPrompt, "1536x1024", "high");
     // Stored in object storage (not a base64 data: URI) so the resulting URL is
     // publicly fetchable — Instagram's Content Publishing API requires that for
     // the post's image, and a data: URI could never satisfy it.
@@ -108,7 +112,7 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   let result: string;
   let status: "completed" | "failed" = "completed";
   try {
-    const imageBuffer = await generateImageBuffer(fullPrompt, "1024x1024");
+    const imageBuffer = await generateImageBuffer(fullPrompt, "1536x1024", "high");
     const videoBuffer = await generateVideoBuffer(imageBuffer, captionText ?? prompt);
     // Stored in object storage (not a base64 data: URI) for the same reason as
     // generate-image — a publicly fetchable URL is what platform publish APIs need.
