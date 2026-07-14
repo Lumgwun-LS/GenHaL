@@ -51,6 +51,15 @@ function parsePaymentSettings(body: unknown): { data: PaymentSettingsBody } | { 
 
 const router: IRouter = Router();
 
+// The response schemas (generated from openapi.yaml) declare createdAt as a
+// string, but drizzle/pg return timestamp columns as JS Date objects. Every
+// endpoint that returns a raw vendor row must convert before validating the
+// response, or the *.parse() call throws (creation/onboarding succeeds in the
+// DB, but the client never gets a response).
+function serializeVendor<T extends { createdAt: Date }>(vendor: T): Omit<T, "createdAt"> & { createdAt: string } {
+  return { ...vendor, createdAt: vendor.createdAt.toISOString() };
+}
+
 router.get("/vendors/stats", async (req, res): Promise<void> => {
   const vendors = await db.select().from(vendorsTable);
   const total = vendors.length;
@@ -83,7 +92,7 @@ router.get("/vendors", async (req, res): Promise<void> => {
           v.industry.toLowerCase().includes(params.data.search!.toLowerCase()),
       )
     : vendors;
-  res.json(ListVendorsResponse.parse(filtered));
+  res.json(ListVendorsResponse.parse(filtered.map(serializeVendor)));
 });
 
 router.post("/vendors", async (req, res): Promise<void> => {
@@ -93,7 +102,7 @@ router.post("/vendors", async (req, res): Promise<void> => {
     return;
   }
   const [vendor] = await db.insert(vendorsTable).values(parsed.data).returning();
-  res.status(201).json(CreateVendorResponse.parse(vendor));
+  res.status(201).json(CreateVendorResponse.parse(serializeVendor(vendor)));
 });
 
 /**
@@ -109,7 +118,7 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const [existing] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
-  if (existing) { res.status(200).json(OnboardVendorResponse.parse(existing)); return; }
+  if (existing) { res.status(200).json(OnboardVendorResponse.parse(serializeVendor(existing))); return; }
 
   const parsed = OnboardVendorBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -150,7 +159,7 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
       })
       .returning();
 
-    res.status(201).json(OnboardVendorResponse.parse(vendor));
+    res.status(201).json(OnboardVendorResponse.parse(serializeVendor(vendor)));
     // Dual-run identity bridge: best-effort, never blocks or fails onboarding.
     void syncVendorToAwajimaa(vendor);
   } catch (err: any) {
@@ -158,7 +167,7 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
     // is unexpected here and should surface rather than being masked as a successful onboard.
     if (err?.code === "23505" && err?.constraint === "vendors_clerk_user_id_unique") {
       const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
-      if (vendor) { res.status(200).json(OnboardVendorResponse.parse(vendor)); return; }
+      if (vendor) { res.status(200).json(OnboardVendorResponse.parse(serializeVendor(vendor))); return; }
     }
     throw err;
   }
@@ -169,7 +178,7 @@ router.get("/vendors/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, params.data.id));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
-  res.json(GetVendorResponse.parse(vendor));
+  res.json(GetVendorResponse.parse(serializeVendor(vendor)));
 });
 
 router.patch("/vendors/:id", async (req, res): Promise<void> => {
@@ -198,7 +207,7 @@ router.patch("/vendors/:id", async (req, res): Promise<void> => {
   }
   const [vendor] = await db.update(vendorsTable).set(parsed.data).where(eq(vendorsTable.id, params.data.id)).returning();
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
-  res.json(UpdateVendorResponse.parse(vendor));
+  res.json(UpdateVendorResponse.parse(serializeVendor(vendor)));
 });
 
 router.delete("/vendors/:id", async (req, res): Promise<void> => {
