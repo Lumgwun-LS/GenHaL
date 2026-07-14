@@ -22,12 +22,15 @@ export const DEFAULT_SITE_CONTENT = {
   },
   "landing.features": {
     heading: "Everything you need to scale",
-    subheading: "We've collapsed 6 different SaaS products into one cohesive, blazing-fast experience.",
+    subheading: "We've collapsed a dozen different SaaS products into one cohesive, blazing-fast experience.",
     items: [
-      { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, X, LinkedIn, TikTok, and Telegram from one composer." },
+      { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer." },
+      { title: "AI Content & Video Studio", description: "Generate product imagery, captions, and fully animated multi-scene marketing videos with AI voiceover and music." },
       { title: "Sales & Leads CRM", description: "Track every lead from first touch to closed order. Visualize pipelines and revenue." },
-      { title: "Inventory & Stock", description: "Real-time stock tracking with low-stock alerts and transaction histories." },
-      { title: "AI Content Studio", description: "Generate bespoke product imagery and viral captions natively inside the platform." },
+      { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range, exportable anytime." },
+      { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale." },
+      { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, full order fulfillment, and transaction histories." },
+      { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
       { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
       { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
     ],
@@ -35,7 +38,7 @@ export const DEFAULT_SITE_CONTENT = {
   "landing.stats": {
     heading: "Built for operators who hate switching tabs",
     body:
-      "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post.",
+      "Stop paying for a social scheduler, a CRM, an inventory tracker, a finance tracker, a call center, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post.",
     bullets: [
       "Zero latency interface",
       "Dark mode optimized for long sessions",
@@ -45,7 +48,7 @@ export const DEFAULT_SITE_CONTENT = {
     stats: [
       { value: "40+", label: "Hours saved monthly" },
       { value: "100%", label: "Data synchronization" },
-      { value: "6", label: "SaaS subscriptions replaced" },
+      { value: "9", label: "SaaS subscriptions replaced" },
       { value: "2.5x", label: "Faster response times" },
     ],
   },

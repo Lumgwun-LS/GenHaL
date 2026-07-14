@@ -1,11 +1,20 @@
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Globe, PackageSearch, MessageSquareText, Zap, ChevronRight, Mail } from "lucide-react";
+import { 
+  MessageSquareText, Zap, ChevronRight, 
+  Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
+  Command, Play
+} from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
-const ICONS = [MessageSquareText, BarChart3, PackageSearch, Zap, Mail, Globe];
+const VIDEOS = [
+  { id: "tour", title: "Platform Tour", src: "/videos/promo-tour.mp4" },
+  { id: "social", title: "Social & AI Studio", src: "/videos/promo-social.mp4" }
+];
 
 type SiteContent = {
   "landing.hero": { badge: string; heading: string; subheading: string; primaryCta: string; secondaryCta: string };
@@ -21,8 +30,35 @@ async function fetchSiteContent(): Promise<SiteContent> {
   return res.json() as Promise<SiteContent>;
 }
 
+const getFeatureIcon = (title: string) => {
+  const t = title.toLowerCase();
+  if (t.includes("social")) return MessageSquareText;
+  if (t.includes("ai ") || t.includes("studio")) return Sparkles;
+  if (t.includes("sales") || t.includes("crm")) return Users;
+  if (t.includes("finance")) return Wallet;
+  if (t.includes("branch") || t.includes("worker")) return Network;
+  if (t.includes("order") || t.includes("inventory")) return Package;
+  if (t.includes("voice")) return PhoneCall;
+  if (t.includes("omnichannel")) return Megaphone;
+  if (t.includes("vendor")) return Layers;
+  return Zap;
+};
+
+const DEFAULT_FEATURES = [
+  { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer." },
+  { title: "AI Content & Video Studio", description: "Generate product imagery, captions, and fully animated multi-scene marketing videos with AI voiceover and music." },
+  { title: "Sales & Leads CRM", description: "Track every lead from first touch to closed order. Visualize pipelines and revenue." },
+  { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range, exportable anytime." },
+  { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale." },
+  { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, full order fulfillment, and transaction histories." },
+  { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
+  { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
+  { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
+];
+
 export default function LandingPage() {
   const { data } = useQuery({ queryKey: ["site-content"], queryFn: fetchSiteContent, staleTime: 60_000 });
+  const [activeVideo, setActiveVideo] = useState(0);
 
   const hero = data?.["landing.hero"];
   const features = data?.["landing.features"];
@@ -30,20 +66,22 @@ export default function LandingPage() {
   const cta = data?.["landing.cta"];
   const settings = data?.["site.settings"];
 
+  const featuresList = features?.items ?? DEFAULT_FEATURES;
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="dark min-h-screen bg-background text-foreground flex flex-col font-sans bg-noise selection:bg-primary/30">
       {/* Navbar */}
-      <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded object-cover" />
-            <span className="font-bold text-xl tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
+      <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 transition-all">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded bg-primary/20 object-cover border border-primary/30" />
+            <span className="font-extrabold text-lg tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/sign-in" className="text-sm font-medium hover:text-primary transition-colors">
+          <div className="flex items-center gap-6">
+            <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
               Sign In
             </Link>
-            <Link href="/sign-up" className="text-sm font-medium text-primary-foreground bg-primary px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+            <Link href="/sign-up" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all">
               Start Free Trial
             </Link>
           </div>
@@ -52,73 +90,140 @@ export default function LandingPage() {
 
       <main className="flex-1 pt-16">
         {/* Hero Section */}
-        <section className="py-20 md:py-32 px-4 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-background to-background -z-10"></div>
-          <div className="container mx-auto max-w-6xl flex flex-col items-center text-center">
-            <Badge className="mb-6">{hero?.badge ?? "Command Center for Modern Operators"}</Badge>
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 max-w-4xl text-balance">
+        <section className="pt-32 pb-20 px-6 relative overflow-hidden flex flex-col items-center">
+          <div className="absolute inset-0 bg-grid-pattern opacity-30 pointer-events-none" style={{ maskImage: "linear-gradient(to bottom, black 40%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 100%)" }} />
+          <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none" />
+
+          <div className="container mx-auto max-w-5xl relative z-10 flex flex-col items-center text-center">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+              <Badge className="mb-8 border-primary/30 bg-primary/10 text-primary uppercase tracking-wider text-xs py-1.5 px-4 shadow-sm shadow-primary/20">
+                {hero?.badge ?? "Command Center for Modern Operators"}
+              </Badge>
+            </motion.div>
+            
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl text-balance text-foreground leading-[1.1]"
+            >
               {hero?.heading ?? "Run your entire business from one terminal."}
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-balance">
-              {hero?.subheading ??
-                "Awa Biz Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit."}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 mb-16">
-              <Link href="/sign-up" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl text-balance font-medium leading-relaxed"
+            >
+              {hero?.subheading ?? "Awa Biz Suite replaces your fragmented tool stack. Manage multi-channel social media, inventory, sales, leads, and SMS campaigns in a single, high-density cockpit."}
+            </motion.p>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex flex-col sm:flex-row gap-5 mb-16 w-full sm:w-auto"
+            >
+              <Link href="/sign-up" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50 hover:-translate-y-0.5">
                 {hero?.primaryCta ?? "Get Started"}
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
               <Button
-                variant="outline"
-                size="lg"
-                className="h-12 px-8"
+                variant="outline" size="lg"
+                className="h-12 px-8 border-border bg-card/50 backdrop-blur hover:bg-muted font-semibold transition-all hover:-translate-y-0.5"
                 onClick={() => document.getElementById("demo-preview")?.scrollIntoView({ behavior: "smooth", block: "center" })}
               >
+                <Command className="mr-2 w-4 h-4 text-muted-foreground" />
                 {hero?.secondaryCta ?? "View Demo"}
               </Button>
-            </div>
-
-            <div id="demo-preview" className="w-full aspect-[16/9] md:aspect-[21/9] rounded-xl overflow-hidden border shadow-2xl relative">
-              <img src="/hero.png" alt="Awa Biz Suite Dashboard" className="object-cover w-full h-full" />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent"></div>
-            </div>
+            </motion.div>
           </div>
+
+          <motion.div 
+            id="demo-preview"
+            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}
+            className="w-full max-w-5xl mx-auto rounded-xl overflow-hidden border border-border/50 shadow-2xl bg-card/40 backdrop-blur-md relative z-20 mb-10"
+          >
+            <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border/50 bg-background/80">
+              {VIDEOS.map((v, i) => (
+                <button
+                  key={v.id}
+                  onClick={() => setActiveVideo(i)}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all relative outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    i === activeVideo ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {i === activeVideo && (
+                    <motion.div
+                      layoutId="activeVideoTab"
+                      className="absolute inset-0 bg-primary rounded-md -z-10 shadow-md shadow-primary/40"
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-2">
+                    {i === activeVideo ? <Play className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3" />}
+                    {v.title}
+                  </span>
+                </button>
+              ))}
+              <div className="ml-auto flex items-center gap-1.5 px-3">
+                 <div className="w-2.5 h-2.5 rounded-full bg-destructive/80" />
+                 <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+              </div>
+            </div>
+            
+            <div className="relative aspect-[16/9] bg-black overflow-hidden">
+              {VIDEOS.map((v, i) => (
+                <video
+                  key={v.id}
+                  src={v.src}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${
+                    i === activeVideo ? "opacity-100 relative z-10" : "opacity-0 pointer-events-none z-0"
+                  }`}
+                  autoPlay muted loop playsInline
+                />
+              ))}
+              <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-b-xl z-20 pointer-events-none" />
+            </div>
+          </motion.div>
         </section>
 
-        {/* Features Grid */}
-        <section className="py-24 bg-muted/30">
-          <div className="container mx-auto px-4 max-w-6xl">
+        {/* Features Section */}
+        <section className="py-24 relative border-t border-border/50 bg-background/50">
+          <div className="container mx-auto px-6 max-w-6xl relative z-10">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight mb-4">{features?.heading ?? "Everything you need to scale"}</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-                {features?.subheading ?? "We've collapsed 6 different SaaS products into one cohesive, blazing-fast experience."}
-              </p>
+              <motion.h2 
+                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
+              >
+                {features?.heading ?? "Everything you need to scale"}
+              </motion.h2>
+              <motion.p 
+                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+                className="text-muted-foreground max-w-2xl mx-auto text-lg font-medium"
+              >
+                {features?.subheading ?? "We've collapsed 9 different SaaS products into one cohesive, blazing-fast experience."}
+              </motion.p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {(features?.items ?? [
-                { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, X, LinkedIn, TikTok, and Telegram from one composer." },
-                { title: "Sales & Leads CRM", description: "Track every lead from first touch to closed order. Visualize pipelines and revenue." },
-                { title: "Inventory & Stock", description: "Real-time stock tracking with low-stock alerts and transaction histories." },
-                { title: "AI Content Studio", description: "Generate bespoke product imagery and viral captions natively inside the platform." },
-                { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
-                { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
-              ]).map((f, i) => (
-                <FeatureCard key={f.title} icon={ICONS[i % ICONS.length]!} title={f.title} description={f.description} />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuresList.map((f, i) => (
+                <FeatureCard key={f.title} title={f.title} description={f.description} index={i} />
               ))}
             </div>
           </div>
         </section>
 
         {/* Metric Section */}
-        <section className="py-24">
-          <div className="container mx-auto px-4 max-w-6xl">
-            <div className="grid md:grid-cols-2 gap-16 items-center">
-              <div>
-                <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">{stats?.heading ?? "Built for operators who hate switching tabs"}</h2>
-                <p className="text-lg text-muted-foreground mb-8">
+        <section className="py-32 border-t border-border/50 relative overflow-hidden">
+          <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[150px] rounded-full pointer-events-none" />
+          <div className="container mx-auto px-6 max-w-6xl relative z-10">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              <motion.div
+                initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
+              >
+                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-6 text-balance leading-tight">
+                  {stats?.heading ?? "Built for operators who hate switching tabs"}
+                </h2>
+                <p className="text-lg text-muted-foreground mb-8 font-medium leading-relaxed">
                   {stats?.body ??
-                    "Stop paying for a social scheduler, a CRM, an inventory tracker, an email tool, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post."}
+                    "Stop paying for a social scheduler, a CRM, an inventory tracker, a finance tracker, a call center, and an AI generation tool. Awa Biz Suite connects your data so an inventory update can automatically trigger a social post."}
                 </p>
                 <ul className="space-y-4">
                   {(stats?.bullets ?? [
@@ -127,21 +232,27 @@ export default function LandingPage() {
                     "Keyboard shortcuts for power users",
                     "Export any table to CSV instantly",
                   ]).map((item, i) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center">✓</div>
-                      <span className="font-medium">{item}</span>
-                    </li>
+                    <motion.li 
+                      key={i} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 + (i * 0.1) }}
+                      className="flex items-center gap-3"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center border border-primary/30 shrink-0">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-semibold text-foreground/90">{item}</span>
+                    </motion.li>
                   ))}
                 </ul>
-              </div>
+              </motion.div>
+              
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-4 pt-8">
-                  <StatCard value={stats?.stats?.[0]?.value ?? "40+"} label={stats?.stats?.[0]?.label ?? "Hours saved monthly"} />
-                  <StatCard value={stats?.stats?.[1]?.value ?? "100%"} label={stats?.stats?.[1]?.label ?? "Data synchronization"} />
+                <div className="space-y-4 pt-8 md:pt-12">
+                  <StatCard value={stats?.stats?.[0]?.value ?? "40+"} label={stats?.stats?.[0]?.label ?? "Hours saved monthly"} delay={0.2} />
+                  <StatCard value={stats?.stats?.[1]?.value ?? "100%"} label={stats?.stats?.[1]?.label ?? "Data synchronization"} delay={0.3} />
                 </div>
                 <div className="space-y-4">
-                  <StatCard value={stats?.stats?.[2]?.value ?? "6"} label={stats?.stats?.[2]?.label ?? "SaaS subscriptions replaced"} />
-                  <StatCard value={stats?.stats?.[3]?.value ?? "2.5x"} label={stats?.stats?.[3]?.label ?? "Faster response times"} />
+                  <StatCard value={stats?.stats?.[2]?.value ?? "9"} label={stats?.stats?.[2]?.label ?? "SaaS subscriptions replaced"} delay={0.4} />
+                  <StatCard value={stats?.stats?.[3]?.value ?? "2.5x"} label={stats?.stats?.[3]?.label ?? "Faster response times"} delay={0.5} />
                 </div>
               </div>
             </div>
@@ -149,91 +260,91 @@ export default function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section className="py-24 bg-primary text-primary-foreground text-center px-4 relative overflow-hidden">
-          <div className="container mx-auto max-w-3xl relative z-10">
-            <h2 className="text-4xl font-bold mb-6">{cta?.heading ?? "Ready to take command?"}</h2>
-            <p className="text-primary-foreground/80 text-xl mb-10">
+        <section className="py-32 relative overflow-hidden border-t border-primary/20">
+          <div className="absolute inset-0 bg-primary/5" />
+          <div className="absolute inset-0 bg-grid-pattern opacity-40" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-primary/20 blur-[150px] rounded-full pointer-events-none" />
+          
+          <div className="container mx-auto max-w-3xl relative z-10 text-center">
+            <motion.h2 
+              initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
+              className="text-4xl md:text-5xl font-black tracking-tight mb-6 text-foreground"
+            >
+              {cta?.heading ?? "Ready to take command?"}
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+              className="text-muted-foreground text-xl mb-10 font-medium"
+            >
               {cta?.body ?? "Join thousands of operators running their empires on Awa Biz Suite."}
-            </p>
-            <Link href="/sign-up" className="inline-flex h-14 items-center justify-center rounded-md bg-background px-10 text-base font-bold text-foreground shadow-lg transition-colors hover:bg-background/90">
-              {cta?.buttonLabel ?? "Start Your Free Trial"}
-            </Link>
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+            >
+              <Link href="/sign-up" className="inline-flex h-14 items-center justify-center rounded-lg bg-primary px-10 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:bg-primary/90 hover:scale-105 hover:shadow-xl hover:shadow-primary/50">
+                {cta?.buttonLabel ?? "Start Your Free Trial"}
+                <ChevronRight className="ml-2 h-5 w-5" />
+              </Link>
+            </motion.div>
           </div>
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
         </section>
       </main>
 
-      <footer className="border-t bg-card">
-        {/* Main footer grid */}
-        <div className="container mx-auto px-4 py-14 grid grid-cols-1 md:grid-cols-3 gap-10">
+      <footer className="border-t border-border/50 bg-card/30 backdrop-blur">
+        <div className="container mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Brand */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded object-cover" />
-              <span className="font-bold text-base tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded bg-primary/20 object-cover border border-primary/30" />
+              <span className="font-extrabold text-lg tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs font-medium">
               {settings?.footerTagline ??
                 "The all-in-one business command centre for vendors, agencies, and multi-brand operators — built for the modern African and global market."}
             </p>
           </div>
 
           {/* Our Products */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Our Products</h4>
-            <ul className="space-y-3 text-sm">
+          <div className="space-y-6">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Our Products</h4>
+            <ul className="space-y-4 text-sm">
               <li>
-                <span className="block font-medium text-foreground">Awa Biz Suite</span>
-                <span className="text-muted-foreground text-xs">Multi-vendor business management platform</span>
+                <span className="block font-semibold text-foreground">Awa Biz Suite</span>
+                <span className="text-muted-foreground text-xs mt-1 block">Multi-vendor business management platform</span>
               </li>
               <li>
-                <a
-                  href="https://www.awajimaaschools.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group"
-                >
-                  <span className="block font-medium text-foreground group-hover:text-primary transition-colors">Awajimaa Schools</span>
-                  <span className="text-muted-foreground text-xs">Education Management Platform</span>
+                <a href="https://www.awajimaaschools.com" target="_blank" rel="noopener noreferrer" className="group block">
+                  <span className="block font-semibold text-foreground group-hover:text-primary transition-colors">Awajimaa Schools</span>
+                  <span className="text-muted-foreground text-xs mt-1 block">Education Management Platform</span>
                 </a>
               </li>
               <li>
-                <a
-                  href="https://www.awajimaahosting.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group"
-                >
-                  <span className="block font-medium text-foreground group-hover:text-primary transition-colors">Awajimaa Hosting</span>
-                  <span className="text-muted-foreground text-xs">Reliable cloud hosting services</span>
+                <a href="https://www.awajimaahosting.com" target="_blank" rel="noopener noreferrer" className="group block">
+                  <span className="block font-semibold text-foreground group-hover:text-primary transition-colors">Awajimaa Hosting</span>
+                  <span className="text-muted-foreground text-xs mt-1 block">Reliable cloud hosting services</span>
                 </a>
               </li>
             </ul>
           </div>
 
           {/* Company */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Company</h4>
-            <div className="space-y-3 text-sm">
+          <div className="space-y-6">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Company</h4>
+            <div className="space-y-4 text-sm">
               <div>
-                <p className="font-medium text-foreground">Lumgwun Solutions</p>
-                <a
-                  href="https://www.lumgwunsolutions.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline"
-                >
+                <p className="font-semibold text-foreground">Lumgwun Solutions</p>
+                <a href="https://www.lumgwunsolutions.com" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-1 block">
                   www.lumgwunsolutions.com
                 </a>
               </div>
               <div>
-                <p className="font-medium text-foreground">Awajimaa Group</p>
-                <p className="text-xs text-muted-foreground">Technology · Education · Infrastructure</p>
+                <p className="font-semibold text-foreground">Awajimaa Group</p>
+                <p className="text-xs text-muted-foreground mt-1 block">Technology · Education · Infrastructure</p>
               </div>
               {settings?.supportEmail ? (
                 <div>
-                  <p className="font-medium text-foreground">Support</p>
-                  <a href={`mailto:${settings.supportEmail}`} className="text-xs text-primary hover:underline">
+                  <p className="font-semibold text-foreground">Support</p>
+                  <a href={`mailto:${settings.supportEmail}`} className="text-xs text-primary hover:underline mt-1 block">
                     {settings.supportEmail}
                   </a>
                 </div>
@@ -243,23 +354,18 @@ export default function LandingPage() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t">
-          <div className="container mx-auto px-4 py-5 flex flex-col md:flex-row justify-between items-center gap-2 text-xs text-muted-foreground">
+        <div className="border-t border-border/50">
+          <div className="container mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-medium text-muted-foreground">
             <p>
               © {new Date().getFullYear()} {settings?.siteName ?? "Awa Biz Suite"}. All rights reserved.
             </p>
             <p>
               A product of{" "}
-              <a
-                href="https://www.lumgwunsolutions.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-foreground font-medium hover:text-primary transition-colors"
-              >
+              <a href="https://www.lumgwunsolutions.com" target="_blank" rel="noopener noreferrer" className="text-foreground font-semibold hover:text-primary transition-colors">
                 Lumgwun Solutions
               </a>
               {" "}and the{" "}
-              <span className="text-foreground font-medium">Awajimaa Group</span>.
+              <span className="text-foreground font-semibold">Awajimaa Group</span>.
             </p>
           </div>
         </div>
@@ -270,29 +376,40 @@ export default function LandingPage() {
 
 function Badge({ children, className }: { children: React.ReactNode, className?: string }) {
   return (
-    <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary/10 text-primary ${className}`}>
+    <div className={`inline-flex items-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${className}`}>
       {children}
     </div>
   )
 }
 
-function FeatureCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+function FeatureCard({ title, description, index }: { title: string, description: string, index: number }) {
+  const Icon = getFeatureIcon(title);
   return (
-    <div className="p-6 rounded-xl border bg-card hover:border-primary/50 transition-colors group">
-      <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.5, delay: index * 0.1 }}
+      className="p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm hover:bg-card/80 hover:border-primary/50 transition-all duration-300 group relative overflow-hidden"
+    >
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors" />
+      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground shadow-sm shadow-primary/0 group-hover:shadow-md group-hover:shadow-primary/30 transition-all duration-300 relative z-10">
         <Icon className="w-6 h-6" />
       </div>
-      <h3 className="text-xl font-bold mb-3">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed">{description}</p>
-    </div>
+      <h3 className="text-xl font-bold mb-3 text-foreground tracking-tight relative z-10">{title}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed font-medium relative z-10">{description}</p>
+    </motion.div>
   )
 }
 
-function StatCard({ value, label }: { value: string, label: string }) {
+function StatCard({ value, label, delay = 0 }: { value: string, label: string, delay?: number }) {
   return (
-    <div className="p-6 rounded-xl border bg-card">
-      <div className="text-4xl font-extrabold tracking-tight text-primary mb-2">{value}</div>
-      <div className="text-sm font-medium text-muted-foreground">{value && label}</div>
-    </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay, duration: 0.5 }}
+      className="p-8 rounded-2xl border border-border/50 bg-card/30 backdrop-blur hover:bg-card/60 transition-colors relative overflow-hidden group"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="relative z-10">
+        <div className="text-4xl md:text-5xl font-black tracking-tighter text-foreground mb-3 font-mono">{value}</div>
+        <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{label}</div>
+      </div>
+    </motion.div>
   )
 }
