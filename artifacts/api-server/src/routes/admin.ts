@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -42,6 +42,71 @@ async function getExportAlertSettings(): Promise<{ threshold: number; windowMinu
 async function getVoiceSignatureFailureAlertSettings(): Promise<{ threshold: number; windowMinutes: number }> {
   const raw = await getSiteContentBlock("admin.voiceSignatureFailureAlertSettings");
   return raw as { threshold: number; windowMinutes: number };
+}
+
+/**
+ * Determines whether the Twilio signature-failure burst alert is currently
+ * flagged, mirroring `getExportBurstStatus` — except this alert is global
+ * (one shared TWILIO_AUTH_TOKEN) rather than per-admin, so the
+ * acknowledgment is a single row instead of one per admin. Flagged once the
+ * failure count within the rolling window reaches the threshold, and stays
+ * flagged until either:
+ *  - an admin acknowledges *after* the failure that crossed the threshold
+ *    (an ack that predates the crossing doesn't clear a new burst), or
+ *  - enough time passes that the crossing failure ages out of the window.
+ */
+async function getVoiceSignatureFailureBurstStatus(): Promise<{
+  flagged: boolean;
+  count: number;
+  threshold: number;
+  windowMinutes: number;
+  flaggedAt: Date | null;
+  lastFailureAt: Date | null;
+  acknowledgedAt: Date | null;
+  acknowledgedBy: string | null;
+}> {
+  const { threshold, windowMinutes } = await getVoiceSignatureFailureAlertSettings();
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+  const recent = await db
+    .select({ createdAt: voiceSignatureFailuresTable.createdAt })
+    .from(voiceSignatureFailuresTable)
+    .where(gte(voiceSignatureFailuresTable.createdAt, windowStart))
+    .orderBy(desc(voiceSignatureFailuresTable.createdAt));
+
+  const count = recent.length;
+  const lastFailureAt = recent[0]?.createdAt ?? null;
+
+  const [ack] = await db.select().from(voiceSignatureFailureAcknowledgmentsTable).limit(1);
+
+  if (count < threshold) {
+    return {
+      flagged: false,
+      count,
+      threshold,
+      windowMinutes,
+      flaggedAt: null,
+      lastFailureAt,
+      acknowledgedAt: ack?.acknowledgedAt ?? null,
+      acknowledgedBy: ack?.acknowledgedBy ?? null,
+    };
+  }
+
+  // The failure that pushed the count to `threshold` (i.e. the Nth most
+  // recent one) is the moment this burst became flagged.
+  const flaggedAt = recent[threshold - 1]!.createdAt;
+  const cleared = Boolean(ack) && ack!.acknowledgedAt >= flaggedAt;
+
+  return {
+    flagged: !cleared,
+    count,
+    threshold,
+    windowMinutes,
+    flaggedAt,
+    lastFailureAt,
+    acknowledgedAt: ack?.acknowledgedAt ?? null,
+    acknowledgedBy: ack?.acknowledgedBy ?? null,
+  };
 }
 
 /**
@@ -477,25 +542,75 @@ router.get("/admin/voice/signature-failures/alert", async (req, res): Promise<vo
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const { threshold, windowMinutes } = await getVoiceSignatureFailureAlertSettings();
-  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
-  const [row] = await db
-    .select({
-      count: sql<number>`count(*)`,
-      lastFailureAt: sql<string>`max(${voiceSignatureFailuresTable.createdAt})`,
-    })
-    .from(voiceSignatureFailuresTable)
-    .where(gte(voiceSignatureFailuresTable.createdAt, windowStart));
+  const status = await getVoiceSignatureFailureBurstStatus();
+  res.json(status);
+});
 
-  const count = Number(row?.count ?? 0);
+// ─── POST /admin/voice/signature-failures/acknowledge ─────────────────────────
 
-  res.json({
-    threshold,
-    windowMinutes,
-    count,
-    lastFailureAt: row?.lastFailureAt ?? null,
-    flagged: count >= threshold,
+/**
+ * Clears a flagged Twilio signature-failure burst, e.g. after an admin has
+ * rotated TWILIO_AUTH_TOKEN in Secrets to match the token active on the
+ * Twilio account. `voiceSignatureFailureAcknowledgmentsTable` keeps only the
+ * latest review (single row) for the block-check, but every review is also
+ * appended to `voiceSignatureFailureAcknowledgmentLogTable` so the history
+ * survives for later reference — mirrors the export-burst acknowledge flow.
+ */
+router.post("/admin/voice/signature-failures/acknowledge", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  let acknowledgedByDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    acknowledgedByDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    acknowledgedByDisplayName = null;
+  }
+
+  const acknowledgedAt = new Date();
+
+  const [existing] = await db.select().from(voiceSignatureFailureAcknowledgmentsTable).limit(1);
+  if (existing) {
+    await db
+      .update(voiceSignatureFailureAcknowledgmentsTable)
+      .set({ acknowledgedAt, acknowledgedBy: userId })
+      .where(eq(voiceSignatureFailureAcknowledgmentsTable.id, existing.id));
+  } else {
+    await db.insert(voiceSignatureFailureAcknowledgmentsTable).values({ acknowledgedAt, acknowledgedBy: userId });
+  }
+
+  await db.insert(voiceSignatureFailureAcknowledgmentLogTable).values({
+    acknowledgedAt,
+    acknowledgedBy: userId,
+    acknowledgedByDisplayName,
   });
+
+  res.json({ success: true });
+});
+
+// ─── GET /admin/voice/signature-failures/history ───────────────────────────────
+
+/** Full review history for the signature-failure alert, not just the latest ack. */
+router.get("/admin/voice/signature-failures/history", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const history = await db
+    .select()
+    .from(voiceSignatureFailureAcknowledgmentLogTable)
+    .orderBy(desc(voiceSignatureFailureAcknowledgmentLogTable.acknowledgedAt))
+    .limit(50);
+
+  res.json(history);
 });
 
 // ─── GET /admin/birthday-logs ─────────────────────────────────────────────────

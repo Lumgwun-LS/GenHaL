@@ -515,7 +515,111 @@ type VoiceSignatureFailureAlert = {
   count: number;
   lastFailureAt: string | null;
   flagged: boolean;
+  flaggedAt: string | null;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
 };
+
+type VoiceSignatureFailureAcknowledgmentHistoryEntry = {
+  id: number;
+  acknowledgedAt: string;
+  acknowledgedBy: string;
+  acknowledgedByDisplayName: string | null;
+};
+
+async function fetchVoiceSignatureFailureAcknowledgmentHistory(): Promise<
+  VoiceSignatureFailureAcknowledgmentHistoryEntry[]
+> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/history`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load review history");
+  return res.json() as Promise<VoiceSignatureFailureAcknowledgmentHistoryEntry[]>;
+}
+
+async function acknowledgeVoiceSignatureFailureBurst(): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/acknowledge`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to clear the flag");
+  }
+}
+
+function AcknowledgeVoiceSignatureFailureButton() {
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
+  async function handleClick() {
+    setSaving(true);
+    try {
+      await acknowledgeVoiceSignatureFailureBurst();
+      toast.success("Cleared the signature-failure flag.");
+      qc.invalidateQueries({ queryKey: ["admin-voice-signature-failure-alert"] });
+      qc.invalidateQueries({ queryKey: ["admin-voice-signature-failure-history"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to clear the flag");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-xs shrink-0"
+      onClick={handleClick}
+      disabled={saving}
+      data-testid="button-acknowledge-voice-signature-failure"
+    >
+      {saving ? "Clearing…" : "Acknowledge & clear"}
+    </Button>
+  );
+}
+
+function VoiceSignatureFailureHistoryButton() {
+  const [open, setOpen] = useState(false);
+  const { data: history, isLoading } = useQuery({
+    queryKey: ["admin-voice-signature-failure-history"],
+    queryFn: fetchVoiceSignatureFailureAcknowledgmentHistory,
+    enabled: open,
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs shrink-0"
+          data-testid="button-voice-signature-failure-review-history"
+        >
+          Review history
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80" align="end">
+        <div className="text-sm font-medium mb-2">Review history</div>
+        {isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading…</div>
+        ) : !history?.length ? (
+          <div className="text-xs text-muted-foreground">No past reviews recorded yet.</div>
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto" data-testid="list-voice-signature-failure-review-history">
+            {history.map((h) => (
+              <li key={h.id} className="text-xs border-b last:border-b-0 pb-2 last:pb-0">
+                <div>
+                  Cleared by <span className="font-medium">{h.acknowledgedByDisplayName ?? h.acknowledgedBy}</span>
+                </div>
+                <div className="text-muted-foreground">{new Date(h.acknowledgedAt).toLocaleString()}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 type PaymentConflictSummary = { id: number }[];
 
@@ -2093,16 +2197,32 @@ export default function AdminPanel() {
                 <ShieldAlert className="h-4 w-4" />
                 <AlertTitle>Twilio call status updates may be failing</AlertTitle>
                 <AlertDescription>
-                  {voiceSignatureFailureAlert.count} status-callback requests were rejected for bad/missing
-                  signatures in the last {voiceSignatureFailureAlert.windowMinutes} minutes
-                  {voiceSignatureFailureAlert.lastFailureAt
-                    ? ` (last at ${new Date(voiceSignatureFailureAlert.lastFailureAt).toLocaleTimeString()})`
-                    : ""}
-                  . This usually means the Auth Token was rotated in the Twilio console. Update{" "}
-                  <code className="bg-black/10 px-1 rounded text-xs">TWILIO_AUTH_TOKEN</code> in Replit Secrets to
-                  match Twilio Console → Account → API keys &amp; tokens.
+                  <div>
+                    {voiceSignatureFailureAlert.count} status-callback requests were rejected for bad/missing
+                    signatures in the last {voiceSignatureFailureAlert.windowMinutes} minutes
+                    {voiceSignatureFailureAlert.lastFailureAt
+                      ? ` (last at ${new Date(voiceSignatureFailureAlert.lastFailureAt).toLocaleTimeString()})`
+                      : ""}
+                    . This usually means the Auth Token was rotated in the Twilio console. Update{" "}
+                    <code className="bg-black/10 px-1 rounded text-xs">TWILIO_AUTH_TOKEN</code> in Replit Secrets to
+                    match Twilio Console → Account → API keys &amp; tokens.
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <AcknowledgeVoiceSignatureFailureButton />
+                    <VoiceSignatureFailureHistoryButton />
+                  </div>
                 </AlertDescription>
               </Alert>
+            )}
+
+            {!voiceSignatureFailureAlert?.flagged && voiceSignatureFailureAlert?.acknowledgedAt && (
+              <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                <span data-testid="text-voice-signature-failure-cleared">
+                  Last cleared {new Date(voiceSignatureFailureAlert.acknowledgedAt).toLocaleString()}
+                  {voiceSignatureFailureAlert.acknowledgedBy ? ` by ${voiceSignatureFailureAlert.acknowledgedBy}` : ""}
+                </span>
+                <VoiceSignatureFailureHistoryButton />
+              </div>
             )}
 
             {voiceBackfillStatus && <VoiceBackfillCard status={voiceBackfillStatus} />}

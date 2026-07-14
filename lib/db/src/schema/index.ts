@@ -28,6 +28,8 @@ export * from "./admin-export-logs";
 export * from "./admin-export-acknowledgments";
 export * from "./admin-export-acknowledgment-log";
 export * from "./voice-signature-failures";
+export * from "./voice-signature-failure-acknowledgments";
+export * from "./voice-signature-failure-acknowledgment-log";
 export * from "./post-publications";
 export * from "./job-run-status";
 export * from "./sales";
