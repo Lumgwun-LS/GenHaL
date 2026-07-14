@@ -22,6 +22,15 @@ export const socialAccountsTable = pgTable("social_accounts", {
   connectedVia: text("connected_via").notNull().default("manual"), // manual | oauth_meta | oauth_linkedin | oauth_twitter
   accessTokenEncrypted: text("access_token_encrypted"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  // Health-check bookkeeping for OAuth-connected accounts (currently just
+  // Meta/Facebook+Instagram — see social-account-health.ts). `status` flips
+  // to "needs_reconnect" on a validated -> invalid transition so publish
+  // flows stop targeting it (posts.ts already filters status = "active");
+  // these three columns track the transition itself for the admin/vendor
+  // notice, mirroring platform_payment_credentials' failingSince pattern.
+  lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
+  lastHealthCheckError: text("last_health_check_error"),
+  healthCheckFailingSince: timestamp("health_check_failing_since", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

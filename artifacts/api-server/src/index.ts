@@ -8,6 +8,7 @@ import { startGatewayHealthScheduler } from "./lib/gateway-health-scheduler";
 import { startSubscriptionSyncScheduler } from "./lib/subscription-sync-scheduler";
 import { startPostScheduler } from "./lib/post-scheduler";
 import { startVoiceBackfillScheduler } from "./lib/voice-backfill";
+import { startSocialAccountHealthScheduler } from "./lib/social-account-health-scheduler";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 
 const rawPort = process.env["PORT"];
@@ -40,4 +41,5 @@ app.listen(port, (err) => {
   startSubscriptionSyncScheduler();
   startPostScheduler();
   startVoiceBackfillScheduler();
+  startSocialAccountHealthScheduler();
 });

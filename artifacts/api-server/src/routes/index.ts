@@ -21,6 +21,7 @@ import adminRouter from "./admin";
 import adminAnalyticsRouter from "./admin-analytics";
 import adminPaymentGatewaysRouter from "./admin-payment-gateways";
 import adminBillingSyncRouter from "./admin-billing-sync";
+import adminSocialHealthRouter from "./admin-social-health";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
@@ -88,5 +89,6 @@ router.use(adminRouter);
 router.use(adminAnalyticsRouter);
 router.use(adminPaymentGatewaysRouter);
 router.use(adminBillingSyncRouter);
+router.use(adminSocialHealthRouter);
 
 export default router;

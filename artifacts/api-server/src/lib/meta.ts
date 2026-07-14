@@ -106,6 +106,17 @@ export async function listManagedPages(userAccessToken: string): Promise<Connect
   }));
 }
 
+/**
+ * Cheap liveness check for a stored Page/Instagram access token: fetches just
+ * the `id` field for the account, which succeeds only if the token is still
+ * valid and still has at least read access to that Page/IG account. Throws
+ * with Meta's own error message (e.g. "Error validating access token") on
+ * expiry or revocation, which the caller surfaces to the vendor/admin.
+ */
+export async function validateMetaAccessToken(accountId: string, accessToken: string): Promise<void> {
+  await graphFetch(`/${accountId}`, { fields: "id", access_token: accessToken });
+}
+
 export interface PublishResult {
   externalPostId: string;
   externalUrl: string;

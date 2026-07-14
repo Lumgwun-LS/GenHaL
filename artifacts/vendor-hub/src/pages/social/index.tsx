@@ -201,11 +201,22 @@ function ConnectedAccounts() {
         ) : accounts && accounts.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center gap-2 rounded-full border pl-3 pr-1 py-1 text-sm">
+              <div key={a.id} className={`flex items-center gap-2 rounded-full border pl-3 pr-1 py-1 text-sm ${a.status === "needs_reconnect" ? "border-destructive/40 bg-destructive/5" : ""}`}>
                 <span className="font-medium">{a.platform}</span>
                 <span className="text-muted-foreground">{a.accountName}</span>
-                {(a.connectedVia === "oauth_meta" || a.connectedVia === "oauth_linkedin" || a.connectedVia === "oauth_twitter") && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Live</Badge>
+                {a.status === "needs_reconnect" ? (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-normal gap-1">
+                    <AlertCircle className="w-2.5 h-2.5" /> Reconnect needed
+                  </Badge>
+                ) : (
+                  (a.connectedVia === "oauth_meta" || a.connectedVia === "oauth_linkedin" || a.connectedVia === "oauth_twitter") && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Live</Badge>
+                  )
+                )}
+                {a.status === "needs_reconnect" && a.connectedVia === "oauth_meta" && (
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleConnectMeta}>
+                    Reconnect
+                  </Button>
                 )}
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDisconnect(a.id)}>
                   <Trash2 className="w-3 h-3" />

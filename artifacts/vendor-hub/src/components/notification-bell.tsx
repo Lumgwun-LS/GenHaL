@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
-import { Bell, Cake, TrendingUp, Info, PhoneCall } from "lucide-react";
+import { Bell, Cake, TrendingUp, Info, PhoneCall, Link2Off } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useListVendors } from "@workspace/api-client-react";
 import { Button } from "./ui/button";
@@ -67,6 +67,8 @@ export function NotificationBell() {
         return <TrendingUp className="w-4 h-4 text-primary shrink-0 mt-0.5" />;
       case "voice_campaign":
         return <PhoneCall className="w-4 h-4 text-accent shrink-0 mt-0.5" />;
+      case "social_reconnect":
+        return <Link2Off className="w-4 h-4 text-destructive shrink-0 mt-0.5" />;
       default:
         return <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />;
     }
