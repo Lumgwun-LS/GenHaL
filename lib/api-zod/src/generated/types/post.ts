@@ -14,6 +14,8 @@ export interface Post {
   /** Aligned by index with platforms; which connected social account to publish each platform entry to. 0 means "not explicitly chosen". */
   socialAccountIds?: number[];
   status: string;
+  /** True when the scheduled auto-publisher reverted this post to "approved" because every platform failed. */
+  autoPublishFailed?: boolean;
   mediaUrls?: string[];
   /** @nullable */
   mediaType?: string | null;

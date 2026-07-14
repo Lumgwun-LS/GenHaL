@@ -7,6 +7,8 @@ import { decrypt } from "../lib/encryption";
 import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
 import { publishLinkedInTextPost, publishLinkedInImagePost } from "../lib/linkedin";
 import { publishTweet, publishTweetWithImage } from "../lib/twitter";
+import { notifyScheduledPostFailed } from "../lib/post-notifications";
+import { logger } from "../lib/logger";
 import {
   ListPostsQueryParams,
   CreatePostBody,
@@ -468,11 +470,15 @@ function serializePublication(row: typeof postPublicationsTable.$inferSelect) {
  * route and the scheduled-post auto-publisher so both go through exactly one
  * code path — a claimed post is never left stuck in "publishing".
  */
-export async function executeClaimedPublish(claimed: typeof postsTable.$inferSelect): Promise<{
+export async function executeClaimedPublish(
+  claimed: typeof postsTable.$inferSelect,
+  opts: { auto?: boolean } = {},
+): Promise<{
   post: typeof postsTable.$inferSelect | undefined;
   publications: ReturnType<typeof serializePublication>[];
   anySucceeded: boolean;
 }> {
+  const auto = opts.auto ?? false;
   const vendorAccounts = await db.select().from(socialAccountsTable).where(and(eq(socialAccountsTable.vendorId, claimed.vendorId), eq(socialAccountsTable.status, "active")));
 
   const outcomes: PublishOutcome[] = [];
@@ -510,9 +516,22 @@ export async function executeClaimedPublish(claimed: typeof postsTable.$inferSel
   // this post in between.
   const [post] = await db
     .update(postsTable)
-    .set(anySucceeded ? { status: "published", publishedAt: new Date() } : { status: "approved" })
+    .set(
+      anySucceeded
+        ? { status: "published", publishedAt: new Date(), autoPublishFailed: false }
+        : { status: "approved", autoPublishFailed: auto },
+    )
     .where(and(eq(postsTable.id, claimed.id), eq(postsTable.status, "publishing")))
     .returning();
+
+  // Only the scheduled auto-publisher's silent failures need a proactive notice —
+  // a manual "Publish Now" failure is already surfaced immediately in the UI.
+  if (auto && !anySucceeded && post) {
+    const failures = outcomes.filter((o) => o.status === "failed").map((o) => ({ platform: o.platform, errorMessage: o.errorMessage }));
+    await notifyScheduledPostFailed(claimed.vendorId, claimed.id, claimed.caption, failures).catch((err) => {
+      logger.error({ err, postId: claimed.id }, "[posts] Failed to notify vendor of scheduled post auto-publish failure");
+    });
+  }
 
   return { post, publications: insertedPublications.map(serializePublication), anySucceeded };
 }
@@ -569,7 +588,7 @@ router.post("/posts/:id/schedule", async (req, res): Promise<void> => {
 
   const [post] = await db
     .update(postsTable)
-    .set({ status: "scheduled", scheduledAt: scheduledDate })
+    .set({ status: "scheduled", scheduledAt: scheduledDate, autoPublishFailed: false })
     .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
     .returning();
   if (!post) { res.status(409).json({ error: `Cannot schedule a post with status "${existing.status}". It must be approved first.` }); return; }
@@ -587,7 +606,7 @@ router.post("/posts/:id/cancel-schedule", async (req, res): Promise<void> => {
 
   const [post] = await db
     .update(postsTable)
-    .set({ status: "draft", scheduledAt: null })
+    .set({ status: "draft", scheduledAt: null, autoPublishFailed: false })
     .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "scheduled")))
     .returning();
   if (!post) { res.status(409).json({ error: `Cannot cancel a schedule on a post with status "${existing.status}".` }); return; }

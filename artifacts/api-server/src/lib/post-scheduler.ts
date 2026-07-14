@@ -27,10 +27,11 @@ import { db, postsTable } from "@workspace/db";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { executeClaimedPublish } from "../routes/posts";
+import { notifyScheduledPostFailed } from "./post-notifications";
 
 async function publishDuePosts(): Promise<void> {
   const due = await db
-    .select({ id: postsTable.id })
+    .select({ id: postsTable.id, vendorId: postsTable.vendorId, caption: postsTable.caption })
     .from(postsTable)
     .where(
       and(
@@ -44,7 +45,7 @@ async function publishDuePosts(): Promise<void> {
 
   logger.info({ count: due.length }, "[post-scheduler] Found due scheduled posts to auto-publish");
 
-  for (const { id } of due) {
+  for (const { id, vendorId, caption } of due) {
     try {
       // Atomic claim — only succeeds if still 'scheduled' at the moment we act.
       // If the vendor cancelled/rescheduled it in the meantime, this update
@@ -60,10 +61,12 @@ async function publishDuePosts(): Promise<void> {
         continue;
       }
 
-      const { anySucceeded } = await executeClaimedPublish(claimed);
+      const { anySucceeded } = await executeClaimedPublish(claimed, { auto: true });
       if (anySucceeded) {
         logger.info({ postId: id }, "[post-scheduler] Auto-published scheduled post");
       } else {
+        // executeClaimedPublish already reverted the post to "approved" (with
+        // autoPublishFailed set) and notified the vendor in-app + by email.
         logger.warn({ postId: id }, "[post-scheduler] Scheduled post failed to publish on every platform — reverted to approved for manual retry");
       }
     } catch (err) {
@@ -73,13 +76,22 @@ async function publishDuePosts(): Promise<void> {
       // stuck in "publishing" forever, since the query above only ever looks for
       // status = 'scheduled'. Guard the revert on status still being "publishing"
       // so we don't clobber a state some other path already moved it to.
-      await db
+      const [reverted] = await db
         .update(postsTable)
-        .set({ status: "approved" })
+        .set({ status: "approved", autoPublishFailed: true })
         .where(and(eq(postsTable.id, id), eq(postsTable.status, "publishing")))
+        .returning({ id: postsTable.id })
         .catch((revertErr) => {
           logger.error({ err: revertErr, postId: id }, "[post-scheduler] Failed to revert stuck post out of 'publishing'");
+          return [];
         });
+      // Only notify if we actually performed the revert (i.e. the post was still
+      // "publishing" — not a state some other path already moved it out of).
+      if (reverted) {
+        await notifyScheduledPostFailed(vendorId, id, caption, []).catch((notifyErr) => {
+          logger.error({ err: notifyErr, postId: id }, "[post-scheduler] Failed to notify vendor after DB-error revert");
+        });
+      }
     }
   }
 }

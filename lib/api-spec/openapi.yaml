@@ -2196,6 +2196,9 @@ components:
             type: integer
         status:
           type: string
+        autoPublishFailed:
+          type: boolean
+          description: True when the scheduled auto-publisher reverted this post to "approved" because every platform failed.
         mediaUrls:
           type: array
           items:

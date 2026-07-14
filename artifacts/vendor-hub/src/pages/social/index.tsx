@@ -11,8 +11,10 @@ import {
   useListSocialAccounts,
   useCreateSocialAccount,
   useDeleteSocialAccount,
+  useListPostPublications,
   getListPostsQueryKey,
   getListSocialAccountsQueryKey,
+  getListPostPublicationsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +84,40 @@ function ScheduleDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Shows why a scheduled post's auto-publish failed. Fetches the post's publish-attempt
+ * history (one row per platform) only when the card actually needs it, since it's not
+ * part of the list-posts payload.
+ */
+function AutoPublishFailureNotice({ postId }: { postId: number }) {
+  const { data: publications, isLoading } = useListPostPublications(postId, {
+    query: { enabled: true, queryKey: getListPostPublicationsQueryKey(postId) },
+  });
+  const latest = (publications ?? []).filter((p) => p.status === "failed");
+
+  return (
+    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 mb-3 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Failed to auto-publish
+      </div>
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading details...</p>
+      ) : latest.length > 0 ? (
+        <div className="space-y-1">
+          {latest.map((p) => (
+            <p key={p.id} className="text-xs text-muted-foreground truncate">
+              <span className="font-medium">{p.platform}:</span> {p.errorMessage ?? "Unknown error"}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">An unexpected error occurred before it could publish.</p>
+      )}
+      <p className="text-xs text-muted-foreground">Fix the issue below, then publish again or reschedule.</p>
+    </div>
   );
 }
 
@@ -361,9 +397,16 @@ export default function Social() {
                       </div>
                     ))}
                   </div>
-                  <Badge variant="outline" className={getStatusColor(post.status)}>
-                    {post.status}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    {post.autoPublishFailed && (
+                      <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1">
+                        <AlertCircle className="w-3 h-3" /> Auto-publish failed
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className={getStatusColor(post.status)}>
+                      {post.status}
+                    </Badge>
+                  </div>
                 </div>
                 
                 <p className="text-sm mb-4 line-clamp-3 flex-1">{post.caption}</p>
@@ -387,6 +430,8 @@ export default function Social() {
                     <span>Created: {new Date(post.createdAt).toLocaleDateString()}</span>
                   )}
                 </div>
+
+                {post.autoPublishFailed && <AutoPublishFailureNotice postId={post.id} />}
 
                 {publishResults[post.id] && publishResults[post.id].length > 0 && (
                   <div className="space-y-1.5 mb-3">
