@@ -12,9 +12,11 @@ import {
   useCreateSocialAccount,
   useDeleteSocialAccount,
   useListPostPublications,
+  useListScheduledPosts,
   getListPostsQueryKey,
   getListSocialAccountsQueryKey,
   getListPostPublicationsQueryKey,
+  getListScheduledPostsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -268,6 +270,110 @@ function ConnectedAccounts() {
   );
 }
 
+/** Groups scheduled posts by calendar day (local time) for the upcoming-schedule view. */
+function groupByDay<T extends { scheduledAt?: string | null }>(items: T[]): { day: Date; items: T[] }[] {
+  const groups = new Map<string, { day: Date; items: T[] }>();
+  for (const item of items) {
+    if (!item.scheduledAt) continue;
+    const d = new Date(item.scheduledAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!groups.has(key)) groups.set(key, { day: new Date(d.getFullYear(), d.getMonth(), d.getDate()), items: [] });
+    groups.get(key)!.items.push(item);
+  }
+  return Array.from(groups.values()).sort((a, b) => a.day.getTime() - b.day.getTime());
+}
+
+function formatDayHeading(day: Date): string {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.round((day.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  return day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
+/**
+ * Chronological calendar view of every "scheduled" post across all statuses,
+ * grouped by day, so a vendor can see the whole upcoming week/month at a
+ * glance instead of scanning the general post grid. Reuses the same
+ * reschedule/cancel handlers and ScheduleDialog as the grid view.
+ */
+function UpcomingScheduleView({
+  getPlatformIcon,
+  onReschedule,
+  onCancelSchedule,
+}: {
+  getPlatformIcon: (platform: string) => ReactNode;
+  onReschedule: (id: number, date: Date) => Promise<void>;
+  onCancelSchedule: (id: number) => void;
+}) {
+  const { data: scheduled, isLoading } = useListScheduledPosts({
+    query: { enabled: true, queryKey: getListScheduledPostsQueryKey() },
+  });
+  const groups = groupByDay(scheduled ?? []);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CalendarClock className="w-4 h-4" /> Upcoming Schedule
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading schedule...</p>
+        ) : groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No posts are scheduled yet. Approve a post and set a publish time to see it here.</p>
+        ) : (
+          <div className="space-y-6">
+            {groups.map(({ day, items }) => (
+              <div key={day.toISOString()}>
+                <h3 className="text-sm font-semibold mb-2">{formatDayHeading(day)}</h3>
+                <div className="space-y-2">
+                  {items
+                    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())
+                    .map((post) => (
+                      <div key={post.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex -space-x-1 shrink-0">
+                            {post.platforms.map((p) => (
+                              <div key={p} className="w-6 h-6 rounded-full bg-muted border flex items-center justify-center" title={p}>
+                                {getPlatformIcon(p)}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm truncate max-w-md">{post.caption}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> {new Date(post.scheduledAt!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <ScheduleDialog
+                            postId={post.id}
+                            title="Reschedule this post"
+                            confirmLabel="Reschedule"
+                            initialValue={new Date(post.scheduledAt!)}
+                            onConfirm={onReschedule}
+                            trigger={<Button size="sm" variant="outline">Reschedule</Button>}
+                          />
+                          <Button size="sm" variant="ghost" onClick={() => onCancelSchedule(post.id)}>
+                            <CalendarX className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Social() {
   const { data: posts, isLoading } = useListPosts();
   const highlightId = Number(new URLSearchParams(window.location.search).get("highlight")) || null;
@@ -284,7 +390,10 @@ export default function Social() {
   const updatePost = useUpdatePost();
   const [publishResults, setPublishResults] = useState<Record<number, { platform: string; status: string; externalUrl?: string | null; errorMessage?: string | null }[]>>({});
 
-  const invalidatePosts = () => queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
+  const invalidatePosts = () => {
+    queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListScheduledPostsQueryKey() });
+  };
 
   const handleSubmitForReview = async (id: number) => {
     try { await submitForReview.mutateAsync({ id }); invalidatePosts(); toast.success("Submitted for review"); }
@@ -373,6 +482,12 @@ export default function Social() {
       </div>
 
       <ConnectedAccounts />
+
+      <UpcomingScheduleView
+        getPlatformIcon={getPlatformIcon}
+        onReschedule={handleReschedule}
+        onCancelSchedule={handleCancelSchedule}
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
