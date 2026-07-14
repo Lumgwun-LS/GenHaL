@@ -151,7 +151,54 @@ export async function publishFacebookPhotoPost(
   return { externalPostId: json.post_id, externalUrl: `https://www.facebook.com/${json.post_id}` };
 }
 
-/** Publishes a video + caption to a Facebook Page by uploading the video bytes directly (no public URL needed). */
+/**
+ * Facebook processes an uploaded video asynchronously — the id returned by the
+ * upload call exists immediately, but the video itself moves through
+ * "processing" (and sometimes "error") states before it's actually viewable.
+ * Polls `/{video-id}?fields=status` until Facebook reports the video ready,
+ * reports a processing failure, or we give up waiting.
+ */
+async function pollFacebookVideoProcessing(
+  videoId: string,
+  accessToken: string,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<{ ready: boolean; failureReason: string | null }> {
+  const timeoutMs = opts.timeoutMs ?? 120_000;
+  const intervalMs = opts.intervalMs ?? 3_000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (true) {
+    const json = await graphFetch(`/${videoId}`, { fields: "status", access_token: accessToken }).catch((err) => {
+      // A transient lookup failure mid-poll shouldn't be mistaken for Facebook
+      // reporting a real processing error — surface it distinctly.
+      throw new Error(`Failed to check Facebook video processing status: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    const videoStatus: string | undefined = json?.status?.video_status;
+
+    if (videoStatus === "ready") return { ready: true, failureReason: null };
+    if (videoStatus === "error") {
+      const reason =
+        json?.status?.processing_progress?.error?.message ??
+        json?.status?.error?.message ??
+        "Facebook reported an error while processing the uploaded video.";
+      return { ready: false, failureReason: reason };
+    }
+
+    if (Date.now() >= deadline) {
+      return { ready: false, failureReason: `Timed out waiting for Facebook to finish processing the video (last status: "${videoStatus ?? "unknown"}").` };
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * Publishes a video + caption to a Facebook Page by uploading the video bytes
+ * directly (no public URL needed), then waits for Facebook's async video
+ * processing to finish before treating the post as actually published. If
+ * processing ultimately fails (or times out), this throws instead of
+ * returning success, so callers never record a "published" row for a video
+ * that never became viewable.
+ */
 export async function publishFacebookVideoPost(
   pageId: string,
   pageAccessToken: string,
@@ -165,6 +212,12 @@ export async function publishFacebookVideoPost(
   const res = await fetch(`${GRAPH_BASE}/${pageId}/videos`, { method: "POST", body: form });
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok || !json.id) throw new Error(json?.error?.message || "Facebook rejected the video post");
+
+  const processing = await pollFacebookVideoProcessing(json.id, pageAccessToken);
+  if (!processing.ready) {
+    throw new Error(`Facebook accepted the video upload but processing failed: ${processing.failureReason}`);
+  }
+
   return { externalPostId: json.id, externalUrl: `https://www.facebook.com/${json.id}` };
 }
 
