@@ -60,3 +60,4 @@
 - [VendorHub finance suite](vendorhub-finance-suite.md) — Sales/Expenses/Investments tables + finance-overview analytics; sales auto-sync hooks into the single applyPaymentStatusTransition, verified idempotent live.
 - [VendorHub branches & workers](vendorhub-branches-workers.md) — branch/worker FK-on-set-null pattern across Sales/Expenses/Investments/Orders; shared filter components; Clerk Backend-API session-mint workaround for API testing when hosted signup hits a CAPTCHA.
 - [VendorHub multi-scene AI video](vendorhub-ai-video-multiscene.md) — multi-scene/motion-template/music video built from stills via ffmpeg xfade+zoompan+ElevenLabs sound-gen; zoompan's `d` never bounds duration, only an output-level `-t` does.
+- [Site-content settings audit history](site-content-audit-history.md) — setSiteContentBlock now appends to site_content_audit_log generically; reuse for any admin-editable site-content key, not just export-alert threshold.

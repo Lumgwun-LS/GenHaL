@@ -7,8 +7,8 @@
  * per key; `getSiteContent()` merges DB overrides on top of the defaults.
  */
 import { db } from "@workspace/db";
-import { siteContentTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { siteContentTable, siteContentAuditLogTable } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 
 export const DEFAULT_SITE_CONTENT = {
@@ -188,13 +188,49 @@ export async function getSiteContentBlock(key: SiteContentKey): Promise<unknown>
   return row ? row.value : DEFAULT_SITE_CONTENT[key];
 }
 
-/** Upserts a content block, recording who changed it. Value must already be validated. */
-export async function setSiteContentBlock(key: SiteContentKey, value: unknown, updatedBy: string): Promise<void> {
-  await db
-    .insert(siteContentTable)
-    .values({ key, value: value as object, updatedBy })
-    .onConflictDoUpdate({
-      target: siteContentTable.key,
-      set: { value: value as object, updatedBy, updatedAt: new Date() },
+/**
+ * Upserts a content block, recording who changed it, and appends an
+ * immutable audit row (old value, new value, admin identity, timestamp) to
+ * `site_content_audit_log`. `siteContentTable` itself only tracks the most
+ * recent editor — it gets overwritten on every edit — so admin-sensitive
+ * blocks (like the export-burst alert threshold) rely on this history to
+ * answer "who changed this and when" beyond the latest edit.
+ *
+ * Value must already be validated.
+ */
+export async function setSiteContentBlock(
+  key: SiteContentKey,
+  value: unknown,
+  updatedBy: string,
+  updatedByDisplayName: string | null = null,
+): Promise<void> {
+  const previousValue = await getSiteContentBlock(key);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(siteContentTable)
+      .values({ key, value: value as object, updatedBy })
+      .onConflictDoUpdate({
+        target: siteContentTable.key,
+        set: { value: value as object, updatedBy, updatedAt: new Date() },
+      });
+
+    await tx.insert(siteContentAuditLogTable).values({
+      contentKey: key,
+      adminUserId: updatedBy,
+      adminDisplayName: updatedByDisplayName,
+      oldValue: JSON.stringify(previousValue),
+      newValue: JSON.stringify(value),
     });
+  });
+}
+
+/** Returns the most recent edits to `key`, newest first. */
+export async function getSiteContentAuditLog(key: SiteContentKey, limit = 50) {
+  return db
+    .select()
+    .from(siteContentAuditLogTable)
+    .where(eq(siteContentAuditLogTable.contentKey, key))
+    .orderBy(desc(siteContentAuditLogTable.changedAt))
+    .limit(limit);
 }

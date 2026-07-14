@@ -5,13 +5,13 @@
  * GET  /admin/vendors        — all vendors enriched with payment-credential status
  */
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
-import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
+import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, getSiteContentAuditLog, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
 import { retryCampaignCall } from "./voice-campaigns";
@@ -676,8 +676,48 @@ router.patch("/admin/site-content/:key", async (req, res): Promise<void> => {
     throw err;
   }
 
-  await setSiteContentBlock(key, validated, userId);
+  // Resolve the admin's display name from Clerk so the change history is
+  // readable without a separate lookup later. Fall back gracefully if
+  // Clerk is unavailable.
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
+  await setSiteContentBlock(key, validated, userId, adminDisplayName);
   res.json({ success: true });
+});
+
+// ─── GET /admin/site-content/:key/history ─────────────────────────────────────
+
+/**
+ * Full edit history for one site-content block (who changed it, old/new
+ * value, when) — unlike the block's own row, which only keeps the latest
+ * editor. Used e.g. by the Export History card to show every past change to
+ * the export-burst alert threshold/window, not just the current setting.
+ */
+router.get("/admin/site-content/:key/history", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const key = req.params.key as SiteContentKey;
+  if (!SITE_CONTENT_KEYS.includes(key)) {
+    res.status(400).json({ error: `Unknown content key "${key}".` });
+    return;
+  }
+
+  const entries = await getSiteContentAuditLog(key);
+  res.json(entries);
 });
 
 // ─── GET /admin/voice-campaigns/scheduled ─────────────────────────────────────

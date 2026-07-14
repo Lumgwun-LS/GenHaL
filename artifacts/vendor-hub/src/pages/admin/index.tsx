@@ -285,6 +285,33 @@ async function acknowledgeExportBurst(adminUserId: string): Promise<void> {
   }
 }
 
+type ExportAlertSettingsHistoryEntry = {
+  id: number;
+  contentKey: string;
+  adminUserId: string;
+  adminDisplayName: string | null;
+  oldValue: string;
+  newValue: string;
+  changedAt: string;
+};
+
+async function fetchExportAlertSettingsHistory(): Promise<ExportAlertSettingsHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings/history`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load threshold change history");
+  return res.json() as Promise<ExportAlertSettingsHistoryEntry[]>;
+}
+
+function formatAlertSettingsValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as { threshold?: number; windowMinutes?: number };
+    return `${v.threshold ?? "?"} downloads / ${v.windowMinutes ?? "?"} min`;
+  } catch {
+    return raw;
+  }
+}
+
 async function saveExportAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings`, {
     method: "PATCH",
@@ -358,6 +385,7 @@ function ExportAlertSettingsDialog({ threshold, windowMinutes }: { threshold: nu
       await saveExportAlertSettings({ threshold: t, windowMinutes: w });
       toast.success("Export alert threshold updated.");
       qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+      qc.invalidateQueries({ queryKey: ["admin-export-alert-settings-history"] });
       setOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
@@ -1256,6 +1284,12 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: exportAlertSettingsHistory, isLoading: exportAlertSettingsHistoryLoading } = useQuery({
+    queryKey: ["admin-export-alert-settings-history"],
+    queryFn: fetchExportAlertSettingsHistory,
+    enabled: isAdmin,
+  });
+
   const { data: voiceSignatureFailureAlert } = useQuery({
     queryKey: ["admin-voice-signature-failure-alert"],
     queryFn: fetchVoiceSignatureFailureAlert,
@@ -1658,6 +1692,51 @@ export default function AdminPanel() {
                         <TableCell className="text-right text-sm">{log.rowCount}</TableCell>
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {new Date(log.exportedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardList className="w-4 h-4" /> Threshold Change History
+              </CardTitle>
+              <CardDescription>
+                Every edit to the export-burst alert threshold and window — who changed it, from what, and when. Read-only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {exportAlertSettingsHistoryLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Loading history…</div>
+              ) : !exportAlertSettingsHistory?.length ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">No changes recorded yet.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Changed By</TableHead>
+                      <TableHead>Previous</TableHead>
+                      <TableHead>New</TableHead>
+                      <TableHead className="text-right">Changed</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {exportAlertSettingsHistory.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="text-xs">
+                          {entry.adminDisplayName ?? <span className="font-mono">{entry.adminUserId}</span>}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatAlertSettingsValue(entry.oldValue)}
+                        </TableCell>
+                        <TableCell className="text-xs">{formatAlertSettingsValue(entry.newValue)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {new Date(entry.changedAt).toLocaleString()}
                         </TableCell>
                       </TableRow>
                     ))}

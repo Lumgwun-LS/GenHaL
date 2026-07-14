@@ -34,3 +34,4 @@ export * from "./expenses";
 export * from "./investments";
 export * from "./branches";
 export * from "./workers";
+export * from "./site-content-audit-log";
