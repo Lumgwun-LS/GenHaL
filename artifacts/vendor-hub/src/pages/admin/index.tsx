@@ -1086,7 +1086,13 @@ function BulkMessageDialog({
   );
 }
 
-function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } }) {
+function MessageVendorDialog({
+  vendor,
+  onViewHistory,
+}: {
+  vendor: { id: number; name: string };
+  onViewHistory?: (vendor: { id: number; name: string }) => void;
+}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -1135,13 +1141,29 @@ function MessageVendorDialog({ vendor }: { vendor: { id: number; name: string } 
           maxLength={1000}
           data-testid="textarea-vendor-message"
         />
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
-            Cancel
-          </Button>
-          <Button onClick={handleSend} disabled={sending || !message.trim()} data-testid="button-send-vendor-message">
-            {sending ? "Sending…" : "Send"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {onViewHistory && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={() => {
+                setOpen(false);
+                onViewHistory(vendor);
+              }}
+              data-testid={`button-view-message-history-dialog-${vendor.id}`}
+            >
+              <ClipboardList className="w-3.5 h-3.5" /> View history
+            </Button>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSend} disabled={sending || !message.trim()} data-testid="button-send-vendor-message">
+              {sending ? "Sending…" : "Send"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1242,8 +1264,11 @@ type MessageHistoryEntry = {
   createdAt: string;
 };
 
-async function fetchMessageHistory(): Promise<MessageHistoryEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/message-history`, { credentials: "include" });
+async function fetchMessageHistory(vendorId?: number): Promise<MessageHistoryEntry[]> {
+  const url = vendorId
+    ? `${BASE_URL}/api/admin/message-history?vendorId=${vendorId}`
+    : `${BASE_URL}/api/admin/message-history`;
+  const res = await fetch(url, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load message history");
   return res.json() as Promise<MessageHistoryEntry[]>;
 }
@@ -1273,7 +1298,11 @@ export default function AdminPanel() {
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
 
+  const [activeAdminTab, setActiveAdminTab] = useState("vendors");
   const [messageVendorSearch, setMessageVendorSearch] = useState("");
+  const [messageHistoryVendorFilter, setMessageHistoryVendorFilter] = useState<{ id: number; name: string } | null>(
+    null,
+  );
 
   const [planChangeVendorSearch, setPlanChangeVendorSearch] = useState("");
 
@@ -1326,8 +1355,8 @@ export default function AdminPanel() {
   });
 
   const { data: messageHistory, isLoading: messageHistoryLoading } = useQuery({
-    queryKey: ["admin-message-history"],
-    queryFn: fetchMessageHistory,
+    queryKey: ["admin-message-history", messageHistoryVendorFilter?.id ?? null],
+    queryFn: () => fetchMessageHistory(messageHistoryVendorFilter?.id),
     enabled: isAdmin,
   });
 
@@ -1394,12 +1423,21 @@ export default function AdminPanel() {
 
   const filteredMessageHistory = useMemo(() => {
     if (!messageHistory) return messageHistory;
+    // When jumping in from a specific vendor, the server already filtered by
+    // exact vendorId — don't re-apply the free-text name filter on top of it.
+    if (messageHistoryVendorFilter) return messageHistory;
     const search = messageVendorSearch.trim().toLowerCase();
     if (!search) return messageHistory;
     return messageHistory.filter((entry) =>
       (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase().includes(search),
     );
-  }, [messageHistory, messageVendorSearch]);
+  }, [messageHistory, messageVendorSearch, messageHistoryVendorFilter]);
+
+  function viewVendorMessageHistory(vendor: { id: number; name: string }) {
+    setMessageHistoryVendorFilter({ id: vendor.id, name: vendor.name });
+    setMessageVendorSearch("");
+    setActiveAdminTab("messages");
+  }
 
   const filteredPlanChangeHistory = useMemo(() => {
     if (!planChangeHistory) return planChangeHistory;
@@ -1478,7 +1516,7 @@ export default function AdminPanel() {
         </Card>
       </div>
 
-      <Tabs defaultValue="vendors">
+      <Tabs value={activeAdminTab} onValueChange={setActiveAdminTab}>
         <TabsList>
           <TabsTrigger value="vendors" className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4" /> Vendors
@@ -1624,7 +1662,7 @@ export default function AdminPanel() {
                       <TableHead>Verification</TableHead>
                       <TableHead>Payment Keys</TableHead>
                       <TableHead className="text-right">Joined</TableHead>
-                      <TableHead className="text-right">Message</TableHead>
+                      <TableHead className="text-right">Messages</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1679,7 +1717,18 @@ export default function AdminPanel() {
                             {new Date(vendor.createdAt).toLocaleDateString()}
                           </TableCell>
                           <TableCell className="text-right">
-                            <MessageVendorDialog vendor={vendor} />
+                            <div className="flex items-center justify-end gap-1">
+                              <MessageVendorDialog vendor={vendor} onViewHistory={viewVendorMessageHistory} />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                onClick={() => viewVendorMessageHistory(vendor)}
+                                data-testid={`button-view-message-history-${vendor.id}`}
+                              >
+                                <ClipboardList className="w-3.5 h-3.5" /> History
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -2278,24 +2327,48 @@ export default function AdminPanel() {
                 Every message an admin has sent to a vendor, whether via a single vendor's page or a bulk announcement.
               </CardDescription>
               <div className="flex flex-wrap items-end gap-3 pt-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Vendor name</Label>
-                  <Input
-                    placeholder="Search vendor…"
-                    className="h-8 w-44 text-xs"
-                    value={messageVendorSearch}
-                    onChange={(e) => setMessageVendorSearch(e.target.value)}
-                  />
-                </div>
-                {messageVendorSearch.trim() !== "" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={() => setMessageVendorSearch("")}
-                  >
-                    Clear filter
-                  </Button>
+                {messageHistoryVendorFilter ? (
+                  <>
+                    <Badge
+                      variant="secondary"
+                      className="h-8 flex items-center gap-1.5 px-3 text-xs"
+                      data-testid="badge-message-history-vendor-filter"
+                    >
+                      Vendor: {messageHistoryVendorFilter.name} (ID {messageHistoryVendorFilter.id})
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8"
+                      onClick={() => setMessageHistoryVendorFilter(null)}
+                      data-testid="button-clear-message-history-vendor-filter"
+                    >
+                      View all vendors
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Vendor name</Label>
+                      <Input
+                        placeholder="Search vendor…"
+                        className="h-8 w-44 text-xs"
+                        value={messageVendorSearch}
+                        onChange={(e) => setMessageVendorSearch(e.target.value)}
+                        data-testid="input-message-history-vendor-search"
+                      />
+                    </div>
+                    {messageVendorSearch.trim() !== "" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-8"
+                        onClick={() => setMessageVendorSearch("")}
+                      >
+                        Clear filter
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </CardHeader>
@@ -2305,7 +2378,9 @@ export default function AdminPanel() {
               ) : !messageHistory?.length ? (
                 <div className="p-8 text-center text-muted-foreground">
                   <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className="font-medium">No messages sent yet.</p>
+                  <p className="font-medium">
+                    {messageHistoryVendorFilter ? "No messages sent to this vendor yet." : "No messages sent yet."}
+                  </p>
                   <p className="text-xs mt-1">Messages sent from a vendor's page or the bulk-message tool will appear here.</p>
                 </div>
               ) : !filteredMessageHistory?.length ? (
