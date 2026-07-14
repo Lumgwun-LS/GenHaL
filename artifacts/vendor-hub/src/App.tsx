@@ -40,6 +40,8 @@ import Sales from "@/pages/sales/index";
 import Expenses from "@/pages/expenses/index";
 import Investments from "@/pages/investments/index";
 import FinanceAnalytics from "@/pages/finance-analytics/index";
+import Branches from "@/pages/branches/index";
+import Workers from "@/pages/workers/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -248,6 +250,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/expenses" component={() => <AuthenticatedRoute component={Expenses} />} />
           <Route path="/investments" component={() => <AuthenticatedRoute component={Investments} />} />
           <Route path="/finance-analytics" component={() => <AuthenticatedRoute component={FinanceAnalytics} />} />
+          <Route path="/branches" component={() => <AuthenticatedRoute component={Branches} />} />
+          <Route path="/workers" component={() => <AuthenticatedRoute component={Workers} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           

@@ -7,6 +7,10 @@
  */
 
 export interface SaleUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   description?: string;
   customerName?: string;
   amount?: number;

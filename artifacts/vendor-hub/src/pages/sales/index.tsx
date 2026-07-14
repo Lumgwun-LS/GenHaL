@@ -7,7 +7,11 @@ import {
   useCreateSale,
   useUpdateSale,
   useDeleteSale,
+  useListBranches,
+  useListWorkers,
   getListSalesQueryKey,
+  getListBranchesQueryKey,
+  getListWorkersQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DollarSign, Plus, Download, Pencil, Trash2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
+import { DateRangeFilterControl, BranchWorkerFilterControl, BranchWorkerFormFields } from "@/components/finance-filters";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -29,13 +35,25 @@ export default function SalesPage() {
   const vendorId = myVendor?.id;
   const qc = useQueryClient();
 
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const dateFilter = useDateRangeFilter();
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [workerFilter, setWorkerFilter] = useState("all");
+
+  const branchListParams = { vendorId: vendorId as number };
+  const { data: branches } = useListBranches(branchListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListBranchesQueryKey(branchListParams) },
+  });
+  const workerListParams = { vendorId: vendorId as number };
+  const { data: workers } = useListWorkers(workerListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListWorkersQueryKey(workerListParams) },
+  });
 
   const listParams = {
     vendorId: vendorId as number,
-    ...(from ? { from: new Date(from).toISOString() } : {}),
-    ...(to ? { to: new Date(to).toISOString() } : {}),
+    ...(branchFilter !== "all" ? { branchId: Number(branchFilter) } : {}),
+    ...(workerFilter !== "all" ? { workerId: Number(workerFilter) } : {}),
+    ...(dateFilter.from ? { from: dateFilter.from } : {}),
+    ...(dateFilter.to ? { to: dateFilter.to } : {}),
   };
   const { data: sales, isLoading } = useListSales(listParams, {
     query: { enabled: Boolean(vendorId), queryKey: getListSalesQueryKey(listParams) },
@@ -50,8 +68,10 @@ export default function SalesPage() {
   const [customerName, setCustomerName] = useState("");
   const [amount, setAmount] = useState("");
   const [saleDate, setSaleDate] = useState("");
+  const [formBranchId, setFormBranchId] = useState("none");
+  const [formWorkerId, setFormWorkerId] = useState("none");
 
-  const [editing, setEditing] = useState<{ id: number; description: string; customerName: string; amount: number; saleDate: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; description: string; customerName: string; amount: number; saleDate: string; branchId: string; workerId: string } | null>(null);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: getListSalesQueryKey(listParams) });
@@ -67,11 +87,13 @@ export default function SalesPage() {
           customerName: customerName || undefined,
           amount: parseFloat(amount),
           saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
+          branchId: formBranchId !== "none" ? Number(formBranchId) : undefined,
+          workerId: formWorkerId !== "none" ? Number(formWorkerId) : undefined,
         },
       });
       toast.success("Sale recorded");
       setOpen(false);
-      setDescription(""); setCustomerName(""); setAmount(""); setSaleDate("");
+      setDescription(""); setCustomerName(""); setAmount(""); setSaleDate(""); setFormBranchId("none"); setFormWorkerId("none");
       invalidate();
     } catch {
       toast.error("Failed to record sale");
@@ -88,6 +110,8 @@ export default function SalesPage() {
           customerName: editing.customerName || undefined,
           amount: editing.amount,
           saleDate: editing.saleDate ? new Date(editing.saleDate).toISOString() : undefined,
+          branchId: editing.branchId !== "none" ? Number(editing.branchId) : null,
+          workerId: editing.workerId !== "none" ? Number(editing.workerId) : null,
         },
       });
       toast.success("Sale updated");
@@ -111,8 +135,10 @@ export default function SalesPage() {
   async function handleExport() {
     if (!vendorId) return;
     const params = new URLSearchParams({ vendorId: String(vendorId) });
-    if (from) params.set("from", new Date(from).toISOString());
-    if (to) params.set("to", new Date(to).toISOString());
+    if (branchFilter !== "all") params.set("branchId", branchFilter);
+    if (workerFilter !== "all") params.set("workerId", workerFilter);
+    if (dateFilter.from) params.set("from", dateFilter.from);
+    if (dateFilter.to) params.set("to", dateFilter.to);
     try {
       const res = await fetch(`${BASE_URL}/api/sales/export?${params.toString()}`, { credentials: "include" });
       if (!res.ok) { toast.error("Export failed"); return; }
@@ -131,6 +157,15 @@ export default function SalesPage() {
   }
 
   const totalRevenue = sales?.reduce((s, r) => s + r.amount, 0) ?? 0;
+
+  function branchName(id: number | null | undefined) {
+    if (!id) return "—";
+    return branches?.find((b) => b.id === id)?.name ?? "—";
+  }
+  function workerName(id: number | null | undefined) {
+    if (!id) return "—";
+    return workers?.find((w) => w.id === id)?.name ?? "—";
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
@@ -162,14 +197,16 @@ export default function SalesPage() {
 
       <Card>
         <div className="p-4 border-b flex flex-wrap gap-3 items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs">From</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">To</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
-          </div>
+          <BranchWorkerFilterControl
+            branches={branches} workers={workers}
+            branchId={branchFilter} onBranchChange={setBranchFilter}
+            workerId={workerFilter} onWorkerChange={setWorkerFilter}
+          />
+          <DateRangeFilterControl
+            preset={dateFilter.preset} onPresetChange={dateFilter.setPreset}
+            customFrom={dateFilter.customFrom} onCustomFromChange={dateFilter.setCustomFrom}
+            customTo={dateFilter.customTo} onCustomToChange={dateFilter.setCustomTo}
+          />
         </div>
         <Table>
           <TableHeader>
@@ -177,6 +214,8 @@ export default function SalesPage() {
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Customer</TableHead>
+              <TableHead>Branch</TableHead>
+              <TableHead>Worker</TableHead>
               <TableHead>Source</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -184,15 +223,17 @@ export default function SalesPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8">Loading sales...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-8">Loading sales...</TableCell></TableRow>
             ) : !sales?.length ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8">No sales recorded yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-8">No sales recorded yet.</TableCell></TableRow>
             ) : (
               sales.map((sale) => (
                 <TableRow key={sale.id}>
                   <TableCell className="text-sm text-muted-foreground">{format(new Date(sale.saleDate), "MMM d, yyyy")}</TableCell>
                   <TableCell>{sale.description ?? "—"}</TableCell>
                   <TableCell>{sale.customerName ?? "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{branchName(sale.branchId)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{workerName(sale.workerId)}</TableCell>
                   <TableCell>
                     <Badge variant={sale.source === "manual" ? "secondary" : "outline"}>
                       {sale.source === "manual" ? "Manual" : "Auto (payment)"}
@@ -202,7 +243,7 @@ export default function SalesPage() {
                   <TableCell className="text-right">
                     {sale.source === "manual" ? (
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setEditing({ id: sale.id, description: sale.description ?? "", customerName: sale.customerName ?? "", amount: sale.amount, saleDate: sale.saleDate.slice(0, 10) })}>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing({ id: sale.id, description: sale.description ?? "", customerName: sale.customerName ?? "", amount: sale.amount, saleDate: sale.saleDate.slice(0, 10), branchId: sale.branchId ? String(sale.branchId) : "none", workerId: sale.workerId ? String(sale.workerId) : "none" })}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => handleDelete(sale.id)}>
@@ -240,6 +281,11 @@ export default function SalesPage() {
               <Label>Sale Date</Label>
               <Input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
             </div>
+            <BranchWorkerFormFields
+              branches={branches} workers={workers}
+              branchId={formBranchId} onBranchChange={setFormBranchId}
+              workerId={formWorkerId} onWorkerChange={setFormWorkerId}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -271,6 +317,11 @@ export default function SalesPage() {
                 <Label>Sale Date</Label>
                 <Input type="date" value={editing.saleDate} onChange={(e) => setEditing({ ...editing, saleDate: e.target.value })} />
               </div>
+              <BranchWorkerFormFields
+                branches={branches} workers={workers}
+                branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
+                workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+              />
             </div>
           )}
           <DialogFooter>

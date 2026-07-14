@@ -8,4 +8,7 @@
 
 export type ExportInvestmentsParams = {
 vendorId: number;
+branchId?: number;
+workerId?: number;
+status?: string;
 };

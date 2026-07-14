@@ -9,5 +9,9 @@
 export type ListOrdersParams = {
 vendorId?: number;
 status?: string;
+branchId?: number;
+workerId?: number;
+from?: string;
+to?: string;
 search?: string;
 };

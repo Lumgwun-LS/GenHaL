@@ -9,6 +9,8 @@
 export type ListSalesParams = {
 vendorId?: number;
 source?: string;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };

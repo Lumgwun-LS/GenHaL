@@ -51,6 +51,8 @@ router.get("/investments", async (req, res): Promise<void> => {
   const conditions = [eq(investmentsTable.vendorId, params.data.vendorId)];
   if (params.data.type) conditions.push(eq(investmentsTable.type, params.data.type));
   if (params.data.status) conditions.push(eq(investmentsTable.status, params.data.status));
+  if (params.data.branchId) conditions.push(eq(investmentsTable.branchId, params.data.branchId));
+  if (params.data.workerId) conditions.push(eq(investmentsTable.workerId, params.data.workerId));
 
   const investments = await db.select().from(investmentsTable).where(and(...conditions)).orderBy(desc(investmentsTable.investmentDate));
   res.json(ListInvestmentsResponse.parse(investments.map(serializeInvestment)));
@@ -78,7 +80,17 @@ router.get("/investments/export", async (req, res): Promise<void> => {
   const check = await resolveOwnedVendorId(req, vendorId);
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
 
-  const investments = await db.select().from(investmentsTable).where(eq(investmentsTable.vendorId, vendorId)).orderBy(desc(investmentsTable.investmentDate));
+  const exportConditions = [eq(investmentsTable.vendorId, vendorId)];
+  if (req.query.branchId) {
+    const b = Number(req.query.branchId);
+    if (!isNaN(b)) exportConditions.push(eq(investmentsTable.branchId, b));
+  }
+  if (req.query.workerId) {
+    const w = Number(req.query.workerId);
+    if (!isNaN(w)) exportConditions.push(eq(investmentsTable.workerId, w));
+  }
+  if (req.query.status) exportConditions.push(eq(investmentsTable.status, String(req.query.status)));
+  const investments = await db.select().from(investmentsTable).where(and(...exportConditions)).orderBy(desc(investmentsTable.investmentDate));
 
   const HEADERS = ["ID", "Type", "Name", "Amount", "Current Value", "Currency", "Status", "Investment Date"];
   function csvCell(v: unknown): string {

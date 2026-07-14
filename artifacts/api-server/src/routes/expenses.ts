@@ -49,6 +49,8 @@ router.get("/expenses", async (req, res): Promise<void> => {
 
   const conditions = [eq(expensesTable.vendorId, params.data.vendorId)];
   if (params.data.category) conditions.push(eq(expensesTable.category, params.data.category));
+  if (params.data.branchId) conditions.push(eq(expensesTable.branchId, params.data.branchId));
+  if (params.data.workerId) conditions.push(eq(expensesTable.workerId, params.data.workerId));
   if (params.data.from) {
     const d = new Date(params.data.from);
     if (!isNaN(d.getTime())) conditions.push(gte(expensesTable.expenseDate, d));
@@ -84,6 +86,14 @@ router.get("/expenses/export", async (req, res): Promise<void> => {
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
 
   const conditions = [eq(expensesTable.vendorId, vendorId)];
+  if (req.query.branchId) {
+    const b = Number(req.query.branchId);
+    if (!isNaN(b)) conditions.push(eq(expensesTable.branchId, b));
+  }
+  if (req.query.workerId) {
+    const w = Number(req.query.workerId);
+    if (!isNaN(w)) conditions.push(eq(expensesTable.workerId, w));
+  }
   if (req.query.from) {
     const d = new Date(String(req.query.from));
     if (!isNaN(d.getTime())) conditions.push(gte(expensesTable.expenseDate, d));

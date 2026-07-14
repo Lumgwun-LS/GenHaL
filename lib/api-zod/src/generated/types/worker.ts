@@ -6,14 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ExpenseUpdate {
+export interface Worker {
+  id: number;
+  vendorId: number;
   /** @nullable */
   branchId?: number | null;
+  name: string;
   /** @nullable */
-  workerId?: number | null;
-  category?: string;
-  description?: string;
-  amount?: number;
-  currency?: string;
-  expenseDate?: string;
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  role?: string | null;
+  status: string;
+  createdAt: string;
 }

@@ -9,6 +9,10 @@
 export interface Expense {
   id: number;
   vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   category: string;
   /** @nullable */
   description?: string | null;

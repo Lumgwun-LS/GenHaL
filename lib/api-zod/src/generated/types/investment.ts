@@ -9,6 +9,10 @@
 export interface Investment {
   id: number;
   vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   type: string;
   name: string;
   /** @nullable */

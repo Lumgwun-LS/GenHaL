@@ -8,6 +8,8 @@
 
 export interface InvestmentInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   type: string;
   name: string;
   notes?: string;

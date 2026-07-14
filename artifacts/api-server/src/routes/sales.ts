@@ -50,6 +50,8 @@ router.get("/sales", async (req, res): Promise<void> => {
 
   const conditions = [eq(salesTable.vendorId, params.data.vendorId)];
   if (params.data.source) conditions.push(eq(salesTable.source, params.data.source));
+  if (params.data.branchId) conditions.push(eq(salesTable.branchId, params.data.branchId));
+  if (params.data.workerId) conditions.push(eq(salesTable.workerId, params.data.workerId));
   if (params.data.from) {
     const d = new Date(params.data.from);
     if (!isNaN(d.getTime())) conditions.push(gte(salesTable.saleDate, d));
@@ -86,6 +88,14 @@ router.get("/sales/export", async (req, res): Promise<void> => {
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
 
   const conditions = [eq(salesTable.vendorId, vendorId)];
+  if (req.query.branchId) {
+    const b = Number(req.query.branchId);
+    if (!isNaN(b)) conditions.push(eq(salesTable.branchId, b));
+  }
+  if (req.query.workerId) {
+    const w = Number(req.query.workerId);
+    if (!isNaN(w)) conditions.push(eq(salesTable.workerId, w));
+  }
   if (req.query.from) {
     const d = new Date(String(req.query.from));
     if (!isNaN(d.getTime())) conditions.push(gte(salesTable.saleDate, d));

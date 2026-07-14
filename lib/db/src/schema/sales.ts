@@ -3,6 +3,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
 import { paymentsTable } from "./payments";
+import { branchesTable } from "./branches";
+import { workersTable } from "./workers";
 
 /**
  * Unified sales ledger. Rows come from two sources:
@@ -17,6 +19,8 @@ export const salesTable = pgTable("sales", {
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   source: text("source").notNull().default("manual"), // "manual" | "order_payment"
   sourcePaymentId: integer("source_payment_id").references(() => paymentsTable.id, { onDelete: "set null" }),
+  branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
+  workerId: integer("worker_id").references(() => workersTable.id, { onDelete: "set null" }),
   description: text("description"),
   customerName: text("customer_name"),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),

@@ -7,7 +7,11 @@ import {
   useCreateExpense,
   useUpdateExpense,
   useDeleteExpense,
+  useListBranches,
+  useListWorkers,
   getListExpensesQueryKey,
+  getListBranchesQueryKey,
+  getListWorkersQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,6 +24,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Receipt, Plus, Download, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
+import { DateRangeFilterControl, BranchWorkerFilterControl, BranchWorkerFormFields } from "@/components/finance-filters";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -32,15 +38,27 @@ export default function ExpensesPage() {
   const vendorId = myVendor?.id;
   const qc = useQueryClient();
 
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const [category, setCategory] = useState<string>("all");
+  const dateFilter = useDateRangeFilter();
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [workerFilter, setWorkerFilter] = useState("all");
+
+  const branchListParams = { vendorId: vendorId as number };
+  const { data: branches } = useListBranches(branchListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListBranchesQueryKey(branchListParams) },
+  });
+  const workerListParams = { vendorId: vendorId as number };
+  const { data: workers } = useListWorkers(workerListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListWorkersQueryKey(workerListParams) },
+  });
 
   const listParams = {
     vendorId: vendorId as number,
     ...(category !== "all" ? { category } : {}),
-    ...(from ? { from: new Date(from).toISOString() } : {}),
-    ...(to ? { to: new Date(to).toISOString() } : {}),
+    ...(branchFilter !== "all" ? { branchId: Number(branchFilter) } : {}),
+    ...(workerFilter !== "all" ? { workerId: Number(workerFilter) } : {}),
+    ...(dateFilter.from ? { from: dateFilter.from } : {}),
+    ...(dateFilter.to ? { to: dateFilter.to } : {}),
   };
   const { data: expenses, isLoading } = useListExpenses(listParams, {
     query: { enabled: Boolean(vendorId), queryKey: getListExpensesQueryKey(listParams) },
@@ -55,8 +73,10 @@ export default function ExpensesPage() {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState("");
+  const [formBranchId, setFormBranchId] = useState("none");
+  const [formWorkerId, setFormWorkerId] = useState("none");
 
-  const [editing, setEditing] = useState<{ id: number; category: string; description: string; amount: number; expenseDate: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; category: string; description: string; amount: number; expenseDate: string; branchId: string; workerId: string } | null>(null);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: getListExpensesQueryKey(listParams) });
@@ -72,11 +92,13 @@ export default function ExpensesPage() {
           description: description || undefined,
           amount: parseFloat(amount),
           expenseDate: expenseDate ? new Date(expenseDate).toISOString() : undefined,
+          branchId: formBranchId !== "none" ? Number(formBranchId) : undefined,
+          workerId: formWorkerId !== "none" ? Number(formWorkerId) : undefined,
         },
       });
       toast.success("Expense recorded");
       setOpen(false);
-      setDescription(""); setAmount(""); setExpenseDate("");
+      setDescription(""); setAmount(""); setExpenseDate(""); setFormBranchId("none"); setFormWorkerId("none");
       invalidate();
     } catch {
       toast.error("Failed to record expense");
@@ -93,6 +115,8 @@ export default function ExpensesPage() {
           description: editing.description || undefined,
           amount: editing.amount,
           expenseDate: editing.expenseDate ? new Date(editing.expenseDate).toISOString() : undefined,
+          branchId: editing.branchId !== "none" ? Number(editing.branchId) : null,
+          workerId: editing.workerId !== "none" ? Number(editing.workerId) : null,
         },
       });
       toast.success("Expense updated");
@@ -116,8 +140,10 @@ export default function ExpensesPage() {
   async function handleExport() {
     if (!vendorId) return;
     const params = new URLSearchParams({ vendorId: String(vendorId) });
-    if (from) params.set("from", new Date(from).toISOString());
-    if (to) params.set("to", new Date(to).toISOString());
+    if (branchFilter !== "all") params.set("branchId", branchFilter);
+    if (workerFilter !== "all") params.set("workerId", workerFilter);
+    if (dateFilter.from) params.set("from", dateFilter.from);
+    if (dateFilter.to) params.set("to", dateFilter.to);
     try {
       const res = await fetch(`${BASE_URL}/api/expenses/export?${params.toString()}`, { credentials: "include" });
       if (!res.ok) { toast.error("Export failed"); return; }
@@ -136,6 +162,15 @@ export default function ExpensesPage() {
   }
 
   const totalExpenses = expenses?.reduce((s, r) => s + r.amount, 0) ?? 0;
+
+  function branchName(id: number | null | undefined) {
+    if (!id) return "—";
+    return branches?.find((b) => b.id === id)?.name ?? "—";
+  }
+  function workerName(id: number | null | undefined) {
+    if (!id) return "—";
+    return workers?.find((w) => w.id === id)?.name ?? "—";
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
@@ -177,14 +212,16 @@ export default function ExpensesPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">From</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">To</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
-          </div>
+          <BranchWorkerFilterControl
+            branches={branches} workers={workers}
+            branchId={branchFilter} onBranchChange={setBranchFilter}
+            workerId={workerFilter} onWorkerChange={setWorkerFilter}
+          />
+          <DateRangeFilterControl
+            preset={dateFilter.preset} onPresetChange={dateFilter.setPreset}
+            customFrom={dateFilter.customFrom} onCustomFromChange={dateFilter.setCustomFrom}
+            customTo={dateFilter.customTo} onCustomToChange={dateFilter.setCustomTo}
+          />
         </div>
         <Table>
           <TableHeader>
@@ -192,25 +229,29 @@ export default function ExpensesPage() {
               <TableHead>Date</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Branch</TableHead>
+              <TableHead>Worker</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8">Loading expenses...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8">Loading expenses...</TableCell></TableRow>
             ) : !expenses?.length ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8">No expenses recorded yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8">No expenses recorded yet.</TableCell></TableRow>
             ) : (
               expenses.map((expense) => (
                 <TableRow key={expense.id}>
                   <TableCell className="text-sm text-muted-foreground">{format(new Date(expense.expenseDate), "MMM d, yyyy")}</TableCell>
                   <TableCell><Badge variant="secondary">{expense.category}</Badge></TableCell>
                   <TableCell>{expense.description ?? "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{branchName(expense.branchId)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{workerName(expense.workerId)}</TableCell>
                   <TableCell className="text-right font-medium">${expense.amount.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing({ id: expense.id, category: expense.category, description: expense.description ?? "", amount: expense.amount, expenseDate: expense.expenseDate.slice(0, 10) })}>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing({ id: expense.id, category: expense.category, description: expense.description ?? "", amount: expense.amount, expenseDate: expense.expenseDate.slice(0, 10), branchId: expense.branchId ? String(expense.branchId) : "none", workerId: expense.workerId ? String(expense.workerId) : "none" })}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(expense.id)}>
@@ -250,6 +291,11 @@ export default function ExpensesPage() {
               <Label>Expense Date</Label>
               <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
             </div>
+            <BranchWorkerFormFields
+              branches={branches} workers={workers}
+              branchId={formBranchId} onBranchChange={setFormBranchId}
+              workerId={formWorkerId} onWorkerChange={setFormWorkerId}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -286,6 +332,11 @@ export default function ExpensesPage() {
                 <Label>Expense Date</Label>
                 <Input type="date" value={editing.expenseDate} onChange={(e) => setEditing({ ...editing, expenseDate: e.target.value })} />
               </div>
+              <BranchWorkerFormFields
+                branches={branches} workers={workers}
+                branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
+                workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+              />
             </div>
           )}
           <DialogFooter>

@@ -6,10 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ExportExpensesParams = {
-vendorId: number;
+export type ListWorkersParams = {
+vendorId?: number;
 branchId?: number;
-workerId?: number;
-from?: string;
-to?: string;
+status?: string;
 };

@@ -2,6 +2,8 @@ import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
+import { branchesTable } from "./branches";
+import { workersTable } from "./workers";
 
 /**
  * Covers both owner-capital tracking (money the owner puts into or lends the
@@ -13,6 +15,8 @@ import { vendorsTable } from "./vendors";
 export const investmentsTable = pgTable("investments", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
+  workerId: integer("worker_id").references(() => workersTable.id, { onDelete: "set null" }),
   type: text("type").notNull(), // "owner_capital" | "loan" | "external_asset"
   name: text("name").notNull(),
   notes: text("notes"),

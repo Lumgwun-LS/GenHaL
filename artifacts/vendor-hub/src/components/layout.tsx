@@ -22,6 +22,7 @@ import {
   PiggyBank,
   LineChart,
   DollarSign,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,8 @@ const NAV_ITEMS = [
   { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
+  { href: "/branches", label: "Branches", icon: Building2 },
+  { href: "/workers", label: "Workers", icon: Users },
   { href: "/sales", label: "Sales", icon: DollarSign },
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/investments", label: "Investments", icon: PiggyBank },

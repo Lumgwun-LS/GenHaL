@@ -8,6 +8,10 @@
 
 export interface OrderUpdate {
   status?: string;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   notes?: string;
   shippingAddress?: string;
 }

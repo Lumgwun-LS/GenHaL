@@ -10,4 +10,6 @@ export type ListInvestmentsParams = {
 vendorId?: number;
 type?: string;
 status?: string;
+branchId?: number;
+workerId?: number;
 };

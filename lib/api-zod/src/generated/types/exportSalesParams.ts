@@ -8,6 +8,8 @@
 
 export type ExportSalesParams = {
 vendorId: number;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };

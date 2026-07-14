@@ -1,9 +1,11 @@
-import { useGetOrder, getGetOrderQueryKey, useUpdateOrder } from "@workspace/api-client-react";
+import { useGetOrder, getGetOrderQueryKey, useUpdateOrder, useListBranches, useListWorkers, getListBranchesQueryKey, getListWorkersQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, MapPin, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +19,15 @@ export default function OrderDetail() {
   const updateOrder = useUpdateOrder();
   const queryClient = useQueryClient();
 
+  const branchListParams = { vendorId: order?.vendorId as number };
+  const { data: branches } = useListBranches(branchListParams, {
+    query: { enabled: Boolean(order?.vendorId), queryKey: getListBranchesQueryKey(branchListParams) },
+  });
+  const workerListParams = { vendorId: order?.vendorId as number };
+  const { data: workers } = useListWorkers(workerListParams, {
+    query: { enabled: Boolean(order?.vendorId), queryKey: getListWorkersQueryKey(workerListParams) },
+  });
+
   if (isLoading) return <div className="p-8">Loading order...</div>;
   if (!order) return <div className="p-8">Order not found</div>;
 
@@ -29,6 +40,19 @@ export default function OrderDetail() {
       queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
       toast.success(`Order marked as ${status}`);
     } catch (e) {
+      toast.error("Failed to update order");
+    }
+  };
+
+  const handleAssign = async (field: "branchId" | "workerId", value: string) => {
+    try {
+      await updateOrder.mutateAsync({
+        id,
+        data: { [field]: value !== "none" ? Number(value) : null },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+      toast.success("Order updated");
+    } catch {
       toast.error("Failed to update order");
     }
   };
@@ -135,6 +159,34 @@ export default function OrderDetail() {
             </CardContent>
           </Card>
           
+          <Card>
+            <CardHeader>
+              <CardTitle>Fulfillment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Branch</Label>
+                <Select value={order.branchId ? String(order.branchId) : "none"} onValueChange={(v) => handleAssign("branchId", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {branches?.map((b) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Worker</Label>
+                <Select value={order.workerId ? String(order.workerId) : "none"} onValueChange={(v) => handleAssign("workerId", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {workers?.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           {order.notes && (
             <Card className="bg-muted/50">
               <CardHeader>

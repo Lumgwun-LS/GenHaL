@@ -50,6 +50,16 @@ router.get("/orders", async (req, res): Promise<void> => {
   if (params.success) {
     if (params.data.vendorId) orders = orders.filter((o) => o.vendorId === params.data.vendorId);
     if (params.data.status) orders = orders.filter((o) => o.status === params.data.status);
+    if (params.data.branchId) orders = orders.filter((o) => o.branchId === params.data.branchId);
+    if (params.data.workerId) orders = orders.filter((o) => o.workerId === params.data.workerId);
+    if (params.data.from) {
+      const d = new Date(params.data.from);
+      if (!isNaN(d.getTime())) orders = orders.filter((o) => new Date(o.createdAt) >= d);
+    }
+    if (params.data.to) {
+      const d = new Date(params.data.to);
+      if (!isNaN(d.getTime())) orders = orders.filter((o) => new Date(o.createdAt) <= d);
+    }
     if (params.data.search) {
       const s = params.data.search.toLowerCase();
       orders = orders.filter((o) => o.customerName.toLowerCase().includes(s) || o.customerEmail.toLowerCase().includes(s));

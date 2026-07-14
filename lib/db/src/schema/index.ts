@@ -32,3 +32,5 @@ export * from "./job-run-status";
 export * from "./sales";
 export * from "./expenses";
 export * from "./investments";
+export * from "./branches";
+export * from "./workers";

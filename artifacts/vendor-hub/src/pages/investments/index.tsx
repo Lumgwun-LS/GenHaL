@@ -7,7 +7,11 @@ import {
   useCreateInvestment,
   useUpdateInvestment,
   useDeleteInvestment,
+  useListBranches,
+  useListWorkers,
   getListInvestmentsQueryKey,
+  getListBranchesQueryKey,
+  getListWorkersQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +25,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { PiggyBank, Plus, Download, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
+import { DateRangeFilterControl, BranchWorkerFilterControl, BranchWorkerFormFields } from "@/components/finance-filters";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -41,14 +47,37 @@ export default function InvestmentsPage() {
 
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const dateFilter = useDateRangeFilter();
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [workerFilter, setWorkerFilter] = useState("all");
+
+  const branchListParams = { vendorId: vendorId as number };
+  const { data: branches } = useListBranches(branchListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListBranchesQueryKey(branchListParams) },
+  });
+  const workerListParams = { vendorId: vendorId as number };
+  const { data: workers } = useListWorkers(workerListParams, {
+    query: { enabled: Boolean(vendorId), queryKey: getListWorkersQueryKey(workerListParams) },
+  });
 
   const listParams = {
     vendorId: vendorId as number,
     ...(typeFilter !== "all" ? { type: typeFilter } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    ...(branchFilter !== "all" ? { branchId: Number(branchFilter) } : {}),
+    ...(workerFilter !== "all" ? { workerId: Number(workerFilter) } : {}),
   };
-  const { data: investments, isLoading } = useListInvestments(listParams, {
+  const { data: investmentsRaw, isLoading } = useListInvestments(listParams, {
     query: { enabled: Boolean(vendorId), queryKey: getListInvestmentsQueryKey(listParams) },
+  });
+
+  // Investments list endpoint has no from/to filter server-side; apply the date-range preset client-side.
+  const investments = investmentsRaw?.filter((inv) => {
+    if (!dateFilter.from && !dateFilter.to) return true;
+    const d = new Date(inv.investmentDate).getTime();
+    if (dateFilter.from && d < new Date(dateFilter.from).getTime()) return false;
+    if (dateFilter.to && d > new Date(dateFilter.to).getTime()) return false;
+    return true;
   });
 
   const createInvestment = useCreateInvestment();
@@ -62,8 +91,10 @@ export default function InvestmentsPage() {
   const [amount, setAmount] = useState("");
   const [currentValue, setCurrentValue] = useState("");
   const [investmentDate, setInvestmentDate] = useState("");
+  const [formBranchId, setFormBranchId] = useState("none");
+  const [formWorkerId, setFormWorkerId] = useState("none");
 
-  const [editing, setEditing] = useState<{ id: number; type: string; name: string; notes: string; amount: number; currentValue: number | null; status: string; investmentDate: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; type: string; name: string; notes: string; amount: number; currentValue: number | null; status: string; investmentDate: string; branchId: string; workerId: string } | null>(null);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: getListInvestmentsQueryKey(listParams) });
@@ -81,11 +112,13 @@ export default function InvestmentsPage() {
           amount: parseFloat(amount),
           currentValue: currentValue ? parseFloat(currentValue) : undefined,
           investmentDate: investmentDate ? new Date(investmentDate).toISOString() : undefined,
+          branchId: formBranchId !== "none" ? Number(formBranchId) : undefined,
+          workerId: formWorkerId !== "none" ? Number(formWorkerId) : undefined,
         },
       });
       toast.success("Investment recorded");
       setOpen(false);
-      setName(""); setNotes(""); setAmount(""); setCurrentValue(""); setInvestmentDate("");
+      setName(""); setNotes(""); setAmount(""); setCurrentValue(""); setInvestmentDate(""); setFormBranchId("none"); setFormWorkerId("none");
       invalidate();
     } catch {
       toast.error("Failed to record investment");
@@ -105,6 +138,8 @@ export default function InvestmentsPage() {
           currentValue: editing.currentValue ?? undefined,
           status: editing.status,
           investmentDate: editing.investmentDate ? new Date(editing.investmentDate).toISOString() : undefined,
+          branchId: editing.branchId !== "none" ? Number(editing.branchId) : null,
+          workerId: editing.workerId !== "none" ? Number(editing.workerId) : null,
         },
       });
       toast.success("Investment updated");
@@ -127,8 +162,12 @@ export default function InvestmentsPage() {
 
   async function handleExport() {
     if (!vendorId) return;
+    const params = new URLSearchParams({ vendorId: String(vendorId) });
+    if (branchFilter !== "all") params.set("branchId", branchFilter);
+    if (workerFilter !== "all") params.set("workerId", workerFilter);
+    if (statusFilter !== "all") params.set("status", statusFilter);
     try {
-      const res = await fetch(`${BASE_URL}/api/investments/export?vendorId=${vendorId}`, { credentials: "include" });
+      const res = await fetch(`${BASE_URL}/api/investments/export?${params.toString()}`, { credentials: "include" });
       if (!res.ok) { toast.error("Export failed"); return; }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -150,6 +189,14 @@ export default function InvestmentsPage() {
 
   function typeLabel(t: string) {
     return TYPES.find((x) => x.value === t)?.label ?? t;
+  }
+  function branchName(id: number | null | undefined) {
+    if (!id) return "—";
+    return branches?.find((b) => b.id === id)?.name ?? "—";
+  }
+  function workerName(id: number | null | undefined) {
+    if (!id) return "—";
+    return workers?.find((w) => w.id === id)?.name ?? "—";
   }
 
   return (
@@ -210,6 +257,16 @@ export default function InvestmentsPage() {
               </SelectContent>
             </Select>
           </div>
+          <BranchWorkerFilterControl
+            branches={branches} workers={workers}
+            branchId={branchFilter} onBranchChange={setBranchFilter}
+            workerId={workerFilter} onWorkerChange={setWorkerFilter}
+          />
+          <DateRangeFilterControl
+            preset={dateFilter.preset} onPresetChange={dateFilter.setPreset}
+            customFrom={dateFilter.customFrom} onCustomFromChange={dateFilter.setCustomFrom}
+            customTo={dateFilter.customTo} onCustomToChange={dateFilter.setCustomTo}
+          />
         </div>
         <Table>
           <TableHeader>
@@ -217,6 +274,8 @@ export default function InvestmentsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Branch</TableHead>
+              <TableHead>Worker</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Invested</TableHead>
               <TableHead className="text-right">Current Value</TableHead>
@@ -226,9 +285,9 @@ export default function InvestmentsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8">Loading investments...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8">Loading investments...</TableCell></TableRow>
             ) : !investments?.length ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8">No investments recorded yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8">No investments recorded yet.</TableCell></TableRow>
             ) : (
               investments.map((inv) => {
                 const cv = inv.currentValue ?? inv.amount;
@@ -238,13 +297,15 @@ export default function InvestmentsPage() {
                     <TableCell className="text-sm text-muted-foreground">{format(new Date(inv.investmentDate), "MMM d, yyyy")}</TableCell>
                     <TableCell className="font-medium">{inv.name}</TableCell>
                     <TableCell><Badge variant="secondary">{typeLabel(inv.type)}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{branchName(inv.branchId)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{workerName(inv.workerId)}</TableCell>
                     <TableCell><Badge variant={inv.status === "active" ? "outline" : "secondary"}>{inv.status}</Badge></TableCell>
                     <TableCell className="text-right">${inv.amount.toFixed(2)}</TableCell>
                     <TableCell className="text-right">${cv.toFixed(2)}</TableCell>
                     <TableCell className={`text-right font-medium ${roi >= 0 ? "text-emerald-500" : "text-destructive"}`}>{roi.toFixed(1)}%</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setEditing({ id: inv.id, type: inv.type, name: inv.name, notes: inv.notes ?? "", amount: inv.amount, currentValue: inv.currentValue ?? null, status: inv.status, investmentDate: inv.investmentDate.slice(0, 10) })}>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing({ id: inv.id, type: inv.type, name: inv.name, notes: inv.notes ?? "", amount: inv.amount, currentValue: inv.currentValue ?? null, status: inv.status, investmentDate: inv.investmentDate.slice(0, 10), branchId: inv.branchId ? String(inv.branchId) : "none", workerId: inv.workerId ? String(inv.workerId) : "none" })}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => handleDelete(inv.id)}>
@@ -291,6 +352,11 @@ export default function InvestmentsPage() {
               <Label>Date</Label>
               <Input type="date" value={investmentDate} onChange={(e) => setInvestmentDate(e.target.value)} />
             </div>
+            <BranchWorkerFormFields
+              branches={branches} workers={workers}
+              branchId={formBranchId} onBranchChange={setFormBranchId}
+              workerId={formWorkerId} onWorkerChange={setFormWorkerId}
+            />
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional" />
@@ -346,6 +412,11 @@ export default function InvestmentsPage() {
                 <Label>Date</Label>
                 <Input type="date" value={editing.investmentDate} onChange={(e) => setEditing({ ...editing, investmentDate: e.target.value })} />
               </div>
+              <BranchWorkerFormFields
+                branches={branches} workers={workers}
+                branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
+                workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+              />
               <div className="space-y-1.5">
                 <Label>Notes</Label>
                 <Textarea value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} rows={2} />

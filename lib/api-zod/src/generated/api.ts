@@ -1045,12 +1045,18 @@ export const GetInventorySummaryResponse = zod.object({
 export const ListOrdersQueryParams = zod.object({
   "vendorId": zod.coerce.number().optional(),
   "status": zod.coerce.string().optional(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional()
 })
 
 export const ListOrdersResponseItem = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().nullish(),
@@ -1076,6 +1082,8 @@ export const ListOrdersResponse = zod.array(ListOrdersResponseItem)
  */
 export const CreateOrderBody = zod.object({
   "vendorId": zod.number(),
+  "branchId": zod.number().optional(),
+  "workerId": zod.number().optional(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().optional(),
@@ -1091,6 +1099,8 @@ export const CreateOrderBody = zod.object({
 export const CreateOrderResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().nullish(),
@@ -1141,6 +1151,8 @@ export const GetOrderParams = zod.object({
 export const GetOrderResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().nullish(),
@@ -1169,6 +1181,8 @@ export const UpdateOrderParams = zod.object({
 
 export const UpdateOrderBody = zod.object({
   "status": zod.string().optional(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "notes": zod.string().optional(),
   "shippingAddress": zod.string().optional()
 })
@@ -1176,6 +1190,8 @@ export const UpdateOrderBody = zod.object({
 export const UpdateOrderResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().nullish(),
@@ -1201,6 +1217,8 @@ export const UpdateOrderResponse = zod.object({
 export const ListSalesQueryParams = zod.object({
   "vendorId": zod.coerce.number().optional(),
   "source": zod.coerce.string().optional(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional()
 })
@@ -1210,6 +1228,8 @@ export const ListSalesResponseItem = zod.object({
   "vendorId": zod.number(),
   "source": zod.string(),
   "sourcePaymentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "customerName": zod.string().nullish(),
   "amount": zod.number(),
@@ -1225,6 +1245,8 @@ export const ListSalesResponse = zod.array(ListSalesResponseItem)
  */
 export const CreateSaleBody = zod.object({
   "vendorId": zod.number(),
+  "branchId": zod.number().optional(),
+  "workerId": zod.number().optional(),
   "description": zod.string().optional(),
   "customerName": zod.string().optional(),
   "amount": zod.number(),
@@ -1237,6 +1259,8 @@ export const CreateSaleResponse = zod.object({
   "vendorId": zod.number(),
   "source": zod.string(),
   "sourcePaymentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "customerName": zod.string().nullish(),
   "amount": zod.number(),
@@ -1251,6 +1275,8 @@ export const CreateSaleResponse = zod.object({
  */
 export const ExportSalesQueryParams = zod.object({
   "vendorId": zod.coerce.number(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional()
 })
@@ -1266,6 +1292,8 @@ export const UpdateSaleParams = zod.object({
 })
 
 export const UpdateSaleBody = zod.object({
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "description": zod.string().optional(),
   "customerName": zod.string().optional(),
   "amount": zod.number().optional(),
@@ -1278,6 +1306,8 @@ export const UpdateSaleResponse = zod.object({
   "vendorId": zod.number(),
   "source": zod.string(),
   "sourcePaymentId": zod.number().nullish(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "customerName": zod.string().nullish(),
   "amount": zod.number(),
@@ -1303,6 +1333,8 @@ export const DeleteSaleResponse = zod.void()
 export const ListExpensesQueryParams = zod.object({
   "vendorId": zod.coerce.number().optional(),
   "category": zod.coerce.string().optional(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional()
 })
@@ -1310,6 +1342,8 @@ export const ListExpensesQueryParams = zod.object({
 export const ListExpensesResponseItem = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "category": zod.string(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
@@ -1325,6 +1359,8 @@ export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
  */
 export const CreateExpenseBody = zod.object({
   "vendorId": zod.number(),
+  "branchId": zod.number().optional(),
+  "workerId": zod.number().optional(),
   "category": zod.string(),
   "description": zod.string().optional(),
   "amount": zod.number(),
@@ -1335,6 +1371,8 @@ export const CreateExpenseBody = zod.object({
 export const CreateExpenseResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "category": zod.string(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
@@ -1349,6 +1387,8 @@ export const CreateExpenseResponse = zod.object({
  */
 export const ExportExpensesQueryParams = zod.object({
   "vendorId": zod.coerce.number(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional()
 })
@@ -1364,6 +1404,8 @@ export const UpdateExpenseParams = zod.object({
 })
 
 export const UpdateExpenseBody = zod.object({
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "category": zod.string().optional(),
   "description": zod.string().optional(),
   "amount": zod.number().optional(),
@@ -1374,6 +1416,8 @@ export const UpdateExpenseBody = zod.object({
 export const UpdateExpenseResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "category": zod.string(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
@@ -1399,12 +1443,16 @@ export const DeleteExpenseResponse = zod.void()
 export const ListInvestmentsQueryParams = zod.object({
   "vendorId": zod.coerce.number().optional(),
   "type": zod.coerce.string().optional(),
-  "status": zod.coerce.string().optional()
+  "status": zod.coerce.string().optional(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional()
 })
 
 export const ListInvestmentsResponseItem = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "type": zod.string(),
   "name": zod.string(),
   "notes": zod.string().nullish(),
@@ -1423,6 +1471,8 @@ export const ListInvestmentsResponse = zod.array(ListInvestmentsResponseItem)
  */
 export const CreateInvestmentBody = zod.object({
   "vendorId": zod.number(),
+  "branchId": zod.number().optional(),
+  "workerId": zod.number().optional(),
   "type": zod.string(),
   "name": zod.string(),
   "notes": zod.string().optional(),
@@ -1436,6 +1486,8 @@ export const CreateInvestmentBody = zod.object({
 export const CreateInvestmentResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "type": zod.string(),
   "name": zod.string(),
   "notes": zod.string().nullish(),
@@ -1452,7 +1504,10 @@ export const CreateInvestmentResponse = zod.object({
  * @summary Export investments as CSV
  */
 export const ExportInvestmentsQueryParams = zod.object({
-  "vendorId": zod.coerce.number()
+  "vendorId": zod.coerce.number(),
+  "branchId": zod.coerce.number().optional(),
+  "workerId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
 })
 
 export const ExportInvestmentsResponse = zod.unknown()
@@ -1466,6 +1521,8 @@ export const UpdateInvestmentParams = zod.object({
 })
 
 export const UpdateInvestmentBody = zod.object({
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "type": zod.string().optional(),
   "name": zod.string().optional(),
   "notes": zod.string().optional(),
@@ -1479,6 +1536,8 @@ export const UpdateInvestmentBody = zod.object({
 export const UpdateInvestmentResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "type": zod.string(),
   "name": zod.string(),
   "notes": zod.string().nullish(),
@@ -1499,6 +1558,181 @@ export const DeleteInvestmentParams = zod.object({
 })
 
 export const DeleteInvestmentResponse = zod.void()
+
+
+/**
+ * @summary List a vendor's branch offices
+ */
+export const ListBranchesQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListBranchesResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListBranchesResponse = zod.array(ListBranchesResponseItem)
+
+
+/**
+ * @summary Create a branch office
+ */
+export const CreateBranchBody = zod.object({
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "country": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const CreateBranchResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a branch office
+ */
+export const UpdateBranchParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateBranchBody = zod.object({
+  "name": zod.string().optional(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "country": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const UpdateBranchResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a branch office
+ */
+export const DeleteBranchParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteBranchResponse = zod.void()
+
+
+/**
+ * @summary List a vendor's workers
+ */
+export const ListWorkersQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional(),
+  "branchId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListWorkersResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListWorkersResponse = zod.array(ListWorkersResponseItem)
+
+
+/**
+ * @summary Add a worker
+ */
+export const CreateWorkerBody = zod.object({
+  "vendorId": zod.number(),
+  "branchId": zod.number().optional(),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "role": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const CreateWorkerResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a worker
+ */
+export const UpdateWorkerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateWorkerBody = zod.object({
+  "branchId": zod.number().nullish(),
+  "name": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "role": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const UpdateWorkerResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a worker
+ */
+export const DeleteWorkerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteWorkerResponse = zod.void()
 
 
 /**
@@ -2419,6 +2653,8 @@ export const UpdateExternalProfileResponse = zod.object({
 export const ListExternalOrdersResponseItem = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
+  "branchId": zod.number().nullish(),
+  "workerId": zod.number().nullish(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
   "customerPhone": zod.string().nullish(),

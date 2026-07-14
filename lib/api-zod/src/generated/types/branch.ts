@@ -6,22 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Sale {
+export interface Branch {
   id: number;
   vendorId: number;
-  source: string;
+  name: string;
   /** @nullable */
-  sourcePaymentId?: number | null;
+  address?: string | null;
   /** @nullable */
-  branchId?: number | null;
+  city?: string | null;
   /** @nullable */
-  workerId?: number | null;
+  state?: string | null;
   /** @nullable */
-  description?: string | null;
-  /** @nullable */
-  customerName?: string | null;
-  amount: number;
-  currency: string;
-  saleDate: string;
+  country?: string | null;
+  status: string;
   createdAt: string;
 }

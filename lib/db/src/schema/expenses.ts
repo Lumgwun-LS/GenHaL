@@ -2,10 +2,14 @@ import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
+import { branchesTable } from "./branches";
+import { workersTable } from "./workers";
 
 export const expensesTable = pgTable("expenses", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
+  workerId: integer("worker_id").references(() => workersTable.id, { onDelete: "set null" }),
   category: text("category").notNull(), // e.g. rent, supplies, payroll, utilities, marketing, other
   description: text("description"),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),

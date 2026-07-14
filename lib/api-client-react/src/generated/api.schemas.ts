@@ -414,6 +414,10 @@ export interface OrderItem {
 export interface Order {
   id: number;
   vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   customerName: string;
   customerEmail: string;
   /** @nullable */
@@ -436,6 +440,8 @@ export type OrderInputItemsItem = {
 
 export interface OrderInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
@@ -577,6 +583,10 @@ export interface ExternalPushOkResponse {
 
 export interface OrderUpdate {
   status?: string;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   notes?: string;
   shippingAddress?: string;
 }
@@ -602,6 +612,10 @@ export interface Sale {
   /** @nullable */
   sourcePaymentId?: number | null;
   /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
+  /** @nullable */
   description?: string | null;
   /** @nullable */
   customerName?: string | null;
@@ -613,6 +627,8 @@ export interface Sale {
 
 export interface SaleInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   description?: string;
   customerName?: string;
   amount: number;
@@ -621,6 +637,10 @@ export interface SaleInput {
 }
 
 export interface SaleUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   description?: string;
   customerName?: string;
   amount?: number;
@@ -631,6 +651,10 @@ export interface SaleUpdate {
 export interface Expense {
   id: number;
   vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   category: string;
   /** @nullable */
   description?: string | null;
@@ -642,6 +666,8 @@ export interface Expense {
 
 export interface ExpenseInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   category: string;
   description?: string;
   amount: number;
@@ -650,6 +676,10 @@ export interface ExpenseInput {
 }
 
 export interface ExpenseUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   category?: string;
   description?: string;
   amount?: number;
@@ -660,6 +690,10 @@ export interface ExpenseUpdate {
 export interface Investment {
   id: number;
   vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   type: string;
   name: string;
   /** @nullable */
@@ -675,6 +709,8 @@ export interface Investment {
 
 export interface InvestmentInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   type: string;
   name: string;
   notes?: string;
@@ -686,6 +722,10 @@ export interface InvestmentInput {
 }
 
 export interface InvestmentUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   type?: string;
   name?: string;
   notes?: string;
@@ -694,6 +734,77 @@ export interface InvestmentUpdate {
   currency?: string;
   status?: string;
   investmentDate?: string;
+}
+
+export interface Branch {
+  id: number;
+  vendorId: number;
+  name: string;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface BranchInput {
+  vendorId: number;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  status?: string;
+}
+
+export interface BranchUpdate {
+  name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  status?: string;
+}
+
+export interface Worker {
+  id: number;
+  vendorId: number;
+  /** @nullable */
+  branchId?: number | null;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  role?: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface WorkerInput {
+  vendorId: number;
+  branchId?: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  status?: string;
+}
+
+export interface WorkerUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  status?: string;
 }
 
 export type FinanceOverviewAnalyticsRange = {
@@ -1037,6 +1148,10 @@ vendorId?: number;
 export type ListOrdersParams = {
 vendorId?: number;
 status?: string;
+branchId?: number;
+workerId?: number;
+from?: string;
+to?: string;
 search?: string;
 };
 
@@ -1048,12 +1163,16 @@ period?: string;
 export type ListSalesParams = {
 vendorId?: number;
 source?: string;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };
 
 export type ExportSalesParams = {
 vendorId: number;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };
@@ -1061,12 +1180,16 @@ to?: string;
 export type ListExpensesParams = {
 vendorId?: number;
 category?: string;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };
 
 export type ExportExpensesParams = {
 vendorId: number;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };
@@ -1075,10 +1198,26 @@ export type ListInvestmentsParams = {
 vendorId?: number;
 type?: string;
 status?: string;
+branchId?: number;
+workerId?: number;
 };
 
 export type ExportInvestmentsParams = {
 vendorId: number;
+branchId?: number;
+workerId?: number;
+status?: string;
+};
+
+export type ListBranchesParams = {
+vendorId?: number;
+status?: string;
+};
+
+export type ListWorkersParams = {
+vendorId?: number;
+branchId?: number;
+status?: string;
 };
 
 export type ListLeadsParams = {

@@ -8,6 +8,8 @@
 
 export interface ExpenseInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   category: string;
   description?: string;
   amount: number;

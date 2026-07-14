@@ -9,6 +9,8 @@ import type { OrderInputItemsItem } from './orderInputItemsItem';
 
 export interface OrderInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   customerName: string;
   customerEmail: string;
   customerPhone?: string;

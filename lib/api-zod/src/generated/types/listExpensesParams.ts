@@ -9,6 +9,8 @@
 export type ListExpensesParams = {
 vendorId?: number;
 category?: string;
+branchId?: number;
+workerId?: number;
 from?: string;
 to?: string;
 };

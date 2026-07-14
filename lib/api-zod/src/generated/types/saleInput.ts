@@ -8,6 +8,8 @@
 
 export interface SaleInput {
   vendorId: number;
+  branchId?: number;
+  workerId?: number;
   description?: string;
   customerName?: string;
   amount: number;

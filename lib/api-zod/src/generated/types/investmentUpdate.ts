@@ -7,6 +7,10 @@
  */
 
 export interface InvestmentUpdate {
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  workerId?: number | null;
   type?: string;
   name?: string;
   notes?: string;
