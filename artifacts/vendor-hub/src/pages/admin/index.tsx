@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useCreateVendorNotification,
+  useCreateBulkVendorNotifications,
+  useGetAdminMessageHistory,
+  getGetAdminMessageHistoryQueryKey,
+} from "@workspace/api-client-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -969,38 +975,6 @@ function TargetByFilterPopover({
   );
 }
 
-async function postVendorMessage(vendorId: number, message: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/notifications`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ message }),
-  });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
-    throw new Error(err.error ?? "Failed to send message");
-  }
-}
-
-async function postBulkVendorMessage(
-  message: string,
-  target: { all: true } | { all: false; vendorIds: number[] },
-): Promise<{ sent: number; emailsSent: number; emailAttempted: number }> {
-  const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(
-      target.all ? { message, all: true } : { message, vendorIds: target.vendorIds },
-    ),
-  });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
-    throw new Error(err.error ?? "Failed to send message");
-  }
-  return res.json() as Promise<{ sent: number; emailsSent: number; emailAttempted: number }>;
-}
-
 function BulkMessageDialog({
   selectedIds,
   allSelected,
@@ -1015,7 +989,7 @@ function BulkMessageDialog({
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  const { mutateAsync: sendBulkMessage, isPending: sending } = useCreateBulkVendorNotifications();
 
   const recipientCount = allSelected ? totalVendors : selectedIds.length;
   const disabled = recipientCount === 0;
@@ -1023,24 +997,20 @@ function BulkMessageDialog({
   async function handleSend() {
     const trimmed = message.trim();
     if (!trimmed || disabled) return;
-    setSending(true);
     try {
-      const { sent, emailsSent } = await postBulkVendorMessage(
-        trimmed,
-        allSelected ? { all: true } : { all: false, vendorIds: selectedIds },
-      );
+      const { sent, emailsSent } = await sendBulkMessage({
+        data: allSelected ? { message: trimmed, all: true } : { message: trimmed, vendorIds: selectedIds },
+      });
       toast.success(
         `Message sent to ${sent} vendor${sent === 1 ? "" : "s"}` +
           (emailsSent > 0 ? ` — email also sent to ${emailsSent} of them` : " (email not sent — SMTP isn't configured)"),
       );
       setMessage("");
       setOpen(false);
-      qc.invalidateQueries({ queryKey: ["admin-message-history"] });
+      qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
       onSent();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
-    } finally {
-      setSending(false);
     }
   }
 
@@ -1096,22 +1066,19 @@ function MessageVendorDialog({
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  const { mutateAsync: sendMessage, isPending: sending } = useCreateVendorNotification();
 
   async function handleSend() {
     const trimmed = message.trim();
     if (!trimmed) return;
-    setSending(true);
     try {
-      await postVendorMessage(vendor.id, trimmed);
+      await sendMessage({ id: vendor.id, data: { message: trimmed } });
       toast.success(`Message sent to ${vendor.name}`);
       setMessage("");
       setOpen(false);
-      qc.invalidateQueries({ queryKey: ["admin-message-history"] });
+      qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
-    } finally {
-      setSending(false);
     }
   }
 
@@ -1254,25 +1221,6 @@ function RetryVoiceCallButton({ logId, purpose, onDone }: { logId: number; purpo
 
 const AUDIT_FIELD_ANY = "__any__";
 
-type MessageHistoryEntry = {
-  id: number;
-  vendorId: number;
-  vendorName: string | null;
-  message: string;
-  adminUserId: string | null;
-  adminDisplayName: string | null;
-  createdAt: string;
-};
-
-async function fetchMessageHistory(vendorId?: number): Promise<MessageHistoryEntry[]> {
-  const url = vendorId
-    ? `${BASE_URL}/api/admin/message-history?vendorId=${vendorId}`
-    : `${BASE_URL}/api/admin/message-history`;
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to load message history");
-  return res.json() as Promise<MessageHistoryEntry[]>;
-}
-
 type PlanChangeEntry = {
   id: number;
   vendorId: number;
@@ -1354,11 +1302,17 @@ export default function AdminPanel() {
     enabled: isAdmin,
   });
 
-  const { data: messageHistory, isLoading: messageHistoryLoading } = useQuery({
-    queryKey: ["admin-message-history", messageHistoryVendorFilter?.id ?? null],
-    queryFn: () => fetchMessageHistory(messageHistoryVendorFilter?.id),
-    enabled: isAdmin,
-  });
+  const { data: messageHistory, isLoading: messageHistoryLoading } = useGetAdminMessageHistory(
+    messageHistoryVendorFilter?.id !== undefined ? { vendorId: messageHistoryVendorFilter.id } : undefined,
+    {
+      query: {
+        queryKey: getGetAdminMessageHistoryQueryKey(
+          messageHistoryVendorFilter?.id !== undefined ? { vendorId: messageHistoryVendorFilter.id } : undefined,
+        ),
+        enabled: isAdmin,
+      },
+    },
+  );
 
   const { data: planChangeHistory, isLoading: planChangeHistoryLoading } = useQuery({
     queryKey: ["admin-tier-change-history"],

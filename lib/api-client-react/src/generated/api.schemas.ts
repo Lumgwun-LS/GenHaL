@@ -102,6 +102,61 @@ export interface DeletionVerifyInput {
   phoneCode: string;
 }
 
+export interface VendorNotification {
+  id: number;
+  vendorId: number;
+  /** "birthday" | "tier_change" | "general" */
+  type: string;
+  message: string;
+  /** @nullable */
+  adminUserId?: string | null;
+  /** @nullable */
+  adminDisplayName?: string | null;
+  /** @nullable */
+  previousTier?: string | null;
+  /** @nullable */
+  newTier?: string | null;
+  /** @nullable */
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface VendorNotificationInput {
+  /** @maxLength 1000 */
+  message: string;
+}
+
+export interface BulkVendorNotificationInput {
+  /** @maxLength 1000 */
+  message: string;
+  /** Target vendor ids. Ignored when `all` is true. */
+  vendorIds?: number[];
+  /** When true, sends to every vendor and `vendorIds` is ignored. */
+  all?: boolean;
+}
+
+export interface BulkVendorNotificationResult {
+  /** Number of in-app notifications created */
+  sent: number;
+  /** Number of announcement emails successfully delivered */
+  emailsSent: number;
+  /** Number of vendors an announcement email was attempted for */
+  emailAttempted: number;
+}
+
+export interface AdminMessageHistoryEntry {
+  id: number;
+  vendorId: number;
+  /** @nullable */
+  vendorName: string | null;
+  message: string;
+  /** @nullable */
+  adminUserId: string | null;
+  /** @nullable */
+  adminDisplayName: string | null;
+  createdAt: string;
+}
+
 export interface DemographicBucket {
   key: string;
   count: number;
@@ -1308,5 +1363,9 @@ to?: string;
 
 export type VerifyVendorDeletion200 = {
   success: boolean;
+};
+
+export type GetAdminMessageHistoryParams = {
+vendorId?: number;
 };
 

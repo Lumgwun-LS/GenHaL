@@ -44,6 +44,8 @@ tags:
     description: Staff members belonging to a vendor's organization
   - name: external
     description: Awajimaa bridge — mobile app / external partner access
+  - name: admin
+    description: Admin-only operations
 
 paths:
   /healthz:
@@ -2063,6 +2065,117 @@ paths:
                   success:
                     type: boolean
 
+  # ─── VENDOR NOTIFICATIONS ─────────────────────────────────────────────────
+  /vendors/{id}/notifications:
+    get:
+      operationId: listVendorNotifications
+      tags: [vendors]
+      summary: In-app notifications for a vendor (most recent 50)
+      description: Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notifications, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorNotification"
+        "403":
+          description: Forbidden — not this vendor's owner and not an admin
+        "404":
+          description: Vendor not found
+    post:
+      operationId: createVendorNotification
+      tags: [vendors]
+      summary: Admin sends a custom in-app + email message to a single vendor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorNotificationInput"
+      responses:
+        "201":
+          description: Created notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorNotification"
+        "403":
+          description: Admin access required
+        "404":
+          description: Vendor not found
+
+  /vendors/notifications/bulk:
+    post:
+      operationId: createBulkVendorNotifications
+      tags: [vendors]
+      summary: Admin sends a custom in-app + email message to several vendors at once
+      description: >
+        Targets either an explicit `vendorIds` list or, when `all` is true, every vendor.
+        The in-app notification is always created; the announcement email is best-effort
+        and does not block or fail the request if delivery to some vendors fails.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkVendorNotificationInput"
+      responses:
+        "201":
+          description: Bulk send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkVendorNotificationResult"
+        "400":
+          description: Missing message, or no vendorIds given and all is not true
+        "403":
+          description: Admin access required
+        "404":
+          description: No matching vendors found
+
+  # ─── ADMIN ────────────────────────────────────────────────────────────────
+  /admin/message-history:
+    get:
+      operationId: getAdminMessageHistory
+      tags: [admin]
+      summary: Admin-facing history of every custom message sent to vendors
+      description: >
+        Covers messages sent via the per-vendor compose dialog and the bulk-message tool
+        (notification type "general"). Optionally filter to a single vendor.
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages, most recent first (max 200)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminMessageHistoryEntry"
+        "400":
+          description: Invalid vendorId
+        "403":
+          description: Admin access required
+
   # ─── EXTERNAL (AWAJIMAA BRIDGE) ──────────────────────────────────────────
   /external/auth/handshake:
     post:
@@ -2557,6 +2670,89 @@ components:
         emailCode:
           type: string
         phoneCode:
+          type: string
+
+    VendorNotification:
+      type: object
+      required: [id, vendorId, type, message, readAt, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        type:
+          type: string
+          description: '"birthday" | "tier_change" | "general"'
+        message:
+          type: string
+        adminUserId:
+          type: ["string", "null"]
+        adminDisplayName:
+          type: ["string", "null"]
+        previousTier:
+          type: ["string", "null"]
+        newTier:
+          type: ["string", "null"]
+        readAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    VendorNotificationInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          maxLength: 1000
+
+    BulkVendorNotificationInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          maxLength: 1000
+        vendorIds:
+          type: array
+          items:
+            type: integer
+          description: Target vendor ids. Ignored when `all` is true.
+        all:
+          type: boolean
+          description: When true, sends to every vendor and `vendorIds` is ignored.
+
+    BulkVendorNotificationResult:
+      type: object
+      required: [sent, emailsSent, emailAttempted]
+      properties:
+        sent:
+          type: integer
+          description: Number of in-app notifications created
+        emailsSent:
+          type: integer
+          description: Number of announcement emails successfully delivered
+        emailAttempted:
+          type: integer
+          description: Number of vendors an announcement email was attempted for
+
+    AdminMessageHistoryEntry:
+      type: object
+      required: [id, vendorId, vendorName, message, adminUserId, adminDisplayName, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        vendorName:
+          type: ["string", "null"]
+        message:
+          type: string
+        adminUserId:
+          type: ["string", "null"]
+        adminDisplayName:
+          type: ["string", "null"]
+        createdAt:
           type: string
 
     DemographicBucket:

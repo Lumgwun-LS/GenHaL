@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminDemographicsAnalytics,
+  AdminMessageHistoryEntry,
   AiCaptionRequest,
   AiGeneration,
   AiImageRequest,
@@ -29,6 +30,8 @@ import type {
   Branch,
   BranchInput,
   BranchUpdate,
+  BulkVendorNotificationInput,
+  BulkVendorNotificationResult,
   CampaignSendResult,
   DeletionEligibility,
   DeletionRequestResult,
@@ -57,6 +60,7 @@ import type {
   ExternalRevokeResponse,
   FinanceOverviewAnalytics,
   GetAdminDemographicsAnalyticsParams,
+  GetAdminMessageHistoryParams,
   GetAnalyticsOverviewParams,
   GetEmailCampaignStatsParams,
   GetFinanceOverviewAnalyticsParams,
@@ -121,6 +125,8 @@ import type {
   SocialAnalytics,
   Vendor,
   VendorInput,
+  VendorNotification,
+  VendorNotificationInput,
   VendorOnboardingInput,
   VendorPerformanceAnalytics,
   VendorStats,
@@ -7173,6 +7179,311 @@ export const useVerifyVendorDeletion = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getVerifyVendorDeletionMutationOptions(options));
     }
+
+export const getListVendorNotificationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/notifications`
+}
+
+/**
+ * Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+ * @summary In-app notifications for a vendor (most recent 50)
+ */
+export const listVendorNotifications = async (id: number, options?: RequestInit): Promise<VendorNotification[]> => {
+
+  return customFetch<VendorNotification[]>(getListVendorNotificationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVendorNotificationsQueryKey = (id: number,) => {
+    return [
+    `/api/vendors/${id}/notifications`
+    ] as const;
+    }
+
+
+export const getListVendorNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listVendorNotifications>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendorNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVendorNotificationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVendorNotifications>>> = ({ signal }) => listVendorNotifications(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVendorNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVendorNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listVendorNotifications>>>
+export type ListVendorNotificationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary In-app notifications for a vendor (most recent 50)
+ */
+
+export function useListVendorNotifications<TData = Awaited<ReturnType<typeof listVendorNotifications>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendorNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVendorNotificationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVendorNotificationUrl = (id: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/notifications`
+}
+
+/**
+ * @summary Admin sends a custom in-app + email message to a single vendor
+ */
+export const createVendorNotification = async (id: number,
+    vendorNotificationInput: VendorNotificationInput, options?: RequestInit): Promise<VendorNotification> => {
+
+  return customFetch<VendorNotification>(getCreateVendorNotificationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorNotificationInput)
+  }
+);}
+
+
+
+
+export const getCreateVendorNotificationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVendorNotification>>, TError,{id: number;data: BodyType<VendorNotificationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVendorNotification>>, TError,{id: number;data: BodyType<VendorNotificationInput>}, TContext> => {
+
+const mutationKey = ['createVendorNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVendorNotification>>, {id: number;data: BodyType<VendorNotificationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createVendorNotification(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVendorNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof createVendorNotification>>>
+    export type CreateVendorNotificationMutationBody = BodyType<VendorNotificationInput>
+    export type CreateVendorNotificationMutationError = ErrorType<void>
+
+    /**
+ * @summary Admin sends a custom in-app + email message to a single vendor
+ */
+export const useCreateVendorNotification = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVendorNotification>>, TError,{id: number;data: BodyType<VendorNotificationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVendorNotification>>,
+        TError,
+        {id: number;data: BodyType<VendorNotificationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVendorNotificationMutationOptions(options));
+    }
+
+export const getCreateBulkVendorNotificationsUrl = () => {
+
+
+
+
+  return `/api/vendors/notifications/bulk`
+}
+
+/**
+ * Targets either an explicit `vendorIds` list or, when `all` is true, every vendor. The in-app notification is always created; the announcement email is best-effort and does not block or fail the request if delivery to some vendors fails.
+ * @summary Admin sends a custom in-app + email message to several vendors at once
+ */
+export const createBulkVendorNotifications = async (bulkVendorNotificationInput: BulkVendorNotificationInput, options?: RequestInit): Promise<BulkVendorNotificationResult> => {
+
+  return customFetch<BulkVendorNotificationResult>(getCreateBulkVendorNotificationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkVendorNotificationInput)
+  }
+);}
+
+
+
+
+export const getCreateBulkVendorNotificationsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBulkVendorNotifications>>, TError,{data: BodyType<BulkVendorNotificationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBulkVendorNotifications>>, TError,{data: BodyType<BulkVendorNotificationInput>}, TContext> => {
+
+const mutationKey = ['createBulkVendorNotifications'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBulkVendorNotifications>>, {data: BodyType<BulkVendorNotificationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBulkVendorNotifications(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBulkVendorNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof createBulkVendorNotifications>>>
+    export type CreateBulkVendorNotificationsMutationBody = BodyType<BulkVendorNotificationInput>
+    export type CreateBulkVendorNotificationsMutationError = ErrorType<void>
+
+    /**
+ * @summary Admin sends a custom in-app + email message to several vendors at once
+ */
+export const useCreateBulkVendorNotifications = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBulkVendorNotifications>>, TError,{data: BodyType<BulkVendorNotificationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBulkVendorNotifications>>,
+        TError,
+        {data: BodyType<BulkVendorNotificationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBulkVendorNotificationsMutationOptions(options));
+    }
+
+export const getGetAdminMessageHistoryUrl = (params?: GetAdminMessageHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/message-history?${stringifiedParams}` : `/api/admin/message-history`
+}
+
+/**
+ * Covers messages sent via the per-vendor compose dialog and the bulk-message tool (notification type "general"). Optionally filter to a single vendor.
+ * @summary Admin-facing history of every custom message sent to vendors
+ */
+export const getAdminMessageHistory = async (params?: GetAdminMessageHistoryParams, options?: RequestInit): Promise<AdminMessageHistoryEntry[]> => {
+
+  return customFetch<AdminMessageHistoryEntry[]>(getGetAdminMessageHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminMessageHistoryQueryKey = (params?: GetAdminMessageHistoryParams,) => {
+    return [
+    `/api/admin/message-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminMessageHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminMessageHistory>>, TError = ErrorType<void>>(params?: GetAdminMessageHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminMessageHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminMessageHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminMessageHistory>>> = ({ signal }) => getAdminMessageHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminMessageHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminMessageHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminMessageHistory>>>
+export type GetAdminMessageHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Admin-facing history of every custom message sent to vendors
+ */
+
+export function useGetAdminMessageHistory<TData = Awaited<ReturnType<typeof getAdminMessageHistory>>, TError = ErrorType<void>>(
+ params?: GetAdminMessageHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminMessageHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminMessageHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getExternalAuthHandshakeUrl = () => {
 

@@ -2509,6 +2509,99 @@ export const VerifyVendorDeletionResponse = zod.object({
 
 
 /**
+ * Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+ * @summary In-app notifications for a vendor (most recent 50)
+ */
+export const ListVendorNotificationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListVendorNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"general\"'),
+  "message": zod.string(),
+  "adminUserId": zod.string().nullish(),
+  "adminDisplayName": zod.string().nullish(),
+  "previousTier": zod.string().nullish(),
+  "newTier": zod.string().nullish(),
+  "readAt": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+export const ListVendorNotificationsResponse = zod.array(ListVendorNotificationsResponseItem)
+
+
+/**
+ * @summary Admin sends a custom in-app + email message to a single vendor
+ */
+export const CreateVendorNotificationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createVendorNotificationBodyMessageMax = 1000;
+
+
+
+export const CreateVendorNotificationBody = zod.object({
+  "message": zod.string().max(createVendorNotificationBodyMessageMax)
+})
+
+export const CreateVendorNotificationResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"general\"'),
+  "message": zod.string(),
+  "adminUserId": zod.string().nullish(),
+  "adminDisplayName": zod.string().nullish(),
+  "previousTier": zod.string().nullish(),
+  "newTier": zod.string().nullish(),
+  "readAt": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Targets either an explicit `vendorIds` list or, when `all` is true, every vendor. The in-app notification is always created; the announcement email is best-effort and does not block or fail the request if delivery to some vendors fails.
+ * @summary Admin sends a custom in-app + email message to several vendors at once
+ */
+export const createBulkVendorNotificationsBodyMessageMax = 1000;
+
+
+
+export const CreateBulkVendorNotificationsBody = zod.object({
+  "message": zod.string().max(createBulkVendorNotificationsBodyMessageMax),
+  "vendorIds": zod.array(zod.number()).optional().describe('Target vendor ids. Ignored when `all` is true.'),
+  "all": zod.boolean().optional().describe('When true, sends to every vendor and `vendorIds` is ignored.')
+})
+
+export const CreateBulkVendorNotificationsResponse = zod.object({
+  "sent": zod.number().describe('Number of in-app notifications created'),
+  "emailsSent": zod.number().describe('Number of announcement emails successfully delivered'),
+  "emailAttempted": zod.number().describe('Number of vendors an announcement email was attempted for')
+})
+
+
+/**
+ * Covers messages sent via the per-vendor compose dialog and the bulk-message tool (notification type "general"). Optionally filter to a single vendor.
+ * @summary Admin-facing history of every custom message sent to vendors
+ */
+export const GetAdminMessageHistoryQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional()
+})
+
+export const GetAdminMessageHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "vendorName": zod.string().nullable(),
+  "message": zod.string(),
+  "adminUserId": zod.string().nullable(),
+  "adminDisplayName": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+export const GetAdminMessageHistoryResponse = zod.array(GetAdminMessageHistoryResponseItem)
+
+
+/**
  * Called once when an Awajimaa user opens the VendorHub mobile app. Auto-creates (or finds) the matching vendor profile and returns a signed JWT to use as a bearer token on all other /external/* routes.
  * @summary Exchange an Awajimaa API key + user identity for a VendorHub session token
  */
