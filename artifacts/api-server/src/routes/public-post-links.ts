@@ -6,12 +6,14 @@
  * GET  /public/post-links/:token             — vendor + product info for the link
  * POST /public/post-links/:token/interest    — capture a lead, no payment
  * POST /public/post-links/:token/checkout    — create an order + start a real payment
+ * GET  /public/post-links/:token/orders/:orderId        — status of an order started via this link
+ * POST /public/post-links/:token/orders/:orderId/retry  — retry payment for that order (same or different gateway)
  *
  * Mounted before requireAuth in routes/index.ts, same as public-vendors.ts.
  * Prices are always re-read from the DB — never trusted from the client.
  */
 import { Router, type IRouter } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import {
   db,
@@ -46,6 +48,33 @@ type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomb
 
 const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "flutterwave", "nomba", "remita"];
 
+/** Statuses from which a payment can still be superseded by a retry. Mirrors external/payments.ts. */
+const OPEN_PAYMENT_STATUSES = new Set(["pending", "failed"]);
+
+/**
+ * Order payment statuses a retry may still be attempted from — explicitly
+ * excludes "paid" and "refunded" (already resolved) as well as any other
+ * non-recoverable status; only the exact "started but didn't finish" states
+ * are retryable.
+ */
+const RETRYABLE_ORDER_PAYMENT_STATUSES = new Set(["unpaid", "failed"]);
+
+/**
+ * Loads an order strictly scoped to the specific shop-link (post) it was
+ * created from — not just the vendor. A valid public token only ever proves
+ * "this is the right vendor for this one post"; without also matching
+ * sourcePostId, that token could be used to probe or retry *any* order for
+ * the vendor (including ones never placed through this public flow) by
+ * guessing ids.
+ */
+async function loadLinkOrder(vendorId: number, postId: number, orderId: number) {
+  const [order] = await db
+    .select()
+    .from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.vendorId, vendorId), eq(ordersTable.sourcePostId, postId)));
+  return order ?? null;
+}
+
 /** Every gateway the vendor has enabled, in the order customers should see them. */
 function enabledProviders(vendor: GatewayVendor): PostLinkProvider[] {
   return ALL_PROVIDERS.filter((p) => vendor[`${p}Enabled` as const]);
@@ -78,10 +107,11 @@ async function resolveProviderAvailability(
  * client-supplied URL. Accepting an unauthenticated client's successUrl/
  * cancelUrl and forwarding it to Stripe/Paystack would be an open redirect.
  */
-function shopLinkUrl(token: string): string | null {
+function shopLinkUrl(token: string, orderId?: number): string | null {
   const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
   if (!domain) return null;
-  return `https://${domain}/p/${token}`;
+  const base = `https://${domain}/p/${token}`;
+  return orderId ? `${base}?order=${orderId}` : base;
 }
 
 /** Default pick when the customer didn't choose (or chose something invalid). Only picks among providers that are actually available. */
@@ -89,6 +119,168 @@ function selectProvider(currency: string, available: PostLinkProvider[]): PostLi
   const wantsPaystack = PAYSTACK_CURRENCIES.has(currency.toUpperCase());
   if (wantsPaystack && available.includes("paystack")) return "paystack";
   return available[0] ?? null;
+}
+
+type ChargeResult =
+  | { ok: true; body: { orderId: number; provider: PostLinkProvider; url: string | null } }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Starts a real payment with the given provider for an order — shared by the
+ * initial checkout and a retry, so both stay in sync. `lineItems` gives
+ * Stripe per-product line items on first checkout; a retry (which no longer
+ * has the original cart handy) falls back to a single line for the order
+ * total, same as the /external/payments retry pattern.
+ */
+async function chargeProvider(params: {
+  provider: PostLinkProvider;
+  vendor: GatewayVendor & { id: number };
+  orderId: number;
+  amount: number;
+  currency: string;
+  email: string;
+  phone?: string | null;
+  name: string;
+  redirectUrl: string;
+  lineItems?: { productName: string; quantity: number; unitPrice: number }[];
+}): Promise<ChargeResult> {
+  const { provider, vendor, orderId, amount, currency, email, phone, name, redirectUrl, lineItems } = params;
+  const description = `Order #${orderId}`;
+
+  try {
+    if (provider === "remita") {
+      const result = await createRemitaCheckout({
+        orderId,
+        vendorId: vendor.id,
+        amount,
+        currency,
+        payerName: name,
+        payerEmail: email,
+        payerPhone: phone ?? undefined,
+        description,
+      });
+      if (!result.ok) return { ok: false, status: result.status, error: result.error };
+      return { ok: true, body: { orderId, provider: "remita", url: result.url } };
+    }
+
+    if (provider === "flutterwave") {
+      const result = await createFlutterwaveCheckout({ orderId, vendorId: vendor.id, amount, currency, email, redirectUrl, description });
+      if (!result.ok) return { ok: false, status: result.status, error: result.error };
+      return { ok: true, body: { orderId, provider: "flutterwave", url: result.url } };
+    }
+
+    if (provider === "nomba") {
+      const result = await createNombaCheckout({ orderId, vendorId: vendor.id, amount, currency, email, callbackUrl: redirectUrl, description });
+      if (!result.ok) return { ok: false, status: result.status, error: result.error };
+      return { ok: true, body: { orderId, provider: "nomba", url: result.url } };
+    }
+
+    if (provider === "stripe") {
+      const stripeKey = await resolveStripeKey(vendor.id, vendor);
+      const stripe = new Stripe(stripeKey);
+      const items = lineItems ?? [{ productName: description, quantity: 1, unitPrice: amount }];
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        customer_email: email,
+        line_items: items.map((i) => ({
+          quantity: i.quantity,
+          price_data: {
+            currency: currency.toLowerCase(),
+            unit_amount: Math.round(i.unitPrice * 100),
+            product_data: { name: i.productName },
+          },
+        })),
+        success_url: redirectUrl,
+        cancel_url: redirectUrl,
+        metadata: { orderId: orderId.toString(), vendorId: vendor.id.toString(), source: "social_post" },
+      });
+
+      await db.insert(paymentsTable).values({
+        orderId,
+        vendorId: vendor.id,
+        provider: "stripe",
+        providerReference: session.id,
+        amount: amount.toString(),
+        currency,
+        status: "pending",
+        metadata: { sessionId: session.id, sessionUrl: session.url, source: "social_post" },
+      });
+
+      return { ok: true, body: { orderId, provider: "stripe", url: session.url } };
+    }
+
+    // ── Paystack ──────────────────────────────────────────────────────────
+    const paystackKey = await resolvePaystackKey(vendor.id, vendor);
+    const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        amount: Math.round(amount * 100),
+        currency,
+        callback_url: redirectUrl,
+        metadata: { orderId: orderId.toString(), vendorId: vendor.id.toString(), source: "social_post" },
+      }),
+    });
+    const data = (await paystackRes.json()) as {
+      status: boolean; message: string;
+      data?: { authorization_url: string; reference: string };
+    };
+    if (!data.status || !data.data) return { ok: false, status: 502, error: `Paystack error: ${data.message}` };
+
+    await db.insert(paymentsTable).values({
+      orderId,
+      vendorId: vendor.id,
+      provider: "paystack",
+      providerReference: data.data.reference,
+      amount: amount.toString(),
+      currency,
+      status: "pending",
+      metadata: { reference: data.data.reference, authorization_url: data.data.authorization_url, source: "social_post" },
+    });
+    return { ok: true, body: { orderId, provider: "paystack", url: data.data.authorization_url } };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: 503, error: msg };
+  }
+}
+
+/**
+ * Best-effort void of a superseded payment's provider-side checkout session,
+ * mirroring /external/payments's voidProviderSession — Stripe supports
+ * expiring an open session; Paystack has no equivalent API so it's a no-op
+ * there (the stale authorization link just stops being honored locally).
+ */
+async function voidProviderSession(
+  vendor: GatewayVendor & { id: number },
+  payment: { id: number; provider: string; providerReference: string; metadata: unknown },
+): Promise<void> {
+  if (payment.provider !== "stripe") return;
+  try {
+    const stripeKey = await resolveStripeKey(vendor.id, vendor);
+    const stripe = new Stripe(stripeKey);
+    const session = await stripe.checkout.sessions.retrieve(payment.providerReference);
+    if (session.status === "open") {
+      await stripe.checkout.sessions.expire(payment.providerReference);
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[public-post-links] failed to void stripe checkout session for payment=${payment.id} reference=${payment.providerReference}:`,
+      message,
+    );
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...((payment.metadata ?? {}) as Record<string, unknown>),
+          voidError: message,
+          voidErrorAt: new Date().toISOString(),
+        },
+      })
+      .where(eq(paymentsTable.id, payment.id));
+  }
 }
 
 async function loadLink(token: string) {
@@ -244,6 +436,7 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
 
   const [order] = await db.insert(ordersTable).values({
     vendorId: link.vendor.id,
+    sourcePostId: link.post.id,
     customerName: name,
     customerEmail: email,
     customerPhone: phone ?? null,
@@ -265,129 +458,155 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
     })),
   );
 
-  const redirectUrl = shopLinkUrl(req.params.token);
+  const redirectUrl = shopLinkUrl(req.params.token, order!.id);
   if (!redirectUrl) {
     res.status(503).json({ error: "Checkout is temporarily unavailable." });
     return;
   }
 
-  try {
-    if (provider === "remita") {
-      const result = await createRemitaCheckout({
-        orderId: order!.id,
-        vendorId: link.vendor.id,
-        amount: totalAmount,
-        currency,
-        payerName: name,
-        payerEmail: email,
-        payerPhone: phone,
-        description: `Order #${order!.id}`,
-      });
-      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
-      res.json({ orderId: order!.id, provider: "remita", url: result.url });
-      return;
-    }
+  const chargeResult = await chargeProvider({
+    provider,
+    vendor: link.vendor,
+    orderId: order!.id,
+    amount: totalAmount,
+    currency,
+    email,
+    phone,
+    name,
+    redirectUrl,
+    lineItems: orderItems.map((i) => ({ productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice })),
+  });
+  if (!chargeResult.ok) { res.status(chargeResult.status).json({ error: chargeResult.error }); return; }
+  res.json(chargeResult.body);
+});
 
-    if (provider === "flutterwave") {
-      const result = await createFlutterwaveCheckout({
-        orderId: order!.id,
-        vendorId: link.vendor.id,
-        amount: totalAmount,
-        currency,
-        email,
-        redirectUrl,
-        description: `Order #${order!.id}`,
-      });
-      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
-      res.json({ orderId: order!.id, provider: "flutterwave", url: result.url });
-      return;
-    }
+/**
+ * GET /public/post-links/:token/orders/:orderId
+ * Lets the shop-link page — after redirecting back from a gateway that
+ * failed or was abandoned — check whether the order is still unpaid and
+ * worth offering a retry for. Scoped by the link token AND the exact post
+ * that order was placed through (see loadLinkOrder) — never just the
+ * vendor — so a valid token for one post can't be used to probe orders it
+ * didn't create.
+ */
+router.get("/public/post-links/:token/orders/:orderId", async (req, res): Promise<void> => {
+  const link = await loadLink(req.params.token);
+  if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
 
-    if (provider === "nomba") {
-      const result = await createNombaCheckout({
-        orderId: order!.id,
-        vendorId: link.vendor.id,
-        amount: totalAmount,
-        currency,
-        email,
-        callbackUrl: redirectUrl,
-        description: `Order #${order!.id}`,
-      });
-      if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
-      res.json({ orderId: order!.id, provider: "nomba", url: result.url });
-      return;
-    }
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId)) { res.status(400).json({ error: "Invalid order id" }); return; }
 
-    if (provider === "stripe") {
-      const stripeKey = await resolveStripeKey(link.vendor.id, link.vendor);
-      const stripe = new Stripe(stripeKey);
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        customer_email: email,
-        line_items: orderItems.map((i) => ({
-          quantity: i.quantity,
-          price_data: {
-            currency: currency.toLowerCase(),
-            unit_amount: Math.round(i.unitPrice * 100),
-            product_data: { name: i.productName },
-          },
-        })),
-        success_url: redirectUrl,
-        cancel_url: redirectUrl,
-        metadata: { orderId: order!.id.toString(), vendorId: link.vendor.id.toString(), source: "social_post" },
-      });
+  const order = await loadLinkOrder(link.vendor.id, link.post.id, orderId);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
 
-      await db.insert(paymentsTable).values({
-        orderId: order!.id,
-        vendorId: link.vendor.id,
-        provider: "stripe",
-        providerReference: session.id,
-        amount: totalAmount.toString(),
-        currency,
-        status: "pending",
-        metadata: { sessionId: session.id, sessionUrl: session.url, source: "social_post" },
-      });
+  const { available, unavailable } = await resolveProviderAvailability(link.vendor, link.vendor.id);
 
-      res.json({ orderId: order!.id, provider: "stripe", url: session.url });
-      return;
-    }
+  res.json({
+    orderId: order.id,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    totalAmount: parseFloat(order.totalAmount),
+    currency: order.currency,
+    canRetry:
+      order.status !== "cancelled" &&
+      RETRYABLE_ORDER_PAYMENT_STATUSES.has(order.paymentStatus) &&
+      available.length > 0,
+    availableProviders: available,
+    unavailableProviders: unavailable,
+  });
+});
 
-    const paystackKey = await resolvePaystackKey(link.vendor.id, link.vendor);
-    const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        amount: Math.round(totalAmount * 100),
-        currency,
-        callback_url: redirectUrl,
-        metadata: { orderId: order!.id.toString(), vendorId: link.vendor.id.toString(), source: "social_post" },
-      }),
-    });
-    const data = (await paystackRes.json()) as {
-      status: boolean; message: string;
-      data?: { authorization_url: string; reference: string };
-    };
-    if (!data.status || !data.data) {
-      res.status(502).json({ error: `Paystack error: ${data.message}` });
-      return;
-    }
-    await db.insert(paymentsTable).values({
-      orderId: order!.id,
-      vendorId: link.vendor.id,
-      provider: "paystack",
-      providerReference: data.data.reference,
-      amount: totalAmount.toString(),
-      currency,
-      status: "pending",
-      metadata: { reference: data.data.reference, authorization_url: data.data.authorization_url, source: "social_post" },
-    });
-    res.json({ orderId: order!.id, provider: "paystack", url: data.data.authorization_url });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(503).json({ error: msg });
+/**
+ * POST /public/post-links/:token/orders/:orderId/retry
+ * Retries payment for an order whose first attempt failed or was abandoned,
+ * instead of forcing the customer to start over and leaving an orphaned
+ * pending order behind. Optionally switches to a different enabled gateway
+ * (`provider` in the body). Mirrors /external/payments/:id/retry: the prior
+ * open payment (if any) is voided where supported and marked cancelled so
+ * it can't also be paid.
+ */
+router.post("/public/post-links/:token/orders/:orderId/retry", async (req, res): Promise<void> => {
+  const link = await loadLink(req.params.token);
+  if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
+  if (link.post.linkMode !== "checkout") { res.status(400).json({ error: "This link does not accept checkout" }); return; }
+
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId)) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  const order = await loadLinkOrder(link.vendor.id, link.post.id, orderId);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (order.status === "cancelled") { res.status(409).json({ error: "This order was cancelled and can no longer be retried" }); return; }
+  if (!RETRYABLE_ORDER_PAYMENT_STATUSES.has(order.paymentStatus)) {
+    res.status(409).json({ error: `This order is ${order.paymentStatus} and can no longer be retried` });
+    return;
   }
+
+  const { provider } = req.body as { provider?: string };
+
+  const currency = (order.currency ?? link.vendor.defaultCurrency ?? "USD").toUpperCase();
+  const { available, unavailable } = await resolveProviderAvailability(link.vendor, link.vendor.id);
+
+  let chosenProvider: PostLinkProvider | null = null;
+  if (provider) {
+    if (available.includes(provider as PostLinkProvider)) {
+      chosenProvider = provider as PostLinkProvider;
+    } else {
+      const badReason = unavailable.find((u) => u.provider === provider);
+      res.status(503).json({
+        error: badReason
+          ? `${badReason.label} isn't available right now: ${badReason.reason}`
+          : "The selected payment method is not available for this vendor.",
+      });
+      return;
+    }
+  } else {
+    chosenProvider = selectProvider(currency, available);
+  }
+
+  if (!chosenProvider) {
+    res.status(503).json({
+      error:
+        unavailable.length > 0
+          ? `This vendor's payment method${unavailable.length > 1 ? "s aren't" : " isn't"} working right now: ${unavailable
+              .map((u) => `${u.label} (${u.reason})`)
+              .join("; ")}`
+          : "This vendor has no payment method configured yet.",
+    });
+    return;
+  }
+
+  const redirectUrl = shopLinkUrl(req.params.token, order.id);
+  if (!redirectUrl) {
+    res.status(503).json({ error: "Checkout is temporarily unavailable." });
+    return;
+  }
+
+  const [priorPayment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.orderId, order.id))
+    .orderBy(desc(paymentsTable.createdAt))
+    .limit(1);
+
+  const chargeResult = await chargeProvider({
+    provider: chosenProvider,
+    vendor: link.vendor,
+    orderId: order.id,
+    amount: parseFloat(order.totalAmount),
+    currency,
+    email: order.customerEmail,
+    phone: order.customerPhone,
+    name: order.customerName,
+    redirectUrl,
+  });
+  if (!chargeResult.ok) { res.status(chargeResult.status).json({ error: chargeResult.error }); return; }
+
+  if (priorPayment && OPEN_PAYMENT_STATUSES.has(priorPayment.status)) {
+    await voidProviderSession(link.vendor, priorPayment);
+    await db.update(paymentsTable).set({ status: "cancelled" }).where(eq(paymentsTable.id, priorPayment.id));
+  }
+
+  res.json(chargeResult.body);
 });
 
 export default router;

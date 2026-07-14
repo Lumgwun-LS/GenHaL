@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ShoppingBag, Store, Check, Loader2, Minus, Plus } from "lucide-react";
+import { ShoppingBag, Store, Check, Loader2, Minus, Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,18 +45,45 @@ type ShopLink = {
   products: ShopProduct[];
 };
 
+type OrderStatus = {
+  orderId: number;
+  status: string;
+  paymentStatus: string;
+  totalAmount: number;
+  currency: string;
+  canRetry: boolean;
+  availableProviders: PaymentProvider[];
+  unavailableProviders: UnavailableProvider[];
+};
+
 async function fetchLink(token: string): Promise<ShopLink> {
   const res = await fetch(`${BASE_URL}/api/public/post-links/${token}`);
   if (!res.ok) throw new Error(res.status === 404 ? "not-found" : "error");
   return res.json();
 }
 
+async function fetchOrderStatus(token: string, orderId: string): Promise<OrderStatus> {
+  const res = await fetch(`${BASE_URL}/api/public/post-links/${token}/orders/${orderId}`);
+  if (!res.ok) throw new Error("not-found");
+  return res.json();
+}
+
 export default function ShopLinkPage() {
   const { token = "" } = useParams();
+  const search = useSearch();
+  const orderIdFromUrl = new URLSearchParams(search).get("order");
+
   const { data: link, isLoading, error } = useQuery({
     queryKey: ["post-link", token],
     queryFn: () => fetchLink(token),
     enabled: !!token,
+    retry: false,
+  });
+
+  const { data: orderStatus, isLoading: orderStatusLoading } = useQuery({
+    queryKey: ["post-link-order", token, orderIdFromUrl],
+    queryFn: () => fetchOrderStatus(token, orderIdFromUrl!),
+    enabled: !!token && !!orderIdFromUrl,
     retry: false,
   });
 
@@ -68,6 +95,7 @@ export default function ShopLinkPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | null>(null);
+  const [retryProvider, setRetryProvider] = useState<PaymentProvider | null>(null);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
@@ -155,6 +183,32 @@ export default function ShopLinkPage() {
     }
   };
 
+  const retryProviders = orderStatus?.availableProviders ?? [];
+  const retryUnavailable = orderStatus?.unavailableProviders ?? [];
+  const activeRetryProvider = retryProvider && retryProviders.includes(retryProvider) ? retryProvider : retryProviders[0];
+
+  const submitRetry = async () => {
+    if (!orderStatus || !activeRetryProvider) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/public/post-links/${token}/orders/${orderStatus.orderId}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: activeRetryProvider }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "failed");
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No payment URL returned");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong — please try again.");
+      setSubmitting(false);
+    }
+  };
+
   const total = selectedForCheckout.reduce((sum, p) => sum + (quantities[p.id] ? p.price * qty(p.id) : 0), 0);
 
   return (
@@ -175,6 +229,81 @@ export default function ShopLinkPage() {
             </div>
           </div>
         </div>
+
+        {orderIdFromUrl && orderStatusLoading && (
+          <div className="mb-6 text-sm text-muted-foreground">Checking your order…</div>
+        )}
+
+        {orderIdFromUrl && orderStatus && orderStatus.paymentStatus === "paid" && (
+          <div className="mb-6 flex flex-col items-center text-center gap-3 py-10 rounded-lg border">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <Check className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h2 className="text-lg font-semibold">Payment received</h2>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              Order #{orderStatus.orderId} is already paid — thanks for your order!
+            </p>
+          </div>
+        )}
+
+        {orderIdFromUrl && orderStatus && orderStatus.paymentStatus !== "paid" && (
+          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium text-sm">Payment wasn't completed</div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Order #{orderStatus.orderId} ({orderStatus.currency} {orderStatus.totalAmount.toFixed(2)}) is still
+                  waiting on payment. You can try again below.
+                </p>
+              </div>
+            </div>
+
+            {!orderStatus.canRetry ? (
+              <p className="text-sm text-destructive">
+                {retryUnavailable.length > 0
+                  ? "None of this vendor's payment methods are working right now. Please check back later."
+                  : "This vendor has no payment method configured yet."}
+              </p>
+            ) : (
+              <>
+                {retryProviders.length > 1 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-muted-foreground">Pay with</div>
+                    <div className="flex flex-wrap gap-2">
+                      {retryProviders.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setRetryProvider(p)}
+                          className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                            activeRetryProvider === p
+                              ? "border-primary bg-primary/10 text-primary font-medium"
+                              : "border-input text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {PROVIDER_LABELS[p]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {retryUnavailable.length > 0 && (
+                  <div className="space-y-1">
+                    {retryUnavailable.map((u) => (
+                      <p key={u.provider} className="text-xs text-muted-foreground">
+                        <span className="line-through">{u.label}</span> isn't available right now — {u.reason}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <Button className="w-full" disabled={submitting} onClick={submitRetry}>
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Try payment again"}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
 
         {done ? (
           <div className="flex flex-col items-center text-center gap-3 py-16">

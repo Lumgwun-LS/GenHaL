@@ -67,3 +67,4 @@
 - [Global (non-per-actor) alert acknowledgment](vendorhub-global-alert-acknowledgment.md) — a shared-resource burst alert (one Twilio token, not per-admin) needs a singleton ack row, not the per-actor table used by export-burst; same flaggedAt-vs-acknowledgedAt comparison still applies.
 - [Voice backfill recent-fixes tracking](voice-backfill-recent-fixes.md) — pair an aggregate-stats site-content block with a capped detail-list block for any job needing both a summary and a "what exactly changed" trail.
 - [Payment method availability vs. enabled](payment-method-availability.md) — "enabled" gateway toggle ≠ "will work"; getPaymentMethodAvailability mirrors real checkout credential resolution and gates order creation on it.
+- [Public shop-link checkout retry](public-shop-link-checkout-retry.md) — unauthenticated retry scoped by token+orderId, shared chargeProvider() helper, redirect URL carries ?order=id so the customer can return to a retry banner.

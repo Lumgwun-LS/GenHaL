@@ -4,12 +4,18 @@ import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
 import { branchesTable } from "./branches";
 import { workersTable } from "./workers";
+import { postsTable } from "./posts";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
   workerId: integer("worker_id").references(() => workersTable.id, { onDelete: "set null" }),
+  // Set only for orders placed through a public "shop this post" link — scopes
+  // that link's own status/retry endpoints to exactly the order(s) it created,
+  // so a valid shop token for one post can't be used to probe or retry a
+  // different order (even one for the same vendor) by guessing its id.
+  sourcePostId: integer("source_post_id").references(() => postsTable.id, { onDelete: "set null" }),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
