@@ -55,6 +55,19 @@ interface VendorSyncState {
 
 const vendorSyncState = new Map<number, VendorSyncState>();
 
+// ─── Checkout de-duplication ──────────────────────────────────────────────────
+// A fast double-click on "Upgrade" (or a retried request before the redirect
+// fires) must not create two Stripe Checkout Sessions for the same vendor.
+// While a checkout-session creation is in flight for a vendor, concurrent
+// requests just await and reuse that same in-flight result instead of
+// calling Stripe again. Per-process, in-memory: worst case on a restart is
+// one extra session, not a correctness bug (the vendor only ever completes
+// one checkout flow at a time from their browser).
+const checkoutInFlight = new Map<
+  number,
+  Promise<{ sessionId: string; url: string | null }>
+>();
+
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
 export const SUBSCRIPTION_PLANS = [
@@ -211,62 +224,102 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const stripeKey = await resolveGatewayField("stripe", "secretKey");
-  if (!stripeKey) {
-    res.status(503).json({ error: "Stripe is not configured on this platform." });
+  // A checkout-session creation is already running for this vendor (e.g. a
+  // double-click fired two requests before the first one's response — and
+  // therefore the redirect — came back). Piggyback on that same in-flight
+  // session instead of asking Stripe for a second one.
+  const existingCheckout = checkoutInFlight.get(id);
+  if (existingCheckout) {
+    const result = await existingCheckout;
+    res.json({ ...result, deduplicated: true });
     return;
   }
 
-  const stripe = new Stripe(stripeKey);
+  const checkoutPromise = (async () => {
+    const stripeKey = await resolveGatewayField("stripe", "secretKey");
+    if (!stripeKey) {
+      throw Object.assign(new Error("Stripe is not configured on this platform."), {
+        statusCode: 503,
+      });
+    }
 
-  // Reuse an existing Stripe Customer for this vendor so billing history and
-  // the Customer Portal work across multiple checkouts. Create one lazily.
-  let customerId = vendor.stripeCustomerId;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: vendor.email ?? undefined,
-      name: vendor.name,
-      metadata: { vendorId: id.toString() },
-    });
-    customerId = customer.id;
-    await db
-      .update(vendorsTable)
-      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
-      .where(eq(vendorsTable.id, id));
-  }
+    const stripe = new Stripe(stripeKey);
 
-  // Use a durable, catalog-managed Price rather than ad-hoc price_data so the
-  // same Price object can later be offered inside the Customer Portal's
-  // "switch plan" flow (Stripe requires real Prices there, not price_data).
-  const catalog = await ensureStripeCatalog(stripe, stripeKey);
-  const catalogEntry = catalog.find((c) => c.tier === tier);
-  if (!catalogEntry) {
-    res.status(500).json({ error: `No Stripe price configured for tier '${tier}'` });
-    return;
-  }
+    // Reuse an existing Stripe Customer for this vendor so billing history and
+    // the Customer Portal work across multiple checkouts. Create one lazily.
+    let customerId = vendor.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: vendor.email ?? undefined,
+        name: vendor.name,
+        metadata: { vendorId: id.toString() },
+      });
+      customerId = customer.id;
+      await db
+        .update(vendorsTable)
+        .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+        .where(eq(vendorsTable.id, id));
+    }
 
-  const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: catalogEntry.priceId, quantity: 1 }],
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    metadata: {
-      // These fields are read back in the Stripe webhook handler
-      upgradeVendorId: id.toString(),
-      upgradeTier: tier,
-      upgradeClerkUserId: userId,
-    },
-    subscription_data: {
+    // Use a durable, catalog-managed Price rather than ad-hoc price_data so the
+    // same Price object can later be offered inside the Customer Portal's
+    // "switch plan" flow (Stripe requires real Prices there, not price_data).
+    const catalog = await ensureStripeCatalog(stripe, stripeKey);
+    const catalogEntry = catalog.find((c) => c.tier === tier);
+    if (!catalogEntry) {
+      throw Object.assign(
+        new Error(`No Stripe price configured for tier '${tier}'`),
+        { statusCode: 500 },
+      );
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: catalogEntry.priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
+        // These fields are read back in the Stripe webhook handler
         upgradeVendorId: id.toString(),
         upgradeTier: tier,
+        upgradeClerkUserId: userId,
       },
-    },
-  });
+      subscription_data: {
+        metadata: {
+          upgradeVendorId: id.toString(),
+          upgradeTier: tier,
+        },
+      },
+    });
 
-  res.json({ sessionId: session.id, url: session.url });
+    return { sessionId: session.id, url: session.url };
+  })();
+
+  checkoutInFlight.set(id, checkoutPromise);
+
+  try {
+    const result = await checkoutPromise;
+    res.json({ ...result, deduplicated: false });
+  } catch (err) {
+    const statusCode =
+      typeof err === "object" && err !== null && "statusCode" in err
+        ? (err as { statusCode: number }).statusCode
+        : undefined;
+    if (statusCode) {
+      res.status(statusCode).json({ error: (err as Error).message });
+      return;
+    }
+    throw err;
+  } finally {
+    // Only clear the lock if we're still the current entry — a slow request
+    // finishing after a newer one started (shouldn't happen given the map
+    // key, but defensive) must not evict a fresher in-flight promise.
+    if (checkoutInFlight.get(id) === checkoutPromise) {
+      checkoutInFlight.delete(id);
+    }
+  }
 });
 
 // ─── POST /vendors/:id/subscription/portal ───────────────────────────────────

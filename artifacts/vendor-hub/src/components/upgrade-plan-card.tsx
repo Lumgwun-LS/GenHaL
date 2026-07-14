@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -211,10 +211,20 @@ export function ManageBillingButton({ vendorId, currentTier }: { vendorId: numbe
 
 export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitiated }: Props) {
   const [busy, setBusy] = useState<PlanTier | null>(null);
+  // React state updates aren't synchronous, so a second click fired in the
+  // same tick (before the re-render that disables the button lands) could
+  // still slip through `disabled={busy !== null}`. This ref is set
+  // immediately and synchronously, so it reliably blocks re-entrant clicks
+  // even ones that outrun the state update — the server-side in-flight
+  // de-dup on the checkout route is the final backstop for anything else
+  // (e.g. a retried request).
+  const inFlightRef = useRef(false);
 
   const currentRank = TIER_RANK[currentTier] ?? 0;
 
   async function handleUpgrade(tier: PlanTier) {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setBusy(tier);
     try {
       const successUrl = `${window.location.origin}${window.location.pathname}?upgrade=success&tier=${tier}`;
@@ -249,6 +259,7 @@ export default function UpgradePlanCard({ vendorId, currentTier, onUpgradeInitia
       toast.error("Network error — could not start checkout.");
     } finally {
       setBusy(null);
+      inFlightRef.current = false;
     }
   }
 
