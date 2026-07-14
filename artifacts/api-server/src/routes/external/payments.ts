@@ -193,6 +193,55 @@ async function initializeCheckout(vendorId: number, input: InitializeInput): Pro
   return { ok: true, body: { provider: "paystack", paymentId: payment!.id, url: authorization_url, reference } };
 }
 
+/**
+ * Attempts to void/expire the provider's checkout session for a payment that
+ * is being cancelled (or superseded by a retry). This is best-effort: if the
+ * provider call fails, or the provider doesn't support voiding, we log it
+ * for follow-up but still let the local cancellation proceed — a stale but
+ * non-payable session is a much smaller problem than blocking the vendor
+ * from cancelling at all.
+ *
+ * Provider support:
+ *   - Stripe: checkout.sessions.expire — fully supported for open sessions.
+ *   - Paystack: no API to void/expire an initialized transaction before the
+ *     customer completes it; the authorization link simply becomes unusable
+ *     once we stop honoring it locally, so this is a documented no-op.
+ */
+async function voidProviderSession(
+  vendorId: number,
+  payment: { id: number; provider: string; providerReference: string; metadata: unknown },
+): Promise<void> {
+  if (payment.provider !== "stripe") return; // Paystack: no void endpoint; nothing to do.
+
+  try {
+    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
+    if (!vendor) return;
+
+    const stripeKey = await resolveStripeKey(vendorId, vendor);
+    const stripe = new Stripe(stripeKey);
+    const session = await stripe.checkout.sessions.retrieve(payment.providerReference);
+    if (session.status === "open") {
+      await stripe.checkout.sessions.expire(payment.providerReference);
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[payments] failed to void stripe checkout session for payment=${payment.id} reference=${payment.providerReference}:`,
+      message,
+    );
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...((payment.metadata ?? {}) as Record<string, unknown>),
+          voidError: message,
+          voidErrorAt: new Date().toISOString(),
+        },
+      })
+      .where(eq(paymentsTable.id, payment.id));
+  }
+}
+
 router.post("/payments/initialize", async (req, res): Promise<void> => {
   const { vendorId } = req.externalUser!;
   const result = await initializeCheckout(vendorId, req.body ?? {});
@@ -203,10 +252,10 @@ router.post("/payments/initialize", async (req, res): Promise<void> => {
 /**
  * POST /external/payments/:id/cancel
  * Cancels a pending or failed payment the vendor started but no longer wants
- * (e.g. a stale checkout with no webhook confirmation after 24h). Does not
- * touch the underlying provider session — it simply stops the app from
- * treating it as an open payment; the provider session will separately
- * expire on its own.
+ * (e.g. a stale checkout with no webhook confirmation after 24h). Also asks
+ * the provider to void/expire the underlying checkout session (where
+ * supported) so the customer's original checkout link stops being payable,
+ * rather than just relying on it expiring on its own.
  */
 router.post("/payments/:id/cancel", async (req, res): Promise<void> => {
   const { vendorId } = req.externalUser!;
@@ -224,6 +273,8 @@ router.post("/payments/:id/cancel", async (req, res): Promise<void> => {
     return;
   }
 
+  await voidProviderSession(vendorId, payment);
+
   const [updated] = await db
     .update(paymentsTable)
     .set({ status: "cancelled" })
@@ -237,7 +288,8 @@ router.post("/payments/:id/cancel", async (req, res): Promise<void> => {
  * POST /external/payments/:id/retry
  * Starts a brand-new checkout session for the same order/amount/currency as
  * an existing pending or failed payment, then marks the original as
- * cancelled (superseded) so it stops showing as an open payment.
+ * cancelled (superseded) so it stops showing as an open payment — and voids
+ * the original provider session (where supported) so it can't also be paid.
  */
 router.post("/payments/:id/retry", async (req, res): Promise<void> => {
   const { vendorId } = req.externalUser!;
@@ -278,6 +330,7 @@ router.post("/payments/:id/retry", async (req, res): Promise<void> => {
 
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
 
+  await voidProviderSession(vendorId, payment);
   await db.update(paymentsTable).set({ status: "cancelled" }).where(eq(paymentsTable.id, id));
 
   res.json(result.body);
