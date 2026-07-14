@@ -865,10 +865,11 @@ function TargetByFilterPopover({
   onApply,
 }: {
   vendors: AdminVendor[];
-  onApply: (vendorIds: number[]) => void;
+  onApply: (vendorIds: number[], mode: "add" | "replace") => void;
 }) {
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState<ExportFilters>(EMPTY_FILTERS);
+  const [mode, setMode] = useState<"add" | "replace">("add");
 
   function update<K extends keyof ExportFilters>(key: K, value: ExportFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -947,6 +948,31 @@ function TargetByFilterPopover({
             />
           </div>
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs">If vendors are already selected</Label>
+          <div className="flex rounded-md border p-0.5 gap-0.5">
+            <Button
+              type="button"
+              variant={mode === "add" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 flex-1 text-xs"
+              onClick={() => setMode("add")}
+              data-testid="button-target-filter-mode-add"
+            >
+              Add to selection
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "replace" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 flex-1 text-xs"
+              onClick={() => setMode("replace")}
+              data-testid="button-target-filter-mode-replace"
+            >
+              Replace selection
+            </Button>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-2 pt-1">
           <Button
             variant="ghost"
@@ -962,12 +988,12 @@ function TargetByFilterPopover({
             className="text-xs"
             disabled={!filtersActive || matchCount === 0}
             onClick={() => {
-              onApply(vendors.filter((v) => vendorMatchesFilters(v, filters)).map((v) => v.id));
+              onApply(vendors.filter((v) => vendorMatchesFilters(v, filters)).map((v) => v.id), mode);
               setOpen(false);
             }}
             data-testid="button-apply-target-filter"
           >
-            Select {matchCount} vendor{matchCount === 1 ? "" : "s"}
+            {mode === "add" ? "Add" : "Select"} {matchCount} vendor{matchCount === 1 ? "" : "s"}
           </Button>
         </div>
       </PopoverContent>
@@ -1604,14 +1630,23 @@ export default function AdminPanel() {
               <div className="flex items-center gap-2">
                 <TargetByFilterPopover
                   vendors={vendors ?? []}
-                  onApply={(vendorIds) => {
+                  onApply={(vendorIds, mode) => {
                     setSelectAllVendors(false);
-                    setSelectedVendorIds(vendorIds);
-                    toast.success(
-                      vendorIds.length > 0
-                        ? `Selected ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter`
-                        : "No vendors matched that filter",
-                    );
+                    if (mode === "add") {
+                      setSelectedVendorIds((prev) => Array.from(new Set([...prev, ...vendorIds])));
+                      toast.success(
+                        vendorIds.length > 0
+                          ? `Added ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter to your selection`
+                          : "No vendors matched that filter",
+                      );
+                    } else {
+                      setSelectedVendorIds(vendorIds);
+                      toast.success(
+                        vendorIds.length > 0
+                          ? `Selected ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter`
+                          : "No vendors matched that filter",
+                      );
+                    }
                   }}
                 />
                 <BulkMessageDialog
