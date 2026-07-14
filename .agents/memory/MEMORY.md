@@ -61,3 +61,4 @@
 - [VendorHub branches & workers](vendorhub-branches-workers.md) — branch/worker FK-on-set-null pattern across Sales/Expenses/Investments/Orders; shared filter components; Clerk Backend-API session-mint workaround for API testing when hosted signup hits a CAPTCHA.
 - [VendorHub multi-scene AI video](vendorhub-ai-video-multiscene.md) — multi-scene/motion-template/music video built from stills via ffmpeg xfade+zoompan+ElevenLabs sound-gen; zoompan's `d` never bounds duration, only an output-level `-t` does.
 - [Site-content settings audit history](site-content-audit-history.md) — setSiteContentBlock now appends to site_content_audit_log generically; reuse for any admin-editable site-content key, not just export-alert threshold.
+- [Live-testing admin routes via minted Clerk sessions](vendorhub-admin-live-test-clerk-session.md) — create a throwaway Clerk user + temp ADMIN_USER_IDS env var to hit real admin HTTP routes with a real session token, not just simulated SQL.
