@@ -2856,6 +2856,54 @@ export const ListExternalPaymentsResponse = zod.array(ListExternalPaymentsRespon
 
 
 /**
+ * @summary List the authenticated vendor's voice campaigns, most recent first
+ */
+export const ListExternalVoiceCampaignsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "script": zod.string(),
+  "status": zod.string(),
+  "scheduledAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "totalCalls": zod.number(),
+  "answeredCalls": zod.number()
+})
+export const ListExternalVoiceCampaignsResponse = zod.array(ListExternalVoiceCampaignsResponseItem)
+
+
+/**
+ * @summary Get a single voice campaign, its stats, and individual call records
+ */
+export const GetExternalVoiceCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetExternalVoiceCampaignResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "script": zod.string(),
+  "status": zod.string(),
+  "scheduledAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "stats": zod.object({
+  "totalCalls": zod.number(),
+  "answeredCalls": zod.number(),
+  "answerRate": zod.number(),
+  "avgDurationSeconds": zod.number()
+}),
+  "calls": zod.array(zod.object({
+  "id": zod.number(),
+  "leadName": zod.string(),
+  "phone": zod.string(),
+  "status": zod.string(),
+  "durationSeconds": zod.number().nullable(),
+  "callSid": zod.string().nullable(),
+  "initiatedAt": zod.string()
+}))
+})
+
+
+/**
  * @summary Register this device's Expo push token for instant notifications
  */
 export const RegisterExternalPushTokenBody = zod.object({

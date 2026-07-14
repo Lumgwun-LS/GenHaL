@@ -42,6 +42,8 @@ function RootLayoutNav() {
       <Stack.Screen name="sign-up" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="voice-campaigns/index" options={{ title: 'Voice Campaigns' }} />
+      <Stack.Screen name="voice-campaigns/[id]" options={{ title: 'Campaign' }} />
     </Stack>
   );
 }

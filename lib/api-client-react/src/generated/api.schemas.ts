@@ -676,6 +676,49 @@ export interface ExternalPaymentInitializeResponse {
   reference: string;
 }
 
+export interface ExternalVoiceCampaignSummary {
+  id: number;
+  name: string;
+  script: string;
+  status: string;
+  /** @nullable */
+  scheduledAt: string | null;
+  createdAt: string;
+  totalCalls: number;
+  answeredCalls: number;
+}
+
+export interface ExternalVoiceCampaignCall {
+  id: number;
+  leadName: string;
+  phone: string;
+  status: string;
+  /** @nullable */
+  durationSeconds: number | null;
+  /** @nullable */
+  callSid: string | null;
+  initiatedAt: string;
+}
+
+export interface ExternalVoiceCampaignStats {
+  totalCalls: number;
+  answeredCalls: number;
+  answerRate: number;
+  avgDurationSeconds: number;
+}
+
+export interface ExternalVoiceCampaignDetail {
+  id: number;
+  name: string;
+  script: string;
+  status: string;
+  /** @nullable */
+  scheduledAt: string | null;
+  createdAt: string;
+  stats: ExternalVoiceCampaignStats;
+  calls: ExternalVoiceCampaignCall[];
+}
+
 export interface ExternalPushTokenInput {
   expoPushToken: string;
 }

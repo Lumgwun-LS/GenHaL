@@ -5,8 +5,8 @@
  *
  * Also listens for notification taps and routes to the relevant screen:
  * payment pushes open the Payments tab, voice-campaign pushes open the
- * Account tab (where campaign alert settings live — the app has no
- * standalone campaign detail screen yet).
+ * specific campaign's detail screen (falling back to the campaigns list
+ * if no campaignId was included).
  *
  * Registration only happens when both:
  *  - `signedIn` is true (there's a VendorHub session to attach the token to)
@@ -146,13 +146,18 @@ export function usePushNotifications(signedIn: boolean): UsePushNotificationsRes
   // Tapping a notification routes to the screen it's about.
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const screen = response.notification.request.content.data?.screen;
+      const data = response.notification.request.content.data as
+        | { screen?: string; campaignId?: number | string }
+        | undefined;
+      const screen = data?.screen;
       if (screen === 'payments') {
         router.push('/(tabs)/payments');
       } else if (screen === 'voice-campaigns') {
-        // No standalone campaign screen yet; Account tab surfaces campaign
-        // alert settings and is the closest relevant destination.
-        router.push('/(tabs)/account');
+        if (data?.campaignId != null) {
+          router.push(`/voice-campaigns/${data.campaignId}`);
+        } else {
+          router.push('/voice-campaigns');
+        }
       }
     });
     return () => subscription.remove();

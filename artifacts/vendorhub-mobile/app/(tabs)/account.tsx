@@ -272,8 +272,26 @@ export default function AccountScreen() {
         </Card>
       </AnimatedListItem>
 
-      {/* ── Notifications ── */}
+      {/* ── Voice campaigns ── */}
       <AnimatedListItem index={2} baseDelay={120}>
+        <Pressable onPress={() => router.push('/voice-campaigns')}>
+          <Card style={[styles.section, styles.linkCard]}>
+            <View style={[styles.detailIconWrap, { backgroundColor: colors.primary + '15' }]}>
+              <Feather name="phone" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.linkTextWrap}>
+              <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Voice campaigns</Text>
+              <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                See your outbound call campaigns and how they performed.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Card>
+        </Pressable>
+      </AnimatedListItem>
+
+      {/* ── Notifications ── */}
+      <AnimatedListItem index={3} baseDelay={120}>
         <Card style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary, marginBottom: 4 }]}>
             Notifications
@@ -362,7 +380,7 @@ export default function AccountScreen() {
       </AnimatedListItem>
 
       {/* ── Sign out ── */}
-      <AnimatedListItem index={3} baseDelay={120}>
+      <AnimatedListItem index={4} baseDelay={120}>
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [
@@ -450,6 +468,15 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 14,
+  },
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  linkTextWrap: {
+    flex: 1,
+    gap: 3,
   },
   sectionHeader: {
     flexDirection: 'row',

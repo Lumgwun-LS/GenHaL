@@ -58,6 +58,8 @@ import type {
   ExternalPushTokenInput,
   ExternalRevokeInput,
   ExternalRevokeResponse,
+  ExternalVoiceCampaignDetail,
+  ExternalVoiceCampaignSummary,
   FinanceOverviewAnalytics,
   GetAdminDemographicsAnalyticsParams,
   GetAdminMessageHistoryParams,
@@ -8217,6 +8219,160 @@ export function useListExternalPayments<TData = Awaited<ReturnType<typeof listEx
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListExternalPaymentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListExternalVoiceCampaignsUrl = () => {
+
+
+
+
+  return `/api/external/voice-campaigns`
+}
+
+/**
+ * @summary List the authenticated vendor's voice campaigns, most recent first
+ */
+export const listExternalVoiceCampaigns = async ( options?: RequestInit): Promise<ExternalVoiceCampaignSummary[]> => {
+
+  return customFetch<ExternalVoiceCampaignSummary[]>(getListExternalVoiceCampaignsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalVoiceCampaignsQueryKey = () => {
+    return [
+    `/api/external/voice-campaigns`
+    ] as const;
+    }
+
+
+export const getListExternalVoiceCampaignsQueryOptions = <TData = Awaited<ReturnType<typeof listExternalVoiceCampaigns>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalVoiceCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalVoiceCampaignsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalVoiceCampaigns>>> = ({ signal }) => listExternalVoiceCampaigns({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalVoiceCampaigns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalVoiceCampaignsQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalVoiceCampaigns>>>
+export type ListExternalVoiceCampaignsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated vendor's voice campaigns, most recent first
+ */
+
+export function useListExternalVoiceCampaigns<TData = Awaited<ReturnType<typeof listExternalVoiceCampaigns>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalVoiceCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalVoiceCampaignsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetExternalVoiceCampaignUrl = (id: number,) => {
+
+
+
+
+  return `/api/external/voice-campaigns/${id}`
+}
+
+/**
+ * @summary Get a single voice campaign, its stats, and individual call records
+ */
+export const getExternalVoiceCampaign = async (id: number, options?: RequestInit): Promise<ExternalVoiceCampaignDetail> => {
+
+  return customFetch<ExternalVoiceCampaignDetail>(getGetExternalVoiceCampaignUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExternalVoiceCampaignQueryKey = (id: number,) => {
+    return [
+    `/api/external/voice-campaigns/${id}`
+    ] as const;
+    }
+
+
+export const getGetExternalVoiceCampaignQueryOptions = <TData = Awaited<ReturnType<typeof getExternalVoiceCampaign>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalVoiceCampaign>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExternalVoiceCampaignQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExternalVoiceCampaign>>> = ({ signal }) => getExternalVoiceCampaign(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExternalVoiceCampaign>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExternalVoiceCampaignQueryResult = NonNullable<Awaited<ReturnType<typeof getExternalVoiceCampaign>>>
+export type GetExternalVoiceCampaignQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a single voice campaign, its stats, and individual call records
+ */
+
+export function useGetExternalVoiceCampaign<TData = Awaited<ReturnType<typeof getExternalVoiceCampaign>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalVoiceCampaign>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExternalVoiceCampaignQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

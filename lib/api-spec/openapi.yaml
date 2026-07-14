@@ -2374,6 +2374,44 @@ paths:
                 items:
                   $ref: "#/components/schemas/Payment"
 
+  /external/voice-campaigns:
+    get:
+      operationId: listExternalVoiceCampaigns
+      tags: [external]
+      summary: List the authenticated vendor's voice campaigns, most recent first
+      security: [{ externalBearerAuth: [] }]
+      responses:
+        "200":
+          description: List of voice campaigns with call-count summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExternalVoiceCampaignSummary"
+
+  /external/voice-campaigns/{id}:
+    get:
+      operationId: getExternalVoiceCampaign
+      tags: [external]
+      summary: Get a single voice campaign, its stats, and individual call records
+      security: [{ externalBearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Voice campaign detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalVoiceCampaignDetail"
+        "404":
+          description: Campaign not found
+
   /external/push/register:
     post:
       operationId: registerExternalPushToken
@@ -3654,6 +3692,82 @@ components:
           type: ["string", "null"]
         reference:
           type: string
+
+    ExternalVoiceCampaignSummary:
+      type: object
+      required: [id, name, script, status, scheduledAt, createdAt, totalCalls, answeredCalls]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        script:
+          type: string
+        status:
+          type: string
+        scheduledAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        totalCalls:
+          type: integer
+        answeredCalls:
+          type: integer
+
+    ExternalVoiceCampaignCall:
+      type: object
+      required: [id, leadName, phone, status, durationSeconds, callSid, initiatedAt]
+      properties:
+        id:
+          type: integer
+        leadName:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]
+        callSid:
+          type: ["string", "null"]
+        initiatedAt:
+          type: string
+
+    ExternalVoiceCampaignStats:
+      type: object
+      required: [totalCalls, answeredCalls, answerRate, avgDurationSeconds]
+      properties:
+        totalCalls:
+          type: integer
+        answeredCalls:
+          type: integer
+        answerRate:
+          type: integer
+        avgDurationSeconds:
+          type: integer
+
+    ExternalVoiceCampaignDetail:
+      type: object
+      required: [id, name, script, status, scheduledAt, createdAt, stats, calls]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        script:
+          type: string
+        status:
+          type: string
+        scheduledAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        stats:
+          $ref: "#/components/schemas/ExternalVoiceCampaignStats"
+        calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalVoiceCampaignCall"
 
     ExternalPushTokenInput:
       type: object
