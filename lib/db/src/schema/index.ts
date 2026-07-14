@@ -26,6 +26,7 @@ export * from "./account-deletion-requests";
 export * from "./pending-reminder-logs";
 export * from "./admin-export-logs";
 export * from "./admin-export-acknowledgments";
+export * from "./admin-export-acknowledgment-log";
 export * from "./voice-signature-failures";
 export * from "./post-publications";
 export * from "./job-run-status";

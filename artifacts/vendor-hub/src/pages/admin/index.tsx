@@ -274,6 +274,22 @@ async function fetchExportAlerts(): Promise<ExportAlerts> {
   return res.json() as Promise<ExportAlerts>;
 }
 
+type ExportAcknowledgmentHistoryEntry = {
+  id: number;
+  adminUserId: string;
+  acknowledgedAt: string;
+  acknowledgedBy: string;
+  acknowledgedByDisplayName: string | null;
+};
+
+async function fetchExportAcknowledgmentHistory(adminUserId: string): Promise<ExportAcknowledgmentHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/history`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load review history");
+  return res.json() as Promise<ExportAcknowledgmentHistoryEntry[]>;
+}
+
 async function acknowledgeExportBurst(adminUserId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/acknowledge`, {
     method: "POST",
@@ -335,6 +351,7 @@ function AcknowledgeExportBurstButton({ adminUserId }: { adminUserId: string }) 
       await acknowledgeExportBurst(adminUserId);
       toast.success(`Cleared the export flag for ${adminUserId}. Exports are unblocked.`);
       qc.invalidateQueries({ queryKey: ["admin-export-alerts"] });
+      qc.invalidateQueries({ queryKey: ["admin-export-acknowledgment-history", adminUserId] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to clear the flag");
     } finally {
@@ -353,6 +370,49 @@ function AcknowledgeExportBurstButton({ adminUserId }: { adminUserId: string }) 
     >
       {saving ? "Clearing…" : "Acknowledge & unblock"}
     </Button>
+  );
+}
+
+function ExportAcknowledgmentHistoryButton({ adminUserId }: { adminUserId: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: history, isLoading } = useQuery({
+    queryKey: ["admin-export-acknowledgment-history", adminUserId],
+    queryFn: () => fetchExportAcknowledgmentHistory(adminUserId),
+    enabled: open,
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs shrink-0"
+          data-testid={`button-export-review-history-${adminUserId}`}
+        >
+          Review history
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80" align="end">
+        <div className="text-sm font-medium mb-2">Review history for {adminUserId}</div>
+        {isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading…</div>
+        ) : !history?.length ? (
+          <div className="text-xs text-muted-foreground">No past reviews recorded yet.</div>
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto" data-testid={`list-export-review-history-${adminUserId}`}>
+            {history.map((h) => (
+              <li key={h.id} className="text-xs border-b last:border-b-0 pb-2 last:pb-0">
+                <div>
+                  Cleared by <span className="font-medium">{h.acknowledgedByDisplayName ?? h.acknowledgedBy}</span>
+                </div>
+                <div className="text-muted-foreground">{new Date(h.acknowledgedAt).toLocaleString()}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1663,7 +1723,10 @@ export default function AdminPanel() {
                                 ? ` Cleared by ${f.acknowledgedBy} at ${new Date(f.acknowledgedAt).toLocaleTimeString()}.`
                                 : ""}
                           </span>
-                          {f.blocked && <AcknowledgeExportBurstButton adminUserId={f.adminUserId} />}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <ExportAcknowledgmentHistoryButton adminUserId={f.adminUserId} />
+                            {f.blocked && <AcknowledgeExportBurstButton adminUserId={f.adminUserId} />}
+                          </div>
                         </div>
                       </AlertDescription>
                     </Alert>

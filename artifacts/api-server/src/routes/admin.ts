@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -354,8 +354,11 @@ router.get("/admin/export-alerts", async (req, res): Promise<void> => {
 
 /**
  * Clears a flagged export burst for `adminUserId`, unblocking further
- * exports from that account. Recorded as an upsert keyed by adminUserId so
- * only the latest review matters for the block check above.
+ * exports from that account. `adminExportAcknowledgmentsTable` is upserted
+ * (keyed by adminUserId) so the block check only needs the latest review,
+ * but every review is also appended to `adminExportAcknowledgmentLogTable`
+ * so the full history survives for compliance — see who cleared each past
+ * burst for this admin, not just the most recent one.
  */
 router.post("/admin/export-alerts/:adminUserId/acknowledge", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
@@ -368,15 +371,64 @@ router.post("/admin/export-alerts/:adminUserId/acknowledge", async (req, res): P
     return;
   }
 
+  let acknowledgedByDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    acknowledgedByDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    acknowledgedByDisplayName = null;
+  }
+
+  const acknowledgedAt = new Date();
+
   await db
     .insert(adminExportAcknowledgmentsTable)
-    .values({ adminUserId: targetAdminUserId, acknowledgedBy: userId, acknowledgedAt: new Date() })
+    .values({ adminUserId: targetAdminUserId, acknowledgedBy: userId, acknowledgedAt })
     .onConflictDoUpdate({
       target: adminExportAcknowledgmentsTable.adminUserId,
-      set: { acknowledgedAt: new Date(), acknowledgedBy: userId },
+      set: { acknowledgedAt, acknowledgedBy: userId },
     });
 
+  await db.insert(adminExportAcknowledgmentLogTable).values({
+    adminUserId: targetAdminUserId,
+    acknowledgedAt,
+    acknowledgedBy: userId,
+    acknowledgedByDisplayName,
+  });
+
   res.json({ success: true });
+});
+
+// ─── GET /admin/export-alerts/:adminUserId/history ────────────────────────────
+
+/**
+ * Full review history for a flagged admin — every past "Acknowledge &
+ * unblock" click, not just the latest one used for the block check.
+ */
+router.get("/admin/export-alerts/:adminUserId/history", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const targetAdminUserId = req.params.adminUserId;
+  if (!targetAdminUserId) {
+    res.status(400).json({ error: "Missing admin user id." });
+    return;
+  }
+
+  const history = await db
+    .select()
+    .from(adminExportAcknowledgmentLogTable)
+    .where(eq(adminExportAcknowledgmentLogTable.adminUserId, targetAdminUserId))
+    .orderBy(desc(adminExportAcknowledgmentLogTable.acknowledgedAt));
+
+  res.json(history);
 });
 
 // ─── GET /admin/export-logs ────────────────────────────────────────────────────
