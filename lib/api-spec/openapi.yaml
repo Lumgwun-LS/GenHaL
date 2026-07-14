@@ -2566,6 +2566,8 @@ components:
           type: boolean
         pushVoiceCampaignAlertsEnabled:
           type: boolean
+        announcementEmailOptOut:
+          type: boolean
 
     VendorOnboardingInput:
       type: object
@@ -2637,6 +2639,8 @@ components:
         pushPaymentAlertsEnabled:
           type: boolean
         pushVoiceCampaignAlertsEnabled:
+          type: boolean
+        announcementEmailOptOut:
           type: boolean
 
     DeletionEligibility:

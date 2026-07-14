@@ -42,4 +42,5 @@ export interface Vendor {
   city?: string | null;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  announcementEmailOptOut?: boolean;
 }

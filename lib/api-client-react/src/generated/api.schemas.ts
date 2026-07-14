@@ -45,6 +45,7 @@ export interface Vendor {
   city?: string | null;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  announcementEmailOptOut?: boolean;
 }
 
 export interface VendorOnboardingInput {
@@ -83,6 +84,7 @@ export interface VendorUpdate {
   city?: string;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  announcementEmailOptOut?: boolean;
 }
 
 export interface DeletionEligibility {

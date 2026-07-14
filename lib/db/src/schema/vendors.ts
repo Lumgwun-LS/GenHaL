@@ -41,6 +41,9 @@ export const vendorsTable = pgTable("vendors", {
   // so adding a new category never silently changes existing behavior.
   pushPaymentAlertsEnabled: boolean("push_payment_alerts_enabled").notNull().default(true),
   pushVoiceCampaignAlertsEnabled: boolean("push_voice_campaign_alerts_enabled").notNull().default(true),
+  // Bulk admin announcement emails — vendor-controlled, default on (opt-out, not opt-in),
+  // so existing behavior (everyone gets emailed) doesn't silently change for anyone.
+  announcementEmailOptOut: boolean("announcement_email_opt_out").notNull().default(false),
   // Demographics — self-reported by the vendor, used for admin analytics
   gender: text("gender"), // male|female|other|prefer_not_to_say
   country: text("country"),

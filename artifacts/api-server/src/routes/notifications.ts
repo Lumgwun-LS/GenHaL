@@ -137,15 +137,25 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
     new Set(rawIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isInteger(n))),
   );
 
-  let targetVendors: { id: number; name: string; email: string }[];
+  let targetVendors: { id: number; name: string; email: string; announcementEmailOptOut: boolean }[];
   if (all) {
     targetVendors = await db
-      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
+      .select({
+        id: vendorsTable.id,
+        name: vendorsTable.name,
+        email: vendorsTable.email,
+        announcementEmailOptOut: vendorsTable.announcementEmailOptOut,
+      })
       .from(vendorsTable);
   } else {
     if (vendorIds.length === 0) { res.status(400).json({ error: "Select at least one vendor" }); return; }
     targetVendors = await db
-      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
+      .select({
+        id: vendorsTable.id,
+        name: vendorsTable.name,
+        email: vendorsTable.email,
+        announcementEmailOptOut: vendorsTable.announcementEmailOptOut,
+      })
       .from(vendorsTable)
       .where(inArray(vendorsTable.id, vendorIds));
   }
@@ -181,10 +191,12 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
 
   // In-app notification is always created above; also email each vendor so
   // time-sensitive announcements aren't missed by vendors who aren't logged in.
-  // Emailing is best-effort — a mail failure never blocks the in-app send above.
+  // Vendors who opted out of announcement emails still get the in-app notification,
+  // just no email. Emailing is best-effort — a mail failure never blocks the in-app send above.
+  const emailEligibleVendors = targetVendors.filter((v) => !v.announcementEmailOptOut);
   let emailsSent = 0;
   await Promise.all(
-    targetVendors.map(async (v) => {
+    emailEligibleVendors.map(async (v) => {
       if (!v.email) return;
       const html = wrapVendorEmail({
         bodyHtml: `
@@ -202,7 +214,7 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
     }),
   );
 
-  res.status(201).json({ sent: notifications.length, emailsSent, emailAttempted: targetVendors.length });
+  res.status(201).json({ sent: notifications.length, emailsSent, emailAttempted: emailEligibleVendors.length });
 });
 
 export default router;

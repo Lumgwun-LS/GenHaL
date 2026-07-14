@@ -5,6 +5,8 @@
  *    via the shared mailer, using the vendorhub email-branding wrapper.
  *  - a vendor with no email address is skipped for email but still gets the
  *    in-app notification.
+ *  - a vendor who opted out of announcement emails is skipped for email but
+ *    still gets the in-app notification.
  *  - the response reports how many emails actually sent.
  */
 
@@ -12,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 process.env.ADMIN_USER_IDS = "admin_1";
 
-type VendorRow = { id: number; name: string; email: string };
+type VendorRow = { id: number; name: string; email: string; announcementEmailOptOut: boolean };
 
 let vendorRows: VendorRow[] = [];
 let insertedNotifications: Array<Record<string, unknown>> = [];
@@ -113,8 +115,8 @@ function makeRes() {
 describe("POST /vendors/notifications/bulk — email fan-out", () => {
   beforeEach(() => {
     vendorRows = [
-      { id: 1, name: "Vendor One", email: "one@example.com" },
-      { id: 2, name: "Vendor Two", email: "" },
+      { id: 1, name: "Vendor One", email: "one@example.com", announcementEmailOptOut: false },
+      { id: 2, name: "Vendor Two", email: "", announcementEmailOptOut: false },
     ];
     insertedNotifications = [];
     sentEmails.length = 0;
@@ -151,5 +153,30 @@ describe("POST /vendors/notifications/bulk — email fan-out", () => {
 
     expect(sentEmails[0].html).not.toContain("<script>alert(1)</script>");
     expect(sentEmails[0].html).toContain("&lt;script&gt;");
+  });
+
+  it("skips emailing a vendor who opted out of announcement emails, but still creates their in-app notification", async () => {
+    vendorRows = [
+      { id: 1, name: "Vendor One", email: "one@example.com", announcementEmailOptOut: false },
+      { id: 2, name: "Vendor Two", email: "two@example.com", announcementEmailOptOut: true },
+    ];
+
+    const router = await loadRouterHandler();
+    const handler = findBulkHandler(router);
+
+    const req = { body: { message: "Scheduled maintenance tonight", all: true } };
+    const res = makeRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.sent).toBe(2);
+    expect(insertedNotifications).toHaveLength(2);
+    expect(insertedNotifications.map((n) => n.vendorId)).toEqual([1, 2]);
+
+    expect(res.body.emailAttempted).toBe(1);
+    expect(res.body.emailsSent).toBe(1);
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0].to).toBe("one@example.com");
   });
 });

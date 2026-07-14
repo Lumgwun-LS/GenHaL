@@ -70,6 +70,7 @@ export default function VendorDetail() {
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
+  const [announcementEmailOptOut, setAnnouncementEmailOptOut] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
 
@@ -118,6 +119,7 @@ export default function VendorDetail() {
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
       setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
+      setAnnouncementEmailOptOut(vendor.announcementEmailOptOut ?? false);
     }
   }, [vendor]);
 
@@ -292,6 +294,35 @@ export default function VendorDetail() {
                         body: JSON.stringify({ voiceCallOptOut: val }),
                       });
                       toast.success(val ? "Birthday calls disabled" : "Birthday calls enabled");
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="pt-4 border-t mt-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      Opt out of announcement emails
+                    </Label>
+                    <p className="text-xs text-muted-foreground">When on, you won't receive an email for admin announcements. You'll still see them in-app.</p>
+                  </div>
+                  <Switch
+                    checked={announcementEmailOptOut}
+                    onCheckedChange={async (val) => {
+                      setAnnouncementEmailOptOut(val);
+                      const res = await fetch(`${BASE_URL}/api/vendors/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ announcementEmailOptOut: val }),
+                      });
+                      if (!res.ok) {
+                        setAnnouncementEmailOptOut(!val);
+                        toast.error("Failed to update announcement email preference");
+                        return;
+                      }
+                      toast.success(val ? "Announcement emails disabled" : "Announcement emails enabled");
                     }}
                   />
                 </div>
