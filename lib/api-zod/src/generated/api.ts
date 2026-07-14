@@ -809,6 +809,42 @@ export const GenerateAiCaptionResponse = zod.object({
 
 
 /**
+ * @summary Get a presigned URL to upload a vendor's own video for AI caption analysis
+ */
+export const GetAiVideoUploadUrlBody = zod.object({
+  "vendorId": zod.number()
+})
+
+export const GetAiVideoUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string().describe('Presigned PUT URL — client should PUT the raw video bytes here.'),
+  "videoUrl": zod.string().describe('Public URL the video will be reachable at after the PUT completes; pass this to \/ai\/analyze-video-caption.')
+})
+
+
+/**
+ * @summary Analyze an uploaded video's content and generate a caption/post for it
+ */
+export const AnalyzeVideoCaptionBody = zod.object({
+  "vendorId": zod.number(),
+  "videoUrl": zod.string().describe('Public URL of the vendor\'s uploaded video (from POST \/media\/upload-url + a PUT of the bytes).'),
+  "platform": zod.string().optional(),
+  "tone": zod.string().optional(),
+  "includeHashtags": zod.boolean().optional(),
+  "includeEmoji": zod.boolean().optional()
+})
+
+export const AnalyzeVideoCaptionResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string(),
+  "result": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary List AI generation history
  */
 export const ListAiGenerationsQueryParams = zod.object({

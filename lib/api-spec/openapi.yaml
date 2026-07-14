@@ -606,6 +606,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiGeneration"
 
+  /ai/upload-video-url:
+    post:
+      operationId: getAiVideoUploadUrl
+      tags: [ai]
+      summary: Get a presigned URL to upload a vendor's own video for AI caption analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiVideoUploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and the public URL it will be served at once uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiVideoUploadUrlResponse"
+
+  /ai/analyze-video-caption:
+    post:
+      operationId: analyzeVideoCaption
+      tags: [ai]
+      summary: Analyze an uploaded video's content and generate a caption/post for it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiVideoCaptionRequest"
+      responses:
+        "200":
+          description: Generated caption based on the video's actual content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGeneration"
+
   /ai/generations:
     get:
       operationId: listAiGenerations
@@ -3265,6 +3303,42 @@ components:
           type: integer
         topic:
           type: string
+        platform:
+          type: string
+        tone:
+          type: string
+        includeHashtags:
+          type: boolean
+        includeEmoji:
+          type: boolean
+
+    AiVideoUploadUrlRequest:
+      type: object
+      required: [vendorId]
+      properties:
+        vendorId:
+          type: integer
+
+    AiVideoUploadUrlResponse:
+      type: object
+      required: [uploadUrl, videoUrl]
+      properties:
+        uploadUrl:
+          type: string
+          description: Presigned PUT URL — client should PUT the raw video bytes here.
+        videoUrl:
+          type: string
+          description: Public URL the video will be reachable at after the PUT completes; pass this to /ai/analyze-video-caption.
+
+    AiVideoCaptionRequest:
+      type: object
+      required: [vendorId, videoUrl]
+      properties:
+        vendorId:
+          type: integer
+        videoUrl:
+          type: string
+          description: Public URL of the vendor's uploaded video (from POST /media/upload-url + a PUT of the bytes).
         platform:
           type: string
         tone:

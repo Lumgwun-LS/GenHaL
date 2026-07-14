@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send } from "lucide-react";
-import { useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useGenerateAiVideo, useSubmitPostForReview, useListSocialAccounts } from "@workspace/api-client-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload } from "lucide-react";
+import {
+  useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useGenerateAiVideo,
+  useGetAiVideoUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -64,6 +67,8 @@ export default function CreatePost() {
   const [sceneCount, setSceneCount] = useState<1 | 2 | 3>(1);
   const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
   const [includeMusic, setIncludeMusic] = useState(false);
+  const [uploadedVideoStage, setUploadedVideoStage] = useState<"idle" | "uploading" | "analyzing">("idle");
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: products } = useListProducts({ vendorId: 1 });
   const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
@@ -72,6 +77,8 @@ export default function CreatePost() {
   const generateCaption = useGenerateAiCaption();
   const generateImage = useGenerateAiImage();
   const generateVideo = useGenerateAiVideo();
+  const getVideoUploadUrl = useGetAiVideoUploadUrl();
+  const analyzeVideoCaption = useAnalyzeVideoCaption();
   const submitForReviewMutation = useSubmitPostForReview();
   const queryClient = useQueryClient();
 
@@ -130,6 +137,35 @@ export default function CreatePost() {
       toast.success("Video generated — review before publishing");
     } catch {
       toast.error("Failed to generate video");
+    }
+  };
+
+  const handleVideoFileSelected = async (file: File) => {
+    const MAX_BYTES = 100 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast.error("Video is too large (max 100MB)");
+      return;
+    }
+    try {
+      setUploadedVideoStage("uploading");
+      const { uploadUrl, videoUrl } = await getVideoUploadUrl.mutateAsync({ data: { vendorId: 1 } });
+      const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "video/mp4" }, body: file });
+      if (!putRes.ok) throw new Error("Upload failed");
+
+      setUploadedVideoStage("analyzing");
+      const result = await analyzeVideoCaption.mutateAsync({
+        data: { vendorId: 1, videoUrl, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
+      });
+      if (result.status === "failed") { toast.error(result.result ?? "Couldn't analyze the video"); return; }
+
+      setGeneratedVideo(videoUrl);
+      setGeneratedImage(null);
+      setCaption(result.result ?? caption);
+      toast.success("AI watched your video and drafted a caption — review and edit as needed");
+    } catch {
+      toast.error("Failed to upload/analyze video");
+    } finally {
+      setUploadedVideoStage("idle");
     }
   };
 
@@ -336,9 +372,33 @@ export default function CreatePost() {
                     {generateVideo.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <VideoIcon className="w-4 h-4 mr-2" />}
                     AI Video
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => videoFileInputRef.current?.click()}
+                    disabled={uploadedVideoStage !== "idle"}
+                  >
+                    {uploadedVideoStage !== "idle" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    {uploadedVideoStage === "uploading" ? "Uploading…" : uploadedVideoStage === "analyzing" ? "AI watching your video…" : "Upload My Video"}
+                  </Button>
+                  <input
+                    ref={videoFileInputRef}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) handleVideoFileSelected(file);
+                    }}
+                  />
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                "Upload My Video" lets AI watch your own footage and write a caption grounded in what it actually shows — different from "AI Video", which generates a new video from an image.
+              </p>
               {!generatedVideo && (
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <label className="flex items-center gap-1.5">

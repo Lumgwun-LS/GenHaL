@@ -4,20 +4,42 @@ import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
+import { ai as gemini } from "@workspace/integrations-gemini-ai";
 import { generateVideoBuffer, type MotionTemplate, type VideoScene } from "../lib/video-generation";
+import { extractVideoFrames } from "../lib/video-frames";
 import { generateMusicBuffer } from "../lib/ai-music";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
 import {
   GenerateAiImageBody,
   GenerateAiVideoBody,
   GenerateAiCaptionBody,
+  GetAiVideoUploadUrlBody,
+  AnalyzeVideoCaptionBody,
   ListAiGenerationsQueryParams,
   GenerateAiImageResponse,
   GenerateAiVideoResponse,
   GenerateAiCaptionResponse,
+  GetAiVideoUploadUrlResponse,
+  AnalyzeVideoCaptionResponse,
   ListAiGenerationsResponse,
 } from "@workspace/api-zod";
+
+const objectStorageService = new ObjectStorageService();
+
+/** Drizzle returns `createdAt` as a Date object, but the generated response schemas
+ *  (from openapi.yaml's `createdAt: {type: string, format: date-time}`) expect a
+ *  plain string — .parse(generation) throws a ZodError without this conversion. */
+function serializeGeneration<T extends { createdAt: Date | string }>(generation: T): Omit<T, "createdAt"> & { createdAt: string } {
+  return { ...generation, createdAt: generation.createdAt instanceof Date ? generation.createdAt.toISOString() : generation.createdAt };
+}
+
+/** Gemini's inline (non-Files-API) request payload is capped at 8MB — see the
+ *  ai-integrations-gemini skill. Videos under this are sent whole; larger
+ *  ones fall back to a handful of extracted still frames instead. */
+const GEMINI_INLINE_MAX_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 const router: IRouter = Router();
 
@@ -86,8 +108,9 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
     status,
   }).returning();
 
-  if (status === "failed") { res.status(502).json(GenerateAiImageResponse.parse(generation)); return; }
-  res.json(GenerateAiImageResponse.parse(generation));
+  const serialized = serializeGeneration(generation);
+  if (status === "failed") { res.status(502).json(GenerateAiImageResponse.parse(serialized)); return; }
+  res.json(GenerateAiImageResponse.parse(serialized));
 });
 
 /**
@@ -192,8 +215,9 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
     status,
   }).returning();
 
-  if (status === "failed") { res.status(502).json(GenerateAiVideoResponse.parse(generation)); return; }
-  res.json(GenerateAiVideoResponse.parse(generation));
+  const serialized = serializeGeneration(generation);
+  if (status === "failed") { res.status(502).json(GenerateAiVideoResponse.parse(serialized)); return; }
+  res.json(GenerateAiVideoResponse.parse(serialized));
 });
 
 router.post("/ai/generate-caption", async (req, res): Promise<void> => {
@@ -250,8 +274,135 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
     status,
   }).returning();
 
-  if (status === "failed") { res.status(502).json(GenerateAiCaptionResponse.parse(generation)); return; }
-  res.json(GenerateAiCaptionResponse.parse(generation));
+  const serialized = serializeGeneration(generation);
+  if (status === "failed") { res.status(502).json(GenerateAiCaptionResponse.parse(serialized)); return; }
+  res.json(GenerateAiCaptionResponse.parse(serialized));
+});
+
+/**
+ * Returns a presigned PUT URL for a vendor to upload a video's raw bytes
+ * directly to object storage, plus the public URL it'll be reachable at
+ * once uploaded (served by routes/media.ts). Mirrors the presigned-upload
+ * mechanism generated-media-storage.ts uses server-side, but exposes it to
+ * the client so vendors can upload their OWN video (not an AI-generated one).
+ */
+router.post("/ai/upload-video-url", async (req, res): Promise<void> => {
+  const parsed = GetAiVideoUploadUrlBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only upload video for your own vendor account." }); return; }
+
+  const base = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+  if (!base) { res.status(500).json({ error: "No public domain configured for media uploads." }); return; }
+
+  const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+  const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
+  const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+  const videoUrl = `https://${base}/api/media/${objectId}`;
+
+  res.json(GetAiVideoUploadUrlResponse.parse({ uploadUrl, videoUrl }));
+});
+
+/** Downloads the vendor's uploaded video and, once it's public, marks its ACL so the
+ *  same public /api/media/:objectId route the caption endpoint reads from can serve it. */
+async function fetchUploadedVideo(videoUrl: string): Promise<Buffer> {
+  const objectIdMatch = videoUrl.match(/\/api\/media\/([^/?]+)/);
+  if (objectIdMatch) {
+    const objectPath = `/objects/uploads/${objectIdMatch[1]}`;
+    await objectStorageService.trySetObjectEntityAclPolicy(objectPath, { owner: "system:vendor-upload", visibility: "public" });
+  }
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Could not fetch uploaded video (status ${response.status})`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/**
+ * Analyzes the actual visual/audio content of a vendor-uploaded video and
+ * writes a catchy, platform-appropriate caption for it — distinct from
+ * /ai/generate-caption, which writes copy from a topic string with no
+ * knowledge of any real media. Uses Gemini (the only AI Integrations
+ * provider that accepts video input; OpenAI's proxy explicitly does not).
+ * Videos small enough to fit Gemini's 8MB inline request limit are sent
+ * whole (so narration/audio is considered too); larger videos fall back to
+ * a handful of extracted still frames, since true chunked video splitting
+ * is out of scope here.
+ */
+router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
+  const parsed = AnalyzeVideoCaptionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, videoUrl, platform, tone, includeHashtags, includeEmoji } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+
+  const toneMap: Record<string, string> = {
+    professional: "professional and authoritative",
+    casual: "friendly and conversational",
+    urgent: "urgent and action-oriented",
+    inspirational: "motivating and inspiring",
+  };
+  const toneDesc = toneMap[tone ?? "professional"] ?? "professional and authoritative";
+  const platformLimits: Record<string, number> = {
+    twitter: 280,
+    instagram: 2200,
+    facebook: 63206,
+    linkedin: 3000,
+  };
+  const limit = platformLimits[platform?.toLowerCase() ?? ""] ?? 500;
+
+  const instruction = `Watch this video and write ONE short, high-converting social media caption that accurately reflects what actually happens/is shown in it — do not invent details it doesn't contain. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes, no preamble, no description of the video itself.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}`;
+
+  let result: string;
+  let status: "completed" | "failed" = "completed";
+  try {
+    const videoBuffer = await fetchUploadedVideo(videoUrl);
+    if (videoBuffer.length > MAX_VIDEO_UPLOAD_BYTES) {
+      throw new Error(`Video is too large (max ${MAX_VIDEO_UPLOAD_BYTES / (1024 * 1024)}MB)`);
+    }
+
+    let parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
+    if (videoBuffer.length <= GEMINI_INLINE_MAX_BYTES) {
+      parts = [
+        { inlineData: { mimeType: "video/mp4", data: videoBuffer.toString("base64") } },
+        { text: instruction },
+      ];
+    } else {
+      // Too large to inline as video — fall back to sampled still frames so
+      // the caption is still grounded in the video's real visual content.
+      const frames = await extractVideoFrames(videoBuffer, 6);
+      parts = [
+        ...frames.map((frame) => ({ inlineData: { mimeType: "image/jpeg", data: frame.toString("base64") } })),
+        { text: `These are ${frames.length} still frames sampled evenly across a longer video. ${instruction}` },
+      ];
+    }
+
+    const response = await gemini.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts }],
+      config: { maxOutputTokens: 8192 },
+    });
+    result = (response.text ?? "").trim().slice(0, limit);
+    if (!result) throw new Error("empty response from model");
+  } catch (err) {
+    status = "failed";
+    result = `Video caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
+
+  const [generation] = await db.insert(aiGenerationsTable).values({
+    vendorId,
+    type: "video-caption",
+    prompt: `video:${videoUrl} | ${platform ?? ""} | ${toneDesc}`,
+    result,
+    status,
+  }).returning();
+
+  const serialized = serializeGeneration(generation);
+  if (status === "failed") { res.status(502).json(AnalyzeVideoCaptionResponse.parse(serialized)); return; }
+  res.json(AnalyzeVideoCaptionResponse.parse(serialized));
 });
 
 router.get("/ai/generations", async (req, res): Promise<void> => {
@@ -270,7 +421,7 @@ router.get("/ai/generations", async (req, res): Promise<void> => {
     if (params.data.vendorId) generations = generations.filter((g) => g.vendorId === params.data.vendorId);
     if (params.data.type) generations = generations.filter((g) => g.type === params.data.type);
   }
-  res.json(ListAiGenerationsResponse.parse(generations));
+  res.json(ListAiGenerationsResponse.parse(generations.map(serializeGeneration)));
 });
 
 export default router;

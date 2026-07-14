@@ -63,3 +63,4 @@
 - [Site-content settings audit history](site-content-audit-history.md) — setSiteContentBlock now appends to site_content_audit_log generically; reuse for any admin-editable site-content key, not just export-alert threshold.
 - [Live-testing admin routes via minted Clerk sessions](vendorhub-admin-live-test-clerk-session.md) — create a throwaway Clerk user + temp ADMIN_USER_IDS env var to hit real admin HTTP routes with a real session token, not just simulated SQL.
 - [VendorHub announcement email opt-out](vendorhub-announcement-email-optout.md) — bulk-announcement in-app notification is always created; email is skipped separately per vendor flag, default off to preserve existing behavior.
+- [VendorHub AI video-to-caption feature](vendorhub-video-caption-feature.md) — Gemini watches vendor-uploaded video for grounded captions; esbuild `@google/*` wildcard external and un-serialized Date `createdAt` both silently broke AI-generation response routes.

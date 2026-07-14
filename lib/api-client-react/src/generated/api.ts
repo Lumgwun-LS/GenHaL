@@ -25,7 +25,10 @@ import type {
   AiCaptionRequest,
   AiGeneration,
   AiImageRequest,
+  AiVideoCaptionRequest,
   AiVideoRequest,
+  AiVideoUploadUrlRequest,
+  AiVideoUploadUrlResponse,
   AnalyticsOverview,
   Branch,
   BranchInput,
@@ -2220,6 +2223,146 @@ export const useGenerateAiCaption = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGenerateAiCaptionMutationOptions(options));
+    }
+
+export const getGetAiVideoUploadUrlUrl = () => {
+
+
+
+
+  return `/api/ai/upload-video-url`
+}
+
+/**
+ * @summary Get a presigned URL to upload a vendor's own video for AI caption analysis
+ */
+export const getAiVideoUploadUrl = async (aiVideoUploadUrlRequest: AiVideoUploadUrlRequest, options?: RequestInit): Promise<AiVideoUploadUrlResponse> => {
+
+  return customFetch<AiVideoUploadUrlResponse>(getGetAiVideoUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiVideoUploadUrlRequest)
+  }
+);}
+
+
+
+
+export const getGetAiVideoUploadUrlMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAiVideoUploadUrl>>, TError,{data: BodyType<AiVideoUploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getAiVideoUploadUrl>>, TError,{data: BodyType<AiVideoUploadUrlRequest>}, TContext> => {
+
+const mutationKey = ['getAiVideoUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getAiVideoUploadUrl>>, {data: BodyType<AiVideoUploadUrlRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getAiVideoUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetAiVideoUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof getAiVideoUploadUrl>>>
+    export type GetAiVideoUploadUrlMutationBody = BodyType<AiVideoUploadUrlRequest>
+    export type GetAiVideoUploadUrlMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Get a presigned URL to upload a vendor's own video for AI caption analysis
+ */
+export const useGetAiVideoUploadUrl = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAiVideoUploadUrl>>, TError,{data: BodyType<AiVideoUploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getAiVideoUploadUrl>>,
+        TError,
+        {data: BodyType<AiVideoUploadUrlRequest>},
+        TContext
+      > => {
+      return useMutation(getGetAiVideoUploadUrlMutationOptions(options));
+    }
+
+export const getAnalyzeVideoCaptionUrl = () => {
+
+
+
+
+  return `/api/ai/analyze-video-caption`
+}
+
+/**
+ * @summary Analyze an uploaded video's content and generate a caption/post for it
+ */
+export const analyzeVideoCaption = async (aiVideoCaptionRequest: AiVideoCaptionRequest, options?: RequestInit): Promise<AiGeneration> => {
+
+  return customFetch<AiGeneration>(getAnalyzeVideoCaptionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiVideoCaptionRequest)
+  }
+);}
+
+
+
+
+export const getAnalyzeVideoCaptionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeVideoCaption>>, TError,{data: BodyType<AiVideoCaptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeVideoCaption>>, TError,{data: BodyType<AiVideoCaptionRequest>}, TContext> => {
+
+const mutationKey = ['analyzeVideoCaption'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeVideoCaption>>, {data: BodyType<AiVideoCaptionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeVideoCaption(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeVideoCaptionMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeVideoCaption>>>
+    export type AnalyzeVideoCaptionMutationBody = BodyType<AiVideoCaptionRequest>
+    export type AnalyzeVideoCaptionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Analyze an uploaded video's content and generate a caption/post for it
+ */
+export const useAnalyzeVideoCaption = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeVideoCaption>>, TError,{data: BodyType<AiVideoCaptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeVideoCaption>>,
+        TError,
+        {data: BodyType<AiVideoCaptionRequest>},
+        TContext
+      > => {
+      return useMutation(getAnalyzeVideoCaptionMutationOptions(options));
     }
 
 export const getListAiGenerationsUrl = (params?: ListAiGenerationsParams,) => {

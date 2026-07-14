@@ -421,6 +421,27 @@ export interface AiCaptionRequest {
   includeEmoji?: boolean;
 }
 
+export interface AiVideoUploadUrlRequest {
+  vendorId: number;
+}
+
+export interface AiVideoUploadUrlResponse {
+  /** Presigned PUT URL — client should PUT the raw video bytes here. */
+  uploadUrl: string;
+  /** Public URL the video will be reachable at after the PUT completes; pass this to /ai/analyze-video-caption. */
+  videoUrl: string;
+}
+
+export interface AiVideoCaptionRequest {
+  vendorId: number;
+  /** Public URL of the vendor's uploaded video (from POST /media/upload-url + a PUT of the bytes). */
+  videoUrl: string;
+  platform?: string;
+  tone?: string;
+  includeHashtags?: boolean;
+  includeEmoji?: boolean;
+}
+
 export interface Product {
   id: number;
   vendorId: number;
