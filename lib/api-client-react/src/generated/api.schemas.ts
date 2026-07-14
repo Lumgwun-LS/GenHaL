@@ -595,6 +595,168 @@ export interface OrdersSummary {
   revenueByPeriod: OrdersSummaryRevenueByPeriodItem[];
 }
 
+export interface Sale {
+  id: number;
+  vendorId: number;
+  source: string;
+  /** @nullable */
+  sourcePaymentId?: number | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  amount: number;
+  currency: string;
+  saleDate: string;
+  createdAt: string;
+}
+
+export interface SaleInput {
+  vendorId: number;
+  description?: string;
+  customerName?: string;
+  amount: number;
+  currency?: string;
+  saleDate?: string;
+}
+
+export interface SaleUpdate {
+  description?: string;
+  customerName?: string;
+  amount?: number;
+  currency?: string;
+  saleDate?: string;
+}
+
+export interface Expense {
+  id: number;
+  vendorId: number;
+  category: string;
+  /** @nullable */
+  description?: string | null;
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  createdAt: string;
+}
+
+export interface ExpenseInput {
+  vendorId: number;
+  category: string;
+  description?: string;
+  amount: number;
+  currency?: string;
+  expenseDate?: string;
+}
+
+export interface ExpenseUpdate {
+  category?: string;
+  description?: string;
+  amount?: number;
+  currency?: string;
+  expenseDate?: string;
+}
+
+export interface Investment {
+  id: number;
+  vendorId: number;
+  type: string;
+  name: string;
+  /** @nullable */
+  notes?: string | null;
+  amount: number;
+  /** @nullable */
+  currentValue?: number | null;
+  currency: string;
+  status: string;
+  investmentDate: string;
+  createdAt: string;
+}
+
+export interface InvestmentInput {
+  vendorId: number;
+  type: string;
+  name: string;
+  notes?: string;
+  amount: number;
+  currentValue?: number;
+  currency?: string;
+  status?: string;
+  investmentDate?: string;
+}
+
+export interface InvestmentUpdate {
+  type?: string;
+  name?: string;
+  notes?: string;
+  amount?: number;
+  currentValue?: number;
+  currency?: string;
+  status?: string;
+  investmentDate?: string;
+}
+
+export type FinanceOverviewAnalyticsRange = {
+  from: string;
+  to: string;
+  period: string;
+};
+
+export type FinanceOverviewAnalyticsRevenueTrendItem = {
+  date: string;
+  revenue: number;
+};
+
+export type FinanceOverviewAnalyticsProfitAndLossByPeriodItem = {
+  date: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+};
+
+export type FinanceOverviewAnalyticsProfitAndLoss = {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  byPeriod: FinanceOverviewAnalyticsProfitAndLossByPeriodItem[];
+};
+
+export type FinanceOverviewAnalyticsExpenseByCategoryItem = {
+  category: string;
+  total: number;
+};
+
+export type FinanceOverviewAnalyticsInvestmentRoiByInvestmentItem = {
+  id: number;
+  name: string;
+  type: string;
+  invested: number;
+  currentValue: number;
+  roiPercent: number;
+};
+
+export type FinanceOverviewAnalyticsInvestmentRoi = {
+  totalInvested: number;
+  totalCurrentValue: number;
+  overallRoiPercent: number;
+  byInvestment: FinanceOverviewAnalyticsInvestmentRoiByInvestmentItem[];
+};
+
+export type FinanceOverviewAnalyticsCashFlowForecastItem = {
+  date: string;
+  projectedNet: number;
+  isForecast: boolean;
+};
+
+export interface FinanceOverviewAnalytics {
+  range: FinanceOverviewAnalyticsRange;
+  revenueTrend: FinanceOverviewAnalyticsRevenueTrendItem[];
+  profitAndLoss: FinanceOverviewAnalyticsProfitAndLoss;
+  expenseByCategory: FinanceOverviewAnalyticsExpenseByCategoryItem[];
+  investmentRoi: FinanceOverviewAnalyticsInvestmentRoi;
+  cashFlowForecast: FinanceOverviewAnalyticsCashFlowForecastItem[];
+}
+
 export interface Lead {
   id: number;
   vendorId: number;
@@ -883,6 +1045,42 @@ vendorId?: number;
 period?: string;
 };
 
+export type ListSalesParams = {
+vendorId?: number;
+source?: string;
+from?: string;
+to?: string;
+};
+
+export type ExportSalesParams = {
+vendorId: number;
+from?: string;
+to?: string;
+};
+
+export type ListExpensesParams = {
+vendorId?: number;
+category?: string;
+from?: string;
+to?: string;
+};
+
+export type ExportExpensesParams = {
+vendorId: number;
+from?: string;
+to?: string;
+};
+
+export type ListInvestmentsParams = {
+vendorId?: number;
+type?: string;
+status?: string;
+};
+
+export type ExportInvestmentsParams = {
+vendorId: number;
+};
+
 export type ListLeadsParams = {
 vendorId?: number;
 status?: string;
@@ -925,6 +1123,13 @@ vendorId?: number;
 };
 
 export type GetVendorPerformanceAnalyticsParams = {
+vendorId: number;
+period?: string;
+from?: string;
+to?: string;
+};
+
+export type GetFinanceOverviewAnalyticsParams = {
 vendorId: number;
 period?: string;
 from?: string;

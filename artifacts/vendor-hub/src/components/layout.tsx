@@ -18,6 +18,10 @@ import {
   ShieldCheck,
   BarChart3,
   UserCircle,
+  Receipt,
+  PiggyBank,
+  LineChart,
+  DollarSign,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -38,7 +42,11 @@ const NAV_ITEMS = [
   { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
+  { href: "/sales", label: "Sales", icon: DollarSign },
+  { href: "/expenses", label: "Expenses", icon: Receipt },
+  { href: "/investments", label: "Investments", icon: PiggyBank },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
   { href: "/account", label: "Account", icon: UserCircle },
 ];
 

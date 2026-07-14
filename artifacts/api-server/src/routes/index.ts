@@ -22,6 +22,9 @@ import adminAnalyticsRouter from "./admin-analytics";
 import adminPaymentGatewaysRouter from "./admin-payment-gateways";
 import adminBillingSyncRouter from "./admin-billing-sync";
 import adminSocialHealthRouter from "./admin-social-health";
+import salesRouter from "./sales";
+import expensesRouter from "./expenses";
+import investmentsRouter from "./investments";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
@@ -90,5 +93,8 @@ router.use(adminAnalyticsRouter);
 router.use(adminPaymentGatewaysRouter);
 router.use(adminBillingSyncRouter);
 router.use(adminSocialHealthRouter);
+router.use(salesRouter);
+router.use(expensesRouter);
+router.use(investmentsRouter);
 
 export default router;

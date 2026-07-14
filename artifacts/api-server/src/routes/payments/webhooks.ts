@@ -25,6 +25,7 @@ import {
   registerSlackAlerter,
 } from "../../lib/webhook-buffer";
 import { resolveGatewayField } from "../../lib/platform-gateways";
+import { syncSaleFromPayment } from "../../lib/sales-sync";
 import { notifyVendorPaymentStatus } from "../../lib/push";
 import { sendEmail } from "../../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../../lib/email-branding";
@@ -352,6 +353,22 @@ async function applyPaymentStatusTransition(
     });
 
   if (!updated) return { outcome: "not_found" };
+
+  if (newStatus === "paid") {
+    const [paymentRow] = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.providerReference, reference));
+    if (paymentRow) {
+      await syncSaleFromPayment({
+        id: paymentRow.id,
+        vendorId: updated.vendorId,
+        amount: updated.amount,
+        currency: updated.currency,
+      });
+    }
+  }
+
   return { outcome: "updated", payment: updated };
 }
 

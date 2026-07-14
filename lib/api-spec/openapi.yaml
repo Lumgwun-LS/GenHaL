@@ -32,6 +32,12 @@ tags:
     description: SMS marketing campaigns
   - name: analytics
     description: Dashboard analytics
+  - name: sales
+    description: Unified sales ledger (manual + auto-synced from payments)
+  - name: expenses
+    description: Categorized business expenses
+  - name: investments
+    description: Owner capital and external investment/asset tracking
   - name: external
     description: Awajimaa bridge — mobile app / external partner access
 
@@ -908,6 +914,339 @@ paths:
               schema:
                 $ref: "#/components/schemas/Order"
 
+  # ─── SALES ────────────────────────────────────────────────────────────────
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List sales (manual + auto-synced from paid payments)
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: source
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Record a manual sale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleInput"
+      responses:
+        "201":
+          description: Created sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+
+  /sales/export:
+    get:
+      operationId: exportSales
+      tags: [sales]
+      summary: Export sales as CSV
+      parameters:
+        - name: vendorId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /sales/{id}:
+    patch:
+      operationId: updateSale
+      tags: [sales]
+      summary: Update a manual sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleUpdate"
+      responses:
+        "200":
+          description: Updated sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+    delete:
+      operationId: deleteSale
+      tags: [sales]
+      summary: Delete a manual sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── EXPENSES ─────────────────────────────────────────────────────────────
+  /expenses:
+    get:
+      operationId: listExpenses
+      tags: [expenses]
+      summary: List expenses
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Record an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseInput"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/export:
+    get:
+      operationId: exportExpenses
+      tags: [expenses]
+      summary: Export expenses as CSV
+      parameters:
+        - name: vendorId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /expenses/{id}:
+    patch:
+      operationId: updateExpense
+      tags: [expenses]
+      summary: Update an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseUpdate"
+      responses:
+        "200":
+          description: Updated expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── INVESTMENTS ──────────────────────────────────────────────────────────
+  /investments:
+    get:
+      operationId: listInvestments
+      tags: [investments]
+      summary: List investments (owner capital, loans, external assets)
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of investments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Investment"
+    post:
+      operationId: createInvestment
+      tags: [investments]
+      summary: Record an investment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestmentInput"
+      responses:
+        "201":
+          description: Created investment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Investment"
+
+  /investments/export:
+    get:
+      operationId: exportInvestments
+      tags: [investments]
+      summary: Export investments as CSV
+      parameters:
+        - name: vendorId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /investments/{id}:
+    patch:
+      operationId: updateInvestment
+      tags: [investments]
+      summary: Update an investment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestmentUpdate"
+      responses:
+        "200":
+          description: Updated investment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Investment"
+    delete:
+      operationId: deleteInvestment
+      tags: [investments]
+      summary: Delete an investment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # ─── LEADS ────────────────────────────────────────────────────────────────
   /leads:
     get:
@@ -1363,6 +1702,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VendorPerformanceAnalytics"
+
+  /analytics/finance-overview:
+    get:
+      operationId: getFinanceOverviewAnalytics
+      tags: [analytics]
+      summary: Profit & loss, expense breakdown, investment ROI, and cash-flow forecast for a vendor
+      parameters:
+        - name: vendorId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Finance overview analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceOverviewAnalytics"
 
   /admin/analytics/demographics:
     get:
@@ -2856,6 +3226,286 @@ components:
                 type: number
               orders:
                 type: integer
+
+    # ─── SALES ──────────────────────────────────────────────────────────────
+    Sale:
+      type: object
+      required: [id, vendorId, source, amount, currency, saleDate, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        source:
+          type: string
+        sourcePaymentId:
+          type: ["integer", "null"]
+        description:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        amount:
+          type: number
+        currency:
+          type: string
+        saleDate:
+          type: string
+        createdAt:
+          type: string
+
+    SaleInput:
+      type: object
+      required: [vendorId, amount]
+      properties:
+        vendorId:
+          type: integer
+        description:
+          type: string
+        customerName:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        saleDate:
+          type: string
+
+    SaleUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+        customerName:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        saleDate:
+          type: string
+
+    # ─── EXPENSES ───────────────────────────────────────────────────────────
+    Expense:
+      type: object
+      required: [id, vendorId, category, amount, currency, expenseDate, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        category:
+          type: string
+        description:
+          type: ["string", "null"]
+        amount:
+          type: number
+        currency:
+          type: string
+        expenseDate:
+          type: string
+        createdAt:
+          type: string
+
+    ExpenseInput:
+      type: object
+      required: [vendorId, category, amount]
+      properties:
+        vendorId:
+          type: integer
+        category:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        expenseDate:
+          type: string
+
+    ExpenseUpdate:
+      type: object
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        expenseDate:
+          type: string
+
+    # ─── INVESTMENTS ────────────────────────────────────────────────────────
+    Investment:
+      type: object
+      required: [id, vendorId, type, name, amount, currency, status, investmentDate, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        type:
+          type: string
+        name:
+          type: string
+        notes:
+          type: ["string", "null"]
+        amount:
+          type: number
+        currentValue:
+          type: ["number", "null"]
+        currency:
+          type: string
+        status:
+          type: string
+        investmentDate:
+          type: string
+        createdAt:
+          type: string
+
+    InvestmentInput:
+      type: object
+      required: [vendorId, type, name, amount]
+      properties:
+        vendorId:
+          type: integer
+        type:
+          type: string
+        name:
+          type: string
+        notes:
+          type: string
+        amount:
+          type: number
+        currentValue:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+        investmentDate:
+          type: string
+
+    InvestmentUpdate:
+      type: object
+      properties:
+        type:
+          type: string
+        name:
+          type: string
+        notes:
+          type: string
+        amount:
+          type: number
+        currentValue:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+        investmentDate:
+          type: string
+
+    FinanceOverviewAnalytics:
+      type: object
+      required: [range, revenueTrend, profitAndLoss, expenseByCategory, investmentRoi, cashFlowForecast]
+      properties:
+        range:
+          type: object
+          required: [from, to, period]
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+            period:
+              type: string
+        revenueTrend:
+          type: array
+          items:
+            type: object
+            required: [date, revenue]
+            properties:
+              date:
+                type: string
+              revenue:
+                type: number
+        profitAndLoss:
+          type: object
+          required: [totalRevenue, totalExpenses, netProfit, byPeriod]
+          properties:
+            totalRevenue:
+              type: number
+            totalExpenses:
+              type: number
+            netProfit:
+              type: number
+            byPeriod:
+              type: array
+              items:
+                type: object
+                required: [date, revenue, expenses, profit]
+                properties:
+                  date:
+                    type: string
+                  revenue:
+                    type: number
+                  expenses:
+                    type: number
+                  profit:
+                    type: number
+        expenseByCategory:
+          type: array
+          items:
+            type: object
+            required: [category, total]
+            properties:
+              category:
+                type: string
+              total:
+                type: number
+        investmentRoi:
+          type: object
+          required: [totalInvested, totalCurrentValue, overallRoiPercent, byInvestment]
+          properties:
+            totalInvested:
+              type: number
+            totalCurrentValue:
+              type: number
+            overallRoiPercent:
+              type: number
+            byInvestment:
+              type: array
+              items:
+                type: object
+                required: [id, name, type, invested, currentValue, roiPercent]
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  invested:
+                    type: number
+                  currentValue:
+                    type: number
+                  roiPercent:
+                    type: number
+        cashFlowForecast:
+          type: array
+          items:
+            type: object
+            required: [date, projectedNet, isForecast]
+            properties:
+              date:
+                type: string
+              projectedNet:
+                type: number
+              isForecast:
+                type: boolean
 
     # ─── LEAD ───────────────────────────────────────────────────────────────
     Lead:

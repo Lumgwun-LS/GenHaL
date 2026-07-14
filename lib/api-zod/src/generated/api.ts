@@ -1196,6 +1196,312 @@ export const UpdateOrderResponse = zod.object({
 
 
 /**
+ * @summary List sales (manual + auto-synced from paid payments)
+ */
+export const ListSalesQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional(),
+  "source": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const ListSalesResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "source": zod.string(),
+  "sourcePaymentId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "saleDate": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListSalesResponse = zod.array(ListSalesResponseItem)
+
+
+/**
+ * @summary Record a manual sale
+ */
+export const CreateSaleBody = zod.object({
+  "vendorId": zod.number(),
+  "description": zod.string().optional(),
+  "customerName": zod.string().optional(),
+  "amount": zod.number(),
+  "currency": zod.string().optional(),
+  "saleDate": zod.string().optional()
+})
+
+export const CreateSaleResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "source": zod.string(),
+  "sourcePaymentId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "saleDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Export sales as CSV
+ */
+export const ExportSalesQueryParams = zod.object({
+  "vendorId": zod.coerce.number(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const ExportSalesResponse = zod.unknown()
+
+
+/**
+ * @summary Update a manual sale
+ */
+export const UpdateSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateSaleBody = zod.object({
+  "description": zod.string().optional(),
+  "customerName": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "saleDate": zod.string().optional()
+})
+
+export const UpdateSaleResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "source": zod.string(),
+  "sourcePaymentId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "saleDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a manual sale
+ */
+export const DeleteSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteSaleResponse = zod.void()
+
+
+/**
+ * @summary List expenses
+ */
+export const ListExpensesQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional(),
+  "category": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const ListExpensesResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "expenseDate": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
+
+
+/**
+ * @summary Record an expense
+ */
+export const CreateExpenseBody = zod.object({
+  "vendorId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string().optional(),
+  "amount": zod.number(),
+  "currency": zod.string().optional(),
+  "expenseDate": zod.string().optional()
+})
+
+export const CreateExpenseResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "expenseDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Export expenses as CSV
+ */
+export const ExportExpensesQueryParams = zod.object({
+  "vendorId": zod.coerce.number(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const ExportExpensesResponse = zod.unknown()
+
+
+/**
+ * @summary Update an expense
+ */
+export const UpdateExpenseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateExpenseBody = zod.object({
+  "category": zod.string().optional(),
+  "description": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "expenseDate": zod.string().optional()
+})
+
+export const UpdateExpenseResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "expenseDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an expense
+ */
+export const DeleteExpenseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteExpenseResponse = zod.void()
+
+
+/**
+ * @summary List investments (owner capital, loans, external assets)
+ */
+export const ListInvestmentsQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional(),
+  "type": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListInvestmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "name": zod.string(),
+  "notes": zod.string().nullish(),
+  "amount": zod.number(),
+  "currentValue": zod.number().nullish(),
+  "currency": zod.string(),
+  "status": zod.string(),
+  "investmentDate": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListInvestmentsResponse = zod.array(ListInvestmentsResponseItem)
+
+
+/**
+ * @summary Record an investment
+ */
+export const CreateInvestmentBody = zod.object({
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "name": zod.string(),
+  "notes": zod.string().optional(),
+  "amount": zod.number(),
+  "currentValue": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "status": zod.string().optional(),
+  "investmentDate": zod.string().optional()
+})
+
+export const CreateInvestmentResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "name": zod.string(),
+  "notes": zod.string().nullish(),
+  "amount": zod.number(),
+  "currentValue": zod.number().nullish(),
+  "currency": zod.string(),
+  "status": zod.string(),
+  "investmentDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Export investments as CSV
+ */
+export const ExportInvestmentsQueryParams = zod.object({
+  "vendorId": zod.coerce.number()
+})
+
+export const ExportInvestmentsResponse = zod.unknown()
+
+
+/**
+ * @summary Update an investment
+ */
+export const UpdateInvestmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateInvestmentBody = zod.object({
+  "type": zod.string().optional(),
+  "name": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currentValue": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "status": zod.string().optional(),
+  "investmentDate": zod.string().optional()
+})
+
+export const UpdateInvestmentResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "name": zod.string(),
+  "notes": zod.string().nullish(),
+  "amount": zod.number(),
+  "currentValue": zod.number().nullish(),
+  "currency": zod.string(),
+  "status": zod.string(),
+  "investmentDate": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an investment
+ */
+export const DeleteInvestmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteInvestmentResponse = zod.void()
+
+
+/**
  * @summary List leads
  */
 export const ListLeadsQueryParams = zod.object({
@@ -1792,6 +2098,62 @@ export const GetVendorPerformanceAnalyticsResponse = zod.object({
   "ordersOverTime": zod.array(zod.object({
   "date": zod.string(),
   "count": zod.number()
+}))
+})
+
+
+/**
+ * @summary Profit & loss, expense breakdown, investment ROI, and cash-flow forecast for a vendor
+ */
+export const GetFinanceOverviewAnalyticsQueryParams = zod.object({
+  "vendorId": zod.coerce.number(),
+  "period": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const GetFinanceOverviewAnalyticsResponse = zod.object({
+  "range": zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "period": zod.string()
+}),
+  "revenueTrend": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number()
+})),
+  "profitAndLoss": zod.object({
+  "totalRevenue": zod.number(),
+  "totalExpenses": zod.number(),
+  "netProfit": zod.number(),
+  "byPeriod": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number(),
+  "expenses": zod.number(),
+  "profit": zod.number()
+}))
+}),
+  "expenseByCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "total": zod.number()
+})),
+  "investmentRoi": zod.object({
+  "totalInvested": zod.number(),
+  "totalCurrentValue": zod.number(),
+  "overallRoiPercent": zod.number(),
+  "byInvestment": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "invested": zod.number(),
+  "currentValue": zod.number(),
+  "roiPercent": zod.number()
+}))
+}),
+  "cashFlowForecast": zod.array(zod.object({
+  "date": zod.string(),
+  "projectedNet": zod.number(),
+  "isForecast": zod.boolean()
 }))
 })
 

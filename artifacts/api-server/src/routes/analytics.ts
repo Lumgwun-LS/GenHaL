@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { desc, and, gte, lte, eq as eqOp } from "drizzle-orm";
-import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable, paymentsTable } from "@workspace/db";
+import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable, paymentsTable, salesTable, expensesTable, investmentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { resolveDateRange } from "../lib/date-range";
@@ -11,6 +11,7 @@ import {
   GetAnalyticsOverviewResponse,
   GetSalesAnalyticsResponse,
   GetSocialAnalyticsResponse,
+  GetFinanceOverviewAnalyticsResponse,
 } from "@workspace/api-zod";
 
 function isAdmin(userId: string): boolean {
@@ -201,6 +202,98 @@ router.get("/analytics/vendor-performance", async (req, res): Promise<void> => {
     revenueOverTime: Object.entries(revenueByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount })),
     ordersOverTime: Object.entries(ordersByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
   });
+});
+
+/**
+ * GET /analytics/finance-overview?vendorId=&period=week|month|year|custom&from=&to=
+ * Combines the sales ledger, expenses, and investments into the 5 requested
+ * views: revenue trend, profit & loss, expense breakdown by category,
+ * investment ROI, and a simple linear-trend cash-flow forecast.
+ */
+router.get("/analytics/finance-overview", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendorId = Number(req.query.vendorId);
+  if (isNaN(vendorId)) { res.status(400).json({ error: "vendorId is required" }); return; }
+
+  const [vendor] = await db.select().from(vendorsTable).where(eqOp(vendorsTable.id, vendorId));
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (vendor.clerkUserId !== userId && !isAdmin(userId)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+
+  const [sales, expenses, investments] = await Promise.all([
+    db.select().from(salesTable).where(and(eqOp(salesTable.vendorId, vendorId), gte(salesTable.saleDate, from), lte(salesTable.saleDate, to))),
+    db.select().from(expensesTable).where(and(eqOp(expensesTable.vendorId, vendorId), gte(expensesTable.expenseDate, from), lte(expensesTable.expenseDate, to))),
+    db.select().from(investmentsTable).where(eqOp(investmentsTable.vendorId, vendorId)),
+  ]);
+
+  // ── Revenue trend (by day) ──────────────────────────────────────────────
+  const revenueByDayMap: Record<string, number> = {};
+  for (const s of sales) {
+    const key = s.saleDate.toISOString().split("T")[0]!;
+    revenueByDayMap[key] = (revenueByDayMap[key] ?? 0) + parseFloat(s.amount);
+  }
+  const revenueTrend = Object.entries(revenueByDayMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, revenue]) => ({ date, revenue }));
+
+  // ── Profit & loss (by day) ───────────────────────────────────────────────
+  const expenseByDayMap: Record<string, number> = {};
+  for (const e of expenses) {
+    const key = e.expenseDate.toISOString().split("T")[0]!;
+    expenseByDayMap[key] = (expenseByDayMap[key] ?? 0) + parseFloat(e.amount);
+  }
+  const allDays = Array.from(new Set([...Object.keys(revenueByDayMap), ...Object.keys(expenseByDayMap)])).sort();
+  const byPeriod = allDays.map((date) => {
+    const revenue = revenueByDayMap[date] ?? 0;
+    const expensesTotal = expenseByDayMap[date] ?? 0;
+    return { date, revenue, expenses: expensesTotal, profit: revenue - expensesTotal };
+  });
+  const totalRevenue = sales.reduce((s, r) => s + parseFloat(r.amount), 0);
+  const totalExpenses = expenses.reduce((s, r) => s + parseFloat(r.amount), 0);
+
+  // ── Expense breakdown by category ────────────────────────────────────────
+  const categoryMap: Record<string, number> = {};
+  for (const e of expenses) {
+    categoryMap[e.category] = (categoryMap[e.category] ?? 0) + parseFloat(e.amount);
+  }
+  const expenseByCategory = Object.entries(categoryMap)
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total);
+
+  // ── Investment ROI ───────────────────────────────────────────────────────
+  const byInvestment = investments.map((inv) => {
+    const invested = parseFloat(inv.amount);
+    const currentValue = inv.currentValue ? parseFloat(inv.currentValue) : invested;
+    const roiPercent = invested > 0 ? ((currentValue - invested) / invested) * 100 : 0;
+    return { id: inv.id, name: inv.name, type: inv.type, invested, currentValue, roiPercent };
+  });
+  const totalInvested = byInvestment.reduce((s, i) => s + i.invested, 0);
+  const totalCurrentValue = byInvestment.reduce((s, i) => s + i.currentValue, 0);
+  const overallRoiPercent = totalInvested > 0 ? ((totalCurrentValue - totalInvested) / totalInvested) * 100 : 0;
+
+  // ── Cash flow forecast ────────────────────────────────────────────────────
+  // Simple linear projection: extend the average daily net (revenue - expenses)
+  // from the selected range forward for the same number of days.
+  const rangeDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+  const avgDailyNet = (totalRevenue - totalExpenses) / rangeDays;
+  const historicalCashFlow = byPeriod.map((p) => ({ date: p.date, projectedNet: p.profit, isForecast: false }));
+  const forecastDays = Math.min(30, rangeDays);
+  const forecastCashFlow = Array.from({ length: forecastDays }, (_, idx) => {
+    const date = new Date(to.getTime() + (idx + 1) * 24 * 60 * 60 * 1000).toISOString().split("T")[0]!;
+    return { date, projectedNet: avgDailyNet, isForecast: true };
+  });
+
+  res.json(GetFinanceOverviewAnalyticsResponse.parse({
+    range: { from: from.toISOString(), to: to.toISOString(), period },
+    revenueTrend,
+    profitAndLoss: { totalRevenue, totalExpenses, netProfit: totalRevenue - totalExpenses, byPeriod },
+    expenseByCategory,
+    investmentRoi: { totalInvested, totalCurrentValue, overallRoiPercent, byInvestment },
+    cashFlowForecast: [...historicalCashFlow, ...forecastCashFlow],
+  }));
 });
 
 export default router;

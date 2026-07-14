@@ -36,6 +36,10 @@ import Account from "@/pages/account";
 import Onboarding from "@/pages/onboarding";
 import VoiceCampaigns from "@/pages/voice-campaigns/index";
 import VoiceCampaignDetail from "@/pages/voice-campaigns/detail";
+import Sales from "@/pages/sales/index";
+import Expenses from "@/pages/expenses/index";
+import Investments from "@/pages/investments/index";
+import FinanceAnalytics from "@/pages/finance-analytics/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -240,6 +244,10 @@ function ClerkProviderWithRoutes() {
           <Route path="/voice-campaigns" component={() => <AuthenticatedRoute component={VoiceCampaigns} />} />
           <Route path="/voice-campaigns/:id" component={() => <AuthenticatedRoute component={VoiceCampaignDetail} />} />
           <Route path="/admin" component={() => <AuthenticatedRoute component={AdminPanel} />} />
+          <Route path="/sales" component={() => <AuthenticatedRoute component={Sales} />} />
+          <Route path="/expenses" component={() => <AuthenticatedRoute component={Expenses} />} />
+          <Route path="/investments" component={() => <AuthenticatedRoute component={Investments} />} />
+          <Route path="/finance-analytics" component={() => <AuthenticatedRoute component={FinanceAnalytics} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           
