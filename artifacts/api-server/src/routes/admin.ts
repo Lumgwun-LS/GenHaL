@@ -14,7 +14,7 @@ import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, getSiteContentAuditLog, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
 import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
-import { retryCampaignCall } from "./voice-campaigns";
+import { retryCampaignCall, retryAllFailedCampaignCalls } from "./voice-campaigns";
 import { sendSlackAlert } from "../lib/slack";
 import { runVoiceBackfill, getVoiceBackfillLastRun } from "../lib/voice-backfill";
 import { syncSaleFromPayment } from "../lib/sales-sync";
@@ -580,6 +580,33 @@ router.post("/admin/voice-call-logs/:id/retry", async (req, res): Promise<void> 
     return;
   }
   res.json({ success: true });
+});
+
+// ─── POST /admin/voice-campaigns/:cid/retry-failed ─────────────────────────────
+
+/**
+ * Retries every failed campaign call for one campaign in one click, instead
+ * of an admin clicking Retry per row. Reuses retryAllFailedCampaignCalls,
+ * which calls retryCampaignCall per row with the same rate-limiting delay
+ * runCampaignCalls uses.
+ */
+router.post("/admin/voice-campaigns/:cid/retry-failed", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const campaignId = Number(req.params.cid);
+  if (!Number.isInteger(campaignId) || campaignId <= 0) {
+    res.status(400).json({ error: "Invalid campaign id." });
+    return;
+  }
+
+  const result = await retryAllFailedCampaignCalls(campaignId);
+  if (result.attempted === 0) {
+    res.status(400).json({ error: "No failed calls to retry for this campaign.", ...result });
+    return;
+  }
+  res.json({ success: true, ...result });
 });
 
 // ─── GET /admin/audit-log ─────────────────────────────────────────────────────

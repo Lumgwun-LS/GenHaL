@@ -1293,6 +1293,61 @@ async function retryVoiceCall(logId: number): Promise<void> {
   }
 }
 
+async function retryAllFailedCampaignCalls(
+  campaignId: number,
+): Promise<{ attempted: number; succeeded: number; failed: number }> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-failed`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to retry campaign calls");
+  }
+  return res.json() as Promise<{ attempted: number; succeeded: number; failed: number }>;
+}
+
+function RetryAllFailedButton({
+  campaignId,
+  failedCount,
+  onDone,
+}: {
+  campaignId: number;
+  failedCount: number;
+  onDone: () => void;
+}) {
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetryAll() {
+    setRetrying(true);
+    try {
+      const result = await retryAllFailedCampaignCalls(campaignId);
+      toast.success(
+        `Retried ${result.attempted} call(s): ${result.succeeded} placed, ${result.failed} still failed.`,
+      );
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to retry campaign calls");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 text-xs shrink-0"
+      onClick={handleRetryAll}
+      disabled={retrying}
+      data-testid={`button-retry-all-failed-${campaignId}`}
+    >
+      <RefreshCw className="w-3.5 h-3.5" />
+      {retrying ? "Retrying…" : `Retry all failed (${failedCount})`}
+    </Button>
+  );
+}
+
 function RetryVoiceCallButton({ logId, purpose, onDone }: { logId: number; purpose: string; onDone: () => void }) {
   const [retrying, setRetrying] = useState(false);
 
@@ -1379,6 +1434,18 @@ export default function AdminPanel() {
     enabled: isAdmin,
     refetchInterval: 30_000,
   });
+
+  const failedCampaignCallsByCampaign = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const log of voiceCallLogs ?? []) {
+      if (log.purpose === "campaign" && log.status === "failed" && log.campaignId != null) {
+        counts.set(log.campaignId, (counts.get(log.campaignId) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([campaignId, count]) => ({ campaignId, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [voiceCallLogs]);
 
   const { data: voiceStatus } = useQuery({
     queryKey: ["admin-voice-status"],
@@ -2039,6 +2106,37 @@ export default function AdminPanel() {
             )}
 
             {voiceBackfillStatus && <VoiceBackfillCard status={voiceBackfillStatus} />}
+
+            {failedCampaignCallsByCampaign.length > 0 && (
+              <Card data-testid="card-failed-campaign-calls">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertCircle className="w-4 h-4 text-destructive" /> Failed campaign calls
+                  </CardTitle>
+                  <CardDescription>
+                    Retry every failed call for a campaign in one click, instead of retrying rows one at a time.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {failedCampaignCallsByCampaign.map(({ campaignId, count }) => (
+                    <div
+                      key={campaignId}
+                      className="flex items-center justify-between rounded-md border p-2.5"
+                      data-testid={`row-failed-campaign-${campaignId}`}
+                    >
+                      <span className="text-sm">
+                        Campaign #{campaignId} — {count} failed call{count === 1 ? "" : "s"}
+                      </span>
+                      <RetryAllFailedButton
+                        campaignId={campaignId}
+                        failedCount={count}
+                        onDone={() => qc.invalidateQueries({ queryKey: ["admin-voice-call-logs"] })}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

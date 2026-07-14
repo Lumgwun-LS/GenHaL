@@ -182,6 +182,48 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
 }
 
 /**
+ * Retries every failed campaign call for a given campaign, one at a time
+ * (reusing retryCampaignCall per call), with the same inter-call delay used
+ * by runCampaignCalls so a bulk retry doesn't hammer Twilio/the provider.
+ * Best-effort per call — one failure doesn't stop the rest from being
+ * attempted — and the final tally is returned so the caller can report
+ * how many succeeded vs. failed.
+ */
+export async function retryAllFailedCampaignCalls(
+  campaignId: number,
+): Promise<{ attempted: number; succeeded: number; failed: number }> {
+  const failedLogs = await db
+    .select({ id: voiceCallLogsTable.id })
+    .from(voiceCallLogsTable)
+    .where(and(
+      eq(voiceCallLogsTable.campaignId, campaignId),
+      eq(voiceCallLogsTable.purpose, "campaign"),
+      eq(voiceCallLogsTable.status, "failed"),
+    ))
+    .orderBy(desc(voiceCallLogsTable.initiatedAt));
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const log of failedLogs) {
+    const result = await retryCampaignCall(log.id);
+    if (result.ok) {
+      succeeded++;
+    } else {
+      failed++;
+    }
+    // Small delay between calls to avoid rate-limiting — mirrors the launch loop.
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  logger.info(
+    { campaignId, attempted: failedLogs.length, succeeded, failed },
+    "[voice-campaign] Bulk retry of failed calls finished",
+  );
+
+  return { attempted: failedLogs.length, succeeded, failed };
+}
+
+/**
  * Notifies the vendor (in-app + email) once an auto-launched or manually
  * launched campaign reaches a terminal state. Best-effort: failures here are
  * logged, not thrown, so a notification hiccup never re-marks the campaign
