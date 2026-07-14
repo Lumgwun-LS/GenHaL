@@ -11,7 +11,7 @@ export default function Scene3() {
     >
       <div className="absolute inset-0 bg-[#05050A]/80 backdrop-blur-md -z-10" />
 
-      <div className="text-center z-10 mb-[6vh] mt-[5vh]">
+      <div className="w-full text-center z-10 mb-[6vh] mt-[5vh] flex flex-col items-center">
         <motion.h2
           className="text-[3.5vw] font-display font-bold mb-[2vh]"
           initial={{ opacity: 0, y: '-3vh' }}
@@ -30,13 +30,13 @@ export default function Scene3() {
         </motion.p>
       </div>
 
-      <div className="relative w-full max-w-[60vw] flex items-center justify-center h-[50vh]">
+      <div className="relative w-[60vw] flex items-center justify-center h-[50vh]">
         <motion.img
           src={`${import.meta.env.BASE_URL}images/ai_brain.png`}
           alt="AI Core"
-          className="w-[20vw] h-[20vw] object-contain absolute z-20 drop-shadow-[0_0_80px_rgba(138,43,226,0.6)]"
-          initial={{ scale: 0, rotate: -45 }}
-          animate={{ scale: 1, rotate: 0 }}
+          className="w-[20vw] h-[20vw] object-contain absolute left-1/2 top-1/2 z-20 drop-shadow-[0_0_80px_rgba(138,43,226,0.6)]"
+          initial={{ scale: 0, rotate: -45, x: "-50%", y: "-50%" }}
+          animate={{ scale: 1, rotate: 0, x: "-50%", y: "-50%" }}
           transition={{ delay: 1.2, type: "spring", stiffness: 80, damping: 15 }}
         />
 

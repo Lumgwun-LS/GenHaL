@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useVideoPlayer } from '@/lib/video';
 import { AnimatePresence, motion } from 'framer-motion';
+import bgMusic from '@assets/awajimaa_song_drive.mp3';
 
 import { Scene0 } from './video_scenes/Scene0';
 import { Scene1 } from './video_scenes/Scene1';
@@ -9,6 +10,7 @@ import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 import { Scene6 } from './video_scenes/Scene6';
+import { Scene7 } from './video_scenes/Scene7';
 
 export const SCENE_DURATIONS = {
   scene0: 4000,
@@ -16,8 +18,9 @@ export const SCENE_DURATIONS = {
   scene2: 5500,
   scene3: 5500,
   scene4: 5500,
-  scene5: 11000,
-  scene6: 5000,
+  scene5: 7500,
+  scene6: 11000,
+  scene7: 5000,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -28,6 +31,7 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene4: Scene4,
   scene5: Scene5,
   scene6: Scene6,
+  scene7: Scene7,
 };
 
 const SCENE_START_SEC: Record<string, number> = (() => {
@@ -105,10 +109,10 @@ export default function VideoTemplate({
       <motion.div
         className="absolute w-[40vw] h-[40vw] rounded-full blur-[6vw] pointer-events-none"
         animate={{
-          x: currentScene === 0 ? '-10vw' : currentScene === 1 ? '70vw' : currentScene === 2 ? '10vw' : currentScene === 3 ? '60vw' : currentScene === 4 ? '-10vw' : currentScene === 5 ? '80vw' : '50vw',
-          y: currentScene === 0 ? '-10vh' : currentScene === 1 ? '60vh' : currentScene === 2 ? '-20vh' : currentScene === 3 ? '50vh' : currentScene === 4 ? '-10vh' : currentScene === 5 ? '70vh' : '50vh',
+          x: currentScene === 0 ? '-10vw' : currentScene === 1 ? '70vw' : currentScene === 2 ? '10vw' : currentScene === 3 ? '60vw' : currentScene === 4 ? '-10vw' : currentScene === 5 ? '80vw' : currentScene === 6 ? '10vw' : '50vw',
+          y: currentScene === 0 ? '-10vh' : currentScene === 1 ? '60vh' : currentScene === 2 ? '-20vh' : currentScene === 3 ? '50vh' : currentScene === 4 ? '-10vh' : currentScene === 5 ? '70vh' : currentScene === 6 ? '-20vh' : '50vh',
           backgroundColor: currentScene % 2 === 0 ? 'rgba(127, 80, 255, 0.4)' : 'rgba(255, 127, 80, 0.3)',
-          scale: currentScene === 6 ? 2 : 1,
+          scale: currentScene === 7 ? 2 : 1,
         }}
         transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
@@ -117,10 +121,10 @@ export default function VideoTemplate({
       <motion.div
         className="absolute w-[50vw] h-[50vw] rounded-full blur-[8vw] pointer-events-none"
         animate={{
-          x: currentScene === 0 ? '80vw' : currentScene === 1 ? '-20vw' : currentScene === 2 ? '80vw' : currentScene === 3 ? '-10vw' : currentScene === 4 ? '70vw' : currentScene === 5 ? '20vw' : '50vw',
-          y: currentScene === 0 ? '80vh' : currentScene === 1 ? '10vh' : currentScene === 2 ? '80vh' : currentScene === 3 ? '-20vh' : currentScene === 4 ? '90vh' : currentScene === 5 ? '-10vh' : '50vh',
+          x: currentScene === 0 ? '80vw' : currentScene === 1 ? '-20vw' : currentScene === 2 ? '80vw' : currentScene === 3 ? '-10vw' : currentScene === 4 ? '70vw' : currentScene === 5 ? '20vw' : currentScene === 6 ? '80vw' : '50vw',
+          y: currentScene === 0 ? '80vh' : currentScene === 1 ? '10vh' : currentScene === 2 ? '80vh' : currentScene === 3 ? '-20vh' : currentScene === 4 ? '90vh' : currentScene === 5 ? '-10vh' : currentScene === 6 ? '80vh' : '50vh',
           backgroundColor: currentScene % 2 !== 0 ? 'rgba(127, 80, 255, 0.3)' : 'rgba(255, 127, 80, 0.2)',
-          scale: currentScene === 6 ? 0 : 1,
+          scale: currentScene === 7 ? 0 : 1,
         }}
         transition={{ duration: 2.5, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
@@ -139,12 +143,12 @@ export default function VideoTemplate({
       <motion.div
         className="absolute z-50 font-display font-bold flex items-center gap-[0.5vw]"
         animate={{
-          top: currentScene === 0 ? '50vh' : currentScene === 6 ? '50vh' : '4vh',
-          left: currentScene === 0 ? '50vw' : currentScene === 6 ? '50vw' : '4vw',
-          x: currentScene === 0 ? '-50%' : currentScene === 6 ? '-50%' : '0%',
-          y: currentScene === 0 ? '-50%' : currentScene === 6 ? '-50%' : '0%',
-          scale: currentScene === 0 ? 2 : currentScene === 6 ? 2.5 : 1,
-          opacity: currentScene === 0 ? 0 : currentScene === 6 ? 0 : 1, // Hidden in 0 and 6 as it's part of the scene
+          top: currentScene === 0 ? '50vh' : currentScene === 7 ? '50vh' : '4vh',
+          left: currentScene === 0 ? '50vw' : currentScene === 7 ? '50vw' : '4vw',
+          x: currentScene === 0 ? '-50%' : currentScene === 7 ? '-50%' : '0%',
+          y: currentScene === 0 ? '-50%' : currentScene === 7 ? '-50%' : '0%',
+          scale: currentScene === 0 ? 2 : currentScene === 7 ? 2.5 : 1,
+          opacity: currentScene === 0 ? 0 : currentScene === 7 ? 0 : 1, // Hidden in 0 and 7 as it's part of the scene
         }}
         transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
       >
@@ -161,7 +165,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        src={bgMusic}
         preload="auto"
         autoPlay
         muted={muted}

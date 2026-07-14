@@ -16,13 +16,13 @@ export const Scene1 = () => {
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 pl-[8vw] flex flex-col justify-center"
+      className="absolute inset-0 z-10 pl-[12vw] flex flex-col justify-center"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -100, filter: 'blur(10px)' }}
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="max-w-[40vw] relative z-20">
+      <div className="max-w-[38vw] relative z-20">
         <div className="overflow-hidden mb-[1vw]">
           <motion.p
             className="text-accent font-bold tracking-widest uppercase text-[1vw]"
@@ -34,7 +34,7 @@ export const Scene1 = () => {
             }
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            VendorHub
+            Awajimaa Biz Suite
           </motion.p>
         </div>
         

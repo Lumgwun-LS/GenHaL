@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { 
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
-  Command, Play, MapPin, Phone
+  Command, Play, MapPin, Phone, ChevronLeft
 } from "lucide-react";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
 
@@ -35,8 +35,8 @@ const PHONE_NUMBERS = ["+1 917 821 8640", "+234 703 884 3102"];
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 const VIDEOS = [
-  { id: "tour", title: "Platform Tour", src: "/videos/promo-tour.mp4" },
-  { id: "social", title: "Social & AI Studio", src: "/videos/promo-social.mp4" }
+  { id: "promo", title: "VendorHub Promo Video", path: "/vendorhub-promo-video/" },
+  { id: "walkthrough", title: "VendorHub Walkthrough Video", path: "/vendorhub-walkthrough-video/" },
 ];
 
 type SiteContent = {
@@ -162,46 +162,64 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}
             className="w-full max-w-5xl mx-auto rounded-xl overflow-hidden border border-border/50 shadow-2xl bg-card/40 backdrop-blur-md relative z-20 mb-10"
           >
-            <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border/50 bg-background/80">
-              {VIDEOS.map((v, i) => (
-                <button
-                  key={v.id}
-                  onClick={() => setActiveVideo(i)}
-                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-all relative outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    i === activeVideo ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  {i === activeVideo && (
-                    <motion.div
-                      layoutId="activeVideoTab"
-                      className="absolute inset-0 bg-primary rounded-md -z-10 shadow-md shadow-primary/40"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-10 flex items-center gap-2">
-                    {i === activeVideo ? <Play className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3" />}
-                    {v.title}
-                  </span>
-                </button>
-              ))}
-              <div className="ml-auto flex items-center gap-1.5 px-3">
+            <div className="flex items-center gap-3 p-3 border-b border-border/50 bg-background/80">
+              <Play className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />
+              <span className="text-sm font-semibold truncate">{VIDEOS[activeVideo].title}</span>
+              <div className="ml-auto flex items-center gap-1.5 px-3 shrink-0">
                  <div className="w-2.5 h-2.5 rounded-full bg-destructive/80" />
                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
               </div>
             </div>
-            
-            <div className="relative aspect-[16/9] bg-black overflow-hidden">
-              {VIDEOS.map((v, i) => (
-                <video
-                  key={v.id}
-                  src={v.src}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${
-                    i === activeVideo ? "opacity-100 relative z-10" : "opacity-0 pointer-events-none z-0"
-                  }`}
-                  autoPlay muted loop playsInline
-                />
-              ))}
+
+            <div className="relative aspect-[16/9] bg-black overflow-hidden group">
+              <div
+                className="absolute inset-0 flex h-full transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{ width: `${VIDEOS.length * 100}%`, transform: `translateX(-${activeVideo * (100 / VIDEOS.length)}%)` }}
+              >
+                {VIDEOS.map((v) => (
+                  <div key={v.id} className="relative h-full" style={{ width: `${100 / VIDEOS.length}%` }}>
+                    <iframe
+                      src={v.path}
+                      title={v.title}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                aria-label="Previous video"
+                onClick={() => setActiveVideo((i) => (i - 1 + VIDEOS.length) % VIDEOS.length)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-background/70 backdrop-blur border border-border/60 flex items-center justify-center text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/90 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next video"
+                onClick={() => setActiveVideo((i) => (i + 1) % VIDEOS.length)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-background/70 backdrop-blur border border-border/60 flex items-center justify-center text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/90 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+                {VIDEOS.map((v, i) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    aria-label={`Show ${v.title}`}
+                    onClick={() => setActiveVideo(i)}
+                    className={`h-1.5 rounded-full transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                      i === activeVideo ? "w-6 bg-primary" : "w-1.5 bg-white/40 hover:bg-white/60"
+                    }`}
+                  />
+                ))}
+              </div>
+
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-b-xl z-20 pointer-events-none" />
             </div>
           </motion.div>

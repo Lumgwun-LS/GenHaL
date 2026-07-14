@@ -1,5 +1,17 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { Share2, Sparkles, TrendingUp, Wallet, Building2, Package, Mic, Users } from 'lucide-react';
+
+const FEATURES = [
+  { icon: Share2, title: 'Unified Social', desc: 'Publish to all networks' },
+  { icon: Sparkles, title: 'AI Studio', desc: 'Generate marketing content' },
+  { icon: TrendingUp, title: 'Sales CRM', desc: 'Track every lead' },
+  { icon: Wallet, title: 'Finance Suite', desc: 'Manage ledgers & expenses' },
+  { icon: Building2, title: 'Branches', desc: 'Model physical locations' },
+  { icon: Package, title: 'Inventory', desc: 'Real-time stock alerts' },
+  { icon: Mic, title: 'Voice AI', desc: 'Automated voice campaigns' },
+  { icon: Users, title: 'Multi-Vendor', desc: 'Manage multiple brands' },
+];
 
 export const Scene5 = () => {
   const [phase, setPhase] = useState(0);
@@ -8,116 +20,94 @@ export const Scene5 = () => {
     const timers = [
       setTimeout(() => setPhase(1), 500),
       setTimeout(() => setPhase(2), 1200),
-      setTimeout(() => setPhase(3), 2200),
-      setTimeout(() => setPhase(4), 5800), // swap to ecosystem line
-      setTimeout(() => setPhase(5), 10200), // Exit
+      setTimeout(() => setPhase(3), 2000), // features stagger in
+      setTimeout(() => setPhase(4), 6800), // Exit
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 flex items-center justify-center"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center pt-[5vh]"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Background Image Layer */}
-      <motion.div
-        className="absolute inset-0 z-0 overflow-hidden"
-        initial={{ scale: 1.2, opacity: 0 }}
-        animate={
-          phase >= 5 ? { scale: 1.3, opacity: 0 } :
-          phase >= 1 ? { scale: 1, opacity: 0.6 } :
-          { scale: 1.2, opacity: 0 }
-        }
-        transition={{ duration: 2, ease: "easeOut" }}
-      >
-        <img 
-          src={`${import.meta.env.BASE_URL}images/ai-marketing.png`}
-          alt="AI Concept"
-          className="w-full h-full object-cover opacity-50 mix-blend-screen"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/80 to-bg-dark/30" />
-        <div className="absolute inset-0 bg-gradient-to-r from-bg-dark via-transparent to-bg-dark" />
-      </motion.div>
-
-      {/* Content Container */}
-      <div className="relative z-10 flex flex-col items-center text-center max-w-[60vw] px-[2vw]">
-        <motion.div
-          className="w-[5vw] h-[5vw] rounded-full bg-gradient-to-r from-primary to-accent mb-[2vw] flex items-center justify-center shadow-[0_0_2vw_rgba(127,80,255,0.8)] relative"
-          initial={{ scale: 0, rotate: -180 }}
-          animate={
-            phase >= 5 ? { scale: 0, rotate: 180 } :
-            phase >= 1 ? { scale: 1, rotate: 0 } :
-            { scale: 0, rotate: -180 }
-          }
-          transition={{ type: "spring", stiffness: 200, damping: 20 }}
-        >
-          {/* Pulsing rings */}
-          <motion.div 
-            className="absolute inset-0 rounded-full border-2 border-white/50"
-            animate={{ scale: [1, 1.5, 2], opacity: [1, 0.5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          />
-          <motion.div 
-            className="absolute inset-0 rounded-full border-2 border-accent/50"
-            animate={{ scale: [1, 1.8, 2.5], opacity: [1, 0.3, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "linear", delay: 0.5 }}
-          />
-          
-          {/* Core shape */}
-          <div className="w-[2vw] h-[2vw] rounded-[0.5vw] bg-white rotate-45" />
-        </motion.div>
-
-        <div className="overflow-hidden mb-[1vw] w-full text-center">
+      <div className="text-center z-20 mb-[4vh]">
+        <div className="overflow-hidden mb-[1vw]">
           <motion.h2
-            className="text-[4.2vw] font-display font-bold text-white tracking-tight"
-            initial={{ y: 120 }}
+            className="text-[4vw] font-display font-bold text-white tracking-tight"
+            initial={{ y: 80, opacity: 0 }}
             animate={
-              phase >= 5 ? { y: -120 } :
-              phase >= 2 ? { y: 0 } :
-              { y: 120 }
+              phase >= 4 ? { y: -50, opacity: 0 } :
+              phase >= 1 ? { y: 0, opacity: 1 } :
+              { y: 80, opacity: 0 }
             }
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            Powered by Awajimaa <span className="text-gradient-mixed italic">AI.</span>
+            Everything your <span className="text-gradient-primary">organization needs</span>
           </motion.h2>
         </div>
-
-        <div className="relative w-full flex items-center justify-center min-h-[3.5vw]">
-          <AnimatePresence mode="wait">
-            {phase === 3 && (
-              <motion.p
-                key="subtext-1"
-                className="text-[1.5vw] text-text-secondary max-w-[40vw] mx-auto"
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -30, opacity: 0 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              >
-                Awajimaa AI connects the dots. Generating insights, automating logistics, and driving growth across every app.
-              </motion.p>
-            )}
-            {phase === 4 && (
-              <motion.p
-                key="subtext-2"
-                className="text-[1.3vw] leading-relaxed text-text-secondary max-w-[46vw] mx-auto"
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -30, opacity: 0 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              >
-                The Awajimaa AI is a core part of the Unified Civictech, Fintech &amp; Super App called the{' '}
-                <span className="text-white font-semibold">Awajimaa App</span> — an intelligent platform for
-                reporting and responding to emergencies, commerce, and education. The WeChat of Africa, and the
-                digital infrastructure that will power states and organizations across Africa and beyond.
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </div>
+        <motion.p
+          className="text-[1.5vw] text-text-secondary"
+          initial={{ opacity: 0, y: 20 }}
+          animate={
+            phase >= 4 ? { opacity: 0, y: -20 } :
+            phase >= 2 ? { opacity: 1, y: 0 } :
+            { opacity: 0, y: 20 }
+          }
+          transition={{ duration: 0.6 }}
+        >
+          A complete suite of tools to scale your operations.
+        </motion.p>
       </div>
+
+      <div className="grid grid-cols-4 gap-[2vw] max-w-[80vw] mx-auto relative z-20">
+        {FEATURES.map((feat, idx) => (
+          <motion.div
+            key={feat.title}
+            className="bg-bg-muted/80 backdrop-blur-md border border-white/10 rounded-[1vw] p-[1.5vw] shadow-xl flex flex-col items-start"
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={
+              phase >= 4 ? { opacity: 0, y: 50, scale: 0.9 } :
+              phase >= 3 ? { opacity: 1, y: 0, scale: 1 } :
+              { opacity: 0, y: 50, scale: 0.9 }
+            }
+            transition={{
+              type: 'spring',
+              stiffness: 300,
+              damping: 25,
+              delay: phase === 3 ? idx * 0.1 : 0,
+            }}
+          >
+            <div className="mb-[1vw] bg-white/5 w-[3.5vw] h-[3.5vw] flex items-center justify-center rounded-[0.8vw] text-primary">
+              <feat.icon className="w-[1.8vw] h-[1.8vw]" />
+            </div>
+            <h3 className="text-white font-bold text-[1.2vw] mb-[0.3vw]">{feat.title}</h3>
+            <p className="text-text-secondary text-[0.9vw] leading-snug">{feat.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Decorative Background Mesh */}
+      <motion.div
+        className="absolute inset-0 z-0 pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: phase >= 1 && phase < 4 ? 0.3 : 0 }}
+        transition={{ duration: 1 }}
+      >
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `radial-gradient(circle at center, var(--color-primary) 1px, transparent 1px)`,
+            backgroundSize: '3vw 3vw',
+            backgroundPosition: 'center',
+            maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 70%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 70%)'
+          }}
+        />
+      </motion.div>
     </motion.div>
   );
 };
