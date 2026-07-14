@@ -21,6 +21,7 @@ import SiteEditor from "./site-editor";
 import PaymentGatewaysPanel from "./payment-gateways";
 import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
+import PaymentConflictsPanel from "./payment-conflicts";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -421,6 +422,14 @@ type VoiceSignatureFailureAlert = {
   lastFailureAt: string | null;
   flagged: boolean;
 };
+
+type PaymentConflictSummary = { id: number }[];
+
+async function fetchPaymentConflicts(): Promise<PaymentConflictSummary> {
+  const res = await fetch(`${BASE_URL}/api/admin/payment-conflicts`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load payment conflicts");
+  return res.json() as Promise<PaymentConflictSummary>;
+}
 
 async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureAlert> {
   const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/alert`, { credentials: "include" });
@@ -1254,6 +1263,13 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: paymentConflicts } = useQuery({
+    queryKey: ["admin-payment-conflicts"],
+    queryFn: fetchPaymentConflicts,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const { data: voiceBackfillStatus } = useQuery({
     queryKey: ["admin-voice-backfill"],
     queryFn: fetchVoiceBackfillStatus,
@@ -1390,6 +1406,14 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="messages" className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4" /> Messages
+          </TabsTrigger>
+          <TabsTrigger value="payment-conflicts" className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4" /> Payment Conflicts
+            {(paymentConflicts?.length ?? 0) > 0 && (
+              <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px] leading-4">
+                {paymentConflicts!.length}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="payment-gateways" className="flex items-center gap-2">
             <CreditCard className="w-4 h-4" /> Payment Gateways
@@ -2190,6 +2214,10 @@ export default function AdminPanel() {
         </TabsContent>
 
         {/* ── Payment Gateways tab ─────────────────────────────────────── */}
+        <TabsContent value="payment-conflicts">
+          <PaymentConflictsPanel />
+        </TabsContent>
+
         <TabsContent value="payment-gateways">
           <PaymentGatewaysPanel />
         </TabsContent>

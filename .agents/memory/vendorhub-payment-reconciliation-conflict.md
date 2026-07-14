@@ -1,12 +1,14 @@
 ---
 name: VendorHub payment reconciliation conflicts
-description: How webhooks.ts guards a vendor-cancelled payment from being resurrected by a late provider webhook.
+description: How reconciliation conflicts (late webhook vs vendor-cancelled payment) are detected and now resolved by admins.
 ---
 
-Every provider webhook handler in `artifacts/api-server/src/routes/payments/webhooks.ts` (Stripe, Paystack, Flutterwave, Nomba, Remita) matches purely by `providerReference` and used to unconditionally overwrite `paymentsTable.status`. This let a late-arriving webhook silently flip a vendor-cancelled payment back to "paid"/"failed", because `/external/payments/:id/cancel` and `/:id/retry` only update the local row — they never void the provider's checkout session.
+## Detection
+`applyPaymentStatusTransition` in `artifacts/api-server/src/routes/payments/webhooks.ts` refuses to let a late webhook flip a vendor-cancelled payment back to paid/failed. On conflict it stores `metadata.reconciliationConflict = { attemptedStatus, provider, detectedAt }` on the payment row and fires a Slack alert, but leaves the row's `status` untouched.
 
-Fix: a shared `applyPaymentStatusTransition(reference, newStatus, provider)` helper selects the row first; if its current status is `"cancelled"`, it refuses to overwrite, instead recording `metadata.reconciliationConflict` (attemptedStatus/provider/detectedAt) and firing a Slack alert, and returns an `"conflict"` outcome the caller treats as `matched: true` (handled, not an error to retry).
+## Admin resolution surface
+`GET /admin/payment-conflicts` and `POST /admin/payment-conflicts/:id/resolve` (`artifacts/api-server/src/routes/admin.ts`) let an admin review and close these out. Resolution values: `dismiss` (keep current status), or `paid`/`failed`/`refunded` (override status to what the provider reported). Either way `reconciliationConflict.resolvedAt/resolvedBy/resolution` is set so the list query (`WHERE metadata->'reconciliationConflict'->>'resolvedAt' IS NULL`) excludes it going forward.
 
-**Why:** cancellation and retry are vendor-initiated business decisions; a stale provider-side session completing after that must never contradict them, especially since a retry may already have a separate successful payment for the same order.
+**Why:** conflicts are rare and manual by nature (a customer completing checkout on a stale link after cancellation) — there's no safe automatic resolution, so an admin must look at context and decide.
 
-**How to apply:** any new payment-status write path (new gateway, admin manual override, reconciliation job) must route through this same guard rather than writing `paymentsTable.status` directly from a bare provider match.
+**How to apply:** if `applyPaymentStatusTransition`'s guard conditions change (e.g. a new payment status becomes cancel-like), keep the conflict detection and the admin resolve endpoint's `RESOLUTIONS` list in sync. If resolving to `paid`, reuse `syncSaleFromPayment`; any status change should call `notifyVendorPaymentStatus`, matching what a normal webhook transition would have done.

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -17,6 +17,8 @@ import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-schedule
 import { retryCampaignCall } from "./voice-campaigns";
 import { sendSlackAlert } from "../lib/slack";
 import { runVoiceBackfill, getVoiceBackfillLastRun } from "../lib/voice-backfill";
+import { syncSaleFromPayment } from "../lib/sales-sync";
+import { notifyVendorPaymentStatus } from "../lib/push";
 
 /**
  * Export-burst detection: if the same admin downloads the vendor CSV export
@@ -745,6 +747,155 @@ router.get("/admin/voice-status", (req, res): void => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
   res.json({ configured: isTwilioConfigured() });
+});
+
+// ─── GET /admin/payment-conflicts ──────────────────────────────────────────────
+// Payments where applyPaymentStatusTransition (payments/webhooks.ts) refused to
+// resurrect a vendor-cancelled payment because a late webhook reported it as
+// paid/failed. The conflict is recorded on metadata.reconciliationConflict and
+// a Slack alert already fired at the time — this is the durable, admin-visible
+// counterpart so someone doesn't have to know to go dig through Slack + the DB.
+// Resolved conflicts (resolvedAt set) are excluded so this stays a to-do list.
+
+router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const rows = await db
+    .select({
+      id: paymentsTable.id,
+      vendorId: paymentsTable.vendorId,
+      vendorName: vendorsTable.name,
+      orderId: paymentsTable.orderId,
+      provider: paymentsTable.provider,
+      providerReference: paymentsTable.providerReference,
+      amount: paymentsTable.amount,
+      currency: paymentsTable.currency,
+      status: paymentsTable.status,
+      metadata: paymentsTable.metadata,
+      updatedAt: paymentsTable.updatedAt,
+    })
+    .from(paymentsTable)
+    .leftJoin(vendorsTable, eq(paymentsTable.vendorId, vendorsTable.id))
+    .where(
+      sql`
+        ${paymentsTable.metadata} -> 'reconciliationConflict' IS NOT NULL
+        AND (${paymentsTable.metadata} -> 'reconciliationConflict' ->> 'resolvedAt') IS NULL
+      `,
+    )
+    .orderBy(desc(paymentsTable.updatedAt))
+    .limit(200);
+
+  const conflicts = rows.map((r) => {
+    const meta = (r.metadata ?? {}) as Record<string, unknown>;
+    const conflict = meta.reconciliationConflict as
+      | { attemptedStatus: string; provider: string; detectedAt: string }
+      | undefined;
+    return {
+      id: r.id,
+      vendorId: r.vendorId,
+      vendorName: r.vendorName,
+      orderId: r.orderId,
+      provider: r.provider,
+      providerReference: r.providerReference,
+      amount: r.amount,
+      currency: r.currency,
+      currentStatus: r.status,
+      attemptedStatus: conflict?.attemptedStatus ?? null,
+      webhookProvider: conflict?.provider ?? null,
+      detectedAt: conflict?.detectedAt ?? null,
+    };
+  });
+
+  res.json(conflicts);
+});
+
+// ─── POST /admin/payment-conflicts/:id/resolve ─────────────────────────────────
+// Lets an admin close out a flagged conflict: either "dismiss" it (the locally
+// cancelled status was correct and nothing should change) or manually apply the
+// status the provider reported (the webhook was actually right and the payment
+// should move to paid/failed/refunded). Either way the conflict is marked
+// resolved so it drops off the list, and who/when is recorded for audit.
+
+router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const paymentId = Number(req.params.id);
+  if (!Number.isInteger(paymentId) || paymentId <= 0) {
+    res.status(400).json({ error: "Invalid payment id." });
+    return;
+  }
+
+  const RESOLUTIONS = ["dismiss", "paid", "failed", "refunded"] as const;
+  const { resolution } = req.body as { resolution?: string };
+  if (!resolution || !RESOLUTIONS.includes(resolution as (typeof RESOLUTIONS)[number])) {
+    res.status(400).json({ error: `resolution must be one of: ${RESOLUTIONS.join(", ")}` });
+    return;
+  }
+
+  const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
+  if (!existing) {
+    res.status(404).json({ error: "Payment not found." });
+    return;
+  }
+
+  const meta = (existing.metadata ?? {}) as Record<string, unknown>;
+  const conflict = meta.reconciliationConflict as Record<string, unknown> | undefined;
+  if (!conflict) {
+    res.status(400).json({ error: "This payment has no flagged reconciliation conflict." });
+    return;
+  }
+  if (conflict.resolvedAt) {
+    res.status(400).json({ error: "This conflict was already resolved." });
+    return;
+  }
+
+  const resolvedMetadata = {
+    ...meta,
+    reconciliationConflict: {
+      ...conflict,
+      resolution,
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: userId,
+    },
+  };
+
+  const newStatus = resolution === "dismiss" ? existing.status : resolution;
+
+  const [updated] = await db
+    .update(paymentsTable)
+    .set({ status: newStatus, metadata: resolvedMetadata, updatedAt: new Date() })
+    .where(eq(paymentsTable.id, paymentId))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Payment not found." });
+    return;
+  }
+
+  // If the admin decided the provider was right after all, apply the same
+  // side effects a normal webhook transition would have (sale sync + vendor
+  // notice) so the payment doesn't just look "paid" without downstream effects.
+  if (resolution === "paid") {
+    await syncSaleFromPayment({
+      id: updated.id,
+      vendorId: updated.vendorId,
+      amount: updated.amount,
+      currency: updated.currency,
+    });
+  }
+  if (resolution === "paid" || resolution === "failed" || resolution === "refunded") {
+    await notifyVendorPaymentStatus(updated.vendorId, resolution, updated.amount, updated.currency);
+  }
+
+  console.info(
+    `[admin] payment reconciliation conflict resolved — payment=${paymentId} admin=${userId} resolution=${resolution}`,
+  );
+
+  res.json({ success: true, payment: updated });
 });
 
 export default router;
