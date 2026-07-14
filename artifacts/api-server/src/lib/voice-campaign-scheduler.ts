@@ -22,8 +22,12 @@ import { voiceCampaignsTable, leadsTable } from "@workspace/db/schema";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { runCampaignCalls } from "../routes/voice-campaigns";
+import { recordJobRun } from "./job-run-status";
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
+
+// Name this job's state is recorded under in job_run_status, for the admin panel.
+export const VOICE_CAMPAIGN_SCHEDULER_JOB_NAME = "voice-campaign-scheduler";
 
 async function launchDueCampaigns(): Promise<void> {
   const due = await db
@@ -74,9 +78,20 @@ async function launchDueCampaigns(): Promise<void> {
   }
 }
 
+async function tick(): Promise<void> {
+  try {
+    await launchDueCampaigns();
+    await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: false, error: message });
+    throw err;
+  }
+}
+
 /** Starts the scheduled-campaign launcher: checks every 5 minutes for due campaigns. */
 export function startVoiceCampaignScheduler(): void {
-  setInterval(() => { launchDueCampaigns().catch(() => {}); }, 5 * 60 * 1000);
-  launchDueCampaigns().catch(() => {}); // run once on boot too, in case a campaign was already due
+  setInterval(() => { tick().catch(() => {}); }, 5 * 60 * 1000);
+  tick().catch(() => {}); // run once on boot too, in case a campaign was already due
   logger.info("[voice-scheduler] Scheduled campaign launcher started — checks every 5 minutes");
 }

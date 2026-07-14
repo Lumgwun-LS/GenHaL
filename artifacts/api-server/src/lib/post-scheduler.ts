@@ -28,6 +28,10 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { executeClaimedPublish } from "../routes/posts";
 import { notifyScheduledPostFailed } from "./post-notifications";
+import { recordJobRun } from "./job-run-status";
+
+// Name this tick's state is recorded under in job_run_status, for the admin panel.
+export const POST_SCHEDULER_JOB_NAME = "post-scheduler";
 
 async function publishDuePosts(): Promise<void> {
   const due = await db
@@ -96,9 +100,20 @@ async function publishDuePosts(): Promise<void> {
   }
 }
 
+async function tick(): Promise<void> {
+  try {
+    await publishDuePosts();
+    await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: false, error: message });
+    throw err;
+  }
+}
+
 /** Starts the scheduled-post publisher: checks every 5 minutes for due posts. */
 export function startPostScheduler(): void {
-  setInterval(() => { publishDuePosts().catch(() => {}); }, 5 * 60 * 1000);
-  publishDuePosts().catch(() => {}); // run once on boot too, in case a post was already due
+  setInterval(() => { tick().catch(() => {}); }, 5 * 60 * 1000);
+  tick().catch(() => {}); // run once on boot too, in case a post was already due
   logger.info("[post-scheduler] Scheduled post publisher started — checks every 5 minutes");
 }

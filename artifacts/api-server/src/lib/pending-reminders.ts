@@ -17,8 +17,12 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
+import { recordJobRun } from "./job-run-status";
 
 const PAYMENT_PENDING_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h
+
+// Name this tick's state is recorded under in job_run_status, for the admin panel.
+export const PENDING_REMINDERS_JOB_NAME = "pending-reminders";
 
 function getPublicDomain(): string | null {
   return process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || null;
@@ -115,16 +119,30 @@ function truncate(s: string, max: number): string {
 /** Checks every 30 minutes for pending posts/payments that need a reminder email. */
 export function startPendingReminderScheduler(): void {
   async function tick() {
+    const errors: string[] = [];
     try {
       await remindPendingPosts();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`post reminder pass: ${message}`);
       logger.error({ err }, "[pending-reminders] Unhandled error in post reminder pass");
     }
     try {
       await remindPendingPayments();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`payment reminder pass: ${message}`);
       logger.error({ err }, "[pending-reminders] Unhandled error in payment reminder pass");
     }
+
+    // Recorded even on partial failure so a schema-drift crash on the very
+    // first tick (before any admin would otherwise notice) shows up in the
+    // admin panel's Background Jobs list, not just a log line no one is
+    // watching (see job-run-status.ts).
+    await recordJobRun(PENDING_REMINDERS_JOB_NAME, {
+      success: errors.length === 0,
+      error: errors.length > 0 ? errors.join("; ") : undefined,
+    });
   }
 
   setInterval(() => { tick().catch(() => {}); }, 30 * 60 * 1000);

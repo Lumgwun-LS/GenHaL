@@ -69,3 +69,4 @@
 - [Payment method availability vs. enabled](payment-method-availability.md) — "enabled" gateway toggle ≠ "will work"; getPaymentMethodAvailability mirrors real checkout credential resolution and gates order creation on it.
 - [Public shop-link checkout retry](public-shop-link-checkout-retry.md) — unauthenticated retry scoped by token+orderId, shared chargeProvider() helper, redirect URL carries ?order=id so the customer can return to a retry banner.
 - [Dev DB drift is widespread, not one-off](dev-db-drift-widespread.md) — many migrations (0020-0033+) were never applied to dev DB; when fixing one job's crash, check sibling jobs for the same missing-column/table pattern before declaring done.
+- [Schema-drift guard + job-run-status](schema-drift-job-run-status.md) — startup drift check (curated list) + per-tick recordJobRun on every scheduler feed a generic admin Background Jobs panel so silent first-tick failures are visible.

@@ -23,6 +23,10 @@ import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { fetchCallStatus, isTwilioConfigured } from "./voice-caller";
 import { getSiteContentBlock, setSiteContentBlock } from "./site-content";
+import { recordJobRun } from "./job-run-status";
+
+// Name this job's state is recorded under in job_run_status, for the admin panel.
+export const VOICE_BACKFILL_JOB_NAME = "voice-backfill";
 
 const NON_TERMINAL_STATUSES = ["queued", "ringing", "in-progress"] as const;
 
@@ -91,64 +95,72 @@ async function findStuckCallSids(): Promise<Map<string, string>> {
 export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBackfillResult> {
   const ranAt = new Date().toISOString();
 
-  if (!isTwilioConfigured()) {
-    const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: 0, updated: 0, failed: 0 };
-    await setSiteContentBlock("admin.voiceBackfillLastRun", result, "system");
-    return result;
-  }
-
-  const stuckSids = await findStuckCallSids();
-  let updated = 0;
-  let failed = 0;
-  const newFixes: VoiceBackfillFix[] = [];
-
-  for (const [callSid, fromStatus] of stuckSids) {
-    try {
-      const snapshot = await fetchCallStatus(callSid);
-      if (!snapshot || NON_TERMINAL_STATUSES.includes(snapshot.status as (typeof NON_TERMINAL_STATUSES)[number])) {
-        // Still genuinely in progress (or Twilio has no record) — leave it alone.
-        continue;
-      }
-
-      await db
-        .update(voiceCallLogsTable)
-        .set({
-          status: snapshot.status,
-          ...(snapshot.durationSeconds !== undefined ? { durationSeconds: snapshot.durationSeconds } : {}),
-        })
-        .where(eq(voiceCallLogsTable.callSid, callSid));
-
-      await db
-        .update(voiceCampaignCallsTable)
-        .set({
-          status: snapshot.status,
-          ...(snapshot.durationSeconds !== undefined ? { durationSeconds: snapshot.durationSeconds } : {}),
-        })
-        .where(eq(voiceCampaignCallsTable.callSid, callSid));
-
-      updated++;
-      newFixes.push({ ranAt, callSid, fromStatus, toStatus: snapshot.status });
-      logger.info({ callSid, status: snapshot.status }, "[voice-backfill] Reconciled stuck call from Twilio");
-    } catch (err) {
-      failed++;
-      logger.error({ err, callSid }, "[voice-backfill] Failed to reconcile call — will retry next run");
+  try {
+    if (!isTwilioConfigured()) {
+      const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: 0, updated: 0, failed: 0 };
+      await setSiteContentBlock("admin.voiceBackfillLastRun", result, "system");
+      await recordJobRun(VOICE_BACKFILL_JOB_NAME, { success: true, checkedCount: 0, affectedCount: 0 });
+      return result;
     }
+
+    const stuckSids = await findStuckCallSids();
+    let updated = 0;
+    let failed = 0;
+    const newFixes: VoiceBackfillFix[] = [];
+
+    for (const [callSid, fromStatus] of stuckSids) {
+      try {
+        const snapshot = await fetchCallStatus(callSid);
+        if (!snapshot || NON_TERMINAL_STATUSES.includes(snapshot.status as (typeof NON_TERMINAL_STATUSES)[number])) {
+          // Still genuinely in progress (or Twilio has no record) — leave it alone.
+          continue;
+        }
+
+        await db
+          .update(voiceCallLogsTable)
+          .set({
+            status: snapshot.status,
+            ...(snapshot.durationSeconds !== undefined ? { durationSeconds: snapshot.durationSeconds } : {}),
+          })
+          .where(eq(voiceCallLogsTable.callSid, callSid));
+
+        await db
+          .update(voiceCampaignCallsTable)
+          .set({
+            status: snapshot.status,
+            ...(snapshot.durationSeconds !== undefined ? { durationSeconds: snapshot.durationSeconds } : {}),
+          })
+          .where(eq(voiceCampaignCallsTable.callSid, callSid));
+
+        updated++;
+        newFixes.push({ ranAt, callSid, fromStatus, toStatus: snapshot.status });
+        logger.info({ callSid, status: snapshot.status }, "[voice-backfill] Reconciled stuck call from Twilio");
+      } catch (err) {
+        failed++;
+        logger.error({ err, callSid }, "[voice-backfill] Failed to reconcile call — will retry next run");
+      }
+    }
+
+    const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: stuckSids.size, updated, failed };
+    await setSiteContentBlock("admin.voiceBackfillLastRun", result, "system");
+
+    if (newFixes.length > 0) {
+      const existing = (await getSiteContentBlock("admin.voiceBackfillRecentFixes")) as VoiceBackfillFix[];
+      const merged = [...newFixes, ...existing].slice(0, MAX_RECENT_FIXES);
+      await setSiteContentBlock("admin.voiceBackfillRecentFixes", merged, "system");
+    }
+
+    if (stuckSids.size > 0) {
+      logger.info(result, "[voice-backfill] Run complete");
+    }
+
+    await recordJobRun(VOICE_BACKFILL_JOB_NAME, { success: true, checkedCount: stuckSids.size, affectedCount: updated });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordJobRun(VOICE_BACKFILL_JOB_NAME, { success: false, error: message });
+    throw err;
   }
-
-  const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: stuckSids.size, updated, failed };
-  await setSiteContentBlock("admin.voiceBackfillLastRun", result, "system");
-
-  if (newFixes.length > 0) {
-    const existing = (await getSiteContentBlock("admin.voiceBackfillRecentFixes")) as VoiceBackfillFix[];
-    const merged = [...newFixes, ...existing].slice(0, MAX_RECENT_FIXES);
-    await setSiteContentBlock("admin.voiceBackfillRecentFixes", merged, "system");
-  }
-
-  if (stuckSids.size > 0) {
-    logger.info(result, "[voice-backfill] Run complete");
-  }
-
-  return result;
 }
 
 export async function getVoiceBackfillLastRun(): Promise<VoiceBackfillResult> {

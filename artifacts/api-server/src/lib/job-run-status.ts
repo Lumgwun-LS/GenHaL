@@ -69,3 +69,26 @@ export async function getJobRunStatus(jobName: string): Promise<JobRunStatusView
     isFailing: (row?.consecutiveFailures ?? 0) >= JOB_FAILING_THRESHOLD,
   };
 }
+
+/**
+ * Returns the health view for every named job that has ever recorded a run,
+ * for a single admin-facing "Background Jobs" list — including jobs that
+ * only have a dedicated per-job admin page (billing sync, social health),
+ * so a first-tick failure on ANY scheduler (e.g. from schema drift) is
+ * visible somewhere even if nobody built it a bespoke panel yet.
+ */
+export async function getAllJobRunStatuses(): Promise<JobRunStatusView[]> {
+  const rows = await db.select().from(jobRunStatusTable);
+  return rows
+    .map((row) => ({
+      jobName: row.jobName,
+      lastRunAt: row.lastRunAt?.toISOString() ?? null,
+      lastSuccessAt: row.lastSuccessAt?.toISOString() ?? null,
+      lastCheckedCount: row.lastCheckedCount ?? null,
+      lastAffectedCount: row.lastAffectedCount ?? null,
+      lastError: row.lastError ?? null,
+      consecutiveFailures: row.consecutiveFailures ?? 0,
+      isFailing: (row.consecutiveFailures ?? 0) >= JOB_FAILING_THRESHOLD,
+    }))
+    .sort((a, b) => a.jobName.localeCompare(b.jobName));
+}

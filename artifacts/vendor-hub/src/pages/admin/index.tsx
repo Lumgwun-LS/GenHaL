@@ -28,6 +28,7 @@ import PaymentGatewaysPanel from "./payment-gateways";
 import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 import PaymentConflictsPanel from "./payment-conflicts";
+import BackgroundJobsPanel from "./background-jobs";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -1819,6 +1820,9 @@ export default function AdminPanel() {
           <TabsTrigger value="billing-sync" className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" /> Billing Sync
           </TabsTrigger>
+          <TabsTrigger value="background-jobs" className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" /> Background Jobs
+          </TabsTrigger>
           <TabsTrigger value="site-editor" className="flex items-center gap-2">
             <Layout className="w-4 h-4" /> Site Editor
           </TabsTrigger>
@@ -2764,6 +2768,10 @@ export default function AdminPanel() {
         {/* ── Billing Sync tab ───────────────────────────────────────── */}
         <TabsContent value="billing-sync">
           <BillingSyncPanel />
+        </TabsContent>
+
+        <TabsContent value="background-jobs">
+          <BackgroundJobsPanel />
         </TabsContent>
 
         {/* ── Site Editor tab ────────────────────────────────────────── */}

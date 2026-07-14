@@ -33,6 +33,7 @@ import { logger } from "./logger";
 import { placeCall } from "./voice-caller";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
+import { recordJobRun } from "./job-run-status";
 
 /** True if a birthday notification was already created for this vendor today (UTC). */
 async function alreadyNotifiedToday(vendorId: number, utcDateStr: string): Promise<boolean> {
@@ -392,6 +393,10 @@ export async function retryBirthdayCall(logId: number): Promise<{ ok: true } | {
  * - `lastRanDate` advances only AFTER a successful run so a DB error at 08:00
  *   UTC doesn't permanently skip that day — the next 5-min tick will retry.
  */
+// Names each job's state is recorded under in job_run_status, for the admin panel.
+export const BIRTHDAY_CALL_JOB_NAME = "birthday-calls";
+export const BIRTHDAY_NOTIFY_JOB_NAME = "birthday-notifications";
+
 export function startBirthdayScheduler(): void {
   let lastCallDate = "";   // tracks 06:00 UTC voice call run
   let lastNotifDate = "";  // tracks 08:00 UTC in-app / email run
@@ -406,7 +411,10 @@ export function startBirthdayScheduler(): void {
       try {
         await runBirthdayCallJob(utcDateStr);
         lastCallDate = utcDateStr;
+        await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true });
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: false, error: message });
         logger.error({ err }, "[voice-birthday] Unhandled error — will retry next tick");
       }
     }
@@ -416,7 +424,10 @@ export function startBirthdayScheduler(): void {
       try {
         await runBirthdayJob(utcDateStr);
         lastNotifDate = utcDateStr;
+        await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true });
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: false, error: message });
         logger.error({ err }, "[birthday] Unhandled error — will retry next tick");
       }
     }

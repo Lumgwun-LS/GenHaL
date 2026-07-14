@@ -9,17 +9,31 @@
  */
 import { logger } from "./logger";
 import { recheckAllPlatformCredentials } from "./platform-gateways";
+import { recordJobRun } from "./job-run-status";
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
+// Name this tick's state is recorded under in job_run_status, for the admin panel.
+export const GATEWAY_HEALTH_JOB_NAME = "gateway-health";
+
 async function tick(): Promise<void> {
-  const results = await recheckAllPlatformCredentials();
-  for (const r of results) {
-    if (r.becameFailing) {
-      logger.error({ provider: r.provider, error: r.error }, "Platform gateway credentials started failing");
-    } else if (r.recovered) {
-      logger.info({ provider: r.provider }, "Platform gateway credentials recovered");
+  try {
+    const results = await recheckAllPlatformCredentials();
+    let affected = 0;
+    for (const r of results) {
+      if (r.becameFailing) {
+        affected++;
+        logger.error({ provider: r.provider, error: r.error }, "Platform gateway credentials started failing");
+      } else if (r.recovered) {
+        affected++;
+        logger.info({ provider: r.provider }, "Platform gateway credentials recovered");
+      }
     }
+    await recordJobRun(GATEWAY_HEALTH_JOB_NAME, { success: true, checkedCount: results.length, affectedCount: affected });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordJobRun(GATEWAY_HEALTH_JOB_NAME, { success: false, error: message });
+    throw err;
   }
 }
 
