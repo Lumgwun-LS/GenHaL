@@ -16,7 +16,7 @@ import { ZodError } from "zod";
 import { resendBirthdayEmail, retryBirthdayCall } from "../lib/birthday-scheduler";
 import { retryCampaignCall, retryAllFailedCampaignCalls } from "./voice-campaigns";
 import { sendSlackAlert } from "../lib/slack";
-import { runVoiceBackfill, getVoiceBackfillLastRun } from "../lib/voice-backfill";
+import { runVoiceBackfill, getVoiceBackfillLastRun, getVoiceBackfillRecentFixes } from "../lib/voice-backfill";
 import { syncSaleFromPayment } from "../lib/sales-sync";
 import { notifyVendorPaymentStatus } from "../lib/push";
 
@@ -959,8 +959,8 @@ router.get("/admin/voice-backfill", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const lastRun = await getVoiceBackfillLastRun();
-  res.json(lastRun);
+  const [lastRun, recentFixes] = await Promise.all([getVoiceBackfillLastRun(), getVoiceBackfillRecentFixes()]);
+  res.json({ ...lastRun, recentFixes });
 });
 
 // ─── POST /admin/voice-backfill/run ────────────────────────────────────────────

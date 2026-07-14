@@ -83,6 +83,12 @@ export const DEFAULT_SITE_CONTENT = {
     updated: 0,
     failed: 0,
   },
+  "admin.voiceBackfillRecentFixes": [] as Array<{
+    ranAt: string;
+    callSid: string;
+    fromStatus: string;
+    toStatus: string;
+  }>,
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -154,6 +160,15 @@ const voiceBackfillLastRunSchema = z.object({
   failed: z.number().int().min(0),
 });
 
+const voiceBackfillRecentFixesSchema = z.array(
+  z.object({
+    ranAt: z.string(),
+    callSid: z.string().max(100),
+    fromStatus: z.string().max(50),
+    toStatus: z.string().max(50),
+  }),
+).max(200);
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -164,6 +179,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.exportAlertSettings": exportAlertSettingsSchema,
   "admin.voiceSignatureFailureAlertSettings": voiceSignatureFailureAlertSettingsSchema,
   "admin.voiceBackfillLastRun": voiceBackfillLastRunSchema,
+  "admin.voiceBackfillRecentFixes": voiceBackfillRecentFixesSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

@@ -38,12 +38,22 @@ export type VoiceBackfillResult = {
   failed: number;
 };
 
-async function findStuckCallSids(): Promise<string[]> {
+export type VoiceBackfillFix = {
+  ranAt: string;
+  callSid: string;
+  fromStatus: string;
+  toStatus: string;
+};
+
+const MAX_RECENT_FIXES = 50;
+
+/** Maps each stuck callSid to the non-terminal status it was found in (log table takes priority). */
+async function findStuckCallSids(): Promise<Map<string, string>> {
   const cutoff = new Date(Date.now() - STUCK_AFTER_MS);
 
   const [logRows, campaignRows] = await Promise.all([
     db
-      .select({ callSid: voiceCallLogsTable.callSid })
+      .select({ callSid: voiceCallLogsTable.callSid, status: voiceCallLogsTable.status })
       .from(voiceCallLogsTable)
       .where(
         and(
@@ -53,7 +63,7 @@ async function findStuckCallSids(): Promise<string[]> {
         ),
       ),
     db
-      .select({ callSid: voiceCampaignCallsTable.callSid })
+      .select({ callSid: voiceCampaignCallsTable.callSid, status: voiceCampaignCallsTable.status })
       .from(voiceCampaignCallsTable)
       .where(
         and(
@@ -64,11 +74,12 @@ async function findStuckCallSids(): Promise<string[]> {
       ),
   ]);
 
-  const sids = new Set<string>();
-  for (const r of [...logRows, ...campaignRows]) {
-    if (r.callSid) sids.add(r.callSid);
+  const sids = new Map<string, string>();
+  // Campaign rows first so log rows (checked second) take priority if both exist.
+  for (const r of [...campaignRows, ...logRows]) {
+    if (r.callSid) sids.set(r.callSid, r.status);
   }
-  return [...sids];
+  return sids;
 }
 
 /**
@@ -89,8 +100,9 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
   const stuckSids = await findStuckCallSids();
   let updated = 0;
   let failed = 0;
+  const newFixes: VoiceBackfillFix[] = [];
 
-  for (const callSid of stuckSids) {
+  for (const [callSid, fromStatus] of stuckSids) {
     try {
       const snapshot = await fetchCallStatus(callSid);
       if (!snapshot || NON_TERMINAL_STATUSES.includes(snapshot.status as (typeof NON_TERMINAL_STATUSES)[number])) {
@@ -115,6 +127,7 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
         .where(eq(voiceCampaignCallsTable.callSid, callSid));
 
       updated++;
+      newFixes.push({ ranAt, callSid, fromStatus, toStatus: snapshot.status });
       logger.info({ callSid, status: snapshot.status }, "[voice-backfill] Reconciled stuck call from Twilio");
     } catch (err) {
       failed++;
@@ -122,10 +135,16 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
     }
   }
 
-  const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: stuckSids.length, updated, failed };
+  const result: VoiceBackfillResult = { ranAt, triggeredBy, checked: stuckSids.size, updated, failed };
   await setSiteContentBlock("admin.voiceBackfillLastRun", result, "system");
 
-  if (stuckSids.length > 0) {
+  if (newFixes.length > 0) {
+    const existing = (await getSiteContentBlock("admin.voiceBackfillRecentFixes")) as VoiceBackfillFix[];
+    const merged = [...newFixes, ...existing].slice(0, MAX_RECENT_FIXES);
+    await setSiteContentBlock("admin.voiceBackfillRecentFixes", merged, "system");
+  }
+
+  if (stuckSids.size > 0) {
     logger.info(result, "[voice-backfill] Run complete");
   }
 
@@ -134,6 +153,10 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
 
 export async function getVoiceBackfillLastRun(): Promise<VoiceBackfillResult> {
   return (await getSiteContentBlock("admin.voiceBackfillLastRun")) as VoiceBackfillResult;
+}
+
+export async function getVoiceBackfillRecentFixes(): Promise<VoiceBackfillFix[]> {
+  return (await getSiteContentBlock("admin.voiceBackfillRecentFixes")) as VoiceBackfillFix[];
 }
 
 /** Starts the automatic reconciliation job: checks every 5 minutes for stuck calls. */

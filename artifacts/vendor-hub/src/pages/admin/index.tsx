@@ -648,12 +648,20 @@ async function saveVoiceSignatureFailureAlertSettings(value: { threshold: number
   }
 }
 
+type VoiceBackfillFix = {
+  ranAt: string;
+  callSid: string;
+  fromStatus: string;
+  toStatus: string;
+};
+
 type VoiceBackfillStatus = {
   ranAt: string | null;
   triggeredBy: string;
   checked: number;
   updated: number;
   failed: number;
+  recentFixes: VoiceBackfillFix[];
 };
 
 async function fetchVoiceBackfillStatus(): Promise<VoiceBackfillStatus> {
@@ -714,6 +722,35 @@ function VoiceBackfillCard({ status }: { status: VoiceBackfillStatus }) {
           </p>
         ) : (
           <p>Hasn't run yet — it will run automatically within 5 minutes of the server starting.</p>
+        )}
+
+        {status.recentFixes.length > 0 && (
+          <div className="mt-4 rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Call SID</TableHead>
+                  <TableHead>Before</TableHead>
+                  <TableHead>After</TableHead>
+                  <TableHead>Fixed at</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {status.recentFixes.map((fix) => (
+                  <TableRow key={`${fix.callSid}-${fix.ranAt}`} data-testid={`row-voice-backfill-fix-${fix.callSid}`}>
+                    <TableCell className="font-mono text-xs">{fix.callSid}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="capitalize">{fix.fromStatus}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">{fix.toStatus}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">{new Date(fix.ranAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -80,7 +80,7 @@ vi.mock("../../lib/site-content", () => ({
 vi.mock("../../lib/birthday-scheduler", () => ({ resendBirthdayEmail: async () => ({ ok: true }), retryBirthdayCall: async () => ({ ok: true }) }));
 vi.mock("../voice-campaigns", () => ({ retryCampaignCall: async () => ({ ok: true }) }));
 vi.mock("../../lib/slack", () => ({ sendSlackAlert: async () => {} }));
-vi.mock("../../lib/voice-backfill", () => ({ runVoiceBackfill: async () => ({}), getVoiceBackfillLastRun: async () => ({}) }));
+vi.mock("../../lib/voice-backfill", () => ({ runVoiceBackfill: async () => ({}), getVoiceBackfillLastRun: async () => ({}), getVoiceBackfillRecentFixes: async () => [] }));
 vi.mock("../../lib/sales-sync", () => ({
   syncSaleFromPayment: async (args: unknown) => {
     syncSaleCalls.push(args);
