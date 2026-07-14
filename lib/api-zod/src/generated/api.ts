@@ -753,12 +753,19 @@ export const GenerateAiImageResponse = zod.object({
 /**
  * @summary Generate a short AI video for a post
  */
+export const generateAiVideoBodySceneCountMax = 3;
+
+
+
 export const GenerateAiVideoBody = zod.object({
   "vendorId": zod.number(),
   "prompt": zod.string(),
   "style": zod.string().optional(),
   "industry": zod.string().optional(),
-  "captionText": zod.string().optional()
+  "captionText": zod.string().optional(),
+  "sceneCount": zod.number().min(1).max(generateAiVideoBodySceneCountMax).optional().describe('Number of distinct visual scenes to generate and stitch together (with crossfade transitions). Defaults to 1.'),
+  "motionTemplate": zod.enum(['auto', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'zoom-pan']).optional().describe('Camera motion style applied to each scene. \"auto\" cycles through templates across scenes. Defaults to \"auto\".'),
+  "includeMusic": zod.boolean().optional().describe('Whether to generate and mix in a short instrumental background track. Defaults to false.')
 })
 
 export const GenerateAiVideoResponse = zod.object({

@@ -4,8 +4,10 @@ import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
-import { generateVideoBuffer } from "../lib/video-generation";
+import { generateVideoBuffer, type MotionTemplate, type VideoScene } from "../lib/video-generation";
+import { generateMusicBuffer } from "../lib/ai-music";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
+import { logger } from "../lib/logger";
 import {
   GenerateAiImageBody,
   GenerateAiVideoBody,
@@ -89,17 +91,51 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
 });
 
 /**
- * Generates a short (~6s) video for a post: an AI product image, brought to
- * life with a Ken Burns zoom/pan and the post's caption burned in as a text
- * overlay. There's no supported text-to-video model available server-side
- * (see media-generation skill — OpenAI/Gemini AI Integrations don't support
- * video output), so this builds a real, relevant mp4 from the same
- * AI-generated image rather than mocking a placeholder clip.
+ * Splits a base image prompt into N distinct-but-consistent scene prompts for
+ * a multi-scene video (e.g. wide shot, close-up, in-use shot). Falls back to
+ * reusing the base prompt for every scene if the model call fails or returns
+ * something unusable — multi-scene still works, the scenes are just less varied.
+ */
+async function buildScenePrompts(basePrompt: string, sceneCount: number): Promise<string[]> {
+  if (sceneCount <= 1) return [basePrompt];
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 400,
+      messages: [
+        {
+          role: "system",
+          content: `You write short image-generation prompts for a multi-scene product video. Given a base product/marketing image prompt, produce exactly ${sceneCount} distinct scene prompts that show the same product/subject from different angles, framings, or moments (e.g. wide establishing shot, close-up detail, in-use/lifestyle shot). Each must stay consistent with the base prompt's subject, style, and industry. Return ONLY a JSON array of ${sceneCount} strings, no other text.`,
+        },
+        { role: "user", content: basePrompt },
+      ],
+    });
+    const raw = (response.choices[0]?.message?.content ?? "").trim().replace(/^```json\s*|```$/g, "");
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length === sceneCount && parsed.every((p) => typeof p === "string" && p.trim())) {
+      return (parsed as string[]).map((p) => `${p.trim()}. Wide 16:9 social media post image, professional marketing quality.`);
+    }
+    throw new Error("unexpected scene prompt format");
+  } catch (err) {
+    logger.warn({ err }, "AI video scene prompt generation failed; reusing the base prompt for every scene");
+    return Array.from({ length: sceneCount }, () => basePrompt);
+  }
+}
+
+/**
+ * Generates a short video for a post: one or more AI product images, each
+ * brought to life with a motion template (zoom/pan), stitched together with
+ * crossfade transitions when there's more than one scene, the post's caption
+ * burned in on the opening scene, and an optional short instrumental
+ * background track. There's no supported text-to-video model available
+ * server-side (see media-generation skill — OpenAI/Gemini AI Integrations
+ * don't support video output), so this builds a real, relevant mp4 from
+ * AI-generated image(s) rather than mocking a placeholder clip.
  */
 router.post("/ai/generate-video", async (req, res): Promise<void> => {
   const parsed = GenerateAiVideoBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { vendorId, prompt, style, industry, captionText } = parsed.data;
+  const { vendorId, prompt, style, industry, captionText, sceneCount, motionTemplate, includeMusic } = parsed.data;
 
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -108,12 +144,37 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   if (captionText && captionText.length > MAX_CAPTION_OVERLAY_LEN) { res.status(400).json({ error: `Caption must be ${MAX_CAPTION_OVERLAY_LEN} characters or fewer.` }); return; }
 
   const fullPrompt = buildImagePrompt(prompt, style, industry);
+  const resolvedSceneCount = Math.min(Math.max(sceneCount ?? 1, 1), 3);
+  const resolvedMotionTemplate: MotionTemplate | "auto" = motionTemplate ?? "auto";
 
   let result: string;
   let status: "completed" | "failed" = "completed";
   try {
-    const imageBuffer = await generateImageBuffer(fullPrompt, "1536x1024", "high");
-    const videoBuffer = await generateVideoBuffer(imageBuffer, captionText ?? prompt);
+    const scenePrompts = await buildScenePrompts(fullPrompt, resolvedSceneCount);
+    const imageBuffers = await Promise.all(scenePrompts.map((p) => generateImageBuffer(p, "1536x1024", "high")));
+    const scenes: VideoScene[] = imageBuffers.map((imageBuffer, i) => ({
+      imageBuffer,
+      // Only burn the caption in on the opening scene so multi-scene videos
+      // don't repeat the same overlay text across every cut.
+      overlayText: i === 0 ? (captionText ?? prompt) : undefined,
+    }));
+
+    let musicBuffer: Buffer | undefined;
+    if (includeMusic) {
+      try {
+        const approxDurationSeconds = resolvedSceneCount === 1 ? 6 : resolvedSceneCount * 5 - (resolvedSceneCount - 1) * 0.6;
+        musicBuffer = await generateMusicBuffer(
+          `Upbeat, modern instrumental background music bed for a short ${industry ?? "small business"} social media product video. Soft synths and a subtle beat, no vocals, no lyrics.`,
+          approxDurationSeconds,
+        );
+      } catch (err) {
+        // Background music is a nice-to-have; failing to generate it should
+        // never block the video itself.
+        logger.warn({ err }, "AI video music generation failed; continuing without music");
+      }
+    }
+
+    const videoBuffer = await generateVideoBuffer(scenes, { motionTemplate: resolvedMotionTemplate, musicBuffer });
     // Stored in object storage (not a base64 data: URI) for the same reason as
     // generate-image — a publicly fetchable URL is what platform publish APIs need.
     const { publicUrl } = await storeGeneratedMedia(videoBuffer, "video/mp4");

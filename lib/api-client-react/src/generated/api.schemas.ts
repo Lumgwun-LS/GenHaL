@@ -301,12 +301,37 @@ export interface AiImageRequest {
   industry?: string;
 }
 
+/**
+ * Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto".
+ */
+export type AiVideoRequestMotionTemplate = typeof AiVideoRequestMotionTemplate[keyof typeof AiVideoRequestMotionTemplate];
+
+
+export const AiVideoRequestMotionTemplate = {
+  auto: 'auto',
+  'zoom-in': 'zoom-in',
+  'zoom-out': 'zoom-out',
+  'pan-left': 'pan-left',
+  'pan-right': 'pan-right',
+  'zoom-pan': 'zoom-pan',
+} as const;
+
 export interface AiVideoRequest {
   vendorId: number;
   prompt: string;
   style?: string;
   industry?: string;
   captionText?: string;
+  /**
+     * Number of distinct visual scenes to generate and stitch together (with crossfade transitions). Defaults to 1.
+     * @minimum 1
+     * @maximum 3
+     */
+  sceneCount?: number;
+  /** Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto". */
+  motionTemplate?: AiVideoRequestMotionTemplate;
+  /** Whether to generate and mix in a short instrumental background track. Defaults to false. */
+  includeMusic?: boolean;
 }
 
 export interface AiCaptionRequest {

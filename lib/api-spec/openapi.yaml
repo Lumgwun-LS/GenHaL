@@ -2985,6 +2985,18 @@ components:
           type: string
         captionText:
           type: string
+        sceneCount:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Number of distinct visual scenes to generate and stitch together (with crossfade transitions). Defaults to 1.
+        motionTemplate:
+          type: string
+          enum: [auto, zoom-in, zoom-out, pan-left, pan-right, zoom-pan]
+          description: Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto".
+        includeMusic:
+          type: boolean
+          description: Whether to generate and mix in a short instrumental background track. Defaults to false.
 
     AiCaptionRequest:
       type: object

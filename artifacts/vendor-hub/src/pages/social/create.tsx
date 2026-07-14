@@ -61,6 +61,9 @@ export default function CreatePost() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
   const [selectedAccountByPlatform, setSelectedAccountByPlatform] = useState<Record<string, number>>({});
+  const [sceneCount, setSceneCount] = useState<1 | 2 | 3>(1);
+  const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
+  const [includeMusic, setIncludeMusic] = useState(false);
 
   const { data: products } = useListProducts({ vendorId: 1 });
   const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
@@ -111,7 +114,16 @@ export default function CreatePost() {
       return;
     }
     try {
-      const result = await generateVideo.mutateAsync({ data: { vendorId: 1, prompt: caption, captionText: caption } });
+      const result = await generateVideo.mutateAsync({
+        data: {
+          vendorId: 1,
+          prompt: caption,
+          captionText: caption,
+          sceneCount,
+          motionTemplate,
+          includeMusic,
+        },
+      });
       if (result.status === "failed") { toast.error(result.result ?? "Video generation failed"); return; }
       setGeneratedVideo(result.result ?? null);
       setGeneratedImage(null);
@@ -327,8 +339,48 @@ export default function CreatePost() {
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
+              {!generatedVideo && (
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <label className="flex items-center gap-1.5">
+                    Scenes
+                    <select
+                      className="rounded-md border bg-background px-1.5 py-1 text-xs"
+                      value={sceneCount}
+                      onChange={(e) => setSceneCount(Number(e.target.value) as 1 | 2 | 3)}
+                      disabled={generateVideo.isPending}
+                    >
+                      <option value={1}>1 (single shot)</option>
+                      <option value={2}>2 (multi-scene)</option>
+                      <option value={3}>3 (multi-scene)</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    Motion
+                    <select
+                      className="rounded-md border bg-background px-1.5 py-1 text-xs"
+                      value={motionTemplate}
+                      onChange={(e) => setMotionTemplate(e.target.value as typeof motionTemplate)}
+                      disabled={generateVideo.isPending}
+                    >
+                      <option value="auto">Auto (cycle)</option>
+                      <option value="zoom-in">Zoom in</option>
+                      <option value="zoom-out">Zoom out</option>
+                      <option value="pan-left">Pan left</option>
+                      <option value="pan-right">Pan right</option>
+                      <option value="zoom-pan">Zoom + pan</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox checked={includeMusic} onCheckedChange={(v) => setIncludeMusic(!!v)} disabled={generateVideo.isPending} />
+                    Background music
+                  </label>
+                </div>
+              )}
               {generateVideo.isPending && (
-                <p className="mt-2 text-xs text-muted-foreground">Generating a short video from an AI product image — this can take up to a minute…</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {sceneCount > 1 ? `Generating a ${sceneCount}-scene video with AI product images` : "Generating a short video from an AI product image"}
+                  {includeMusic ? " and background music" : ""} — this can take up to a minute or two…
+                </p>
               )}
               {generatedImage && (
                 <div className="mt-3 relative">
