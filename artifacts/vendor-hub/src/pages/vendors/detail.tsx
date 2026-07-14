@@ -3,6 +3,7 @@ import { useParams, Link } from "wouter";
 import { useState, useEffect } from "react";
 import VendorPaymentAccounts from "@/components/vendor-payment-accounts";
 import UpgradePlanCard, { syncSubscriptionStatus } from "@/components/upgrade-plan-card";
+import BillingHistoryCard from "@/components/billing-history-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -571,6 +572,8 @@ export default function VendorDetail() {
             currentTier={vendor.subscriptionTier ?? "free"}
             onUpgradeInitiated={() => void refetchVendor()}
           />
+
+          <BillingHistoryCard vendorId={id} />
         </div>
       </div>
     </div>
