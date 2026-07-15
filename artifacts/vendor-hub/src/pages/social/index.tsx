@@ -19,7 +19,17 @@ import {
   getListPostPublicationsQueryKey,
   getListScheduledPostsQueryKey,
   getGetPostConnectionWarningsQueryKey,
+  type Post,
 } from "@workspace/api-client-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -372,20 +382,64 @@ function UpcomingScheduleView({
   const { data: scheduled, isLoading } = useListScheduledPosts({
     query: { enabled: true, queryKey: getListScheduledPostsQueryKey() },
   });
-  const groups = groupByDay(scheduled ?? []);
+  const { data: accounts } = useListSocialAccounts({ vendorId: 1 });
+  // "all" | "platform:<Platform>" | "account:<id>" — narrows the list without a refetch.
+  const [filter, setFilter] = useState("all");
+
+  const filtered = (scheduled ?? []).filter((post: Post) => {
+    if (filter === "all") return true;
+    if (filter.startsWith("platform:")) {
+      return post.platforms.includes(filter.slice("platform:".length));
+    }
+    if (filter.startsWith("account:")) {
+      const accountId = Number(filter.slice("account:".length));
+      return (post.socialAccountIds ?? []).includes(accountId);
+    }
+    return true;
+  });
+  const groups = groupByDay(filtered);
+  const platforms = Array.from(new Set((scheduled ?? []).flatMap((p) => p.platforms))).sort();
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <CalendarClock className="w-4 h-4" /> Upcoming Schedule
         </CardTitle>
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Filter" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All platforms &amp; accounts</SelectItem>
+            {platforms.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Platform</SelectLabel>
+                {platforms.map((p) => (
+                  <SelectItem key={p} value={`platform:${p}`}>{p}</SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+            {accounts && accounts.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Account</SelectLabel>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={`account:${a.id}`}>{a.platform} — {a.accountName}</SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading schedule...</p>
         ) : groups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No posts are scheduled yet. Approve a post and set a publish time to see it here.</p>
+          <p className="text-sm text-muted-foreground">
+            {filter === "all"
+              ? "No posts are scheduled yet. Approve a post and set a publish time to see it here."
+              : "No scheduled posts match this filter."}
+          </p>
         ) : (
           <div className="space-y-6">
             {groups.map(({ day, items }) => (

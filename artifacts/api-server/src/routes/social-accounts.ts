@@ -14,6 +14,15 @@ import {
 
 const router: IRouter = Router();
 
+/** Response schemas expect ISO date strings; Drizzle returns Date objects. Mirrors posts.ts serializePost. */
+function serializeAccount(account: typeof socialAccountsTable.$inferSelect) {
+  return {
+    ...account,
+    tokenExpiresAt: account.tokenExpiresAt ? account.tokenExpiresAt.toISOString() : null,
+    createdAt: account.createdAt.toISOString(),
+  };
+}
+
 /**
  * Resolves the calling Clerk user to their own vendor row (or confirms admin status).
  * Mirrors the ownership pattern used in posts.ts/vendors.ts.
@@ -42,7 +51,7 @@ router.get("/social-accounts", async (req, res): Promise<void> => {
   if (params.success && params.data.vendorId) {
     accounts = accounts.filter((a) => a.vendorId === params.data.vendorId);
   }
-  res.json(ListSocialAccountsResponse.parse(accounts));
+  res.json(ListSocialAccountsResponse.parse(accounts.map(serializeAccount)));
 });
 
 router.post("/social-accounts", async (req, res): Promise<void> => {
@@ -57,7 +66,7 @@ router.post("/social-accounts", async (req, res): Promise<void> => {
   }
 
   const [account] = await db.insert(socialAccountsTable).values(parsed.data).returning();
-  res.status(201).json(CreateSocialAccountResponse.parse(account));
+  res.status(201).json(CreateSocialAccountResponse.parse(serializeAccount(account)));
 });
 
 router.get("/social-accounts/:id", async (req, res): Promise<void> => {
@@ -69,7 +78,7 @@ router.get("/social-accounts/:id", async (req, res): Promise<void> => {
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!isAdmin && authedVendorId !== account.vendorId) { res.status(403).json({ error: "You do not have permission to view this account." }); return; }
 
-  res.json(GetSocialAccountResponse.parse(account));
+  res.json(GetSocialAccountResponse.parse(serializeAccount(account)));
 });
 
 router.delete("/social-accounts/:id", async (req, res): Promise<void> => {
