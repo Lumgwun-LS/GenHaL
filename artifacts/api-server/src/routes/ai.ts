@@ -11,6 +11,7 @@ import { generateMusicBuffer } from "../lib/ai-music";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
+import { consumeQuota, releaseQuota, getVendorForUsage, quotaExceededMessage } from "../lib/usage";
 import {
   GenerateAiImageBody,
   GenerateAiVideoBody,
@@ -80,6 +81,14 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
   if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
 
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  // Reserve quota atomically BEFORE generating (so concurrent requests can
+  // never both pass a stale read and jointly overshoot the limit). Refund
+  // below if generation ends up failing.
+  const quotaCheck = await consumeQuota(usageVendor, "aiImages", 1);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
+
   const fullPrompt = buildImagePrompt(prompt, style, industry);
 
   let result: string;
@@ -99,6 +108,8 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
     status = "failed";
     result = `Image generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
+
+  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -166,6 +177,11 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
   if (captionText && captionText.length > MAX_CAPTION_OVERLAY_LEN) { res.status(400).json({ error: `Caption must be ${MAX_CAPTION_OVERLAY_LEN} characters or fewer.` }); return; }
 
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const quotaCheck = await consumeQuota(usageVendor, "aiVideos", 1);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
+
   const fullPrompt = buildImagePrompt(prompt, style, industry);
   const resolvedSceneCount = Math.min(Math.max(sceneCount ?? 1, 1), 3);
   const resolvedMotionTemplate: MotionTemplate | "auto" = motionTemplate ?? "auto";
@@ -207,6 +223,8 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
     result = `Video generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
+  if (status === "failed") await releaseQuota(vendorId, "aiVideos", 1, quotaCheck.periodStart);
+
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
     type: "video",
@@ -229,6 +247,11 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
   if (topic.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Topic must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const quotaCheck = await consumeQuota(usageVendor, "aiCaptions", 1);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
 
   const toneMap: Record<string, string> = {
     professional: "professional and authoritative",
@@ -265,6 +288,8 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
     status = "failed";
     result = `Caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
+
+  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -339,6 +364,11 @@ router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
 
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const quotaCheck = await consumeQuota(usageVendor, "aiCaptions", 1);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
+
   const toneMap: Record<string, string> = {
     professional: "professional and authoritative",
     casual: "friendly and conversational",
@@ -391,6 +421,8 @@ router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
     status = "failed";
     result = `Video caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
+
+  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,

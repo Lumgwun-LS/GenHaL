@@ -75,3 +75,4 @@
 - [VendorHub admin-editable plan pricing](vendorhub-plan-pricing-margin.md) — plans/quotas live in site-content (admin-only edit, generic PATCH route), sized for ~5x margin; Stripe catalog re-prices via immutable-Price swap when admin edits price.
 - [VendorHub dual-currency multi-gateway billing](vendorhub-dual-currency-multigateway-billing.md) — pricing.usd/ngn tied 1:1 to Stripe/Paystack; admin gateway toggle needs server-side "at least one enabled" refine, not just client guard.
 - [VendorHub X/LinkedIn video publishing](vendorhub-video-publish-x-linkedin.md) — X uses INIT/APPEND/FINALIZE+STATUS poll; LinkedIn uses initializeUpload/per-part PUT+ETag/finalizeUpload; neither validates size/duration upfront.
+- [VendorHub usage metering & quota enforcement](vendorhub-usage-metering.md) — rolling 30-day period anchored to vendors.currentPeriodStart, reset only on real tier change; free-tier fallback quotas; voice minutes metered post-hoc via status callback.

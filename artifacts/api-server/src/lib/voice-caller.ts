@@ -11,6 +11,7 @@
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
 import { registerAudio, synthesizeSpeech } from "./elevenlabs-voice";
+import { VOICE_CALL_RESERVATION_MINUTES } from "./usage";
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
 
@@ -132,6 +133,11 @@ export async function placeCall(opts: {
       To:     opts.to,
       From:   fromNumber,
       Twiml:  await buildTwiml(opts.message),
+      // Hard cap on call length so voice-minute usage can never exceed the
+      // quota reservation made before this call was placed (see
+      // VOICE_CALL_RESERVATION_MINUTES in usage.ts) — Twilio forcibly ends
+      // the call at this many seconds if it's still in progress.
+      TimeLimit: String(VOICE_CALL_RESERVATION_MINUTES * 60),
     });
 
     const statusCallbackUrl = getStatusCallbackUrl();

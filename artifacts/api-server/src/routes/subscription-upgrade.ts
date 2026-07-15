@@ -32,6 +32,7 @@ import { ensurePaystackCatalog } from "../lib/paystack-catalog";
 import { reconcileVendorSubscription, applyVendorTierDowngrade } from "../lib/subscription-sync";
 import { reconcileVendorPaystackSubscription } from "../lib/paystack-sync";
 import { getSubscriptionPlans, getEnabledSubscriptionGateways, type SubscriptionGateway } from "../lib/subscription-plans";
+import { getUsageSummary } from "../lib/usage";
 
 const router = Router();
 
@@ -132,6 +133,29 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
     plans: await getSubscriptionPlans(),
     enabledGateways: await getEnabledSubscriptionGateways(),
   });
+});
+
+// ─── GET /vendors/:id/usage ───────────────────────────────────────────────────
+// Metered resource usage vs. quota for the vendor's current billing period —
+// shown on the vendor's own billing view and, since the same route is reachable
+// by an admin via canManageVendor, in the admin's vendor-detail view too.
+
+router.get("/vendors/:id/usage", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendor = await getVendorOr404(res, id);
+  if (!vendor) return;
+
+  if (!canManageVendor(userId, vendor)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  res.json(await getUsageSummary(vendor));
 });
 
 // ─── POST /vendors/:id/subscription/checkout ─────────────────────────────────

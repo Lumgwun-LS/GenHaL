@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import VendorPaymentAccounts from "@/components/vendor-payment-accounts";
 import UpgradePlanCard, { syncSubscriptionStatus } from "@/components/upgrade-plan-card";
 import BillingHistoryCard from "@/components/billing-history-card";
+import UsageSummaryCard from "@/components/usage-summary-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -573,6 +574,8 @@ export default function VendorDetail() {
             subscriptionProvider={vendor.subscriptionProvider ?? null}
             onUpgradeInitiated={() => void refetchVendor()}
           />
+
+          <UsageSummaryCard vendorId={id} />
 
           <BillingHistoryCard vendorId={id} />
         </div>

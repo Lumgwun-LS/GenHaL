@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
 
 /**
  * Records every outbound voice call placed by the platform.
@@ -18,6 +18,20 @@ export const voiceCallLogsTable = pgTable("voice_call_logs", {
   durationSeconds: integer("duration_seconds"),
   callSid: text("call_sid"),                  // Twilio call SID for lookup
   initiatedAt: timestamp("initiated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Set exactly once, the first time a terminal status-callback is processed
+  // for this call. Guards voice-minute reservation settlement against
+  // Twilio's at-least-once callback delivery (retries/duplicates) double-
+  // refunding the same call — see lib/usage.ts.
+  meteredAt: timestamp("metered_at", { withTimezone: true }),
+  // The voice-minute quota reservation made atomically before this call was
+  // placed (see VOICE_CALL_RESERVATION_MINUTES in lib/usage.ts), and the
+  // exact billing period it was reserved against. Both are captured at
+  // reservation time — not re-derived later — so the status-callback
+  // settlement always refunds the unused portion against the SAME period
+  // the reservation was made in, even if the vendor's rolling period has
+  // since rolled over (e.g. a tier change mid-call).
+  reservedMinutes: numeric("reserved_minutes"),
+  reservedPeriodStart: timestamp("reserved_period_start", { withTimezone: true }),
 });
 
 export type VoiceCallLog = typeof voiceCallLogsTable.$inferSelect;

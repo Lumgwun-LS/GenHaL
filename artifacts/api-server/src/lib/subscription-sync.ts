@@ -115,6 +115,11 @@ async function applyVendorTierUpgradeInternal(
       paystackCustomerCode: fields.paystackCustomerCode ?? vendor.paystackCustomerCode,
       paystackSubscriptionCode: fields.paystackSubscriptionCode ?? vendor.paystackSubscriptionCode,
       paystackEmailToken: fields.paystackEmailToken ?? vendor.paystackEmailToken,
+      // Reset the metered-usage billing-period anchor on an actual tier
+      // change so quotas start fresh from this upgrade rather than
+      // whenever the vendor last signed up or changed tier before. A
+      // subscription-id-only refresh at the same tier leaves it alone.
+      ...(previousTier !== tier ? { currentPeriodStart: new Date() } : {}),
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendorId))
@@ -159,6 +164,7 @@ export async function applyVendorTierDowngrade(vendor: Vendor, source: string): 
       subscriptionProvider: null,
       paystackSubscriptionCode: null,
       paystackEmailToken: null,
+      currentPeriodStart: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendor.id))

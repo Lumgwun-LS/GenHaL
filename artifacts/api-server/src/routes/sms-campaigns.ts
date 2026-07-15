@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, ne, and } from "drizzle-orm";
 import { db, smsCampaignsTable } from "@workspace/db";
+import { consumeQuotaTx, getVendorForUsage, quotaExceededMessage } from "../lib/usage";
 import {
   ListSmsCampaignsQueryParams,
   CreateSmsCampaignBody,
@@ -62,12 +63,71 @@ router.post("/sms-campaigns/:id/send", async (req, res): Promise<void> => {
   const [campaign] = await db.select().from(smsCampaignsTable).where(eq(smsCampaignsTable.id, params.data.id));
   if (!campaign) { res.status(404).json({ error: "SMS campaign not found" }); return; }
 
+  // Already sent — a duplicate/retried request (e.g. a client double-submit)
+  // must not re-send or re-charge quota. Report the prior result as a no-op
+  // success rather than erroring, since from the caller's point of view the
+  // campaign genuinely was sent.
+  if (campaign.status === "sent") {
+    res.json(SendSmsCampaignResponse.parse({
+      sent: campaign.sentCount ?? campaign.recipientCount,
+      failed: 0,
+      message: `SMS campaign "${campaign.name}" was already sent to ${campaign.sentCount ?? campaign.recipientCount} recipients`,
+    }));
+    return;
+  }
+
+  const usageVendor = await getVendorForUsage(campaign.vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
   const sentCount = campaign.recipientCount;
-  await db.update(smsCampaignsTable).set({
-    status: "sent",
-    sentCount,
-    sentAt: new Date(),
-  }).where(eq(smsCampaignsTable.id, campaign.id));
+  let quotaExceeded: Awaited<ReturnType<typeof consumeQuotaTx>> | undefined;
+
+  // Single transaction: atomically claim the draft->sent transition AND
+  // reserve quota together. If quota is insufficient, throwing here rolls
+  // back the status claim too, so the campaign stays sendable and no usage
+  // is recorded. If two requests race, the DB row lock on the UPDATE
+  // serializes them — the loser sees status already "sent" post-lock and
+  // affects 0 rows, so it never reaches (and never double-charges) quota.
+  try {
+    await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(smsCampaignsTable)
+        .set({ status: "sending" })
+        .where(and(eq(smsCampaignsTable.id, campaign.id), ne(smsCampaignsTable.status, "sent")))
+        .returning({ id: smsCampaignsTable.id });
+      if (!claimed) {
+        // Lost the race to a concurrent request that already sent it.
+        throw new AlreadySentError();
+      }
+
+      const quotaCheck = await consumeQuotaTx(tx, usageVendor, "sms", sentCount);
+      if (!quotaCheck.allowed) {
+        quotaExceeded = quotaCheck;
+        throw new QuotaExceededError();
+      }
+
+      await tx.update(smsCampaignsTable).set({
+        status: "sent",
+        sentCount,
+        sentAt: new Date(),
+      }).where(eq(smsCampaignsTable.id, campaign.id));
+    });
+  } catch (err) {
+    if (err instanceof AlreadySentError) {
+      const [latest] = await db.select().from(smsCampaignsTable).where(eq(smsCampaignsTable.id, campaign.id));
+      res.json(SendSmsCampaignResponse.parse({
+        sent: latest?.sentCount ?? sentCount,
+        failed: 0,
+        message: `SMS campaign "${campaign.name}" was already sent to ${latest?.sentCount ?? sentCount} recipients`,
+      }));
+      return;
+    }
+    if (err instanceof QuotaExceededError && quotaExceeded) {
+      res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaExceeded), usage: quotaExceeded });
+      return;
+    }
+    throw err;
+  }
 
   res.json(SendSmsCampaignResponse.parse({
     sent: sentCount,
@@ -75,6 +135,9 @@ router.post("/sms-campaigns/:id/send", async (req, res): Promise<void> => {
     message: `SMS campaign "${campaign.name}" sent to ${sentCount} recipients`,
   }));
 });
+
+class AlreadySentError extends Error {}
+class QuotaExceededError extends Error {}
 
 function serializeCampaign(c: typeof smsCampaignsTable.$inferSelect) {
   return {

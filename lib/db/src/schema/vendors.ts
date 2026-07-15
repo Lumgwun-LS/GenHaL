@@ -57,6 +57,11 @@ export const vendorsTable = pgTable("vendors", {
   country: text("country"),
   state: text("state"),
   city: text("city"),
+  // Anchor for the vendor's current metered-usage billing period (see lib/usage.ts).
+  // Defaults to signup time; reset to now() whenever the tier changes (upgrade,
+  // downgrade, cancellation) via subscription-sync.ts so quotas roll over on the
+  // vendor's actual subscription lifecycle events rather than a fixed calendar day.
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -24,6 +24,7 @@ import { logger } from "../lib/logger";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 import { sendPushToVendor } from "../lib/push";
+import { checkQuota, consumeQuota, releaseQuota, getBillingPeriodStart, getVendorForUsage, VOICE_CALL_RESERVATION_MINUTES } from "../lib/usage";
 import { z } from "zod";
 
 const router = Router();
@@ -44,6 +45,30 @@ export async function runCampaignCalls(
   let terminalStatus = "completed";
   try {
     for (const lead of callable) {
+      // Voice-minute usage is only known once a call ends (see
+      // voice-status-callback.ts), so quota is RESERVED atomically per call
+      // before placing it (see VOICE_CALL_RESERVATION_MINUTES) rather than
+      // just gated with a read-only check — that reservation is what
+      // actually prevents overshoot, since a plain check-then-place can
+      // still race far ahead of usage that's only recorded after each call
+      // ends. The reservation is refunded down to the real duration once the
+      // call completes (voice-status-callback.ts), or fully refunded here if
+      // the call never actually got placed.
+      const usageVendor = await getVendorForUsage(vendorId);
+      const reservationPeriodStart = usageVendor ? getBillingPeriodStart(usageVendor) : null;
+      const reservation = usageVendor ? await consumeQuota(usageVendor, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES) : null;
+      if (reservation && !reservation.allowed) {
+        await db.insert(voiceCampaignCallsTable).values({
+          campaignId,
+          leadId: lead.id,
+          leadName: lead.name ?? "Unknown",
+          phone: lead.phone!,
+          status: "canceled",
+        });
+        logger.warn({ campaignId, vendorId, leadId: lead.id }, "[voice] Skipping call — voice-minute quota exhausted for this billing period");
+        continue;
+      }
+
       const script = campaign.script.replace(/\{\{name\}\}/gi, lead.name ?? "there");
 
       const [callRow] = await db.insert(voiceCampaignCallsTable).values({
@@ -56,6 +81,13 @@ export async function runCampaignCalls(
 
       const result = await placeCall({ to: lead.phone!, message: script, purpose: "campaign", vendorId, campaignId });
 
+      if (result.status !== "placed" && usageVendor && reservationPeriodStart) {
+        // Call never actually happened — give back the full reservation.
+        // No voice_call_logs row exists for this attempt (no callSid to
+        // settle against later), so this is the only settlement it gets.
+        await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart);
+      }
+
       await db.insert(voiceCallLogsTable).values({
         vendorId,
         campaignId,
@@ -63,6 +95,15 @@ export async function runCampaignCalls(
         purpose: "campaign",
         status: result.status === "placed" ? "queued" : result.status,
         callSid: result.callSid ?? null,
+        // Only set when a reservation was actually made AND the call was
+        // actually placed — this is what voice-status-callback.ts uses to
+        // settle the reservation against the exact period it was made in,
+        // regardless of what the vendor's period looks like by the time the
+        // callback arrives.
+        ...(result.status === "placed" && usageVendor && reservationPeriodStart ? {
+          reservedMinutes: VOICE_CALL_RESERVATION_MINUTES.toString(),
+          reservedPeriodStart: reservationPeriodStart,
+        } : {}),
       });
 
       await db.update(voiceCampaignCallsTable).set({
@@ -121,6 +162,17 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
     return { ok: false, error: "Campaign no longer exists." };
   }
 
+  // Reserve only after every precondition that can fail without ever
+  // attempting a call has already passed — a reservation made any earlier
+  // would leak quota on a path that returns before `placeCall` runs and has
+  // no voice_call_logs row to settle it against later.
+  const usageVendor = log.vendorId != null ? await getVendorForUsage(log.vendorId) : null;
+  const reservationPeriodStart = usageVendor ? getBillingPeriodStart(usageVendor) : null;
+  const reservation = usageVendor ? await consumeQuota(usageVendor, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES) : null;
+  if (reservation && !reservation.allowed) {
+    return { ok: false, error: "Voice-minute quota exhausted for this billing period — upgrade your plan to retry this call." };
+  }
+
   // The per-lead row (leadName, etc.) lives in voice_campaign_calls, not on
   // the voice_call_logs row itself — look up the matching one (same
   // campaign + phone, most recent) so the retried call still gets the
@@ -153,6 +205,10 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
       { logId, campaignId: log.campaignId, reason: result.error, twilioStatus: result.status },
       "[voice-campaign] Manual retry did not succeed",
     );
+    if (usageVendor && reservationPeriodStart) {
+      // Call never actually happened — give back the full reservation.
+      await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart);
+    }
     await db
       .update(voiceCallLogsTable)
       .set({ status: "failed", callSid: result.callSid ?? null })
@@ -168,7 +224,20 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
 
   await db
     .update(voiceCallLogsTable)
-    .set({ status: "queued", callSid: result.callSid ?? null, initiatedAt: new Date() })
+    .set({
+      status: "queued",
+      callSid: result.callSid ?? null,
+      initiatedAt: new Date(),
+      // Reset settlement state for this retry attempt: a prior attempt on
+      // this same log row may have already been metered/refunded, and this
+      // new call needs its own reservation settled independently once it
+      // ends.
+      meteredAt: null,
+      ...(usageVendor && reservationPeriodStart ? {
+        reservedMinutes: VOICE_CALL_RESERVATION_MINUTES.toString(),
+        reservedPeriodStart: reservationPeriodStart,
+      } : {}),
+    })
     .where(eq(voiceCallLogsTable.id, logId));
   if (campaignCall) {
     await db
@@ -434,6 +503,17 @@ router.post("/vendors/:id/voice-campaigns/:cid/launch", async (req, res): Promis
   const callable = leads.filter((l) => l.phone && E164_RE.test(l.phone));
   if (callable.length === 0) {
     res.status(400).json({ error: "No leads with E.164 phone numbers found. Add phone numbers starting with + to your leads first." });
+    return;
+  }
+
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const quotaCheck = await checkQuota(usageVendor, "voiceMinutes", 0.01);
+  if (!quotaCheck.allowed) {
+    res.status(402).json({
+      error: `You've used all ${quotaCheck.quota} voice campaign minutes included in your ${usageVendor.subscriptionTier} plan this period. Upgrade your plan to launch more voice campaigns.`,
+      usage: quotaCheck,
+    });
     return;
   }
 
