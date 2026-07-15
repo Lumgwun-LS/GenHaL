@@ -23,5 +23,6 @@ export interface VendorUpdate {
   city?: string;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
   announcementEmailOptOut?: boolean;
 }

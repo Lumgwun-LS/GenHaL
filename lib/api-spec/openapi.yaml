@@ -2689,6 +2689,8 @@ components:
           type: boolean
         pushVoiceCampaignAlertsEnabled:
           type: boolean
+        pushPostRemindersEnabled:
+          type: boolean
         announcementEmailOptOut:
           type: boolean
         subscriptionTier:
@@ -2782,6 +2784,8 @@ components:
         pushPaymentAlertsEnabled:
           type: boolean
         pushVoiceCampaignAlertsEnabled:
+          type: boolean
+        pushPostRemindersEnabled:
           type: boolean
         announcementEmailOptOut:
           type: boolean
@@ -3838,6 +3842,8 @@ components:
         pushPaymentAlertsEnabled:
           type: boolean
         pushVoiceCampaignAlertsEnabled:
+          type: boolean
+        pushPostRemindersEnabled:
           type: boolean
 
     ExternalAnalyticsSummary:

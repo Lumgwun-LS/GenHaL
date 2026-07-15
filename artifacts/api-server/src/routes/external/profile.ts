@@ -37,7 +37,7 @@ router.patch("/profile", async (req, res) => {
   const { vendorId } = req.externalUser!;
   const {
     name, phone, address, description, logoUrl, gender, country, state, city,
-    pushPaymentAlertsEnabled, pushVoiceCampaignAlertsEnabled,
+    pushPaymentAlertsEnabled, pushVoiceCampaignAlertsEnabled, pushPostRemindersEnabled,
   } = req.body as {
     name?: string;
     phone?: string;
@@ -50,6 +50,7 @@ router.patch("/profile", async (req, res) => {
     city?: string;
     pushPaymentAlertsEnabled?: boolean;
     pushVoiceCampaignAlertsEnabled?: boolean;
+    pushPostRemindersEnabled?: boolean;
   };
 
   const [updated] = await db
@@ -66,6 +67,7 @@ router.patch("/profile", async (req, res) => {
       ...(city !== undefined && { city }),
       ...(pushPaymentAlertsEnabled !== undefined && { pushPaymentAlertsEnabled }),
       ...(pushVoiceCampaignAlertsEnabled !== undefined && { pushVoiceCampaignAlertsEnabled }),
+      ...(pushPostRemindersEnabled !== undefined && { pushPostRemindersEnabled }),
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendorId))

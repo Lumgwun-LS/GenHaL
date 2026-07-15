@@ -140,9 +140,13 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Use /submit-for-review, /approve, /request-changes, or /publish to change post status." });
     return;
   }
-  const updateData: typeof restUpdate & { scheduledAt?: Date | null; shareToken?: string | null } = {
+  const updateData: typeof restUpdate & { scheduledAt?: Date | null; shareToken?: string | null; reminderSentAt?: Date | null } = {
     ...restUpdate,
-    ...(saU !== undefined ? { scheduledAt: saU ? new Date(saU) : null } : {}),
+    // Changing scheduledAt (e.g. a still-scheduled post being re-timed some
+    // other way than the dedicated /schedule route) must clear any reminder
+    // already sent for the old time, or the vendor never gets reminded ahead
+    // of the new one — see post-reminders.ts.
+    ...(saU !== undefined ? { scheduledAt: saU ? new Date(saU) : null, reminderSentAt: null } : {}),
   };
 
   // Every PATCH must be scoped to the post's own vendor (or an admin) — this was
@@ -673,7 +677,7 @@ router.post("/posts/:id/schedule", async (req, res): Promise<void> => {
 
   const [post] = await db
     .update(postsTable)
-    .set({ status: "scheduled", scheduledAt: scheduledDate, autoPublishFailed: false })
+    .set({ status: "scheduled", scheduledAt: scheduledDate, autoPublishFailed: false, reminderSentAt: null })
     .where(and(eq(postsTable.id, params.data.id), eq(postsTable.status, "approved")))
     .returning();
   if (!post) { res.status(409).json({ error: `Cannot schedule a post with status "${existing.status}". It must be approved first.` }); return; }

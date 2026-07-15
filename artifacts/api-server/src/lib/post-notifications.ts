@@ -9,10 +9,77 @@ import { db, vendorNotificationsTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
+import { sendPushToVendor } from "./push";
 import { logger } from "./logger";
 
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function getPublicDomain(): string | null {
+  return process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || null;
+}
+
+function socialHubLink(postId: number): string {
+  const domain = getPublicDomain();
+  return domain ? `https://${domain}/social?highlight=${postId}` : "#";
+}
+
+/**
+ * Reminds a vendor, shortly before it auto-publishes, that a scheduled post
+ * is about to go live — push + email, so they have one last chance to catch
+ * a mistake. Called once per post by post-reminders.ts, which reserves the
+ * send atomically before calling this (see reminderSentAt on postsTable).
+ */
+export async function notifyPostReminderDue(
+  vendorId: number,
+  postId: number,
+  caption: string,
+  scheduledAt: Date,
+): Promise<void> {
+  const when = scheduledAt.toLocaleString();
+  const message = `Your post "${truncate(caption, 80)}" is scheduled to publish at ${when}. Review it now if you want to make changes first.`;
+
+  try {
+    await db.insert(vendorNotificationsTable).values({
+      vendorId,
+      type: "post_reminder",
+      message,
+    });
+  } catch (err) {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to insert post-reminder notification");
+  }
+
+  await sendPushToVendor(
+    vendorId,
+    "Your post is about to publish",
+    `"${truncate(caption, 60)}" goes live at ${when}.`,
+    { screen: "social", postId },
+    "post_reminders",
+  ).catch((err) => {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to send post-reminder push");
+  });
+
+  const [vendor] = await db
+    .select({ name: vendorsTable.name, email: vendorsTable.email })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, vendorId));
+  if (!vendor?.email) return;
+
+  const html = wrapVendorEmail({
+    bodyHtml: `
+      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your post is about to go live</h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Hi ${escapeHtml(vendor.name)}, your scheduled post "<em>${escapeHtml(truncate(caption, 80))}</em>" is set to publish at
+        ${escapeHtml(when)}. If you spot something you want to change, now's the time — cancel or edit it before it goes out.
+      </p>`,
+    action: { label: "Review this post", url: socialHubLink(postId) },
+  });
+
+  const result = await sendEmail({ to: vendor.email, subject: "Your post is about to publish", html });
+  if (result.status !== "sent") {
+    logger.warn({ postId, vendorId, reason: result.error }, "[post-notifications] post-reminder email did not send");
+  }
 }
 
 export interface PlatformFailure {

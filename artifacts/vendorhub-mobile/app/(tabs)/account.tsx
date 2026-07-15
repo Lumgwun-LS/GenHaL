@@ -45,14 +45,15 @@ export default function AccountScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingCategory, setIsTogglingCategory] = useState<
-    'payments' | 'voiceCampaigns' | null
+    'payments' | 'voiceCampaigns' | 'postReminders' | null
   >(null);
 
   const paymentAlertsEnabled = vendor?.pushPaymentAlertsEnabled ?? true;
   const voiceCampaignAlertsEnabled = vendor?.pushVoiceCampaignAlertsEnabled ?? true;
+  const postRemindersEnabled = vendor?.pushPostRemindersEnabled ?? true;
 
   const handleToggleCategory = async (
-    key: 'payments' | 'voiceCampaigns',
+    key: 'payments' | 'voiceCampaigns' | 'postReminders',
     next: boolean,
   ) => {
     if (Platform.OS !== 'web') {
@@ -63,7 +64,9 @@ export default function AccountScreen() {
       await updateProfile(
         key === 'payments'
           ? { pushPaymentAlertsEnabled: next }
-          : { pushVoiceCampaignAlertsEnabled: next },
+          : key === 'voiceCampaigns'
+          ? { pushVoiceCampaignAlertsEnabled: next }
+          : { pushPostRemindersEnabled: next },
       );
     } catch {
       Alert.alert('Could not save', 'Please try again.');
@@ -353,7 +356,13 @@ export default function AccountScreen() {
                 )}
               </View>
 
-              <View style={styles.toggleRow}>
+              <View
+                style={[
+                  styles.toggleRow,
+                  styles.toggleSubRow,
+                  { borderTopColor: colors.border },
+                ]}
+              >
                 <View style={styles.toggleTextWrap}>
                   <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
                     Voice campaign alerts
@@ -368,6 +377,28 @@ export default function AccountScreen() {
                   <Switch
                     value={voiceCampaignAlertsEnabled}
                     onValueChange={(next) => void handleToggleCategory('voiceCampaigns', next)}
+                    disabled={isTogglingCategory !== null}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor="#FFFFFF"
+                  />
+                )}
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextWrap}>
+                  <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                    Post reminders
+                  </Text>
+                  <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                    Get notified shortly before a scheduled post goes live.
+                  </Text>
+                </View>
+                {isTogglingCategory === 'postReminders' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Switch
+                    value={postRemindersEnabled}
+                    onValueChange={(next) => void handleToggleCategory('postReminders', next)}
                     disabled={isTogglingCategory !== null}
                     trackColor={{ true: colors.primary, false: colors.border }}
                     thumbColor="#FFFFFF"

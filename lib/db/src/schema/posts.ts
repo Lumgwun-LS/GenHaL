@@ -22,6 +22,10 @@ export const postsTable = pgTable("posts", {
   mediaUrls: text("media_urls").array().notNull().default([]),
   mediaType: text("media_type"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  // Set once the pre-publish reminder (push/email) has gone out for the post's
+  // current `scheduledAt`. Cleared whenever scheduledAt changes (reschedule) so
+  // the vendor gets a fresh reminder ahead of the new time — see post-reminders.ts.
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   hashtags: text("hashtags"),
   aiGenerated: boolean("ai_generated").notNull().default(false),

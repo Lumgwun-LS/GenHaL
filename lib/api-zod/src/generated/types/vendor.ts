@@ -42,6 +42,7 @@ export interface Vendor {
   city?: string | null;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   subscriptionTier?: string;
   verificationLevel?: string;

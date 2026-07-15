@@ -52,6 +52,7 @@ export const ListVendorsResponseItem = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -107,6 +108,7 @@ export const CreateVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -159,6 +161,7 @@ export const OnboardVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -220,6 +223,7 @@ export const GetVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -258,6 +262,7 @@ export const UpdateVendorBody = zod.object({
   "city": zod.string().optional(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional()
 })
 
@@ -287,6 +292,7 @@ export const UpdateVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -2822,6 +2828,7 @@ export const GetExternalProfileResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -2852,7 +2859,8 @@ export const UpdateExternalProfileBody = zod.object({
   "state": zod.string().optional(),
   "city": zod.string().optional(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
-  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional()
+  "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional()
 })
 
 export const UpdateExternalProfileResponse = zod.object({
@@ -2881,6 +2889,7 @@ export const UpdateExternalProfileResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
+  "pushPostRemindersEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),

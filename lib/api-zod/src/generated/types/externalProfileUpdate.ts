@@ -18,4 +18,5 @@ export interface ExternalProfileUpdate {
   city?: string;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
 }

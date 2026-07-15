@@ -45,6 +45,7 @@ export interface Vendor {
   city?: string | null;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   subscriptionTier?: string;
   verificationLevel?: string;
@@ -101,6 +102,7 @@ export interface VendorUpdate {
   city?: string;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
   announcementEmailOptOut?: boolean;
 }
 
@@ -713,6 +715,7 @@ export interface ExternalProfileUpdate {
   city?: string;
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
+  pushPostRemindersEnabled?: boolean;
 }
 
 export interface ExternalAnalyticsSummary {
