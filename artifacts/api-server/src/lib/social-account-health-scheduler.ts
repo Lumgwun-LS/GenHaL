@@ -1,9 +1,9 @@
 /**
- * Periodically re-validates every OAuth-connected Facebook/Instagram
- * account's stored access token so an expiry or vendor-side revocation is
- * caught proactively, instead of only surfacing the next time a post fails
- * to publish. Follows the standard VendorHub scheduled-job pattern: a plain
- * setInterval loop plus one immediate tick on boot (see
+ * Periodically re-validates every OAuth-connected Facebook/Instagram,
+ * LinkedIn, and X account's stored access token so an expiry or vendor-side
+ * revocation is caught proactively, instead of only surfacing the next time
+ * a post fails to publish. Follows the standard VendorHub scheduled-job
+ * pattern: a plain setInterval loop plus one immediate tick on boot (see
  * gateway-health-scheduler.ts).
  */
 import { logger } from "./logger";

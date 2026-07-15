@@ -1,6 +1,6 @@
 /**
- * Admin-only visibility into the periodic social-account (Facebook/Instagram
- * OAuth token) health background job. Mirrors admin-billing-sync.ts.
+ * Admin-only visibility into the periodic social-account (Facebook/Instagram,
+ * LinkedIn, X OAuth token) health background job. Mirrors admin-billing-sync.ts.
  *
  * GET  /admin/social-account-health-status — last run time, what it found,
  *                                             and whether it's currently stuck failing
