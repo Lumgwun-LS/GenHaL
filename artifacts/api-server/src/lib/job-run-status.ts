@@ -11,6 +11,7 @@
 import { db } from "@workspace/db";
 import { jobRunStatusTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { sendSlackAlert } from "./slack";
 
 // Consecutive failed ticks before the admin UI treats a job as "stuck
 // failing" rather than a one-off transient blip.
@@ -41,6 +42,22 @@ export async function recordJobRun(jobName: string, input: RecordJobRunInput): P
     await db.update(jobRunStatusTable).set(values).where(eq(jobRunStatusTable.jobName, jobName));
   } else {
     await db.insert(jobRunStatusTable).values({ jobName, ...values });
+  }
+
+  // Mirrors the platform-gateway-health pass/fail transition alerting
+  // (see recheckPlatformCredentials in platform-gateways.ts): fire a Slack
+  // alert only on the threshold-crossing tick in either direction, not on
+  // every failing/succeeding tick.
+  const wasFailing = (existing?.consecutiveFailures ?? 0) >= JOB_FAILING_THRESHOLD;
+  const isNowFailing = values.consecutiveFailures >= JOB_FAILING_THRESHOLD;
+
+  if (!wasFailing && isNowFailing) {
+    await sendSlackAlert(
+      `:rotating_light: Background job *${jobName}* has now failed ${values.consecutiveFailures} times in a row: ${values.lastError}\n` +
+        `Check the admin Background Jobs panel for details.`,
+    );
+  } else if (wasFailing && input.success) {
+    await sendSlackAlert(`:white_check_mark: Background job *${jobName}* is succeeding again after previously failing.`);
   }
 }
 

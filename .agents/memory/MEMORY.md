@@ -71,3 +71,4 @@
 - [Dev DB drift is widespread, not one-off](dev-db-drift-widespread.md) — many migrations (0020-0033+) were never applied to dev DB; when fixing one job's crash, check sibling jobs for the same missing-column/table pattern before declaring done.
 - [Schema-drift guard + job-run-status](schema-drift-job-run-status.md) — startup drift check (curated list) + per-tick recordJobRun on every scheduler feed a generic admin Background Jobs panel so silent first-tick failures are visible.
 - [No Stripe secret key configured](stripe-test-mode-key-gap.md) — no DB or env Stripe key exists for VendorHub; ask the user before attempting any real (non-mocked) Stripe API check.
+- [Job-run-status Slack alerting](job-run-status-slack-alerting.md) — recordJobRun fires Slack alerts on failing-threshold transitions; every job using it gets alerting for free, no per-job wiring needed.
