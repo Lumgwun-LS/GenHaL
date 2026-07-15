@@ -2762,7 +2762,7 @@ components:
           type: integer
         type:
           type: string
-          description: '"birthday" | "tier_change" | "general"'
+          description: '"birthday" | "tier_change" | "verification_change" | "general"'
         message:
           type: string
         adminUserId:

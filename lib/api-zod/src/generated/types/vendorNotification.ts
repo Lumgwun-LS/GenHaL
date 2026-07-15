@@ -9,7 +9,7 @@
 export interface VendorNotification {
   id: number;
   vendorId: number;
-  /** "birthday" | "tier_change" | "general" */
+  /** "birthday" | "tier_change" | "verification_change" | "general" */
   type: string;
   message: string;
   /** @nullable */

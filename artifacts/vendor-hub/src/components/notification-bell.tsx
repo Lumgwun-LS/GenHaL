@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
-import { Bell, Cake, TrendingUp, Info, PhoneCall, Link2Off } from "lucide-react";
+import { Bell, Cake, TrendingUp, Info, PhoneCall, Link2Off, ShieldCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useListVendors } from "@workspace/api-client-react";
 import { Button } from "./ui/button";
@@ -65,6 +65,8 @@ export function NotificationBell() {
         return <Cake className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />;
       case "tier_change":
         return <TrendingUp className="w-4 h-4 text-primary shrink-0 mt-0.5" />;
+      case "verification_change":
+        return <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />;
       case "voice_campaign":
         return <PhoneCall className="w-4 h-4 text-accent shrink-0 mt-0.5" />;
       case "social_reconnect":

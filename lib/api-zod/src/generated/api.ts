@@ -2561,7 +2561,7 @@ export const ListVendorNotificationsParams = zod.object({
 export const ListVendorNotificationsResponseItem = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
-  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"general\"'),
+  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"verification_change\" | \"general\"'),
   "message": zod.string(),
   "adminUserId": zod.string().nullish(),
   "adminDisplayName": zod.string().nullish(),
@@ -2591,7 +2591,7 @@ export const CreateVendorNotificationBody = zod.object({
 export const CreateVendorNotificationResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
-  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"general\"'),
+  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"verification_change\" | \"general\"'),
   "message": zod.string(),
   "adminUserId": zod.string().nullish(),
   "adminDisplayName": zod.string().nullish(),

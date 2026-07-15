@@ -796,8 +796,9 @@ router.get("/admin/message-history", async (req, res): Promise<void> => {
 // via the Stripe Customer Portal, cancellation, refund, reconciliation, or an
 // admin manually editing a vendor's tier. Sourced from the same
 // vendorNotificationsTable rows vendors see (type="tier_change"), filtered to
-// rows that carry structured previousTier/newTier (excludes unrelated
-// tier_change rows like a verificationLevel-only edit).
+// rows that carry structured previousTier/newTier. Verification-level admin
+// edits use their own "verification_change" type (see task #129) and never
+// appear here.
 
 router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);

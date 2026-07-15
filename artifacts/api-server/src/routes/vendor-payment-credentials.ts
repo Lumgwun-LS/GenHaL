@@ -419,7 +419,7 @@ router.patch("/vendors/:id/tier", async (req, res): Promise<void> => {
     if (verificationLevel && verificationLevel !== before.verificationLevel) {
       notificationRows.push({
         vendorId: id,
-        type: "tier_change",
+        type: "verification_change",
         message: `Your verification level changed from ${before.verificationLevel} to ${verificationLevel}.`,
       });
     }
