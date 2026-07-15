@@ -9,10 +9,10 @@
 /**
  * Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto".
  */
-export type AiVideoRequestMotionTemplate = typeof AiVideoRequestMotionTemplate[keyof typeof AiVideoRequestMotionTemplate];
+export type AiVideoRenderRequestMotionTemplate = typeof AiVideoRenderRequestMotionTemplate[keyof typeof AiVideoRenderRequestMotionTemplate];
 
 
-export const AiVideoRequestMotionTemplate = {
+export const AiVideoRenderRequestMotionTemplate = {
   auto: 'auto',
   'zoom-in': 'zoom-in',
   'zoom-out': 'zoom-out',

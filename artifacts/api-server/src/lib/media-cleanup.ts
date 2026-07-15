@@ -1,11 +1,14 @@
 /**
  * Deletes AI-generated images/videos from object storage once they've sat
  * unattached to any post for RETENTION_HOURS. Every successful call to
- * /ai/generate-image or /ai/generate-video permanently uploads its result
- * (see generated-media-storage.ts) so it has a public URL platforms like
+ * /ai/generate-image, /ai/generate-video-scenes, /ai/regenerate-video-scene,
+ * or /ai/render-video permanently uploads its result (see
+ * generated-media-storage.ts) so it has a public URL platforms like
  * Instagram can fetch — but a vendor who previews, regenerates, or simply
  * never publishes a generation otherwise leaves that object in the bucket
- * forever, growing storage cost with no bound.
+ * forever, growing storage cost with no bound. Scene preview images are
+ * recorded as ordinary `type: "image"` AiGeneration rows, so they're swept
+ * by the exact same "image"/"video" query below with no special-casing.
  *
  * "Still attached" is re-checked live on every tick (not decided once at
  * generation time) via a lookup against posts.media_urls, so media that WAS

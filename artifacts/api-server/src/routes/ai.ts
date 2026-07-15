@@ -1,27 +1,31 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
 import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { ai as gemini } from "@workspace/integrations-gemini-ai";
 import { generateVideoBuffer, type MotionTemplate, type VideoScene } from "../lib/video-generation";
 import { extractVideoFrames } from "../lib/video-frames";
 import { generateMusicBuffer } from "../lib/ai-music";
-import { storeGeneratedMedia } from "../lib/generated-media-storage";
+import { storeGeneratedMedia, extractMediaObjectId } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
 import { consumeQuota, releaseQuota, getVendorForUsage, quotaExceededMessage } from "../lib/usage";
 import {
   GenerateAiImageBody,
-  GenerateAiVideoBody,
+  GenerateAiVideoScenesBody,
+  RegenerateAiVideoSceneBody,
+  RenderAiVideoBody,
   GenerateAiCaptionBody,
   GetAiVideoUploadUrlBody,
   GetAiImageUploadUrlBody,
   AnalyzeVideoCaptionBody,
   ListAiGenerationsQueryParams,
   GenerateAiImageResponse,
-  GenerateAiVideoResponse,
+  GenerateAiVideoScenesResponse,
+  RegenerateAiVideoSceneResponse,
+  RenderAiVideoResponse,
   GenerateAiCaptionResponse,
   GetAiVideoUploadUrlResponse,
   GetAiImageUploadUrlResponse,
@@ -49,7 +53,7 @@ const router: IRouter = Router();
 const MAX_PROMPT_LEN = 500;
 const MAX_CAPTION_OVERLAY_LEN = 500;
 
-/** Shared with /ai/generate-video so the still frame it's built from matches the image endpoint's style. */
+/** Shared with /ai/generate-video-scenes so the still frames it's built from match the image endpoint's style. */
 function buildImagePrompt(prompt: string, style?: string, industry?: string): string {
   return [
     prompt,
@@ -159,19 +163,169 @@ async function buildScenePrompts(basePrompt: string, sceneCount: number): Promis
 }
 
 /**
- * Generates a short video for a post: one or more AI product images, each
- * brought to life with a motion template (zoom/pan), stitched together with
- * crossfade transitions when there's more than one scene, the post's caption
- * burned in on the opening scene, and an optional short instrumental
- * background track. There's no supported text-to-video model available
- * server-side (see media-generation skill — OpenAI/Gemini AI Integrations
- * don't support video output), so this builds a real, relevant mp4 from
- * AI-generated image(s) rather than mocking a placeholder clip.
+ * Generates the per-scene preview images for a multi-scene video (1-3
+ * scenes) WITHOUT rendering anything — this is the step that lets a vendor
+ * see what each scene looks like before spending any AI video quota. Each
+ * scene image is billed against `aiImages` quota (same cost as calling
+ * /ai/generate-image once per scene) and persisted as its own `type: "image"`
+ * AiGeneration row, so an unconfirmed/abandoned preview is picked up by the
+ * same orphaned-media cleanup job as any other unused AI image — no separate
+ * cleanup path needed.
  */
-router.post("/ai/generate-video", async (req, res): Promise<void> => {
-  const parsed = GenerateAiVideoBody.safeParse(req.body);
+router.post("/ai/generate-video-scenes", async (req, res): Promise<void> => {
+  const parsed = GenerateAiVideoScenesBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { vendorId, prompt, style, industry, captionText, sceneCount, motionTemplate, includeMusic } = parsed.data;
+  const { vendorId, prompt, style, industry, sceneCount } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+  if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const resolvedSceneCount = Math.min(Math.max(sceneCount ?? 1, 1), 3);
+  const quotaCheck = await consumeQuota(usageVendor, "aiImages", resolvedSceneCount);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
+
+  const fullPrompt = buildImagePrompt(prompt, style, industry);
+
+  try {
+    const scenePrompts = await buildScenePrompts(fullPrompt, resolvedSceneCount);
+    const imageBuffers = await Promise.all(scenePrompts.map((p) => generateImageBuffer(p, "1536x1024", "high")));
+    const imageUrls = await Promise.all(imageBuffers.map(async (buffer) => (await storeGeneratedMedia(buffer, "image/png")).publicUrl));
+
+    const generations = await db.insert(aiGenerationsTable).values(
+      scenePrompts.map((scenePrompt, i) => ({
+        vendorId,
+        type: "image" as const,
+        prompt: scenePrompt,
+        result: imageUrls[i],
+        status: "completed" as const,
+      })),
+    ).returning();
+
+    res.json(GenerateAiVideoScenesResponse.parse({ scenes: generations.map(serializeGeneration) }));
+  } catch (err) {
+    await releaseQuota(vendorId, "aiImages", resolvedSceneCount, quotaCheck.periodStart);
+    res.status(502).json({ error: `Scene generation failed: ${err instanceof Error ? err.message : "unknown error"}` });
+  }
+});
+
+/**
+ * Regenerates a single scene's preview image (e.g. the vendor didn't like
+ * it) without touching any other scene. `prompt` is the scene-specific
+ * prompt from the /ai/generate-video-scenes result, optionally edited by the
+ * vendor. Billed as one more `aiImages` unit, same as any other single image
+ * generation, and recorded as its own AiGeneration row for the same
+ * cleanup-job coverage as generate-video-scenes.
+ */
+router.post("/ai/regenerate-video-scene", async (req, res): Promise<void> => {
+  const parsed = RegenerateAiVideoSceneBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, prompt } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+  if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
+
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const quotaCheck = await consumeQuota(usageVendor, "aiImages", 1);
+  if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
+
+  let result: string;
+  let status: "completed" | "failed" = "completed";
+  try {
+    const buffer = await generateImageBuffer(prompt, "1536x1024", "high");
+    const { publicUrl } = await storeGeneratedMedia(buffer, "image/png");
+    result = publicUrl;
+  } catch (err) {
+    status = "failed";
+    result = `Scene regeneration failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
+
+  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart);
+
+  const [generation] = await db.insert(aiGenerationsTable).values({
+    vendorId,
+    type: "image",
+    prompt,
+    result,
+    status,
+  }).returning();
+
+  const serialized = serializeGeneration(generation);
+  if (status === "failed") { res.status(502).json(RegenerateAiVideoSceneResponse.parse(serialized)); return; }
+  res.json(RegenerateAiVideoSceneResponse.parse(serialized));
+});
+
+/** Fetches a scene image's bytes from its own public /api/media/:objectId URL
+ *  (generated by storeGeneratedMedia, already ACL'd public — unlike vendor
+ *  uploads, no ACL fix-up is needed before fetching it back). */
+async function fetchGeneratedMediaBuffer(mediaUrl: string): Promise<Buffer> {
+  const response = await fetch(mediaUrl);
+  if (!response.ok) throw new Error(`Could not fetch scene image (status ${response.status})`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/**
+ * Resolves each client-supplied scene URL to the canonical URL WE stored for
+ * one of this vendor's own completed image generations, and rejects
+ * anything else. This is a security boundary, not just data plumbing:
+ * without it, /ai/render-video would let an authenticated vendor point the
+ * server's fetch() at an arbitrary URL (SSRF — internal services, cloud
+ * metadata endpoints, another vendor's private media, etc). By requiring
+ * every URL to match an `aiGenerationsTable` row this vendor owns, and by
+ * fetching the row's own stored `result` value rather than the
+ * client-supplied string, the server never fetches a URL it didn't
+ * originally mint and store itself.
+ */
+async function resolveOwnedSceneImageUrls(vendorId: number, urls: string[]): Promise<string[]> {
+  const objectIds = urls.map((url) => extractMediaObjectId(url));
+  const unrecognized = objectIds.some((id) => !id);
+  if (unrecognized) {
+    throw new Error("One or more scene image URLs are not recognized generated-media URLs.");
+  }
+
+  const ownedImages = await db
+    .select({ result: aiGenerationsTable.result })
+    .from(aiGenerationsTable)
+    .where(and(eq(aiGenerationsTable.vendorId, vendorId), eq(aiGenerationsTable.type, "image")));
+
+  const ownedByObjectId = new Map<string, string>();
+  for (const row of ownedImages) {
+    if (!row.result) continue;
+    const id = extractMediaObjectId(row.result);
+    if (id) ownedByObjectId.set(id, row.result);
+  }
+
+  return objectIds.map((objectId) => {
+    const ownedUrl = ownedByObjectId.get(objectId as string);
+    if (!ownedUrl) {
+      throw new Error("One or more scene images were not found among this vendor's own generated images.");
+    }
+    return ownedUrl;
+  });
+}
+
+/**
+ * Renders the final video from scene images the vendor has already
+ * previewed/confirmed (from /ai/generate-video-scenes and/or
+ * /ai/regenerate-video-scene) — applying motion templates, crossfade
+ * transitions between scenes, the caption overlay on the opening scene, and
+ * an optional short instrumental background track. This is the only step
+ * that spends `aiVideos` quota; no new scene images are generated here.
+ * There's no supported text-to-video model available server-side (see
+ * media-generation skill — OpenAI/Gemini AI Integrations don't support video
+ * output), so this builds a real, relevant mp4 from the confirmed image(s)
+ * rather than mocking a placeholder clip.
+ */
+router.post("/ai/render-video", async (req, res): Promise<void> => {
+  const parsed = RenderAiVideoBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, prompt, sceneImageUrls, captionText, motionTemplate, includeMusic } = parsed.data;
 
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -179,20 +333,28 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   if (prompt.length > MAX_PROMPT_LEN) { res.status(400).json({ error: `Prompt must be ${MAX_PROMPT_LEN} characters or fewer.` }); return; }
   if (captionText && captionText.length > MAX_CAPTION_OVERLAY_LEN) { res.status(400).json({ error: `Caption must be ${MAX_CAPTION_OVERLAY_LEN} characters or fewer.` }); return; }
 
+  // Resolve every scene URL to this vendor's own stored generation BEFORE
+  // spending any quota or fetching anything — see resolveOwnedSceneImageUrls
+  // for why this can't just trust the client-supplied URLs (SSRF).
+  let ownedSceneImageUrls: string[];
+  try {
+    ownedSceneImageUrls = await resolveOwnedSceneImageUrls(vendorId, sceneImageUrls);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Invalid scene image URLs" });
+    return;
+  }
+
   const usageVendor = await getVendorForUsage(vendorId);
   if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   const quotaCheck = await consumeQuota(usageVendor, "aiVideos", 1);
   if (!quotaCheck.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, quotaCheck), usage: quotaCheck }); return; }
 
-  const fullPrompt = buildImagePrompt(prompt, style, industry);
-  const resolvedSceneCount = Math.min(Math.max(sceneCount ?? 1, 1), 3);
   const resolvedMotionTemplate: MotionTemplate | "auto" = motionTemplate ?? "auto";
 
   let result: string;
   let status: "completed" | "failed" = "completed";
   try {
-    const scenePrompts = await buildScenePrompts(fullPrompt, resolvedSceneCount);
-    const imageBuffers = await Promise.all(scenePrompts.map((p) => generateImageBuffer(p, "1536x1024", "high")));
+    const imageBuffers = await Promise.all(ownedSceneImageUrls.map(fetchGeneratedMediaBuffer));
     const scenes: VideoScene[] = imageBuffers.map((imageBuffer, i) => ({
       imageBuffer,
       // Only burn the caption in on the opening scene so multi-scene videos
@@ -203,9 +365,9 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
     let musicBuffer: Buffer | undefined;
     if (includeMusic) {
       try {
-        const approxDurationSeconds = resolvedSceneCount === 1 ? 6 : resolvedSceneCount * 5 - (resolvedSceneCount - 1) * 0.6;
+        const approxDurationSeconds = scenes.length === 1 ? 6 : scenes.length * 5 - (scenes.length - 1) * 0.6;
         musicBuffer = await generateMusicBuffer(
-          `Upbeat, modern instrumental background music bed for a short ${industry ?? "small business"} social media product video. Soft synths and a subtle beat, no vocals, no lyrics.`,
+          `Upbeat, modern instrumental background music bed for a short small business social media product video. Soft synths and a subtle beat, no vocals, no lyrics.`,
           approxDurationSeconds,
         );
       } catch (err) {
@@ -230,14 +392,14 @@ router.post("/ai/generate-video", async (req, res): Promise<void> => {
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
     type: "video",
-    prompt: fullPrompt,
+    prompt,
     result,
     status,
   }).returning();
 
   const serialized = serializeGeneration(generation);
-  if (status === "failed") { res.status(502).json(GenerateAiVideoResponse.parse(serialized)); return; }
-  res.json(GenerateAiVideoResponse.parse(serialized));
+  if (status === "failed") { res.status(502).json(RenderAiVideoResponse.parse(serialized)); return; }
+  res.json(RenderAiVideoResponse.parse(serialized));
 });
 
 router.post("/ai/generate-caption", async (req, res): Promise<void> => {

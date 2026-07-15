@@ -109,7 +109,7 @@ app.use(
 
 // Raised from Express's 100kb default: AI-generated images/videos are stored
 // as base64 data: URIs in request bodies (e.g. post creation with a
-// generated image/video attached, /ai/generate-video responses), which are
+// generated image/video attached, /ai/render-video responses), which are
 // comfortably multiple megabytes before base64 overhead.
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));

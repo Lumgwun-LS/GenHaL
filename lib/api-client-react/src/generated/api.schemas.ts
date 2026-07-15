@@ -414,13 +414,37 @@ export interface AiImageRequest {
   industry?: string;
 }
 
+export interface AiVideoScenesRequest {
+  vendorId: number;
+  prompt: string;
+  style?: string;
+  industry?: string;
+  /**
+     * Number of distinct visual scenes to generate previews for. Defaults to 1.
+     * @minimum 1
+     * @maximum 3
+     */
+  sceneCount?: number;
+}
+
+export interface AiVideoScenesResponse {
+  /** One AiGeneration (type "image") per scene, in scene order. Each is swept by the same orphaned-media cleanup as any other AI image if never used in a render. */
+  scenes: AiGeneration[];
+}
+
+export interface AiVideoSceneRegenerateRequest {
+  vendorId: number;
+  /** The scene-specific prompt to regenerate with — normally the `prompt` from the AiGeneration returned for this scene by /ai/generate-video-scenes, optionally edited by the vendor. */
+  prompt: string;
+}
+
 /**
  * Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto".
  */
-export type AiVideoRequestMotionTemplate = typeof AiVideoRequestMotionTemplate[keyof typeof AiVideoRequestMotionTemplate];
+export type AiVideoRenderRequestMotionTemplate = typeof AiVideoRenderRequestMotionTemplate[keyof typeof AiVideoRenderRequestMotionTemplate];
 
 
-export const AiVideoRequestMotionTemplate = {
+export const AiVideoRenderRequestMotionTemplate = {
   auto: 'auto',
   'zoom-in': 'zoom-in',
   'zoom-out': 'zoom-out',
@@ -429,20 +453,19 @@ export const AiVideoRequestMotionTemplate = {
   'zoom-pan': 'zoom-pan',
 } as const;
 
-export interface AiVideoRequest {
+export interface AiVideoRenderRequest {
   vendorId: number;
+  /** Base prompt this video is for, stored on the resulting AiGeneration record. */
   prompt: string;
-  style?: string;
-  industry?: string;
-  captionText?: string;
   /**
-     * Number of distinct visual scenes to generate and stitch together (with crossfade transitions). Defaults to 1.
-     * @minimum 1
-     * @maximum 3
+     * Confirmed scene image URLs, in order, from /ai/generate-video-scenes and/or /ai/regenerate-video-scene results.
+     * @minItems 1
+     * @maxItems 3
      */
-  sceneCount?: number;
+  sceneImageUrls: string[];
+  captionText?: string;
   /** Camera motion style applied to each scene. "auto" cycles through templates across scenes. Defaults to "auto". */
-  motionTemplate?: AiVideoRequestMotionTemplate;
+  motionTemplate?: AiVideoRenderRequestMotionTemplate;
   /** Whether to generate and mix in a short instrumental background track. Defaults to false. */
   includeMusic?: boolean;
 }

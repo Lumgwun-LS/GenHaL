@@ -829,24 +829,72 @@ export const GenerateAiImageResponse = zod.object({
 
 
 /**
- * @summary Generate a short AI video for a post
+ * Generates 1-3 distinct scene images (as separate AiGeneration image records, so unused ones are swept by the same media-cleanup job) so a vendor can review/regenerate scenes before spending video-render quota via POST /ai/render-video.
+ * @summary Generate the per-scene AI preview images for a multi-scene video, without rendering
  */
-export const generateAiVideoBodySceneCountMax = 3;
+export const generateAiVideoScenesBodySceneCountMax = 3;
 
 
 
-export const GenerateAiVideoBody = zod.object({
+export const GenerateAiVideoScenesBody = zod.object({
   "vendorId": zod.number(),
   "prompt": zod.string(),
   "style": zod.string().optional(),
   "industry": zod.string().optional(),
+  "sceneCount": zod.number().min(1).max(generateAiVideoScenesBodySceneCountMax).optional().describe('Number of distinct visual scenes to generate previews for. Defaults to 1.')
+})
+
+export const GenerateAiVideoScenesResponse = zod.object({
+  "scenes": zod.array(zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string(),
+  "result": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})).describe('One AiGeneration (type \"image\") per scene, in scene order. Each is swept by the same orphaned-media cleanup as any other AI image if never used in a render.')
+})
+
+
+/**
+ * Re-generates one scene's image (e.g. the vendor didn't like it) without touching the other scenes' already-generated images.
+ * @summary Regenerate a single scene's AI preview image
+ */
+export const RegenerateAiVideoSceneBody = zod.object({
+  "vendorId": zod.number(),
+  "prompt": zod.string().describe('The scene-specific prompt to regenerate with — normally the `prompt` from the AiGeneration returned for this scene by \/ai\/generate-video-scenes, optionally edited by the vendor.')
+})
+
+export const RegenerateAiVideoSceneResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string(),
+  "result": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Stitches previously-generated (and vendor-confirmed) scene images from POST /ai/generate-video-scenes / /ai/regenerate-video-scene into the final video, applying motion templates, transitions, caption overlay, and optional music. This is the only step that spends AI video generation quota.
+ * @summary Render the final video from confirmed scene preview images
+ */
+export const renderAiVideoBodySceneImageUrlsMax = 3;
+
+
+
+export const RenderAiVideoBody = zod.object({
+  "vendorId": zod.number(),
+  "prompt": zod.string().describe('Base prompt this video is for, stored on the resulting AiGeneration record.'),
+  "sceneImageUrls": zod.array(zod.string()).min(1).max(renderAiVideoBodySceneImageUrlsMax).describe('Confirmed scene image URLs, in order, from \/ai\/generate-video-scenes and\/or \/ai\/regenerate-video-scene results.'),
   "captionText": zod.string().optional(),
-  "sceneCount": zod.number().min(1).max(generateAiVideoBodySceneCountMax).optional().describe('Number of distinct visual scenes to generate and stitch together (with crossfade transitions). Defaults to 1.'),
   "motionTemplate": zod.enum(['auto', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'zoom-pan']).optional().describe('Camera motion style applied to each scene. \"auto\" cycles through templates across scenes. Defaults to \"auto\".'),
   "includeMusic": zod.boolean().optional().describe('Whether to generate and mix in a short instrumental background track. Defaults to false.')
 })
 
-export const GenerateAiVideoResponse = zod.object({
+export const RenderAiVideoResponse = zod.object({
   "id": zod.number(),
   "vendorId": zod.number(),
   "type": zod.string(),

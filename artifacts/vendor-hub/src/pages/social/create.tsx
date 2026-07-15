@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload } from "lucide-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload, RefreshCw, Film, X } from "lucide-react";
 import {
-  useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useGenerateAiVideo,
+  useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage,
+  useGenerateAiVideoScenes, useRegenerateAiVideoScene, useRenderAiVideo,
   useGetAiVideoUploadUrl, useGetAiImageUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,6 +68,11 @@ export default function CreatePost() {
   const [sceneCount, setSceneCount] = useState<1 | 2 | 3>(1);
   const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
   const [includeMusic, setIncludeMusic] = useState(false);
+  // Scene previews the vendor can review/regenerate before any render (and
+  // therefore before any aiVideos quota) is spent. Each entry mirrors the
+  // AiGeneration (type "image") row the server created for that scene.
+  const [videoScenes, setVideoScenes] = useState<{ id: number; prompt: string; imageUrl: string }[] | null>(null);
+  const [regeneratingSceneId, setRegeneratingSceneId] = useState<number | null>(null);
   const [uploadedVideoStage, setUploadedVideoStage] = useState<"idle" | "uploading" | "analyzing">("idle");
   const [uploadingImage, setUploadingImage] = useState(false);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +84,9 @@ export default function CreatePost() {
   const updatePost = useUpdatePost();
   const generateCaption = useGenerateAiCaption();
   const generateImage = useGenerateAiImage();
-  const generateVideo = useGenerateAiVideo();
+  const generateVideoScenes = useGenerateAiVideoScenes();
+  const regenerateVideoScene = useRegenerateAiVideoScene();
+  const renderVideo = useRenderAiVideo();
   const getVideoUploadUrl = useGetAiVideoUploadUrl();
   const getImageUploadUrl = useGetAiImageUploadUrl();
   const analyzeVideoCaption = useAnalyzeVideoCaption();
@@ -112,24 +120,65 @@ export default function CreatePost() {
       if (result.status === "failed") { toast.error(result.result ?? "Image generation failed"); return; }
       setGeneratedImage(result.result ?? null);
       setGeneratedVideo(null);
+      setVideoScenes(null);
       toast.success("Image generated — review before publishing");
     } catch {
       toast.error("Failed to generate image");
     }
   };
 
-  const handleGenerateVideo = async () => {
+  // Step 1 of AI video: generate scene preview images only (no render, no
+  // aiVideos quota spent) so the vendor can see what each scene looks like
+  // first.
+  const handlePreviewVideoScenes = async () => {
     if (!caption.trim()) {
       toast.error("Write a caption first so the video matches your post");
       return;
     }
     try {
-      const result = await generateVideo.mutateAsync({
+      const result = await generateVideoScenes.mutateAsync({ data: { vendorId: 1, prompt: caption, sceneCount } });
+      const failed = result.scenes.find((s) => s.status === "failed");
+      if (failed) { toast.error(failed.result ?? "Scene generation failed"); return; }
+      setVideoScenes(result.scenes.map((s) => ({ id: s.id, prompt: s.prompt, imageUrl: s.result ?? "" })));
+      setGeneratedVideo(null);
+      setGeneratedImage(null);
+      toast.success(`Generated ${result.scenes.length} scene${result.scenes.length > 1 ? "s" : ""} — review below, then render the video`);
+    } catch {
+      toast.error("Failed to generate scene previews");
+    }
+  };
+
+  // Regenerates just one scene's image, leaving the others (and any quota
+  // already spent on them) untouched.
+  const handleRegenerateScene = async (index: number) => {
+    if (!videoScenes) return;
+    const scene = videoScenes[index];
+    setRegeneratingSceneId(scene.id);
+    try {
+      const result = await regenerateVideoScene.mutateAsync({ data: { vendorId: 1, prompt: scene.prompt } });
+      if (result.status === "failed") { toast.error(result.result ?? "Scene regeneration failed"); return; }
+      setVideoScenes((prev) =>
+        prev ? prev.map((s, i) => (i === index ? { id: result.id, prompt: result.prompt, imageUrl: result.result ?? "" } : s)) : prev,
+      );
+      toast.success("Scene regenerated");
+    } catch {
+      toast.error("Failed to regenerate scene");
+    } finally {
+      setRegeneratingSceneId(null);
+    }
+  };
+
+  // Step 2: once every scene looks right, stitch the confirmed images into
+  // the final video — this is the only step that spends aiVideos quota.
+  const handleRenderVideo = async () => {
+    if (!videoScenes || videoScenes.length === 0) return;
+    try {
+      const result = await renderVideo.mutateAsync({
         data: {
           vendorId: 1,
           prompt: caption,
+          sceneImageUrls: videoScenes.map((s) => s.imageUrl),
           captionText: caption,
-          sceneCount,
           motionTemplate,
           includeMusic,
         },
@@ -137,11 +186,14 @@ export default function CreatePost() {
       if (result.status === "failed") { toast.error(result.result ?? "Video generation failed"); return; }
       setGeneratedVideo(result.result ?? null);
       setGeneratedImage(null);
+      setVideoScenes(null);
       toast.success("Video generated — review before publishing");
     } catch {
-      toast.error("Failed to generate video");
+      toast.error("Failed to render video");
     }
   };
+
+  const handleDiscardScenes = () => setVideoScenes(null);
 
   const handleVideoFileSelected = async (file: File) => {
     const MAX_BYTES = 100 * 1024 * 1024;
@@ -163,6 +215,7 @@ export default function CreatePost() {
 
       setGeneratedVideo(videoUrl);
       setGeneratedImage(null);
+      setVideoScenes(null);
       setCaption(result.result ?? caption);
       toast.success("AI watched your video and drafted a caption — review and edit as needed");
     } catch {
@@ -186,6 +239,7 @@ export default function CreatePost() {
 
       setGeneratedImage(imageUrl);
       setGeneratedVideo(null);
+      setVideoScenes(null);
       toast.success("Photo attached — it'll be used as this post's media");
     } catch {
       toast.error("Failed to upload photo");
@@ -389,12 +443,12 @@ export default function CreatePost() {
               />
               <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateImage} disabled={generateImage.isPending || generateVideo.isPending}>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateImage} disabled={generateImage.isPending || generateVideoScenes.isPending}>
                     {generateImage.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
                     AI Image
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleGenerateVideo} disabled={generateImage.isPending || generateVideo.isPending}>
-                    {generateVideo.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <VideoIcon className="w-4 h-4 mr-2" />}
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handlePreviewVideoScenes} disabled={generateImage.isPending || generateVideoScenes.isPending || !!videoScenes}>
+                    {generateVideoScenes.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <VideoIcon className="w-4 h-4 mr-2" />}
                     AI Video
                   </Button>
                   <Button
@@ -445,7 +499,7 @@ export default function CreatePost() {
               <p className="mt-1 text-xs text-muted-foreground">
                 "Upload My Video" lets AI watch your own footage and write a caption grounded in what it actually shows — different from "AI Video", which generates a new video from an image. "Upload Photo" attaches your own picture directly, no AI involved.
               </p>
-              {!generatedVideo && (
+              {!generatedVideo && !videoScenes && (
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <label className="flex items-center gap-1.5">
                     Scenes
@@ -453,7 +507,7 @@ export default function CreatePost() {
                       className="rounded-md border bg-background px-1.5 py-1 text-xs"
                       value={sceneCount}
                       onChange={(e) => setSceneCount(Number(e.target.value) as 1 | 2 | 3)}
-                      disabled={generateVideo.isPending}
+                      disabled={generateVideoScenes.isPending}
                     >
                       <option value={1}>1 (single shot)</option>
                       <option value={2}>2 (multi-scene)</option>
@@ -466,7 +520,7 @@ export default function CreatePost() {
                       className="rounded-md border bg-background px-1.5 py-1 text-xs"
                       value={motionTemplate}
                       onChange={(e) => setMotionTemplate(e.target.value as typeof motionTemplate)}
-                      disabled={generateVideo.isPending}
+                      disabled={generateVideoScenes.isPending}
                     >
                       <option value="auto">Auto (cycle)</option>
                       <option value="zoom-in">Zoom in</option>
@@ -477,16 +531,54 @@ export default function CreatePost() {
                     </select>
                   </label>
                   <label className="flex items-center gap-1.5 cursor-pointer">
-                    <Checkbox checked={includeMusic} onCheckedChange={(v) => setIncludeMusic(!!v)} disabled={generateVideo.isPending} />
+                    <Checkbox checked={includeMusic} onCheckedChange={(v) => setIncludeMusic(!!v)} disabled={generateVideoScenes.isPending} />
                     Background music
                   </label>
                 </div>
               )}
-              {generateVideo.isPending && (
+              {generateVideoScenes.isPending && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {sceneCount > 1 ? `Generating a ${sceneCount}-scene video with AI product images` : "Generating a short video from an AI product image"}
-                  {includeMusic ? " and background music" : ""} — this can take up to a minute or two…
+                  {sceneCount > 1 ? `Generating ${sceneCount} scene previews with AI product images` : "Generating a scene preview with an AI product image"}
+                  — this can take a moment. No video-generation credit is spent until you render.
                 </p>
+              )}
+              {videoScenes && (
+                <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Review your scene{videoScenes.length > 1 ? "s" : ""} — regenerate any you don't like, then render. Rendering is the only step that spends AI video credits.
+                    </p>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 shrink-0" onClick={handleDiscardScenes} disabled={renderVideo.isPending}>
+                      <X className="w-3.5 h-3.5 mr-1" /> Discard
+                    </Button>
+                  </div>
+                  <div className={`grid gap-2 ${videoScenes.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {videoScenes.map((scene, i) => (
+                      <div key={scene.id} className="relative">
+                        <img src={scene.imageUrl} alt={`Scene ${i + 1}`} className="w-full rounded-md border aspect-video object-cover" />
+                        <Badge variant="secondary" className="absolute top-1.5 left-1.5 text-[10px]">Scene {i + 1}</Badge>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="absolute top-1.5 right-1.5 h-7 px-2"
+                          onClick={() => handleRegenerateScene(i)}
+                          disabled={regeneratingSceneId !== null || renderVideo.isPending}
+                        >
+                          {regeneratingSceneId === scene.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={handleRenderVideo}
+                    disabled={renderVideo.isPending || regeneratingSceneId !== null}
+                  >
+                    {renderVideo.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Film className="w-4 h-4 mr-2" />}
+                    {renderVideo.isPending ? "Rendering video…" : "Render Video"}
+                  </Button>
+                </div>
               )}
               {generatedImage && (
                 <div className="mt-3 relative">
