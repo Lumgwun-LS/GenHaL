@@ -59,6 +59,17 @@ vi.mock("../../lib/platform-gateways", () => ({
   resolveGatewayField: async () => platformStripeKey,
 }));
 
+const TEST_PLANS = [
+  { tier: "starter", name: "Starter", price: 29, currency: "usd", description: "d", features: ["a"], highlight: false, quotas: { aiImages: 5, aiVideos: 2, aiCaptions: 25, voiceMinutes: 10, sms: 25, email: 150 } },
+  { tier: "pro", name: "Pro", price: 79, currency: "usd", description: "d", features: ["a"], highlight: true, quotas: { aiImages: 15, aiVideos: 7, aiCaptions: 100, voiceMinutes: 40, sms: 100, email: 500 } },
+  { tier: "enterprise", name: "Enterprise", price: 199, currency: "usd", description: "d", features: ["a"], highlight: false, quotas: { aiImages: 40, aiVideos: 20, aiCaptions: 300, voiceMinutes: 120, sms: 300, email: 1500 } },
+];
+
+vi.mock("../../lib/subscription-plans", () => ({
+  getSubscriptionPlans: async () => TEST_PLANS,
+  getSubscriptionPlan: async (tier: string) => TEST_PLANS.find((p) => p.tier === tier),
+}));
+
 // Catalog/portal-configuration creation hits real Stripe Product/Price/portal
 // APIs — stub them so route tests stay fast and deterministic.
 vi.mock("../../lib/stripe-catalog", () => ({

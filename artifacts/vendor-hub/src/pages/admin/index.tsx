@@ -19,11 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect } from "wouter";
 import SiteEditor from "./site-editor";
+import PlansEditor from "./plans";
 import PaymentGatewaysPanel from "./payment-gateways";
 import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
@@ -1823,6 +1824,9 @@ export default function AdminPanel() {
           <TabsTrigger value="background-jobs" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Background Jobs
           </TabsTrigger>
+          <TabsTrigger value="plans" className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4" /> Plans
+          </TabsTrigger>
           <TabsTrigger value="site-editor" className="flex items-center gap-2">
             <Layout className="w-4 h-4" /> Site Editor
           </TabsTrigger>
@@ -2775,6 +2779,10 @@ export default function AdminPanel() {
         </TabsContent>
 
         {/* ── Site Editor tab ────────────────────────────────────────── */}
+        <TabsContent value="plans">
+          <PlansEditor />
+        </TabsContent>
+
         <TabsContent value="site-editor">
           <SiteEditor />
         </TabsContent>

@@ -29,6 +29,7 @@ import type { Vendor } from "@workspace/db/schema";
 import { resolveGatewayField } from "../lib/platform-gateways";
 import { ensureStripeCatalog, ensurePortalConfiguration } from "../lib/stripe-catalog";
 import { reconcileVendorSubscription } from "../lib/subscription-sync";
+import { getSubscriptionPlans } from "../lib/subscription-plans";
 
 const router = Router();
 
@@ -69,55 +70,12 @@ const checkoutInFlight = new Map<
 >();
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
+// Plan pricing, features and resource quotas now live in the admin-editable
+// "billing.subscriptionPlans" site-content block (see subscription-plans.ts)
+// instead of being hardcoded here — admins manage them from the Site Editor,
+// vendors only ever read them.
 
-export const SUBSCRIPTION_PLANS = [
-  {
-    tier: "starter",
-    name: "Starter",
-    price: 29,
-    currency: "usd",
-    description: "Get started with direct payment routing",
-    features: [
-      "Connect your own Stripe or Paystack account",
-      "Up to 100 orders / month",
-      "Email support",
-      "Basic analytics",
-    ],
-    highlight: false,
-  },
-  {
-    tier: "pro",
-    name: "Pro",
-    price: 79,
-    currency: "usd",
-    description: "Everything your growing business needs",
-    features: [
-      "Everything in Starter",
-      "Unlimited orders",
-      "Priority support",
-      "Advanced analytics",
-      "Multi-currency payouts",
-    ],
-    highlight: true,
-  },
-  {
-    tier: "enterprise",
-    name: "Enterprise",
-    price: 199,
-    currency: "usd",
-    description: "For high-volume vendors and large teams",
-    features: [
-      "Everything in Pro",
-      "Dedicated account manager",
-      "Custom integrations",
-      "SLA guarantees",
-      "White-glove onboarding",
-    ],
-    highlight: false,
-  },
-] as const;
-
-type PlanTier = (typeof SUBSCRIPTION_PLANS)[number]["tier"];
+type PlanTier = "starter" | "pro" | "enterprise";
 const VALID_UPGRADE_TIERS: PlanTier[] = ["starter", "pro", "enterprise"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -169,7 +127,7 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
 
   res.json({
     currentTier: vendor.subscriptionTier,
-    plans: SUBSCRIPTION_PLANS,
+    plans: await getSubscriptionPlans(),
   });
 });
 
@@ -208,7 +166,8 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const plan = SUBSCRIPTION_PLANS.find((p) => p.tier === tier)!;
+  const plans = await getSubscriptionPlans();
+  const plan = plans.find((p) => p.tier === tier)!;
 
   // Guard: don't allow downgrading via this route
   const TIER_RANK: Record<string, number> = {
@@ -264,7 +223,7 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     // Use a durable, catalog-managed Price rather than ad-hoc price_data so the
     // same Price object can later be offered inside the Customer Portal's
     // "switch plan" flow (Stripe requires real Prices there, not price_data).
-    const catalog = await ensureStripeCatalog(stripe, stripeKey);
+    const catalog = await ensureStripeCatalog(stripe, stripeKey, plans);
     const catalogEntry = catalog.find((c) => c.tier === tier);
     if (!catalogEntry) {
       throw Object.assign(
@@ -364,7 +323,8 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
 
   // Ensure the portal is configured to allow switching between our tier
   // Prices (not just cancel/payment-method/invoices).
-  const catalog = await ensureStripeCatalog(stripe, stripeKey);
+  const plans = await getSubscriptionPlans();
+  const catalog = await ensureStripeCatalog(stripe, stripeKey, plans);
   const configurationId = await ensurePortalConfiguration(stripe, stripeKey, catalog);
 
   const portalSession = await stripe.billingPortal.sessions.create({

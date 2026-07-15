@@ -29,7 +29,7 @@ import { syncSaleFromPayment } from "../../lib/sales-sync";
 import { notifyVendorPaymentStatus } from "../../lib/push";
 import { sendEmail } from "../../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../../lib/email-branding";
-import { SUBSCRIPTION_PLANS } from "../subscription-upgrade";
+import { getSubscriptionPlan } from "../../lib/subscription-plans";
 import { insertTierChangeNotification, sendSubscriptionCancelledEmail } from "../../lib/subscription-notifications";
 
 const router = Router();
@@ -45,8 +45,7 @@ async function sendSubscriptionChangedEmail(
   newTier: string,
 ): Promise<void> {
   const isUpgrade = (TIER_RANK[newTier] ?? 0) > (TIER_RANK[previousTier] ?? 0);
-  const newPlan = SUBSCRIPTION_PLANS.find((p) => p.tier === newTier);
-  const lostPlan = SUBSCRIPTION_PLANS.find((p) => p.tier === previousTier);
+  const [newPlan, lostPlan] = await Promise.all([getSubscriptionPlan(newTier), getSubscriptionPlan(previousTier)]);
 
   const featuresHtml = isUpgrade
     ? newPlan

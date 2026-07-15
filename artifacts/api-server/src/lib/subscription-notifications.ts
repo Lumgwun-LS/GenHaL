@@ -13,7 +13,7 @@
 import { db, vendorNotificationsTable } from "@workspace/db";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
-import { SUBSCRIPTION_PLANS } from "../routes/subscription-upgrade";
+import { getSubscriptionPlan } from "./subscription-plans";
 
 /**
  * Inserts the in-app "tier_change" notification vendors see for any downgrade to free.
@@ -41,7 +41,7 @@ export async function sendSubscriptionCancelledEmail(
   vendorName: string,
   previousTier: string,
 ): Promise<void> {
-  const plan = SUBSCRIPTION_PLANS.find((p) => p.tier === previousTier);
+  const plan = await getSubscriptionPlan(previousTier);
   const featuresHtml = plan
     ? `
       <p style="font-size: 14px; line-height: 1.6; color: #444;">You'll no longer have access to ${escapeHtml(plan.name)} features, including:</p>

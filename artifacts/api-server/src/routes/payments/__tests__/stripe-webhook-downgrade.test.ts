@@ -174,12 +174,15 @@ vi.mock("../../../lib/webhook-buffer", () => ({
   enqueueWebhookEvent: enqueueWebhookEventMock,
 }));
 
-vi.mock("../subscription-upgrade", () => ({
-  SUBSCRIPTION_PLANS: [
-    { tier: "starter", name: "Starter", features: ["Feature A"] },
-    { tier: "pro", name: "Pro", features: ["Feature B", "Feature C"] },
-    { tier: "enterprise", name: "Enterprise", features: ["Feature D"] },
-  ],
+const TEST_PLANS = [
+  { tier: "starter", name: "Starter", features: ["Feature A"] },
+  { tier: "pro", name: "Pro", features: ["Feature B", "Feature C"] },
+  { tier: "enterprise", name: "Enterprise", features: ["Feature D"] },
+];
+
+vi.mock("../../../lib/subscription-plans", () => ({
+  getSubscriptionPlan: vi.fn(async (tier: string) => TEST_PLANS.find((p) => p.tier === tier)),
+  getSubscriptionPlans: vi.fn(async () => TEST_PLANS),
 }));
 
 // ── Mock the Stripe SDK ───────────────────────────────────────────────────────

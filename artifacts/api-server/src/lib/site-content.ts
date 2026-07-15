@@ -89,6 +89,65 @@ export const DEFAULT_SITE_CONTENT = {
     fromStatus: string;
     toStatus: string;
   }>,
+  // Subscription plan pricing/quotas — admin-editable, vendors only ever read this.
+  // Quotas are monthly resource allowances (AI generations, voice minutes, SMS,
+  // email) bundled into each tier. Pricing is set so the bundled resource cost
+  // (at the unit costs documented in PLAN_RESOURCE_UNIT_COSTS, see
+  // subscription-plans.ts) stays at roughly 1/5th of the plan price — i.e. a
+  // ~5x margin over what the bundled resources actually cost the platform,
+  // after accounting for payment-processing fees (~3%) and a flat monthly
+  // infra/support overhead per vendor.
+  "billing.subscriptionPlans": {
+    plans: [
+      {
+        tier: "starter",
+        name: "Starter",
+        price: 29,
+        currency: "usd",
+        description: "Get started with direct payment routing",
+        features: [
+          "Connect your own Stripe or Paystack account",
+          "Up to 100 orders / month",
+          "Email support",
+          "Basic analytics",
+        ],
+        highlight: false,
+        quotas: { aiImages: 5, aiVideos: 2, aiCaptions: 25, voiceMinutes: 10, sms: 25, email: 150 },
+      },
+      {
+        tier: "pro",
+        name: "Pro",
+        price: 79,
+        currency: "usd",
+        description: "Everything your growing business needs",
+        features: [
+          "Everything in Starter",
+          "Unlimited orders",
+          "Priority support",
+          "Advanced analytics",
+          "Multi-currency payouts",
+        ],
+        highlight: true,
+        quotas: { aiImages: 15, aiVideos: 7, aiCaptions: 100, voiceMinutes: 40, sms: 100, email: 500 },
+      },
+      {
+        tier: "enterprise",
+        name: "Enterprise",
+        price: 199,
+        currency: "usd",
+        description: "For high-volume vendors and large teams",
+        features: [
+          "Everything in Pro",
+          "Dedicated account manager",
+          "Custom integrations",
+          "SLA guarantees",
+          "White-glove onboarding",
+        ],
+        highlight: false,
+        quotas: { aiImages: 40, aiVideos: 20, aiCaptions: 300, voiceMinutes: 120, sms: 300, email: 1500 },
+      },
+    ],
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -169,6 +228,30 @@ const voiceBackfillRecentFixesSchema = z.array(
   }),
 ).max(200);
 
+const subscriptionPlanQuotasSchema = z.object({
+  aiImages: z.number().int().min(0).max(100000),
+  aiVideos: z.number().int().min(0).max(100000),
+  aiCaptions: z.number().int().min(0).max(100000),
+  voiceMinutes: z.number().int().min(0).max(100000),
+  sms: z.number().int().min(0).max(1000000),
+  email: z.number().int().min(0).max(1000000),
+});
+
+const subscriptionPlansSchema = z.object({
+  plans: z.array(
+    z.object({
+      tier: z.enum(["starter", "pro", "enterprise"]),
+      name: z.string().min(1).max(100),
+      price: z.number().min(0).max(100000),
+      currency: z.string().min(1).max(10),
+      description: z.string().max(500),
+      features: z.array(z.string().max(300)).max(30),
+      highlight: z.boolean(),
+      quotas: subscriptionPlanQuotasSchema,
+    }),
+  ).min(1).max(12),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -180,6 +263,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.voiceSignatureFailureAlertSettings": voiceSignatureFailureAlertSettingsSchema,
   "admin.voiceBackfillLastRun": voiceBackfillLastRunSchema,
   "admin.voiceBackfillRecentFixes": voiceBackfillRecentFixesSchema,
+  "billing.subscriptionPlans": subscriptionPlansSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

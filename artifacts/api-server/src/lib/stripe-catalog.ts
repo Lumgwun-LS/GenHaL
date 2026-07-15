@@ -12,9 +12,19 @@
  * Each Price carries `metadata.tier` so the `customer.subscription.updated`
  * webhook can read the new tier straight off the subscription item without a
  * second lookup.
+ *
+ * Plan prices are now admin-editable (see subscription-plans.ts), so unlike
+ * the old hardcoded-forever constants, the Stripe Price for a tier can go
+ * stale after an admin edit. Stripe Prices are immutable once created, so
+ * when the admin-configured price no longer matches the active Stripe
+ * Price's `unit_amount`, we retire the old Price (clear its lookup_key,
+ * mark inactive) and mint a new one under the same lookup_key. The catalog
+ * cache is short-TTL (not permanent) so an admin's price edit is picked up
+ * on the next checkout/portal request within seconds, not only after a
+ * server restart.
  */
 import Stripe from "stripe";
-import { SUBSCRIPTION_PLANS } from "../routes/subscription-upgrade";
+import type { SubscriptionPlan } from "./subscription-plans";
 
 export interface TierPrice {
   tier: string;
@@ -22,50 +32,76 @@ export interface TierPrice {
   priceId: string;
 }
 
+interface CacheEntry {
+  promise: Promise<TierPrice[]>;
+  cachedAt: number;
+}
+
 // In-memory cache, keyed by Stripe secret key so switching platform keys
 // (e.g. test -> live) doesn't serve a stale catalog from the other account.
-const catalogCache = new Map<string, Promise<TierPrice[]>>();
+// Short TTL only — long enough to absorb bursty repeat calls (e.g. checkout
+// immediately followed by a portal-config request) without hammering
+// Stripe, short enough that an admin price edit shows up promptly.
+const CATALOG_TTL_MS = 30_000;
+const catalogCache = new Map<string, CacheEntry>();
 const portalConfigCache = new Map<string, Promise<string>>();
 
 function lookupKeyFor(tier: string): string {
   return `vendorhub_${tier}`;
 }
 
-async function findOrCreateTierPrice(stripe: Stripe, plan: (typeof SUBSCRIPTION_PLANS)[number]): Promise<TierPrice> {
+async function findOrCreateTierPrice(stripe: Stripe, plan: SubscriptionPlan): Promise<TierPrice> {
   const lookupKey = lookupKeyFor(plan.tier);
+  const targetAmount = Math.round(plan.price * 100);
 
   const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   const found = existing.data[0];
-  if (found) {
+
+  if (found && found.unit_amount === targetAmount && found.currency === plan.currency) {
     const productId = typeof found.product === "string" ? found.product : found.product.id;
     return { tier: plan.tier, productId, priceId: found.id };
   }
 
-  const product = await stripe.products.create({
-    name: `VendorHub ${plan.name} Plan`,
-    description: plan.description,
-    metadata: { tier: plan.tier },
-  });
+  let productId: string;
+  if (found) {
+    // The admin changed the price (or currency) for this tier — Prices are
+    // immutable in Stripe, so retire the stale one (free its lookup_key so
+    // the replacement can claim it) and mint a new Price under the same
+    // product.
+    productId = typeof found.product === "string" ? found.product : found.product.id;
+    await stripe.prices.update(found.id, { lookup_key: "", active: false });
+    await stripe.products.update(productId, {
+      name: `VendorHub ${plan.name} Plan`,
+      description: plan.description,
+    });
+  } else {
+    const product = await stripe.products.create({
+      name: `VendorHub ${plan.name} Plan`,
+      description: plan.description,
+      metadata: { tier: plan.tier },
+    });
+    productId = product.id;
+  }
 
   const price = await stripe.prices.create({
-    product: product.id,
+    product: productId,
     currency: plan.currency,
-    unit_amount: plan.price * 100,
+    unit_amount: targetAmount,
     recurring: { interval: "month" },
     lookup_key: lookupKey,
     metadata: { tier: plan.tier },
   });
 
-  return { tier: plan.tier, productId: product.id, priceId: price.id };
+  return { tier: plan.tier, productId, priceId: price.id };
 }
 
-/** Returns the durable Product/Price for every subscription tier, creating them on first use. */
-export async function ensureStripeCatalog(stripe: Stripe, stripeKey: string): Promise<TierPrice[]> {
+/** Returns the durable Product/Price for every subscription tier, creating (or repricing) them as needed. */
+export async function ensureStripeCatalog(stripe: Stripe, stripeKey: string, plans: SubscriptionPlan[]): Promise<TierPrice[]> {
   const cached = catalogCache.get(stripeKey);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.cachedAt < CATALOG_TTL_MS) return cached.promise;
 
-  const promise = Promise.all(SUBSCRIPTION_PLANS.map((plan) => findOrCreateTierPrice(stripe, plan)));
-  catalogCache.set(stripeKey, promise);
+  const promise = Promise.all(plans.map((plan) => findOrCreateTierPrice(stripe, plan)));
+  catalogCache.set(stripeKey, { promise, cachedAt: Date.now() });
   try {
     return await promise;
   } catch (err) {
@@ -77,10 +113,13 @@ export async function ensureStripeCatalog(stripe: Stripe, stripeKey: string): Pr
 /**
  * Returns a Customer Portal configuration id that allows vendors to cancel,
  * update payment method, view invoice history, AND switch between the tier
- * prices in `catalog` — created once and reused via lookup by product set.
+ * prices in `catalog` — created fresh whenever the catalog's price set
+ * changes (keyed by the sorted price ids), so a re-priced plan doesn't leave
+ * vendors switching onto a retired Price via a stale portal configuration.
  */
 export async function ensurePortalConfiguration(stripe: Stripe, stripeKey: string, catalog: TierPrice[]): Promise<string> {
-  const cached = portalConfigCache.get(stripeKey);
+  const cacheKey = `${stripeKey}:${catalog.map((c) => c.priceId).sort().join(",")}`;
+  const cached = portalConfigCache.get(cacheKey);
   if (cached) return cached;
 
   const promise = (async () => {
@@ -104,11 +143,11 @@ export async function ensurePortalConfiguration(stripe: Stripe, stripeKey: strin
     return config.id;
   })();
 
-  portalConfigCache.set(stripeKey, promise);
+  portalConfigCache.set(cacheKey, promise);
   try {
     return await promise;
   } catch (err) {
-    portalConfigCache.delete(stripeKey);
+    portalConfigCache.delete(cacheKey);
     throw err;
   }
 }
