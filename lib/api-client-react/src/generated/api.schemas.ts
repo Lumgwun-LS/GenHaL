@@ -449,6 +449,17 @@ export interface AiVideoUploadUrlResponse {
   videoUrl: string;
 }
 
+export interface AiImageUploadUrlRequest {
+  vendorId: number;
+}
+
+export interface AiImageUploadUrlResponse {
+  /** Presigned PUT URL — client should PUT the raw image bytes here. */
+  uploadUrl: string;
+  /** Public URL the image will be reachable at after the PUT completes; use this directly as post media, same as an AI-generated image. */
+  imageUrl: string;
+}
+
 export interface AiVideoCaptionRequest {
   vendorId: number;
   /** Public URL of the vendor's uploaded video (from POST /media/upload-url + a PUT of the bytes). */

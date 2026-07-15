@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload } from "lucide-react";
 import {
   useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage, useGenerateAiVideo,
-  useGetAiVideoUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
+  useGetAiVideoUploadUrl, useGetAiImageUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
@@ -68,7 +68,9 @@ export default function CreatePost() {
   const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
   const [includeMusic, setIncludeMusic] = useState(false);
   const [uploadedVideoStage, setUploadedVideoStage] = useState<"idle" | "uploading" | "analyzing">("idle");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: products } = useListProducts({ vendorId: 1 });
   const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
@@ -78,6 +80,7 @@ export default function CreatePost() {
   const generateImage = useGenerateAiImage();
   const generateVideo = useGenerateAiVideo();
   const getVideoUploadUrl = useGetAiVideoUploadUrl();
+  const getImageUploadUrl = useGetAiImageUploadUrl();
   const analyzeVideoCaption = useAnalyzeVideoCaption();
   const submitForReviewMutation = useSubmitPostForReview();
   const queryClient = useQueryClient();
@@ -166,6 +169,28 @@ export default function CreatePost() {
       toast.error("Failed to upload/analyze video");
     } finally {
       setUploadedVideoStage("idle");
+    }
+  };
+
+  const handleImageFileSelected = async (file: File) => {
+    const MAX_BYTES = 20 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast.error("Photo is too large (max 20MB)");
+      return;
+    }
+    try {
+      setUploadingImage(true);
+      const { uploadUrl, imageUrl } = await getImageUploadUrl.mutateAsync({ data: { vendorId: 1 } });
+      const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "image/jpeg" }, body: file });
+      if (!putRes.ok) throw new Error("Upload failed");
+
+      setGeneratedImage(imageUrl);
+      setGeneratedVideo(null);
+      toast.success("Photo attached — it'll be used as this post's media");
+    } catch {
+      toast.error("Failed to upload photo");
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -393,11 +418,32 @@ export default function CreatePost() {
                       if (file) handleVideoFileSelected(file);
                     }}
                   />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => imageFileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                  >
+                    {uploadingImage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    {uploadingImage ? "Uploading…" : "Upload Photo"}
+                  </Button>
+                  <input
+                    ref={imageFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) handleImageFileSelected(file);
+                    }}
+                  />
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                "Upload My Video" lets AI watch your own footage and write a caption grounded in what it actually shows — different from "AI Video", which generates a new video from an image.
+                "Upload My Video" lets AI watch your own footage and write a caption grounded in what it actually shows — different from "AI Video", which generates a new video from an image. "Upload Photo" attaches your own picture directly, no AI involved.
               </p>
               {!generatedVideo && (
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

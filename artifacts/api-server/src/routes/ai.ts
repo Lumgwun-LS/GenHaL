@@ -17,12 +17,14 @@ import {
   GenerateAiVideoBody,
   GenerateAiCaptionBody,
   GetAiVideoUploadUrlBody,
+  GetAiImageUploadUrlBody,
   AnalyzeVideoCaptionBody,
   ListAiGenerationsQueryParams,
   GenerateAiImageResponse,
   GenerateAiVideoResponse,
   GenerateAiCaptionResponse,
   GetAiVideoUploadUrlResponse,
+  GetAiImageUploadUrlResponse,
   AnalyzeVideoCaptionResponse,
   ListAiGenerationsResponse,
 } from "@workspace/api-zod";
@@ -329,6 +331,33 @@ router.post("/ai/upload-video-url", async (req, res): Promise<void> => {
   const videoUrl = `https://${base}/api/media/${objectId}`;
 
   res.json(GetAiVideoUploadUrlResponse.parse({ uploadUrl, videoUrl }));
+});
+
+/**
+ * Returns a presigned PUT URL for a vendor to upload their own photo's raw
+ * bytes directly to object storage, plus the public URL it'll be reachable
+ * at once uploaded (served by routes/media.ts). Mirrors /ai/upload-video-url,
+ * but the resulting imageUrl is used directly as post media — no AI analysis
+ * step, since a photo needs no captioning of its own content to be usable.
+ */
+router.post("/ai/upload-image-url", async (req, res): Promise<void> => {
+  const parsed = GetAiImageUploadUrlBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only upload media for your own vendor account." }); return; }
+
+  const base = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+  if (!base) { res.status(500).json({ error: "No public domain configured for media uploads." }); return; }
+
+  const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+  const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
+  const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+  const imageUrl = `https://${base}/api/media/${objectId}`;
+
+  res.json(GetAiImageUploadUrlResponse.parse({ uploadUrl, imageUrl }));
 });
 
 /** Downloads the vendor's uploaded video and, once it's public, marks its ACL so the

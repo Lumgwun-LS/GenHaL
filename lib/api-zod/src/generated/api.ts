@@ -872,6 +872,19 @@ export const GetAiVideoUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Get a presigned URL to upload a vendor's own photo for use as post media
+ */
+export const GetAiImageUploadUrlBody = zod.object({
+  "vendorId": zod.number()
+})
+
+export const GetAiImageUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string().describe('Presigned PUT URL — client should PUT the raw image bytes here.'),
+  "imageUrl": zod.string().describe('Public URL the image will be reachable at after the PUT completes; use this directly as post media, same as an AI-generated image.')
+})
+
+
+/**
  * @summary Analyze an uploaded video's content and generate a caption/post for it
  */
 export const AnalyzeVideoCaptionBody = zod.object({

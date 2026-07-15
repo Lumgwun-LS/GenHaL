@@ -12,6 +12,8 @@ export * from './adminMessageHistoryEntry';
 export * from './aiCaptionRequest';
 export * from './aiGeneration';
 export * from './aiImageRequest';
+export * from './aiImageUploadUrlRequest';
+export * from './aiImageUploadUrlResponse';
 export * from './aiVideoCaptionRequest';
 export * from './aiVideoRequest';
 export * from './aiVideoRequestMotionTemplate';

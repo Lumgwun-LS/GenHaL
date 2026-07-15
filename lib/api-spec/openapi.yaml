@@ -625,6 +625,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiVideoUploadUrlResponse"
 
+  /ai/upload-image-url:
+    post:
+      operationId: getAiImageUploadUrl
+      tags: [ai]
+      summary: Get a presigned URL to upload a vendor's own photo for use as post media
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiImageUploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and the public URL it will be served at once uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiImageUploadUrlResponse"
+
   /ai/analyze-video-caption:
     post:
       operationId: analyzeVideoCaption
@@ -3349,6 +3368,24 @@ components:
         videoUrl:
           type: string
           description: Public URL the video will be reachable at after the PUT completes; pass this to /ai/analyze-video-caption.
+
+    AiImageUploadUrlRequest:
+      type: object
+      required: [vendorId]
+      properties:
+        vendorId:
+          type: integer
+
+    AiImageUploadUrlResponse:
+      type: object
+      required: [uploadUrl, imageUrl]
+      properties:
+        uploadUrl:
+          type: string
+          description: Presigned PUT URL — client should PUT the raw image bytes here.
+        imageUrl:
+          type: string
+          description: Public URL the image will be reachable at after the PUT completes; use this directly as post media, same as an AI-generated image.
 
     AiVideoCaptionRequest:
       type: object

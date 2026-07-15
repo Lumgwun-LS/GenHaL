@@ -25,6 +25,8 @@ import type {
   AiCaptionRequest,
   AiGeneration,
   AiImageRequest,
+  AiImageUploadUrlRequest,
+  AiImageUploadUrlResponse,
   AiVideoCaptionRequest,
   AiVideoRequest,
   AiVideoUploadUrlRequest,
@@ -2293,6 +2295,76 @@ export const useGetAiVideoUploadUrl = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGetAiVideoUploadUrlMutationOptions(options));
+    }
+
+export const getGetAiImageUploadUrlUrl = () => {
+
+
+
+
+  return `/api/ai/upload-image-url`
+}
+
+/**
+ * @summary Get a presigned URL to upload a vendor's own photo for use as post media
+ */
+export const getAiImageUploadUrl = async (aiImageUploadUrlRequest: AiImageUploadUrlRequest, options?: RequestInit): Promise<AiImageUploadUrlResponse> => {
+
+  return customFetch<AiImageUploadUrlResponse>(getGetAiImageUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiImageUploadUrlRequest)
+  }
+);}
+
+
+
+
+export const getGetAiImageUploadUrlMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAiImageUploadUrl>>, TError,{data: BodyType<AiImageUploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getAiImageUploadUrl>>, TError,{data: BodyType<AiImageUploadUrlRequest>}, TContext> => {
+
+const mutationKey = ['getAiImageUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getAiImageUploadUrl>>, {data: BodyType<AiImageUploadUrlRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getAiImageUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetAiImageUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof getAiImageUploadUrl>>>
+    export type GetAiImageUploadUrlMutationBody = BodyType<AiImageUploadUrlRequest>
+    export type GetAiImageUploadUrlMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Get a presigned URL to upload a vendor's own photo for use as post media
+ */
+export const useGetAiImageUploadUrl = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAiImageUploadUrl>>, TError,{data: BodyType<AiImageUploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getAiImageUploadUrl>>,
+        TError,
+        {data: BodyType<AiImageUploadUrlRequest>},
+        TContext
+      > => {
+      return useMutation(getGetAiImageUploadUrlMutationOptions(options));
     }
 
 export const getAnalyzeVideoCaptionUrl = () => {
