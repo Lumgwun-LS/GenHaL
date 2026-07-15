@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, gt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, salesTable, vendorsTable } from "@workspace/db";
 import {
@@ -104,8 +104,6 @@ router.get("/sales/export", async (req, res): Promise<void> => {
     const d = new Date(String(req.query.to));
     if (!isNaN(d.getTime())) conditions.push(lte(salesTable.saleDate, d));
   }
-  const sales = await db.select().from(salesTable).where(and(...conditions)).orderBy(desc(salesTable.saleDate));
-
   const HEADERS = ["ID", "Source", "Description", "Customer", "Amount", "Currency", "Sale Date"];
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
@@ -117,8 +115,29 @@ router.get("/sales/export", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.write(HEADERS.join(",") + "\r\n");
-  for (const s of sales) {
-    res.write([s.id, s.source, s.description, s.customerName, s.amount, s.currency, s.saleDate.toISOString()].map(csvCell).join(",") + "\r\n");
+
+  // Stream sales in fixed-size batches ordered by a stable, indexed key (id)
+  // so memory usage stays constant regardless of history size — mirrors the
+  // admin vendor export's batching pattern.
+  const BATCH_SIZE = 500;
+  let lastId = 0;
+  while (true) {
+    const batch = await db
+      .select()
+      .from(salesTable)
+      .where(and(...conditions, gt(salesTable.id, lastId)))
+      .orderBy(asc(salesTable.id))
+      .limit(BATCH_SIZE);
+    if (batch.length === 0) break;
+
+    let chunk = "";
+    for (const s of batch) {
+      chunk += [s.id, s.source, s.description, s.customerName, s.amount, s.currency, s.saleDate.toISOString()].map(csvCell).join(",") + "\r\n";
+    }
+    res.write(chunk);
+
+    lastId = batch[batch.length - 1]!.id;
+    if (batch.length < BATCH_SIZE) break;
   }
   res.end();
 });

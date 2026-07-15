@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, gt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, expensesTable, vendorsTable } from "@workspace/db";
 import { computeNextOccurrenceDate } from "../lib/recurring-expenses";
@@ -116,8 +116,6 @@ router.get("/expenses/export", async (req, res): Promise<void> => {
     const d = new Date(String(req.query.to));
     if (!isNaN(d.getTime())) conditions.push(lte(expensesTable.expenseDate, d));
   }
-  const expenses = await db.select().from(expensesTable).where(and(...conditions)).orderBy(desc(expensesTable.expenseDate));
-
   const HEADERS = ["ID", "Category", "Description", "Amount", "Currency", "Expense Date"];
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
@@ -129,8 +127,29 @@ router.get("/expenses/export", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.write(HEADERS.join(",") + "\r\n");
-  for (const e of expenses) {
-    res.write([e.id, e.category, e.description, e.amount, e.currency, e.expenseDate.toISOString()].map(csvCell).join(",") + "\r\n");
+
+  // Stream expenses in fixed-size batches ordered by a stable, indexed key
+  // (id) so memory usage stays constant regardless of history size — mirrors
+  // the admin vendor export's batching pattern.
+  const BATCH_SIZE = 500;
+  let lastId = 0;
+  while (true) {
+    const batch = await db
+      .select()
+      .from(expensesTable)
+      .where(and(...conditions, gt(expensesTable.id, lastId)))
+      .orderBy(asc(expensesTable.id))
+      .limit(BATCH_SIZE);
+    if (batch.length === 0) break;
+
+    let chunk = "";
+    for (const e of batch) {
+      chunk += [e.id, e.category, e.description, e.amount, e.currency, e.expenseDate.toISOString()].map(csvCell).join(",") + "\r\n";
+    }
+    res.write(chunk);
+
+    lastId = batch[batch.length - 1]!.id;
+    if (batch.length < BATCH_SIZE) break;
   }
   res.end();
 });
