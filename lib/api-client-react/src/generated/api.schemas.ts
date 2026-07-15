@@ -1105,6 +1105,79 @@ export interface FinanceOverviewAnalytics {
   cashFlowForecast: FinanceOverviewAnalyticsCashFlowForecastItem[];
 }
 
+export interface VendorFinanceSummary {
+  vendorId: number;
+  vendorName: string;
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  totalInvested: number;
+  totalCurrentValue: number;
+  overallRoiPercent: number;
+}
+
+export type AdminFinanceRollupAnalyticsRange = {
+  from: string;
+  to: string;
+  period: string;
+};
+
+export type AdminFinanceRollupAnalyticsRevenueTrendItem = {
+  date: string;
+  revenue: number;
+};
+
+export type AdminFinanceRollupAnalyticsProfitAndLossByPeriodItem = {
+  date: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+};
+
+export type AdminFinanceRollupAnalyticsProfitAndLoss = {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  byPeriod: AdminFinanceRollupAnalyticsProfitAndLossByPeriodItem[];
+};
+
+export type AdminFinanceRollupAnalyticsExpenseByCategoryItem = {
+  category: string;
+  total: number;
+};
+
+export type AdminFinanceRollupAnalyticsInvestmentRoiByInvestmentItem = {
+  id: number;
+  name: string;
+  type: string;
+  invested: number;
+  currentValue: number;
+  roiPercent: number;
+};
+
+export type AdminFinanceRollupAnalyticsInvestmentRoi = {
+  totalInvested: number;
+  totalCurrentValue: number;
+  overallRoiPercent: number;
+  byInvestment: AdminFinanceRollupAnalyticsInvestmentRoiByInvestmentItem[];
+};
+
+export type AdminFinanceRollupAnalyticsCashFlowForecastItem = {
+  date: string;
+  projectedNet: number;
+  isForecast: boolean;
+};
+
+export interface AdminFinanceRollupAnalytics {
+  range: AdminFinanceRollupAnalyticsRange;
+  revenueTrend: AdminFinanceRollupAnalyticsRevenueTrendItem[];
+  profitAndLoss: AdminFinanceRollupAnalyticsProfitAndLoss;
+  expenseByCategory: AdminFinanceRollupAnalyticsExpenseByCategoryItem[];
+  investmentRoi: AdminFinanceRollupAnalyticsInvestmentRoi;
+  cashFlowForecast: AdminFinanceRollupAnalyticsCashFlowForecastItem[];
+  byVendor?: VendorFinanceSummary[];
+}
+
 export interface Lead {
   id: number;
   vendorId: number;
@@ -1516,6 +1589,16 @@ export type GetAdminDemographicsAnalyticsParams = {
 period?: string;
 from?: string;
 to?: string;
+};
+
+export type GetAdminFinanceRollupAnalyticsParams = {
+period?: string;
+from?: string;
+to?: string;
+/**
+ * Set to "true" to also include a per-vendor summary breakdown
+ */
+breakdown?: string;
 };
 
 export type VerifyVendorDeletion200 = {

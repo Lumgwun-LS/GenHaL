@@ -2639,6 +2639,72 @@ export const GetAdminDemographicsAnalyticsResponse = zod.object({
 
 
 /**
+ * @summary Admin-only company-wide finance rollup (revenue, P&L, expenses, investment ROI, cash-flow forecast) across all vendors
+ */
+export const GetAdminFinanceRollupAnalyticsQueryParams = zod.object({
+  "period": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional(),
+  "breakdown": zod.coerce.string().optional().describe('Set to \"true\" to also include a per-vendor summary breakdown')
+})
+
+export const GetAdminFinanceRollupAnalyticsResponse = zod.object({
+  "range": zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "period": zod.string()
+}),
+  "revenueTrend": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number()
+})),
+  "profitAndLoss": zod.object({
+  "totalRevenue": zod.number(),
+  "totalExpenses": zod.number(),
+  "netProfit": zod.number(),
+  "byPeriod": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number(),
+  "expenses": zod.number(),
+  "profit": zod.number()
+}))
+}),
+  "expenseByCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "total": zod.number()
+})),
+  "investmentRoi": zod.object({
+  "totalInvested": zod.number(),
+  "totalCurrentValue": zod.number(),
+  "overallRoiPercent": zod.number(),
+  "byInvestment": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "type": zod.string(),
+  "invested": zod.number(),
+  "currentValue": zod.number(),
+  "roiPercent": zod.number()
+}))
+}),
+  "cashFlowForecast": zod.array(zod.object({
+  "date": zod.string(),
+  "projectedNet": zod.number(),
+  "isForecast": zod.boolean()
+})),
+  "byVendor": zod.array(zod.object({
+  "vendorId": zod.number(),
+  "vendorName": zod.string(),
+  "totalRevenue": zod.number(),
+  "totalExpenses": zod.number(),
+  "netProfit": zod.number(),
+  "totalInvested": zod.number(),
+  "totalCurrentValue": zod.number(),
+  "overallRoiPercent": zod.number()
+})).optional()
+})
+
+
+/**
  * @summary Whether this vendor can currently request deletion of their data
  */
 export const GetVendorDeletionEligibilityParams = zod.object({

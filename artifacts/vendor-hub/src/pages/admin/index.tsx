@@ -28,6 +28,7 @@ import PlansEditor from "./plans";
 import PaymentGatewaysPanel from "./payment-gateways";
 import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
+import AdminFinanceRollupPanel from "./finance-rollup";
 import PaymentConflictsPanel from "./payment-conflicts";
 import BackgroundJobsPanel from "./background-jobs";
 import SocialAccountHealthPanel from "./social-account-health";
@@ -1837,6 +1838,9 @@ export default function AdminPanel() {
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" /> Analytics
           </TabsTrigger>
+          <TabsTrigger value="finance-rollup" className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4" /> Finance Rollup
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -2798,6 +2802,11 @@ export default function AdminPanel() {
         {/* ── Analytics tab ──────────────────────────────────────────── */}
         <TabsContent value="analytics">
           <AdminAnalyticsPanel />
+        </TabsContent>
+
+        {/* ── Finance Rollup tab ─────────────────────────────────────── */}
+        <TabsContent value="finance-rollup">
+          <AdminFinanceRollupPanel />
         </TabsContent>
       </Tabs>
     </div>

@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminDemographicsAnalytics,
+  AdminFinanceRollupAnalytics,
   AdminMessageHistoryEntry,
   AiCaptionRequest,
   AiGeneration,
@@ -71,6 +72,7 @@ import type {
   ExternalVoiceCampaignSummary,
   FinanceOverviewAnalytics,
   GetAdminDemographicsAnalyticsParams,
+  GetAdminFinanceRollupAnalyticsParams,
   GetAdminMessageHistoryParams,
   GetAnalyticsOverviewParams,
   GetEmailCampaignStatsParams,
@@ -7392,6 +7394,90 @@ export function useGetAdminDemographicsAnalytics<TData = Awaited<ReturnType<type
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminDemographicsAnalyticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminFinanceRollupAnalyticsUrl = (params?: GetAdminFinanceRollupAnalyticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/analytics/finance-rollup?${stringifiedParams}` : `/api/admin/analytics/finance-rollup`
+}
+
+/**
+ * @summary Admin-only company-wide finance rollup (revenue, P&L, expenses, investment ROI, cash-flow forecast) across all vendors
+ */
+export const getAdminFinanceRollupAnalytics = async (params?: GetAdminFinanceRollupAnalyticsParams, options?: RequestInit): Promise<AdminFinanceRollupAnalytics> => {
+
+  return customFetch<AdminFinanceRollupAnalytics>(getGetAdminFinanceRollupAnalyticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminFinanceRollupAnalyticsQueryKey = (params?: GetAdminFinanceRollupAnalyticsParams,) => {
+    return [
+    `/api/admin/analytics/finance-rollup`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminFinanceRollupAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>, TError = ErrorType<unknown>>(params?: GetAdminFinanceRollupAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminFinanceRollupAnalyticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>> = ({ signal }) => getAdminFinanceRollupAnalytics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminFinanceRollupAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>>
+export type GetAdminFinanceRollupAnalyticsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Admin-only company-wide finance rollup (revenue, P&L, expenses, investment ROI, cash-flow forecast) across all vendors
+ */
+
+export function useGetAdminFinanceRollupAnalytics<TData = Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>, TError = ErrorType<unknown>>(
+ params?: GetAdminFinanceRollupAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFinanceRollupAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminFinanceRollupAnalyticsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

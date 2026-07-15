@@ -7,9 +7,10 @@
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, paymentsTable } from "@workspace/db";
+import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable } from "@workspace/db";
 import { and, gte, lte } from "drizzle-orm";
 import { resolveDateRange } from "../lib/date-range";
+import { computeFinanceOverview } from "../lib/finance-overview";
 
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS ?? "")
@@ -104,6 +105,76 @@ router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
     paymentsByCity,
     signupsOverTime: Object.entries(signupsByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
     revenueOverTime: Object.entries(revenueByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount })),
+  });
+});
+
+/**
+ * GET /admin/analytics/finance-rollup?period=week|month|year|custom&from=&to=&breakdown=true
+ *
+ * Company-wide rollup of the same 5 finance views exposed per-vendor by
+ * GET /analytics/finance-overview (revenue trend, P&L, expense breakdown,
+ * investment ROI, cash-flow forecast), aggregated across every vendor.
+ * Reuses computeFinanceOverview so the two endpoints never drift apart.
+ * Pass breakdown=true to also include a per-vendor summary table.
+ */
+router.get("/admin/analytics/finance-rollup", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+  const includeBreakdown = req.query.breakdown === "true";
+
+  const [allSales, allExpenses, allInvestments, allVendors] = await Promise.all([
+    db.select().from(salesTable).where(and(gte(salesTable.saleDate, from), lte(salesTable.saleDate, to))),
+    db.select().from(expensesTable).where(and(gte(expensesTable.expenseDate, from), lte(expensesTable.expenseDate, to))),
+    db.select().from(investmentsTable),
+    db.select().from(vendorsTable),
+  ]);
+
+  const overview = computeFinanceOverview(allSales, allExpenses, allInvestments, from, to);
+
+  let byVendor: {
+    vendorId: number;
+    vendorName: string;
+    totalRevenue: number;
+    totalExpenses: number;
+    netProfit: number;
+    totalInvested: number;
+    totalCurrentValue: number;
+    overallRoiPercent: number;
+  }[] | undefined;
+
+  if (includeBreakdown) {
+    const vendorNameById = new Map(allVendors.map((v) => [v.id, v.name]));
+    const vendorIds = new Set<number>([...allSales.map((s) => s.vendorId), ...allExpenses.map((e) => e.vendorId), ...allInvestments.map((i) => i.vendorId)]);
+    byVendor = Array.from(vendorIds)
+      .map((vendorId) => {
+        const vendorOverview = computeFinanceOverview(
+          allSales.filter((s) => s.vendorId === vendorId),
+          allExpenses.filter((e) => e.vendorId === vendorId),
+          allInvestments.filter((i) => i.vendorId === vendorId),
+          from,
+          to,
+        );
+        return {
+          vendorId,
+          vendorName: vendorNameById.get(vendorId) ?? "Unknown vendor",
+          totalRevenue: vendorOverview.profitAndLoss.totalRevenue,
+          totalExpenses: vendorOverview.profitAndLoss.totalExpenses,
+          netProfit: vendorOverview.profitAndLoss.netProfit,
+          totalInvested: vendorOverview.investmentRoi.totalInvested,
+          totalCurrentValue: vendorOverview.investmentRoi.totalCurrentValue,
+          overallRoiPercent: vendorOverview.investmentRoi.overallRoiPercent,
+        };
+      })
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+  }
+
+  res.json({
+    range: { from: from.toISOString(), to: to.toISOString(), period },
+    ...overview,
+    ...(byVendor ? { byVendor } : {}),
   });
 });
 
