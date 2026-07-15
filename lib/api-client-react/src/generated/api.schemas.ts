@@ -885,6 +885,18 @@ export interface SaleUpdate {
   saleDate?: string;
 }
 
+/**
+ * @nullable
+ */
+export type ExpenseRecurringFrequency = typeof ExpenseRecurringFrequency[keyof typeof ExpenseRecurringFrequency] | null;
+
+
+export const ExpenseRecurringFrequency = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+  yearly: 'yearly',
+} as const;
+
 export interface Expense {
   id: number;
   vendorId: number;
@@ -898,8 +910,24 @@ export interface Expense {
   amount: number;
   currency: string;
   expenseDate: string;
+  isRecurring: boolean;
+  /** @nullable */
+  recurringFrequency?: ExpenseRecurringFrequency;
+  /** @nullable */
+  nextOccurrenceDate?: string | null;
+  /** @nullable */
+  recurringParentId?: number | null;
   createdAt: string;
 }
+
+export type ExpenseInputRecurringFrequency = typeof ExpenseInputRecurringFrequency[keyof typeof ExpenseInputRecurringFrequency];
+
+
+export const ExpenseInputRecurringFrequency = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+  yearly: 'yearly',
+} as const;
 
 export interface ExpenseInput {
   vendorId: number;
@@ -910,7 +938,21 @@ export interface ExpenseInput {
   amount: number;
   currency?: string;
   expenseDate?: string;
+  isRecurring?: boolean;
+  recurringFrequency?: ExpenseInputRecurringFrequency;
 }
+
+/**
+ * @nullable
+ */
+export type ExpenseUpdateRecurringFrequency = typeof ExpenseUpdateRecurringFrequency[keyof typeof ExpenseUpdateRecurringFrequency] | null;
+
+
+export const ExpenseUpdateRecurringFrequency = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+  yearly: 'yearly',
+} as const;
 
 export interface ExpenseUpdate {
   /** @nullable */
@@ -922,6 +964,9 @@ export interface ExpenseUpdate {
   amount?: number;
   currency?: string;
   expenseDate?: string;
+  isRecurring?: boolean;
+  /** @nullable */
+  recurringFrequency?: ExpenseUpdateRecurringFrequency;
 }
 
 export interface Investment {

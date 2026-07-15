@@ -1531,6 +1531,10 @@ export const ListExpensesResponseItem = zod.object({
   "amount": zod.number(),
   "currency": zod.string(),
   "expenseDate": zod.string(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
+  "nextOccurrenceDate": zod.string().nullish(),
+  "recurringParentId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
@@ -1547,7 +1551,9 @@ export const CreateExpenseBody = zod.object({
   "description": zod.string().optional(),
   "amount": zod.number(),
   "currency": zod.string().optional(),
-  "expenseDate": zod.string().optional()
+  "expenseDate": zod.string().optional(),
+  "isRecurring": zod.boolean().optional(),
+  "recurringFrequency": zod.enum(['weekly', 'monthly', 'yearly']).optional()
 })
 
 export const CreateExpenseResponse = zod.object({
@@ -1560,6 +1566,10 @@ export const CreateExpenseResponse = zod.object({
   "amount": zod.number(),
   "currency": zod.string(),
   "expenseDate": zod.string(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
+  "nextOccurrenceDate": zod.string().nullish(),
+  "recurringParentId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
@@ -1592,7 +1602,9 @@ export const UpdateExpenseBody = zod.object({
   "description": zod.string().optional(),
   "amount": zod.number().optional(),
   "currency": zod.string().optional(),
-  "expenseDate": zod.string().optional()
+  "expenseDate": zod.string().optional(),
+  "isRecurring": zod.boolean().optional(),
+  "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish()
 })
 
 export const UpdateExpenseResponse = zod.object({
@@ -1605,6 +1617,10 @@ export const UpdateExpenseResponse = zod.object({
   "amount": zod.number(),
   "currency": zod.string(),
   "expenseDate": zod.string(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
+  "nextOccurrenceDate": zod.string().nullish(),
+  "recurringParentId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 

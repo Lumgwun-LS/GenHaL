@@ -4203,7 +4203,7 @@ components:
     # ─── EXPENSES ───────────────────────────────────────────────────────────
     Expense:
       type: object
-      required: [id, vendorId, category, amount, currency, expenseDate, createdAt]
+      required: [id, vendorId, category, amount, currency, expenseDate, createdAt, isRecurring]
       properties:
         id:
           type: integer
@@ -4223,6 +4223,15 @@ components:
           type: string
         expenseDate:
           type: string
+        isRecurring:
+          type: boolean
+        recurringFrequency:
+          type: ["string", "null"]
+          enum: ["weekly", "monthly", "yearly", null]
+        nextOccurrenceDate:
+          type: ["string", "null"]
+        recurringParentId:
+          type: ["integer", "null"]
         createdAt:
           type: string
 
@@ -4246,6 +4255,11 @@ components:
           type: string
         expenseDate:
           type: string
+        isRecurring:
+          type: boolean
+        recurringFrequency:
+          type: string
+          enum: ["weekly", "monthly", "yearly"]
 
     ExpenseUpdate:
       type: object
@@ -4264,6 +4278,11 @@ components:
           type: string
         expenseDate:
           type: string
+        isRecurring:
+          type: boolean
+        recurringFrequency:
+          type: ["string", "null"]
+          enum: ["weekly", "monthly", "yearly", null]
 
     # ─── INVESTMENTS ────────────────────────────────────────────────────────
     Investment:

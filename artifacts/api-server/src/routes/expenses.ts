@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, expensesTable, vendorsTable } from "@workspace/db";
+import { computeNextOccurrenceDate } from "../lib/recurring-expenses";
 import {
   ListExpensesQueryParams,
   CreateExpenseBody,
@@ -38,6 +39,7 @@ function serializeExpense(e: typeof expensesTable.$inferSelect) {
     amount: parseFloat(e.amount),
     expenseDate: e.expenseDate.toISOString(),
     createdAt: e.createdAt.toISOString(),
+    nextOccurrenceDate: e.nextOccurrenceDate ? e.nextOccurrenceDate.toISOString() : null,
   };
 }
 
@@ -69,12 +71,24 @@ router.post("/expenses", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const check = await resolveOwnedVendorId(req, parsed.data.vendorId);
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+  if (parsed.data.isRecurring && !parsed.data.recurringFrequency) {
+    res.status(400).json({ error: "recurringFrequency is required when isRecurring is true" });
+    return;
+  }
 
-  const { amount, expenseDate, ...rest } = parsed.data;
+  const { amount, expenseDate, isRecurring, recurringFrequency, ...rest } = parsed.data;
+  const resolvedExpenseDate = expenseDate ? new Date(expenseDate) : new Date();
   const [expense] = await db.insert(expensesTable).values({
     ...rest,
     amount: amount.toString(),
-    ...(expenseDate ? { expenseDate: new Date(expenseDate) } : {}),
+    expenseDate: resolvedExpenseDate,
+    isRecurring: isRecurring ?? false,
+    ...(isRecurring && recurringFrequency
+      ? {
+          recurringFrequency,
+          nextOccurrenceDate: computeNextOccurrenceDate(resolvedExpenseDate, recurringFrequency),
+        }
+      : {}),
   }).returning();
   res.status(201).json(CreateExpenseResponse.parse(serializeExpense(expense)));
 });
@@ -132,11 +146,34 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
   const check = await resolveOwnedVendorId(req, existing.vendorId);
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
 
-  const { amount, expenseDate, ...rest } = parsed.data;
+  const { amount, expenseDate, isRecurring, recurringFrequency, ...rest } = parsed.data;
+  const willBeRecurring = isRecurring ?? existing.isRecurring;
+  // Reflect exactly what will be written: an explicit `recurringFrequency:
+  // null` must NOT fall back to the existing value here, or a request that
+  // clears the frequency while leaving isRecurring true would pass
+  // validation while still writing a null frequency to the DB — which then
+  // makes the background job silently skip this template forever.
+  const effectiveFrequency = recurringFrequency !== undefined ? recurringFrequency : existing.recurringFrequency;
+  if (willBeRecurring && !effectiveFrequency) {
+    res.status(400).json({ error: "recurringFrequency is required when isRecurring is true" });
+    return;
+  }
+  const resolvedExpenseDate = expenseDate !== undefined ? new Date(expenseDate) : existing.expenseDate;
+
   const updateData = {
     ...rest,
     ...(amount !== undefined ? { amount: amount.toString() } : {}),
-    ...(expenseDate !== undefined ? { expenseDate: new Date(expenseDate) } : {}),
+    ...(expenseDate !== undefined ? { expenseDate: resolvedExpenseDate } : {}),
+    ...(isRecurring !== undefined ? { isRecurring } : {}),
+    ...(recurringFrequency !== undefined ? { recurringFrequency } : {}),
+    ...(willBeRecurring
+      ? // Turning recurring on, or changing its frequency/date — (re)compute
+        // when the next occurrence is due from the current expense date.
+        (isRecurring === true || recurringFrequency !== undefined || expenseDate !== undefined) && effectiveFrequency
+        ? { nextOccurrenceDate: computeNextOccurrenceDate(resolvedExpenseDate, effectiveFrequency as "weekly" | "monthly" | "yearly") }
+        : {}
+      : // Turning recurring off — no more occurrences should be generated.
+        { nextOccurrenceDate: null }),
   };
   const [expense] = await db.update(expensesTable).set(updateData).where(eq(expensesTable.id, params.data.id)).returning();
   res.json(UpdateExpenseResponse.parse(serializeExpense(expense)));

@@ -5,6 +5,7 @@
  * VendorHub - Multivendor Social Media, Sales & Inventory Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpenseUpdateRecurringFrequency } from './expenseUpdateRecurringFrequency';
 
 export interface ExpenseUpdate {
   /** @nullable */
@@ -16,4 +17,7 @@ export interface ExpenseUpdate {
   amount?: number;
   currency?: string;
   expenseDate?: string;
+  isRecurring?: boolean;
+  /** @nullable */
+  recurringFrequency?: ExpenseUpdateRecurringFrequency;
 }

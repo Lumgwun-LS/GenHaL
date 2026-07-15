@@ -19,9 +19,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Receipt, Plus, Download, Pencil, Trash2 } from "lucide-react";
+import { Receipt, Plus, Download, Pencil, Trash2, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
@@ -30,6 +31,16 @@ import { DateRangeFilterControl, BranchWorkerFilterControl, BranchWorkerFormFiel
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 const CATEGORIES = ["Inventory", "Marketing", "Utilities", "Rent", "Payroll", "Shipping", "Software", "Fees", "Travel", "Other"];
+
+type RecurringFrequency = "weekly" | "monthly" | "yearly";
+const FREQUENCIES: { value: RecurringFrequency; label: string }[] = [
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+];
+function frequencyLabel(freq: string | null | undefined): string {
+  return FREQUENCIES.find((f) => f.value === freq)?.label ?? freq ?? "";
+}
 
 export default function ExpensesPage() {
   const { user } = useUser();
@@ -75,8 +86,10 @@ export default function ExpensesPage() {
   const [expenseDate, setExpenseDate] = useState("");
   const [formBranchId, setFormBranchId] = useState("none");
   const [formWorkerId, setFormWorkerId] = useState("none");
+  const [formIsRecurring, setFormIsRecurring] = useState(false);
+  const [formFrequency, setFormFrequency] = useState<RecurringFrequency>("monthly");
 
-  const [editing, setEditing] = useState<{ id: number; category: string; description: string; amount: number; expenseDate: string; branchId: string; workerId: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; category: string; description: string; amount: number; expenseDate: string; branchId: string; workerId: string; isRecurring: boolean; recurringFrequency: RecurringFrequency } | null>(null);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: getListExpensesQueryKey(listParams) });
@@ -94,11 +107,14 @@ export default function ExpensesPage() {
           expenseDate: expenseDate ? new Date(expenseDate).toISOString() : undefined,
           branchId: formBranchId !== "none" ? Number(formBranchId) : undefined,
           workerId: formWorkerId !== "none" ? Number(formWorkerId) : undefined,
+          isRecurring: formIsRecurring,
+          ...(formIsRecurring ? { recurringFrequency: formFrequency } : {}),
         },
       });
-      toast.success("Expense recorded");
+      toast.success(formIsRecurring ? "Recurring expense set up" : "Expense recorded");
       setOpen(false);
       setDescription(""); setAmount(""); setExpenseDate(""); setFormBranchId("none"); setFormWorkerId("none");
+      setFormIsRecurring(false); setFormFrequency("monthly");
       invalidate();
     } catch {
       toast.error("Failed to record expense");
@@ -117,6 +133,8 @@ export default function ExpensesPage() {
           expenseDate: editing.expenseDate ? new Date(editing.expenseDate).toISOString() : undefined,
           branchId: editing.branchId !== "none" ? Number(editing.branchId) : null,
           workerId: editing.workerId !== "none" ? Number(editing.workerId) : null,
+          isRecurring: editing.isRecurring,
+          recurringFrequency: editing.isRecurring ? editing.recurringFrequency : null,
         },
       });
       toast.success("Expense updated");
@@ -244,14 +262,28 @@ export default function ExpensesPage() {
               expenses.map((expense) => (
                 <TableRow key={expense.id}>
                   <TableCell className="text-sm text-muted-foreground">{format(new Date(expense.expenseDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell><Badge variant="secondary">{expense.category}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="secondary">{expense.category}</Badge>
+                      {expense.isRecurring && (
+                        <Badge variant="outline" className="gap-1 text-primary border-primary/40">
+                          <Repeat className="w-3 h-3" /> {frequencyLabel(expense.recurringFrequency)}
+                        </Badge>
+                      )}
+                      {!expense.isRecurring && expense.recurringParentId != null && (
+                        <Badge variant="outline" className="gap-1 text-muted-foreground">
+                          <Repeat className="w-3 h-3" /> Auto-generated
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{expense.description ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{branchName(expense.branchId)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{workerName(expense.workerId)}</TableCell>
                   <TableCell className="text-right font-medium">${expense.amount.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing({ id: expense.id, category: expense.category, description: expense.description ?? "", amount: expense.amount, expenseDate: expense.expenseDate.slice(0, 10), branchId: expense.branchId ? String(expense.branchId) : "none", workerId: expense.workerId ? String(expense.workerId) : "none" })}>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing({ id: expense.id, category: expense.category, description: expense.description ?? "", amount: expense.amount, expenseDate: expense.expenseDate.slice(0, 10), branchId: expense.branchId ? String(expense.branchId) : "none", workerId: expense.workerId ? String(expense.workerId) : "none", isRecurring: expense.isRecurring, recurringFrequency: (expense.recurringFrequency as RecurringFrequency) ?? "monthly" })}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(expense.id)}>
@@ -296,6 +328,22 @@ export default function ExpensesPage() {
               branchId={formBranchId} onBranchChange={setFormBranchId}
               workerId={formWorkerId} onWorkerChange={setFormWorkerId}
             />
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="create-recurring" checked={formIsRecurring} onCheckedChange={(c) => setFormIsRecurring(c === true)} />
+              <Label htmlFor="create-recurring" className="cursor-pointer">Make this a recurring expense</Label>
+            </div>
+            {formIsRecurring && (
+              <div className="space-y-1.5">
+                <Label>Repeats</Label>
+                <Select value={formFrequency} onValueChange={(v) => setFormFrequency(v as RecurringFrequency)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">A new expense will be created automatically each period, starting from the expense date above.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -337,6 +385,21 @@ export default function ExpensesPage() {
                 branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
                 workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
               />
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox id="edit-recurring" checked={editing.isRecurring} onCheckedChange={(c) => setEditing({ ...editing, isRecurring: c === true })} />
+                <Label htmlFor="edit-recurring" className="cursor-pointer">Make this a recurring expense</Label>
+              </div>
+              {editing.isRecurring && (
+                <div className="space-y-1.5">
+                  <Label>Repeats</Label>
+                  <Select value={editing.recurringFrequency} onValueChange={(v) => setEditing({ ...editing, recurringFrequency: v as RecurringFrequency })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
