@@ -28,8 +28,10 @@ import { getAuth } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
 import { resolveGatewayField } from "../lib/platform-gateways";
 import { ensureStripeCatalog, ensurePortalConfiguration } from "../lib/stripe-catalog";
-import { reconcileVendorSubscription } from "../lib/subscription-sync";
-import { getSubscriptionPlans } from "../lib/subscription-plans";
+import { ensurePaystackCatalog } from "../lib/paystack-catalog";
+import { reconcileVendorSubscription, applyVendorTierDowngrade } from "../lib/subscription-sync";
+import { reconcileVendorPaystackSubscription } from "../lib/paystack-sync";
+import { getSubscriptionPlans, getEnabledSubscriptionGateways, type SubscriptionGateway } from "../lib/subscription-plans";
 
 const router = Router();
 
@@ -128,6 +130,7 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
   res.json({
     currentTier: vendor.subscriptionTier,
     plans: await getSubscriptionPlans(),
+    enabledGateways: await getEnabledSubscriptionGateways(),
   });
 });
 
@@ -148,8 +151,9 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const { tier, successUrl, cancelUrl } = req.body as {
+  const { tier, provider, successUrl, cancelUrl } = req.body as {
     tier?: string;
+    provider?: string;
     successUrl?: string;
     cancelUrl?: string;
   };
@@ -163,6 +167,13 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     res.status(400).json({
       error: `tier must be one of: ${VALID_UPGRADE_TIERS.join(", ")}`,
     });
+    return;
+  }
+
+  const gatewayProvider: SubscriptionGateway = provider === "paystack" ? "paystack" : "stripe";
+  const enabledGateways = await getEnabledSubscriptionGateways();
+  if (!enabledGateways[gatewayProvider]) {
+    res.status(400).json({ error: `${gatewayProvider} is not currently enabled for subscription billing.` });
     return;
   }
 
@@ -194,7 +205,51 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const checkoutPromise = (async () => {
+  const checkoutPromise: Promise<{ sessionId: string; url: string | null }> =
+    gatewayProvider === "paystack"
+      ? (async () => {
+          const paystackKey = await resolveGatewayField("paystack", "secretKey");
+          if (!paystackKey) {
+            throw Object.assign(new Error("Paystack is not configured on this platform."), { statusCode: 503 });
+          }
+          if (!vendor.email) {
+            throw Object.assign(new Error("Your account has no email on file — add one before subscribing."), { statusCode: 400 });
+          }
+
+          const catalog = await ensurePaystackCatalog(paystackKey, plans);
+          const catalogEntry = catalog.find((c) => c.tier === tier);
+          if (!catalogEntry) {
+            throw Object.assign(new Error(`No Paystack plan configured for tier '${tier}'`), { statusCode: 500 });
+          }
+
+          const initResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: vendor.email,
+              amount: catalogEntry.amount,
+              currency: "NGN",
+              plan: catalogEntry.planCode,
+              callback_url: successUrl,
+              metadata: {
+                upgradeVendorId: id.toString(),
+                upgradeTier: tier,
+                upgradeClerkUserId: userId,
+              },
+            }),
+          });
+          const initData = (await initResponse.json()) as {
+            status: boolean;
+            message: string;
+            data?: { authorization_url: string; reference: string };
+          };
+          if (!initData.status || !initData.data) {
+            throw Object.assign(new Error(`Paystack checkout could not be started: ${initData.message}`), { statusCode: 502 });
+          }
+
+          return { sessionId: initData.data.reference, url: initData.data.authorization_url };
+        })()
+      : (async () => {
     const stripeKey = await resolveGatewayField("stripe", "secretKey");
     if (!stripeKey) {
       throw Object.assign(new Error("Stripe is not configured on this platform."), {
@@ -300,6 +355,13 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
     return;
   }
 
+  if (vendor.subscriptionProvider === "paystack") {
+    res.status(409).json({
+      error: "Your subscription is billed via Paystack, which doesn't have a self-service billing portal. Use the Cancel Subscription button instead — Paystack emails you receipts directly.",
+    });
+    return;
+  }
+
   if (!vendor.stripeCustomerId) {
     res.status(409).json({
       error: "No billing account found yet. Upgrade to a paid plan first to set up billing.",
@@ -336,6 +398,53 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
   res.json({ url: portalSession.url });
 });
 
+// ─── POST /vendors/:id/subscription/paystack/cancel ──────────────────────────
+// Paystack has no self-service portal, so cancellation is a dedicated route:
+// disables the subscription on Paystack's side, then downgrades immediately
+// rather than waiting on the subscription.disable webhook (which also fires
+// and is a safe no-op by the time it arrives — the vendor is already free).
+
+router.post("/vendors/:id/subscription/paystack/cancel", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendor = await getVendorOr404(res, id);
+  if (!vendor) return;
+
+  if (!canManageVendor(userId, vendor)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  if (vendor.subscriptionProvider !== "paystack" || !vendor.paystackSubscriptionCode || !vendor.paystackEmailToken) {
+    res.status(409).json({ error: "No active Paystack subscription found to cancel." });
+    return;
+  }
+
+  const paystackKey = await resolveGatewayField("paystack", "secretKey");
+  if (!paystackKey) {
+    res.status(503).json({ error: "Paystack is not configured on this platform." });
+    return;
+  }
+
+  const disableResponse = await fetch("https://api.paystack.co/subscription/disable", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ code: vendor.paystackSubscriptionCode, token: vendor.paystackEmailToken }),
+  });
+  const disableData = (await disableResponse.json()) as { status: boolean; message: string };
+  if (!disableData.status) {
+    res.status(502).json({ error: `Paystack could not cancel the subscription: ${disableData.message}` });
+    return;
+  }
+
+  await applyVendorTierDowngrade(vendor, "vendor-cancel");
+  res.json({ cancelled: true, currentTier: "free" });
+});
+
 // ─── POST /vendors/:id/subscription/sync ─────────────────────────────────────
 // Reconciles the vendor's tier directly against Stripe, in both directions.
 // Covers the case where checkout.session.completed was never delivered —
@@ -362,8 +471,9 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
     return;
   }
 
-  if (!vendor.stripeCustomerId) {
-    res.json({ synced: false, reason: "No Stripe customer on file yet — nothing to sync.", currentTier: vendor.subscriptionTier });
+  const isPaystackVendor = vendor.subscriptionProvider === "paystack" && !!vendor.paystackSubscriptionCode;
+  if (!vendor.stripeCustomerId && !isPaystackVendor) {
+    res.json({ synced: false, reason: "No billing account on file yet — nothing to sync.", currentTier: vendor.subscriptionTier });
     return;
   }
 
@@ -386,16 +496,25 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
     return;
   }
 
-  const stripeKey = await resolveGatewayField("stripe", "secretKey");
-  if (!stripeKey) {
-    res.status(503).json({ error: "Stripe is not configured on this platform." });
-    return;
+  let syncPromise: Promise<import("../lib/subscription-sync").ReconcileResult>;
+  if (isPaystackVendor) {
+    const paystackKey = await resolveGatewayField("paystack", "secretKey");
+    if (!paystackKey) {
+      res.status(503).json({ error: "Paystack is not configured on this platform." });
+      return;
+    }
+    syncPromise = reconcileVendorPaystackSubscription(vendor, paystackKey, "manual-sync");
+  } else {
+    const stripeKey = await resolveGatewayField("stripe", "secretKey");
+    if (!stripeKey) {
+      res.status(503).json({ error: "Stripe is not configured on this platform." });
+      return;
+    }
+    const stripe = new Stripe(stripeKey);
+    syncPromise = reconcileVendorSubscription(vendor, stripe, "manual-sync");
   }
 
-  const stripe = new Stripe(stripeKey);
-
   const fallbackResult = existing?.lastResult ?? { synced: false, currentTier: vendor.subscriptionTier };
-  const syncPromise = reconcileVendorSubscription(vendor, stripe, "manual-sync");
   vendorSyncState.set(id, { lastResult: fallbackResult, lastRunAt: now, inFlight: syncPromise });
 
   try {

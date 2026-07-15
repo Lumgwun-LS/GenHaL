@@ -2644,6 +2644,26 @@ components:
           type: boolean
         announcementEmailOptOut:
           type: boolean
+        subscriptionTier:
+          type: string
+        verificationLevel:
+          type: string
+        stripeCustomerId:
+          type: ["string", "null"]
+        stripeSubscriptionId:
+          type: ["string", "null"]
+        subscriptionProvider:
+          type: ["string", "null"]
+        paystackCustomerCode:
+          type: ["string", "null"]
+        paystackSubscriptionCode:
+          type: ["string", "null"]
+        paystackEmailToken:
+          type: ["string", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
+        voiceCallOptOut:
+          type: boolean
 
     VendorOnboardingInput:
       type: object

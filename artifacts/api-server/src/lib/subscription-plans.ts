@@ -36,16 +36,24 @@ export interface SubscriptionPlanQuotas {
   email: number;
 }
 
+export interface SubscriptionPlanPricing {
+  usd: number;
+  ngn: number;
+}
+
 export interface SubscriptionPlan {
   tier: "starter" | "pro" | "enterprise";
   name: string;
-  price: number;
-  currency: string;
+  pricing: SubscriptionPlanPricing;
   description: string;
   features: string[];
   highlight: boolean;
   quotas: SubscriptionPlanQuotas;
 }
+
+/** Which gateway bills which currency for platform subscriptions — fixed, not admin-editable. */
+export const SUBSCRIPTION_GATEWAY_CURRENCY = { stripe: "usd", paystack: "ngn" } as const;
+export type SubscriptionGateway = keyof typeof SUBSCRIPTION_GATEWAY_CURRENCY;
 
 /** Returns the current admin-configured plan list (falls back to defaults if never edited). */
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
@@ -56,4 +64,9 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
 export async function getSubscriptionPlan(tier: string): Promise<SubscriptionPlan | undefined> {
   const plans = await getSubscriptionPlans();
   return plans.find((p) => p.tier === tier);
+}
+
+/** Which gateways admins have enabled for vendors to pay their platform subscription with. */
+export async function getEnabledSubscriptionGateways(): Promise<Record<SubscriptionGateway, boolean>> {
+  return (await getSiteContentBlock("billing.paymentGateways")) as Record<SubscriptionGateway, boolean>;
 }

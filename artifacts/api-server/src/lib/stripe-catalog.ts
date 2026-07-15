@@ -50,14 +50,16 @@ function lookupKeyFor(tier: string): string {
   return `vendorhub_${tier}`;
 }
 
+const STRIPE_CURRENCY = "usd";
+
 async function findOrCreateTierPrice(stripe: Stripe, plan: SubscriptionPlan): Promise<TierPrice> {
   const lookupKey = lookupKeyFor(plan.tier);
-  const targetAmount = Math.round(plan.price * 100);
+  const targetAmount = Math.round(plan.pricing.usd * 100);
 
   const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   const found = existing.data[0];
 
-  if (found && found.unit_amount === targetAmount && found.currency === plan.currency) {
+  if (found && found.unit_amount === targetAmount && found.currency === STRIPE_CURRENCY) {
     const productId = typeof found.product === "string" ? found.product : found.product.id;
     return { tier: plan.tier, productId, priceId: found.id };
   }
@@ -85,7 +87,7 @@ async function findOrCreateTierPrice(stripe: Stripe, plan: SubscriptionPlan): Pr
 
   const price = await stripe.prices.create({
     product: productId,
-    currency: plan.currency,
+    currency: STRIPE_CURRENCY,
     unit_amount: targetAmount,
     recurring: { interval: "month" },
     lookup_key: lookupKey,

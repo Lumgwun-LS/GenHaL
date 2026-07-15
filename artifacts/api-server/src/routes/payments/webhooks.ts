@@ -692,12 +692,52 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
  *
  * Returns `matched: false` when the target payment could not be found (see processStripeEvent).
  */
-async function processPaystackEvent(event: {
+interface PaystackWebhookEvent {
   event: string;
-  data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
-}): Promise<{ matched: boolean }> {
+  data: {
+    id?: number | string;
+    reference?: string;
+    metadata?: { orderId?: string; upgradeVendorId?: string; upgradeTier?: string };
+    plan?: { plan_code?: string } | null;
+    plan_object?: { plan_code?: string } | null;
+    subscription_code?: string;
+    email_token?: string;
+    customer?: { customer_code?: string };
+  };
+}
+
+const VALID_UPGRADE_TIERS = ["starter", "pro", "enterprise"];
+
+async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matched: boolean }> {
   if (event.event === "charge.success") {
     const { reference, metadata } = event.data;
+    if (!reference) return { matched: false };
+
+    // ── Subscription self-upgrade path ──────────────────────────────────
+    // Paystack fires charge.success for the initial subscription charge too
+    // (with our metadata attached, since we set it on transaction/initialize).
+    // A regular order charge never carries these fields.
+    const upgradeVendorId = metadata?.upgradeVendorId ? parseInt(metadata.upgradeVendorId) : null;
+    const upgradeTier = metadata?.upgradeTier ?? null;
+
+    if (upgradeVendorId && upgradeTier && VALID_UPGRADE_TIERS.includes(upgradeTier)) {
+      const { applyVendorPaystackTierUpgrade } = await import("../../lib/subscription-sync");
+      const customerCode = event.data.customer?.customer_code ?? null;
+      const result = await applyVendorPaystackTierUpgrade(
+        upgradeVendorId,
+        upgradeTier,
+        { paystackCustomerCode: customerCode },
+        "webhook",
+      );
+      if (!result.applied) {
+        console.warn(`[paystack webhook] subscription upgrade skipped — vendor=${upgradeVendorId} reason=${result.reason} reference=${reference}`);
+      } else {
+        console.info(`[paystack webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} reference=${reference}`);
+      }
+      return { matched: true };
+    }
+
+    // ── Regular order checkout path ──────────────────────────────────────
     const orderId = metadata?.orderId ? parseInt(metadata.orderId) : null;
 
     const result = await applyPaymentStatusTransition(reference, "paid", "paystack");
@@ -729,6 +769,66 @@ async function processPaystackEvent(event: {
       console.warn(`[paystack webhook] charge.success — no matching order found for order=${orderId} reference=${reference}`);
       return { matched: false };
     }
+    return { matched: true };
+  } else if (event.event === "subscription.create") {
+    // Fires shortly after the initial charge.success above, carrying the
+    // subscription_code + email_token we need to later cancel via
+    // /subscription/disable. Match the vendor by the customer_code we just
+    // stored from charge.success (charge.success is delivered first).
+    const customerCode = event.data.customer?.customer_code;
+    const subscriptionCode = event.data.subscription_code;
+    const emailToken = event.data.email_token;
+    if (!customerCode || !subscriptionCode || !emailToken) {
+      console.warn(`[paystack webhook] subscription.create missing fields — skipping`);
+      return { matched: false };
+    }
+
+    const [vendor] = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.paystackCustomerCode, customerCode));
+
+    if (!vendor) {
+      console.warn(`[paystack webhook] subscription.create — no vendor found for customer_code=${customerCode}`);
+      return { matched: false };
+    }
+
+    await db
+      .update(vendorsTable)
+      .set({ paystackSubscriptionCode: subscriptionCode, paystackEmailToken: emailToken, updatedAt: new Date() })
+      .where(eq(vendorsTable.id, vendor.id));
+
+    console.info(`[paystack webhook] subscription.create — vendor=${vendor.id} subscription=${subscriptionCode}`);
+    return { matched: true };
+  } else if (event.event === "subscription.disable" || event.event === "subscription.not_renew") {
+    // Paystack disabled the subscription (repeated failed renewal charges,
+    // or our own /subscription/paystack/cancel route calling disable) —
+    // drop the vendor back to free, mirroring Stripe's customer.subscription.deleted.
+    const subscriptionCode = event.data.subscription_code;
+    if (!subscriptionCode) return { matched: false };
+
+    const [vendor] = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.paystackSubscriptionCode, subscriptionCode));
+
+    if (!vendor) {
+      console.info(`[paystack webhook] ${event.event} — no vendor found for subscription=${subscriptionCode} (likely already cancelled via API)`);
+      return { matched: true };
+    }
+
+    if (vendor.subscriptionTier === "free") {
+      return { matched: true }; // already downgraded (e.g. by the cancel route)
+    }
+
+    const { applyVendorTierDowngrade } = await import("../../lib/subscription-sync");
+    await applyVendorTierDowngrade(vendor, "webhook");
+    console.info(`[paystack webhook] ${event.event} — vendor=${vendor.id} downgraded to free`);
+    return { matched: true };
+  } else if (event.event === "invoice.payment_failed") {
+    // Paystack retries automatically; no immediate downgrade — subscription.disable
+    // fires once retries are exhausted. Just log for observability.
+    console.info(`[paystack webhook] invoice.payment_failed — subscription=${event.data.subscription_code ?? "unknown"}`);
     return { matched: true };
   } else {
     console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${event.data.id ?? event.data.reference}`);
@@ -924,10 +1024,7 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
     if (row.provider === "stripe") {
       ({ matched } = await processStripeEvent(row.rawPayload as unknown as Stripe.Event));
     } else if (row.provider === "paystack") {
-      ({ matched } = await processPaystackEvent(row.rawPayload as unknown as {
-        event: string;
-        data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
-      }));
+      ({ matched } = await processPaystackEvent(row.rawPayload as unknown as PaystackWebhookEvent));
     } else if (row.provider === "flutterwave") {
       ({ matched } = await processFlutterwaveEvent(row.rawPayload as unknown as {
         event: string;
@@ -1049,14 +1146,12 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
     return;
   }
 
-  const event = JSON.parse(rawBody.toString()) as {
-    event: string;
-    data: { id?: number | string; reference: string; metadata?: { orderId?: string } };
-  };
+  const event = JSON.parse(rawBody.toString()) as PaystackWebhookEvent;
 
+  const eventReference = event.data.reference ?? event.data.subscription_code ?? null;
   const eventId = event.data.id
     ? `paystack-${event.data.id}`
-    : `paystack-${event.event}-${event.data.reference}`;
+    : `paystack-${event.event}-${eventReference}`;
 
   /** Same pipeline/safety model as the Stripe handler above. */
   async function fullPipeline(): Promise<void> {
@@ -1064,7 +1159,7 @@ router.post("/payments/paystack/webhook", async (req, res): Promise<void> => {
       provider:   "paystack",
       eventType:  event.event,
       eventId,
-      reference:  event.data.reference,
+      reference:  eventReference,
       rawPayload: event,
     });
 

@@ -43,4 +43,21 @@ export interface Vendor {
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
   announcementEmailOptOut?: boolean;
+  subscriptionTier?: string;
+  verificationLevel?: string;
+  /** @nullable */
+  stripeCustomerId?: string | null;
+  /** @nullable */
+  stripeSubscriptionId?: string | null;
+  /** @nullable */
+  subscriptionProvider?: string | null;
+  /** @nullable */
+  paystackCustomerCode?: string | null;
+  /** @nullable */
+  paystackSubscriptionCode?: string | null;
+  /** @nullable */
+  paystackEmailToken?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  voiceCallOptOut?: boolean;
 }

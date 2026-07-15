@@ -21,15 +21,24 @@ interface PlanQuotas {
   email: number;
 }
 
+interface PlanPricing {
+  usd: number;
+  ngn: number;
+}
+
 interface Plan {
   tier: "starter" | "pro" | "enterprise";
   name: string;
-  price: number;
-  currency: string;
+  pricing: PlanPricing;
   description: string;
   features: string[];
   highlight: boolean;
   quotas: PlanQuotas;
+}
+
+interface PaymentGateways {
+  stripe: boolean;
+  paystack: boolean;
 }
 
 // Mirrors PLAN_RESOURCE_UNIT_COSTS in artifacts/api-server/src/lib/subscription-plans.ts —
@@ -51,11 +60,17 @@ function estimatedResourceCost(quotas: PlanQuotas): number {
   );
 }
 
-async function fetchPlans(): Promise<{ plans: Plan[] }> {
+async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways }> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plans");
-  const content = (await res.json()) as { "billing.subscriptionPlans": { plans: Plan[] } };
-  return content["billing.subscriptionPlans"];
+  const content = (await res.json()) as {
+    "billing.subscriptionPlans": { plans: Plan[] };
+    "billing.paymentGateways"?: PaymentGateways;
+  };
+  return {
+    plans: content["billing.subscriptionPlans"].plans,
+    gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true },
+  };
 }
 
 async function savePlans(plans: Plan[]): Promise<void> {
@@ -64,6 +79,19 @@ async function savePlans(plans: Plan[]): Promise<void> {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ value: { plans } }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save");
+  }
+}
+
+async function saveGateways(gateways: PaymentGateways): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.paymentGateways`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value: gateways }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
@@ -89,9 +117,13 @@ const QUOTA_FIELDS: { key: keyof PlanQuotas; label: string; icon: typeof Image }
   { key: "email", label: "Emails / mo", icon: Mail },
 ];
 
+// Same rough assumption used server-side for the NGN default seed price —
+// shown as a hint only; admins can freely diverge from it.
+const USD_TO_NGN_HINT = 1550;
+
 function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => void }) {
   const cost = estimatedResourceCost(plan.quotas);
-  const margin = cost > 0 ? plan.price / cost : Infinity;
+  const marginUsd = cost > 0 ? plan.pricing.usd / cost : Infinity;
 
   return (
     <Card className={plan.highlight ? "border-primary" : undefined}>
@@ -109,18 +141,30 @@ function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => vo
         <CardDescription>Tier key: {plan.tier} (fixed — used by billing/checkout)</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <Field label="Display name">
             <Input value={plan.name} onChange={(e) => onChange({ ...plan, name: e.target.value })} />
           </Field>
-          <Field label={`Price / month (${plan.currency.toUpperCase()})`}>
+          <Field label="Price / month (USD — Stripe)">
             <Input
               type="number"
               min={0}
               step="0.01"
-              value={plan.price}
-              onChange={(e) => onChange({ ...plan, price: Number(e.target.value) })}
+              value={plan.pricing.usd}
+              onChange={(e) => onChange({ ...plan, pricing: { ...plan.pricing, usd: Number(e.target.value) } })}
             />
+          </Field>
+          <Field label="Price / month (NGN — Paystack)">
+            <Input
+              type="number"
+              min={0}
+              step="1"
+              value={plan.pricing.ngn}
+              onChange={(e) => onChange({ ...plan, pricing: { ...plan.pricing, ngn: Number(e.target.value) } })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Reference: ${plan.pricing.usd} × ~{USD_TO_NGN_HINT} ≈ ₦{Math.round(plan.pricing.usd * USD_TO_NGN_HINT).toLocaleString()}
+            </p>
           </Field>
         </div>
         <Field label="Description">
@@ -157,8 +201,8 @@ function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => vo
 
         <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground flex items-center justify-between">
           <span>Estimated resource cost at full quota usage: <strong>${cost.toFixed(2)}</strong>/mo</span>
-          <span className={margin >= 5 ? "text-emerald-600 font-medium" : "text-amber-600 font-medium"}>
-            {isFinite(margin) ? `${margin.toFixed(1)}x margin` : "∞ margin (no cost)"}
+          <span className={marginUsd >= 5 ? "text-emerald-600 font-medium" : "text-amber-600 font-medium"}>
+            {isFinite(marginUsd) ? `${marginUsd.toFixed(1)}x margin (USD)` : "∞ margin (no cost)"}
           </span>
         </div>
       </CardContent>
@@ -169,13 +213,16 @@ function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => vo
 export default function PlansEditor() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["admin-subscription-plans"], queryFn: fetchPlans });
   const [draft, setDraft] = useState<Plan[]>([]);
+  const [gateways, setGateways] = useState<PaymentGateways>({ stripe: true, paystack: true });
   const [seeded, setSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingGateways, setSavingGateways] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
     if (data && !seeded) {
       setDraft(data.plans);
+      setGateways(data.gateways);
       setSeeded(true);
     }
   }, [data, seeded]);
@@ -192,6 +239,29 @@ export default function PlansEditor() {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleGateway(key: keyof PaymentGateways, value: boolean) {
+    if (!value && !gateways[key === "stripe" ? "paystack" : "stripe"]) {
+      toast.error("At least one payment gateway must stay enabled for subscriptions.");
+      return;
+    }
+    const next = { ...gateways, [key]: value };
+    setGateways(next);
+    setSavingGateways(true);
+    try {
+      await saveGateways(next);
+      toast.success("Payment gateway settings saved.");
+      qc.invalidateQueries({ queryKey: ["admin-subscription-plans"] });
+      qc.invalidateQueries({ queryKey: ["admin-site-content"] });
+      qc.invalidateQueries({ queryKey: ["site-content"] });
+      qc.invalidateQueries({ queryKey: ["subscription-plans"] });
+    } catch (e) {
+      setGateways(gateways); // revert on failure
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingGateways(false);
     }
   }
 
@@ -217,6 +287,40 @@ export default function PlansEditor() {
         estimates gross margin if a vendor fully uses their quota, based on assumed per-unit provider costs (OpenAI, Twilio,
         ElevenLabs) plus payment-processing fees — aim to keep it at 5x or higher.
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription payment gateways</CardTitle>
+          <CardDescription>
+            Choose which gateways vendors can use to pay for a subscription plan. Stripe bills in USD; Paystack bills in NGN —
+            currency follows the gateway a vendor picks. This is separate from per-vendor storefront checkout gateways.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 flex-1">
+            <div>
+              <p className="text-sm font-medium">Stripe (USD)</p>
+              <p className="text-xs text-muted-foreground">Card payments, Customer Portal for self-service management.</p>
+            </div>
+            <Switch
+              checked={gateways.stripe}
+              disabled={savingGateways}
+              onCheckedChange={(v) => toggleGateway("stripe", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 flex-1">
+            <div>
+              <p className="text-sm font-medium">Paystack (NGN)</p>
+              <p className="text-xs text-muted-foreground">Card/bank payments for Nigerian vendors; cancel is immediate.</p>
+            </div>
+            <Switch
+              checked={gateways.paystack}
+              disabled={savingGateways}
+              onCheckedChange={(v) => toggleGateway("paystack", v)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {draft.map((plan) => (
         <PlanCard

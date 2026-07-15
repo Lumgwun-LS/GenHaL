@@ -52,7 +52,17 @@ export const ListVendorsResponseItem = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
 
@@ -97,7 +107,17 @@ export const CreateVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 
@@ -139,7 +159,17 @@ export const OnboardVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 
@@ -190,7 +220,17 @@ export const GetVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 
@@ -247,7 +287,17 @@ export const UpdateVendorResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 
@@ -2743,7 +2793,17 @@ export const GetExternalProfileResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 }),
   "features": zod.array(zod.string())
 })
@@ -2792,7 +2852,17 @@ export const UpdateExternalProfileResponse = zod.object({
   "city": zod.string().nullish(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "subscriptionTier": zod.string().optional(),
+  "verificationLevel": zod.string().optional(),
+  "stripeCustomerId": zod.string().nullish(),
+  "stripeSubscriptionId": zod.string().nullish(),
+  "subscriptionProvider": zod.string().nullish(),
+  "paystackCustomerCode": zod.string().nullish(),
+  "paystackSubscriptionCode": zod.string().nullish(),
+  "paystackEmailToken": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "voiceCallOptOut": zod.boolean().optional()
 })
 
 

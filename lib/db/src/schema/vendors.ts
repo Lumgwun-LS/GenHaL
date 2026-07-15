@@ -33,6 +33,14 @@ export const vendorsTable = pgTable("vendors", {
   // Stripe customer — created on first subscription checkout, reused for portal sessions & cancellations
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  // Which gateway the vendor's *platform subscription billing* (not order payments) runs
+  // through — set on first subscription checkout, null while on the free tier.
+  subscriptionProvider: text("subscription_provider"), // stripe|paystack|null
+  // Paystack customer/subscription — mirrors the Stripe fields above. emailToken is
+  // Paystack's per-subscription secret required to call the subscription/disable endpoint.
+  paystackCustomerCode: text("paystack_customer_code"),
+  paystackSubscriptionCode: text("paystack_subscription_code"),
+  paystackEmailToken: text("paystack_email_token"),
   // Birthday — used for automated birthday greetings
   dateOfBirth: date("date_of_birth"),
   // Voice — opt-out of birthday & campaign calls (default opted in)

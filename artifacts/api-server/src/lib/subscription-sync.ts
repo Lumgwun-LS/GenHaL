@@ -41,6 +41,49 @@ export async function applyVendorTierUpgrade(
   stripeSubscriptionId: string | null,
   source: string,
 ): Promise<ApplyUpgradeResult> {
+  return applyVendorTierUpgradeInternal(
+    vendorId,
+    tier,
+    { subscriptionProvider: "stripe", stripeSubscriptionId },
+    source,
+  );
+}
+
+export interface PaystackUpgradeFields {
+  paystackCustomerCode?: string | null;
+  paystackSubscriptionCode?: string | null;
+  paystackEmailToken?: string | null;
+}
+
+/** Paystack analogue of applyVendorTierUpgrade — same idempotency/notification behavior. */
+export async function applyVendorPaystackTierUpgrade(
+  vendorId: number,
+  tier: string,
+  fields: PaystackUpgradeFields,
+  source: string,
+): Promise<ApplyUpgradeResult> {
+  return applyVendorTierUpgradeInternal(
+    vendorId,
+    tier,
+    { subscriptionProvider: "paystack", ...fields },
+    source,
+  );
+}
+
+interface UpgradeFields {
+  subscriptionProvider: "stripe" | "paystack";
+  stripeSubscriptionId?: string | null;
+  paystackCustomerCode?: string | null;
+  paystackSubscriptionCode?: string | null;
+  paystackEmailToken?: string | null;
+}
+
+async function applyVendorTierUpgradeInternal(
+  vendorId: number,
+  tier: string,
+  fields: UpgradeFields,
+  source: string,
+): Promise<ApplyUpgradeResult> {
   if (!VALID_TIERS.includes(tier)) {
     return { applied: false, reason: `invalid tier '${tier}'` };
   }
@@ -50,7 +93,13 @@ export async function applyVendorTierUpgrade(
     return { applied: false, reason: `vendor ${vendorId} not found` };
   }
 
-  if (vendor.subscriptionTier === tier && (!stripeSubscriptionId || vendor.stripeSubscriptionId === stripeSubscriptionId)) {
+  const subscriptionId = fields.stripeSubscriptionId ?? fields.paystackSubscriptionCode ?? null;
+  const alreadyOnSubscription =
+    fields.subscriptionProvider === "stripe"
+      ? vendor.stripeSubscriptionId === subscriptionId
+      : vendor.paystackSubscriptionCode === subscriptionId;
+
+  if (vendor.subscriptionTier === tier && (!subscriptionId || alreadyOnSubscription)) {
     return { applied: false, reason: "already up to date", tier };
   }
 
@@ -60,7 +109,12 @@ export async function applyVendorTierUpgrade(
     .update(vendorsTable)
     .set({
       subscriptionTier: tier,
-      stripeSubscriptionId: stripeSubscriptionId ?? vendor.stripeSubscriptionId,
+      subscriptionProvider: fields.subscriptionProvider,
+      stripeSubscriptionId:
+        fields.subscriptionProvider === "stripe" ? (fields.stripeSubscriptionId ?? vendor.stripeSubscriptionId) : vendor.stripeSubscriptionId,
+      paystackCustomerCode: fields.paystackCustomerCode ?? vendor.paystackCustomerCode,
+      paystackSubscriptionCode: fields.paystackSubscriptionCode ?? vendor.paystackSubscriptionCode,
+      paystackEmailToken: fields.paystackEmailToken ?? vendor.paystackEmailToken,
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendorId))
@@ -68,7 +122,7 @@ export async function applyVendorTierUpgrade(
 
   const featureUnlocked = canAddPaymentKeys({ subscriptionTier: tier, verificationLevel: vendor.verificationLevel });
   console.info(
-    `[subscription sync] source=${source} vendor=${vendorId} tier=${tier} subscription=${stripeSubscriptionId ?? "n/a"} featureUnlocked=${featureUnlocked}`,
+    `[subscription sync] source=${source} vendor=${vendorId} tier=${tier} provider=${fields.subscriptionProvider} subscription=${subscriptionId ?? "n/a"} featureUnlocked=${featureUnlocked}`,
   );
 
   // Record the tier change for the admin plan-change history whenever the
@@ -94,7 +148,7 @@ export async function applyVendorTierUpgrade(
  * equivalent of a `customer.subscription.deleted` webhook that never
  * arrived.
  */
-async function applyVendorTierDowngrade(vendor: Vendor, source: string): Promise<ApplyUpgradeResult> {
+export async function applyVendorTierDowngrade(vendor: Vendor, source: string): Promise<ApplyUpgradeResult> {
   const previousTier = vendor.subscriptionTier;
 
   const [updated] = await db
@@ -102,6 +156,9 @@ async function applyVendorTierDowngrade(vendor: Vendor, source: string): Promise
     .set({
       subscriptionTier: "free",
       stripeSubscriptionId: null,
+      subscriptionProvider: null,
+      paystackSubscriptionCode: null,
+      paystackEmailToken: null,
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendor.id))

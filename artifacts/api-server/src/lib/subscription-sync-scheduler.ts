@@ -22,6 +22,7 @@ import { logger } from "./logger";
 import { recordJobRun } from "./job-run-status";
 import { resolveGatewayField } from "./platform-gateways";
 import { reconcileVendorSubscription } from "./subscription-sync";
+import { reconcileVendorPaystackSubscription } from "./paystack-sync";
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -30,49 +31,80 @@ export const SUBSCRIPTION_SYNC_JOB_NAME = "subscription-sync";
 
 export async function tick(): Promise<void> {
   try {
+    let checkedCount = 0;
+    let syncedCount = 0;
+
     const stripeKey = await resolveGatewayField("stripe", "secretKey");
-    if (!stripeKey) {
-      // Stripe isn't configured on this platform yet — nothing to reconcile against.
-      // Still a "successful" run: there was simply nothing to check.
+    if (stripeKey) {
+      const stripe = new Stripe(stripeKey);
+
+      // Only vendors who have ever started checkout have a Stripe customer to
+      // reconcile against; everyone else has nothing on Stripe's side.
+      const candidates = await db
+        .select()
+        .from(vendorsTable)
+        .where(isNotNull(vendorsTable.stripeCustomerId));
+
+      checkedCount += candidates.length;
+      for (const vendor of candidates) {
+        try {
+          const result = await reconcileVendorSubscription(vendor, stripe, "scheduled-sync");
+          if (result.synced) {
+            syncedCount++;
+            logger.info(
+              { vendorId: vendor.id, tier: result.currentTier },
+              result.currentTier === "free"
+                ? "[subscription-sync-scheduler] Caught a missed Stripe subscription cancellation — downgraded to free"
+                : "[subscription-sync-scheduler] Caught a missed Stripe subscription upgrade",
+            );
+          }
+        } catch (err) {
+          // Per-vendor failures don't fail the whole tick — they're logged and retried next tick.
+          logger.error({ err, vendorId: vendor.id }, "[subscription-sync-scheduler] Error reconciling Stripe vendor — will retry next tick");
+        }
+      }
+    }
+
+    const paystackKey = await resolveGatewayField("paystack", "secretKey");
+    if (paystackKey) {
+      const paystackCandidates = await db
+        .select()
+        .from(vendorsTable)
+        .where(isNotNull(vendorsTable.paystackSubscriptionCode));
+
+      checkedCount += paystackCandidates.length;
+      for (const vendor of paystackCandidates) {
+        try {
+          const result = await reconcileVendorPaystackSubscription(vendor, paystackKey, "scheduled-sync");
+          if (result.synced) {
+            syncedCount++;
+            logger.info(
+              { vendorId: vendor.id, tier: result.currentTier },
+              result.currentTier === "free"
+                ? "[subscription-sync-scheduler] Caught a missed Paystack subscription cancellation — downgraded to free"
+                : "[subscription-sync-scheduler] Caught a missed Paystack subscription upgrade",
+            );
+          }
+        } catch (err) {
+          logger.error({ err, vendorId: vendor.id }, "[subscription-sync-scheduler] Error reconciling Paystack vendor — will retry next tick");
+        }
+      }
+    }
+
+    if (!stripeKey && !paystackKey) {
+      // Neither gateway is configured on this platform yet — nothing to
+      // reconcile against. Still a "successful" run: nothing to check.
       await recordJobRun(SUBSCRIPTION_SYNC_JOB_NAME, { success: true, checkedCount: 0, affectedCount: 0 });
       return;
     }
 
-    const stripe = new Stripe(stripeKey);
-
-    // Only vendors who have ever started checkout have a Stripe customer to
-    // reconcile against; everyone else has nothing on Stripe's side.
-    const candidates = await db
-      .select()
-      .from(vendorsTable)
-      .where(isNotNull(vendorsTable.stripeCustomerId));
-
-    let syncedCount = 0;
-    for (const vendor of candidates) {
-      try {
-        const result = await reconcileVendorSubscription(vendor, stripe, "scheduled-sync");
-        if (result.synced) {
-          syncedCount++;
-          logger.info(
-            { vendorId: vendor.id, tier: result.currentTier },
-            result.currentTier === "free"
-              ? "[subscription-sync-scheduler] Caught a missed subscription cancellation — downgraded to free"
-              : "[subscription-sync-scheduler] Caught a missed subscription upgrade",
-          );
-        }
-      } catch (err) {
-        // Per-vendor failures don't fail the whole tick — they're logged and retried next tick.
-        logger.error({ err, vendorId: vendor.id }, "[subscription-sync-scheduler] Error reconciling vendor — will retry next tick");
-      }
-    }
-
     if (syncedCount > 0) {
-      logger.info({ syncedCount, checked: candidates.length }, "[subscription-sync-scheduler] Tick complete");
+      logger.info({ syncedCount, checked: checkedCount }, "[subscription-sync-scheduler] Tick complete");
     }
 
     await recordJobRun(SUBSCRIPTION_SYNC_JOB_NAME, {
       success: true,
-      checkedCount: candidates.length,
+      checkedCount,
       affectedCount: syncedCount,
     });
   } catch (err) {

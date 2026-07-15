@@ -96,14 +96,16 @@ export const DEFAULT_SITE_CONTENT = {
   // subscription-plans.ts) stays at roughly 1/5th of the plan price — i.e. a
   // ~5x margin over what the bundled resources actually cost the platform,
   // after accounting for payment-processing fees (~3%) and a flat monthly
-  // infra/support overhead per vendor.
+  // infra/support overhead per vendor. Each plan now carries BOTH a USD price
+  // (billed via Stripe) and an NGN price (billed via Paystack) — the NGN price
+  // is the USD price converted at an assumed ~1,550 NGN/USD rate, so the same
+  // ~5x margin holds in either currency; admins can edit either independently.
   "billing.subscriptionPlans": {
     plans: [
       {
         tier: "starter",
         name: "Starter",
-        price: 29,
-        currency: "usd",
+        pricing: { usd: 29, ngn: 45000 },
         description: "Get started with direct payment routing",
         features: [
           "Connect your own Stripe or Paystack account",
@@ -117,8 +119,7 @@ export const DEFAULT_SITE_CONTENT = {
       {
         tier: "pro",
         name: "Pro",
-        price: 79,
-        currency: "usd",
+        pricing: { usd: 79, ngn: 122500 },
         description: "Everything your growing business needs",
         features: [
           "Everything in Starter",
@@ -133,8 +134,7 @@ export const DEFAULT_SITE_CONTENT = {
       {
         tier: "enterprise",
         name: "Enterprise",
-        price: 199,
-        currency: "usd",
+        pricing: { usd: 199, ngn: 308500 },
         description: "For high-volume vendors and large teams",
         features: [
           "Everything in Pro",
@@ -147,6 +147,14 @@ export const DEFAULT_SITE_CONTENT = {
         quotas: { aiImages: 40, aiVideos: 20, aiCaptions: 300, voiceMinutes: 120, sms: 300, email: 1500 },
       },
     ],
+  },
+  // Which payment gateways vendors may use to pay for their PLATFORM
+  // subscription (starter/pro/enterprise), independent of which gateways a
+  // vendor has enabled for routing their own customers' order payments.
+  // Admin-only toggle; a vendor sees only the currencies/gateways enabled here.
+  "billing.paymentGateways": {
+    stripe: true,
+    paystack: true,
   },
 } as const;
 
@@ -237,13 +245,17 @@ const subscriptionPlanQuotasSchema = z.object({
   email: z.number().int().min(0).max(1000000),
 });
 
+const subscriptionPlanPricingSchema = z.object({
+  usd: z.number().min(0).max(100000),
+  ngn: z.number().min(0).max(100000000),
+});
+
 const subscriptionPlansSchema = z.object({
   plans: z.array(
     z.object({
       tier: z.enum(["starter", "pro", "enterprise"]),
       name: z.string().min(1).max(100),
-      price: z.number().min(0).max(100000),
-      currency: z.string().min(1).max(10),
+      pricing: subscriptionPlanPricingSchema,
       description: z.string().max(500),
       features: z.array(z.string().max(300)).max(30),
       highlight: z.boolean(),
@@ -251,6 +263,15 @@ const subscriptionPlansSchema = z.object({
     }),
   ).min(1).max(12),
 });
+
+const paymentGatewaysSchema = z
+  .object({
+    stripe: z.boolean(),
+    paystack: z.boolean(),
+  })
+  .refine((v) => v.stripe || v.paystack, {
+    message: "At least one payment gateway must stay enabled.",
+  });
 
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
@@ -264,6 +285,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.voiceBackfillLastRun": voiceBackfillLastRunSchema,
   "admin.voiceBackfillRecentFixes": voiceBackfillRecentFixesSchema,
   "billing.subscriptionPlans": subscriptionPlansSchema,
+  "billing.paymentGateways": paymentGatewaysSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

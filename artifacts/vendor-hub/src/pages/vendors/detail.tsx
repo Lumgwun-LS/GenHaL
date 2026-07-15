@@ -570,6 +570,7 @@ export default function VendorDetail() {
           <UpgradePlanCard
             vendorId={id}
             currentTier={vendor.subscriptionTier ?? "free"}
+            subscriptionProvider={vendor.subscriptionProvider ?? null}
             onUpgradeInitiated={() => void refetchVendor()}
           />
 
