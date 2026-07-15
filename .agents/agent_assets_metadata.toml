@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "VMwP2R8p7mYL8R69kx0sO"
+uri = "file://attached_assets/task143-music-verification/task143-music-1scene.mp4"
+type = "video"
+title = "Task 143 – AI music test (1 scene, ~6s)"
+
+[[outputs]]
+id = "1vecnPO6nLbv6Hwx2jeaJ"
+uri = "file://attached_assets/task143-music-verification/task143-music-2scene.mp4"
+type = "video"
+title = "Task 143 – AI music test (2 scenes, ~9.4s)"
+
+[[outputs]]
+id = "EJ7v98DXpwQjRtMLHwh2Z"
+uri = "file://attached_assets/task143-music-verification/task143-music-3scene.mp4"
+type = "video"
+title = "Task 143 – AI music test (3 scenes, ~13.8s)"

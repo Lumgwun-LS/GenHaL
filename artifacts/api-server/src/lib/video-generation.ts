@@ -186,11 +186,26 @@ export async function generateVideoBuffer(scenes: VideoScene[], options: Generat
       return await readFile(silentVideoPath);
     }
 
-    // Mix in the background track: loop it to cover the full video length
-    // (short generated tracks are often only a few seconds), trim to the
-    // video's exact duration, fade in/out, and keep it well under the
-    // (currently silent) voice/caption content so it reads as a bed, not a
-    // competing sound.
+    // Mix in the background track: loop it to cover the full video length,
+    // trim to the video's exact duration, fade in/out, and keep it well
+    // under the (currently silent) voice/caption content so it reads as a
+    // bed, not a competing sound.
+    //
+    // Verified with real (non-synthetic) ElevenLabs sound-generation calls
+    // for 1-3 scenes (see task #143): requested duration always matches the
+    // route's approxDurationSeconds formula exactly, and ElevenLabs
+    // consistently returns audio slightly *longer* than requested (e.g.
+    // ~6.03s for a 6s request), never shorter. Combined with the render
+    // route's current 3-scene cap (max ~13.8s), the generated clip always
+    // already covers the full video, so -stream_loop never actually needs
+    // to repeat the track in production today — it's kept as a safety net
+    // for if the scene cap is ever raised past ~22s (ElevenLabs's ceiling).
+    // Manually inspecting a forced-loop case (6 synthetic scenes, ~27s) found
+    // no digital click at the seam (sample deltas in line with the track's
+    // own normal peaks), just the expected musical "restart" of the loop —
+    // acceptable for a background bed at this volume, but if the cap is ever
+    // raised, a short crossfade at the loop boundary (rather than this hard
+    // -stream_loop repeat) would make longer loops sound smoother.
     const musicPath = path.join(dir, "music.mp3");
     await writeFile(musicPath, options.musicBuffer);
     const finalVideoPath = path.join(dir, "final.mp4");
