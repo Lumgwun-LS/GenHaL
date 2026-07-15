@@ -30,6 +30,7 @@ import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 import PaymentConflictsPanel from "./payment-conflicts";
 import BackgroundJobsPanel from "./background-jobs";
+import SocialAccountHealthPanel from "./social-account-health";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -1824,6 +1825,9 @@ export default function AdminPanel() {
           <TabsTrigger value="background-jobs" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Background Jobs
           </TabsTrigger>
+          <TabsTrigger value="social-account-health" className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4" /> Social Account Health
+          </TabsTrigger>
           <TabsTrigger value="plans" className="flex items-center gap-2">
             <DollarSign className="w-4 h-4" /> Plans
           </TabsTrigger>
@@ -2776,6 +2780,10 @@ export default function AdminPanel() {
 
         <TabsContent value="background-jobs">
           <BackgroundJobsPanel />
+        </TabsContent>
+
+        <TabsContent value="social-account-health">
+          <SocialAccountHealthPanel />
         </TabsContent>
 
         {/* ── Site Editor tab ────────────────────────────────────────── */}
