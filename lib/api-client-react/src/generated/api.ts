@@ -38,6 +38,7 @@ import type {
   BulkVendorNotificationInput,
   BulkVendorNotificationResult,
   CampaignSendResult,
+  ConnectionWarningsResponse,
   DeletionEligibility,
   DeletionRequestResult,
   DeletionVerifyInput,
@@ -123,6 +124,7 @@ import type {
   SaleInput,
   SaleUpdate,
   SalesAnalytics,
+  SchedulePostConflict,
   SchedulePostInput,
   SmsCampaign,
   SmsCampaignInput,
@@ -1902,7 +1904,7 @@ export const schedulePost = async (id: number,
 
 
 
-export const getSchedulePostMutationOptions = <TError = ErrorType<unknown>,
+export const getSchedulePostMutationOptions = <TError = ErrorType<SchedulePostConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext> => {
 
@@ -1931,12 +1933,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SchedulePostMutationResult = NonNullable<Awaited<ReturnType<typeof schedulePost>>>
     export type SchedulePostMutationBody = BodyType<SchedulePostInput>
-    export type SchedulePostMutationError = ErrorType<unknown>
+    export type SchedulePostMutationError = ErrorType<SchedulePostConflict>
 
     /**
  * @summary Schedule an approved post to auto-publish at a future date/time
  */
-export const useSchedulePost = <TError = ErrorType<unknown>,
+export const useSchedulePost = <TError = ErrorType<SchedulePostConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof schedulePost>>, TError,{id: number;data: BodyType<SchedulePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof schedulePost>>,
@@ -1946,6 +1948,83 @@ export const useSchedulePost = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSchedulePostMutationOptions(options));
     }
+
+export const getGetPostConnectionWarningsUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/connection-warnings`
+}
+
+/**
+ * @summary Check whether this post's selected platforms each have a usable connected account, without scheduling anything
+ */
+export const getPostConnectionWarnings = async (id: number, options?: RequestInit): Promise<ConnectionWarningsResponse> => {
+
+  return customFetch<ConnectionWarningsResponse>(getGetPostConnectionWarningsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPostConnectionWarningsQueryKey = (id: number,) => {
+    return [
+    `/api/posts/${id}/connection-warnings`
+    ] as const;
+    }
+
+
+export const getGetPostConnectionWarningsQueryOptions = <TData = Awaited<ReturnType<typeof getPostConnectionWarnings>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPostConnectionWarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPostConnectionWarningsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPostConnectionWarnings>>> = ({ signal }) => getPostConnectionWarnings(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPostConnectionWarnings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPostConnectionWarningsQueryResult = NonNullable<Awaited<ReturnType<typeof getPostConnectionWarnings>>>
+export type GetPostConnectionWarningsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether this post's selected platforms each have a usable connected account, without scheduling anything
+ */
+
+export function useGetPostConnectionWarnings<TData = Awaited<ReturnType<typeof getPostConnectionWarnings>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPostConnectionWarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPostConnectionWarningsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCancelPostScheduleUrl = (id: number,) => {
 

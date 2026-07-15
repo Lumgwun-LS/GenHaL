@@ -8,4 +8,6 @@
 
 export interface SchedulePostInput {
   scheduledAt: string;
+  /** Schedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings. */
+  force?: boolean;
 }

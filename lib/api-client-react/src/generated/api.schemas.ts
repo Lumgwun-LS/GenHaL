@@ -364,6 +364,22 @@ export type PostWithPublications = Post & {
 
 export interface SchedulePostInput {
   scheduledAt: string;
+  /** Schedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings. */
+  force?: boolean;
+}
+
+export interface ConnectionWarning {
+  platform: string;
+  message: string;
+}
+
+export interface ConnectionWarningsResponse {
+  warnings: ConnectionWarning[];
+}
+
+export interface SchedulePostConflict {
+  error: string;
+  warnings?: ConnectionWarning[];
 }
 
 export interface PostUpdate {

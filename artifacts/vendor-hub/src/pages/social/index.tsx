@@ -13,10 +13,12 @@ import {
   useDeleteSocialAccount,
   useListPostPublications,
   useListScheduledPosts,
+  useGetPostConnectionWarnings,
   getListPostsQueryKey,
   getListSocialAccountsQueryKey,
   getListPostPublicationsQueryKey,
   getListScheduledPostsQueryKey,
+  getGetPostConnectionWarningsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +41,36 @@ function fromDatetimeLocalValue(value: string): Date {
   return new Date(value);
 }
 
+/**
+ * Warns a vendor, before they confirm a schedule, that one or more of the
+ * post's selected platforms has no usable connected account right now —
+ * the exact situation that otherwise silently fails hours later when the
+ * scheduled auto-publisher picks the post up. Checked live (not just from
+ * already-loaded account state) so a stale accounts list can't hide a
+ * warning the backend would still catch.
+ */
+function ConnectionWarningsNotice({ postId }: { postId: number }) {
+  const { data } = useGetPostConnectionWarnings(postId, {
+    query: { enabled: true, queryKey: getGetPostConnectionWarningsQueryKey(postId) },
+  });
+  const warnings = data?.warnings ?? [];
+  if (warnings.length === 0) return null;
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This post may fail to auto-publish
+      </div>
+      <div className="space-y-1">
+        {warnings.map((w, i) => (
+          <p key={i} className="text-xs text-muted-foreground">
+            <span className="font-medium">{w.platform}:</span> {w.message}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ScheduleDialog({
   postId,
   trigger,
@@ -51,15 +83,22 @@ function ScheduleDialog({
   trigger: ReactNode;
   title: string;
   initialValue?: Date;
-  onConfirm: (postId: number, date: Date) => Promise<void>;
+  onConfirm: (postId: number, date: Date, force?: boolean) => Promise<{ warnings?: { platform: string; message: string }[] } | void>;
   confirmLabel: string;
 }) {
   const [open, setOpen] = useState(false);
   const minValue = toDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
   const [value, setValue] = useState(() => toDatetimeLocalValue(initialValue ?? new Date(Date.now() + 60 * 60 * 1000)));
   const [submitting, setSubmitting] = useState(false);
+  // Set once the backend has rejected a plain schedule attempt because of a
+  // connection warning — surfaces a "confirm anyway" step instead of a dead end.
+  const [blockedWarnings, setBlockedWarnings] = useState<{ platform: string; message: string }[] | null>(null);
 
-  const handleConfirm = async () => {
+  useEffect(() => {
+    if (open) setBlockedWarnings(null);
+  }, [open]);
+
+  const handleConfirm = async (force?: boolean) => {
     const date = fromDatetimeLocalValue(value);
     if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
       toast.error("Pick a date/time in the future");
@@ -67,7 +106,11 @@ function ScheduleDialog({
     }
     setSubmitting(true);
     try {
-      await onConfirm(postId, date);
+      const result = await onConfirm(postId, date, force);
+      if (result?.warnings && result.warnings.length > 0) {
+        setBlockedWarnings(result.warnings);
+        return;
+      }
       setOpen(false);
     } finally {
       setSubmitting(false);
@@ -82,7 +125,26 @@ function ScheduleDialog({
         <div className="space-y-3">
           <label className="text-sm text-muted-foreground">Publish at</label>
           <Input type="datetime-local" min={minValue} value={value} onChange={(e) => setValue(e.target.value)} />
-          <Button className="w-full" onClick={handleConfirm} disabled={submitting}>{confirmLabel}</Button>
+          <ConnectionWarningsNotice postId={postId} />
+          {blockedWarnings && blockedWarnings.length > 0 ? (
+            <div className="space-y-2">
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This post will likely fail to auto-publish
+                </div>
+                {blockedWarnings.map((w, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    <span className="font-medium">{w.platform}:</span> {w.message}
+                  </p>
+                ))}
+              </div>
+              <Button className="w-full" variant="destructive" onClick={() => handleConfirm(true)} disabled={submitting}>
+                {confirmLabel} Anyway
+              </Button>
+            </div>
+          ) : (
+            <Button className="w-full" onClick={() => handleConfirm(false)} disabled={submitting}>{confirmLabel}</Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -407,9 +469,21 @@ export default function Social() {
     try { await requestChanges.mutateAsync({ id }); invalidatePosts(); toast.success("Sent back for edits"); }
     catch { toast.error("Failed to request changes"); }
   };
-  const handleSchedule = async (id: number, date: Date) => {
-    try { await schedulePost.mutateAsync({ id, data: { scheduledAt: date.toISOString() } }); invalidatePosts(); toast.success(`Scheduled for ${date.toLocaleString()}`); }
-    catch (err: any) { toast.error(err?.data?.error ?? "Failed to schedule post"); }
+  const handleSchedule = async (id: number, date: Date, force?: boolean) => {
+    try {
+      await schedulePost.mutateAsync({ id, data: { scheduledAt: date.toISOString(), force } });
+      invalidatePosts();
+      toast.success(`Scheduled for ${date.toLocaleString()}`);
+      return;
+    } catch (err: any) {
+      // A 409 carrying `warnings` means the only problem is a missing/broken
+      // platform connection — hand it back to the dialog so it can show the
+      // warning and offer to schedule anyway, instead of a dead-end toast.
+      const warnings = err?.data?.warnings;
+      if (warnings && warnings.length > 0) return { warnings };
+      toast.error(err?.data?.error ?? "Failed to schedule post");
+      return;
+    }
   };
   const handleReschedule = async (id: number, date: Date) => {
     try { await updatePost.mutateAsync({ id, data: { scheduledAt: date.toISOString() } }); invalidatePosts(); toast.success(`Rescheduled for ${date.toLocaleString()}`); }

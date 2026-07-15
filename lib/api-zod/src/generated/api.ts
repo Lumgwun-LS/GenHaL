@@ -731,7 +731,8 @@ export const SchedulePostParams = zod.object({
 })
 
 export const SchedulePostBody = zod.object({
-  "scheduledAt": zod.string()
+  "scheduledAt": zod.string(),
+  "force": zod.boolean().optional().describe('Schedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings.')
 })
 
 export const SchedulePostResponse = zod.object({
@@ -753,6 +754,21 @@ export const SchedulePostResponse = zod.object({
   "linkMode": zod.string().optional(),
   "shareToken": zod.string().nullish(),
   "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Check whether this post's selected platforms each have a usable connected account, without scheduling anything
+ */
+export const GetPostConnectionWarningsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPostConnectionWarningsResponse = zod.object({
+  "warnings": zod.array(zod.object({
+  "platform": zod.string(),
+  "message": zod.string()
+}))
 })
 
 

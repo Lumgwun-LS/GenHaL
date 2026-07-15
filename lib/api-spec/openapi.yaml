@@ -528,6 +528,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Post"
+        "409":
+          description: >-
+            Cannot schedule this post — either it isn't approved, or one or more
+            selected platforms has no usable connected account
+            (unless `force` was passed to schedule anyway).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulePostConflict"
+
+  /posts/{id}/connection-warnings:
+    get:
+      operationId: getPostConnectionWarnings
+      tags: [posts]
+      summary: Check whether this post's selected platforms each have a usable connected account, without scheduling anything
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Per-platform connection warnings (empty if every selected platform is usable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionWarningsResponse"
 
   /posts/{id}/cancel-schedule:
     post:
@@ -3243,6 +3271,41 @@ components:
       properties:
         scheduledAt:
           type: string
+        force:
+          type: boolean
+          description: >-
+            Schedule anyway even though one or more selected platforms has no
+            usable connected account. Set this only after the vendor has seen
+            and acknowledged the connection warnings.
+
+    ConnectionWarning:
+      type: object
+      required: [platform, message]
+      properties:
+        platform:
+          type: string
+        message:
+          type: string
+
+    ConnectionWarningsResponse:
+      type: object
+      required: [warnings]
+      properties:
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionWarning"
+
+    SchedulePostConflict:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionWarning"
 
     PostUpdate:
       type: object

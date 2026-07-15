@@ -25,6 +25,7 @@ import {
   SchedulePostParams,
   SchedulePostBody,
   CancelPostScheduleParams,
+  GetPostConnectionWarningsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -325,6 +326,41 @@ function resolveTargetAccount(
 }
 
 /**
+ * Checks each selected platform entry against the vendor's currently active
+ * `social_accounts` — the same resolution `resolveTargetAccount` performs at
+ * actual publish time — so a vendor can be warned about a missing/ambiguous
+ * connection at schedule time instead of finding out hours later when the
+ * scheduled auto-publisher fails. Returns one entry per platform that has no
+ * usable connection right now; an empty array means every platform is fine
+ * (accounts could still be disconnected later, so this is a point-in-time check).
+ */
+async function getConnectionWarnings(
+  vendorId: number,
+  platforms: string[],
+  socialAccountIds: number[],
+): Promise<{ platform: string; message: string }[]> {
+  const vendorAccounts = await db
+    .select()
+    .from(socialAccountsTable)
+    .where(and(eq(socialAccountsTable.vendorId, vendorId), eq(socialAccountsTable.status, "active")));
+
+  const warnings: { platform: string; message: string }[] = [];
+  for (let i = 0; i < platforms.length; i++) {
+    const platformLabel = platforms[i];
+    const explicitAccountId = socialAccountIds[i] ?? null;
+    const { account, error } = resolveTargetAccount(platformLabel, explicitAccountId, vendorAccounts);
+    if (error) {
+      warnings.push({ platform: platformLabel, message: error });
+    } else if (!account) {
+      warnings.push({ platform: platformLabel, message: `No connected ${platformLabel} account. Connect it from the Social Hub before this post can publish.` });
+    } else if (!account.accessTokenEncrypted) {
+      warnings.push({ platform: platformLabel, message: `The connected ${platformLabel} account has no live connection. Reconnect it from the Social Hub.` });
+    }
+  }
+  return warnings;
+}
+
+/**
  * Publishes a single platform's leg of a post. Facebook/Instagram (Meta Graph
  * API), LinkedIn, and X/Twitter have real OAuth-connected publish paths today;
  * every other platform fails clearly instead of silently pretending to succeed.
@@ -615,10 +651,25 @@ router.post("/posts/:id/schedule", async (req, res): Promise<void> => {
   if (Number.isNaN(scheduledDate.getTime())) { res.status(400).json({ error: "scheduledAt must be a valid date/time" }); return; }
   if (scheduledDate.getTime() <= Date.now()) { res.status(400).json({ error: "scheduledAt must be in the future" }); return; }
 
-  const [existing] = await db.select({ vendorId: postsTable.vendorId, status: postsTable.status }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  const [existing] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
   const authed = await resolveAuthedVendor(req);
   if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to update this post." }); return; }
+
+  // Warn (and by default, block) scheduling a post for a platform with no
+  // usable connected account right now — this is exactly the situation that
+  // would otherwise silently fail hours later when the auto-publisher picks
+  // it up. A vendor who has seen the warning and still wants to proceed
+  // (e.g. they're about to reconnect before the scheduled time) can pass
+  // `force: true` to schedule anyway.
+  const warnings = await getConnectionWarnings(existing.vendorId, existing.platforms, existing.socialAccountIds ?? []);
+  if (warnings.length > 0 && !parsed.data.force) {
+    res.status(409).json({
+      error: "One or more selected platforms has no usable connected account. Reconnect it, or confirm to schedule anyway.",
+      warnings,
+    });
+    return;
+  }
 
   const [post] = await db
     .update(postsTable)
@@ -627,6 +678,22 @@ router.post("/posts/:id/schedule", async (req, res): Promise<void> => {
     .returning();
   if (!post) { res.status(409).json({ error: `Cannot schedule a post with status "${existing.status}". It must be approved first.` }); return; }
   res.json(GetPostResponse.parse(serializePost(post)));
+});
+
+/**
+ * Point-in-time check of whether this post's selected platforms each have a
+ * usable connected account, without scheduling anything. The Social Hub's
+ * schedule dialog calls this to surface a warning before the vendor confirms.
+ */
+router.get("/posts/:id/connection-warnings", async (req, res): Promise<void> => {
+  const params = PublishPostParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [existing] = await db.select().from(postsTable).where(eq(postsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to view this post." }); return; }
+  const warnings = await getConnectionWarnings(existing.vendorId, existing.platforms, existing.socialAccountIds ?? []);
+  res.json(GetPostConnectionWarningsResponse.parse({ warnings }));
 });
 
 /** Cancels a pending schedule, clearing scheduledAt and sending the post back to draft so it can be re-reviewed before going out any other way. */
@@ -663,6 +730,7 @@ function serializePost(post: typeof postsTable.$inferSelect) {
     ...post,
     scheduledAt: post.scheduledAt ? post.scheduledAt.toISOString() : null,
     publishedAt: post.publishedAt ? post.publishedAt.toISOString() : null,
+    createdAt: post.createdAt.toISOString(),
   };
 }
 
