@@ -143,6 +143,10 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
         status: "active",
         connectedVia: "oauth_meta",
         accessTokenEncrypted: encrypt(page.accessToken),
+        // Meta has no refresh_token grant — store the long-lived *user* token
+        // here so it can be re-exchanged later to re-derive a fresh Page token
+        // without the vendor redoing OAuth (see lib/token-refresh.ts).
+        refreshTokenEncrypted: encrypt(longLivedUserToken),
         tokenExpiresAt,
       };
       if (existingFb) {
@@ -169,6 +173,7 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
           // Publishing to an Instagram Business account uses the linked Page's
           // access token, not a separate Instagram-specific one.
           accessTokenEncrypted: encrypt(page.accessToken),
+          refreshTokenEncrypted: encrypt(longLivedUserToken),
           tokenExpiresAt,
         };
         if (existingIg) {
@@ -230,7 +235,7 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
 
   try {
     const redirectUri = linkedInRedirectUriFor(req);
-    const { accessToken, expiresInSeconds } = await exchangeLinkedInCodeForAccessToken(code, redirectUri);
+    const { accessToken, refreshToken, expiresInSeconds } = await exchangeLinkedInCodeForAccessToken(code, redirectUri);
     const profile = await fetchLinkedInProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
 
@@ -248,6 +253,10 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
       status: "active",
       connectedVia: "oauth_linkedin",
       accessTokenEncrypted: encrypt(accessToken),
+      // Only present for apps with LinkedIn's "Programmatic refresh tokens"
+      // product — without it this stays null and the ~60-day token can't be
+      // silently renewed; the vendor gets a reconnect notice once it expires.
+      refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
       tokenExpiresAt,
     };
     if (existing) {
@@ -311,7 +320,7 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
 
   try {
     const redirectUri = twitterRedirectUriFor(req);
-    const { accessToken, expiresInSeconds } = await exchangeTwitterCodeForAccessToken(code, redirectUri, statePayload.codeVerifier);
+    const { accessToken, refreshToken, expiresInSeconds } = await exchangeTwitterCodeForAccessToken(code, redirectUri, statePayload.codeVerifier);
     const profile = await fetchTwitterProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
 
@@ -329,6 +338,10 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
       status: "active",
       connectedVia: "oauth_twitter",
       accessTokenEncrypted: encrypt(accessToken),
+      // Requesting "offline.access" (see twitter.ts) gets us a refresh token,
+      // used to silently renew the ~2h access token (see lib/token-refresh.ts)
+      // instead of the vendor having to reconnect constantly.
+      refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
       tokenExpiresAt,
     };
     if (existing) {

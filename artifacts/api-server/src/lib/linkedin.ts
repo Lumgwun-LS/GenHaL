@@ -45,8 +45,20 @@ export function buildLinkedInAuthUrl(state: string, redirectUri: string): string
   return url.toString();
 }
 
-/** Exchanges the OAuth "code" from the redirect callback for a member access token. */
-export async function exchangeCodeForAccessToken(code: string, redirectUri: string): Promise<{ accessToken: string; expiresInSeconds: number | null }> {
+export interface LinkedInTokenResult {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresInSeconds: number | null;
+}
+
+/**
+ * Exchanges the OAuth "code" from the redirect callback for a member access
+ * token (~60 days). LinkedIn only issues a `refresh_token` alongside it for
+ * apps granted the "Programmatic refresh tokens" product — for apps without
+ * it, `refreshToken` comes back null and that account can't be silently
+ * renewed once its access token expires.
+ */
+export async function exchangeCodeForAccessToken(code: string, redirectUri: string): Promise<LinkedInTokenResult> {
   const { clientId, clientSecret } = requireLinkedInEnv();
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -62,7 +74,33 @@ export async function exchangeCodeForAccessToken(code: string, redirectUri: stri
   });
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok || !json.access_token) throw new Error(json?.error_description || "LinkedIn did not return an access token");
-  return { accessToken: json.access_token as string, expiresInSeconds: json.expires_in ?? null };
+  return { accessToken: json.access_token as string, refreshToken: json.refresh_token ?? null, expiresInSeconds: json.expires_in ?? null };
+}
+
+/** Exchanges a stored refresh token for a fresh access token (only works for apps with "Programmatic refresh tokens" enabled). */
+export async function refreshLinkedInAccessToken(refreshToken: string): Promise<LinkedInTokenResult> {
+  const { clientId, clientSecret } = requireLinkedInEnv();
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const res = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok || !json.access_token) {
+    throw new Error(json?.error_description || "LinkedIn refused to refresh the access token — the connection needs to be redone.");
+  }
+  return { accessToken: json.access_token as string, refreshToken: json.refresh_token ?? refreshToken, expiresInSeconds: json.expires_in ?? null };
+}
+
+/** Heuristic for "this LinkedIn API error means the access token is expired/invalid", used to trigger a refresh-and-retry. */
+export function isLinkedInAuthError(message: string): boolean {
+  return /invalid access token|expired|unauthorized|401/i.test(message);
 }
 
 export interface LinkedInProfile {

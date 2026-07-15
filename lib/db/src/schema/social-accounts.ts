@@ -22,6 +22,16 @@ export const socialAccountsTable = pgTable("social_accounts", {
   connectedVia: text("connected_via").notNull().default("manual"), // manual | oauth_meta | oauth_linkedin | oauth_twitter
   accessTokenEncrypted: text("access_token_encrypted"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  // Encrypted credential used to silently renew accessTokenEncrypted before it
+  // expires, without asking the vendor to redo OAuth. Its meaning is
+  // platform-specific: for X/LinkedIn it's the OAuth refresh_token; for Meta
+  // there is no refresh_token grant, so this holds the long-lived *user*
+  // access token (distinct from the Page/IG accessTokenEncrypted we publish
+  // with) — re-exchanging it yields a fresh long-lived user token, which is
+  // then used to re-derive a fresh Page/IG access token. Null means this
+  // account can't be silently renewed and must be reconnected via OAuth once
+  // its token expires (e.g. manually registered accounts).
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
   // Health-check bookkeeping for OAuth-connected accounts (currently just
   // Meta/Facebook+Instagram — see social-account-health.ts). `status` flips
   // to "needs_reconnect" on a validated -> invalid transition so publish

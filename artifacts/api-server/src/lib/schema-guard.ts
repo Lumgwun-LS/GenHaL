@@ -48,6 +48,7 @@ const EXPECTED_COLUMNS: ExpectedColumn[] = [
   { table: "social_accounts", column: "connected_via", usedBy: "social OAuth publish, social-account-health-scheduler" },
   { table: "social_accounts", column: "access_token_encrypted", usedBy: "social OAuth publish, social-account-health-scheduler" },
   { table: "social_accounts", column: "token_expires_at", usedBy: "social OAuth publish, social-account-health-scheduler" },
+  { table: "social_accounts", column: "refresh_token_encrypted", usedBy: "token-refresh-scheduler, silent token renewal" },
 ];
 
 // Whole tables known to be required by scheduled background jobs, for

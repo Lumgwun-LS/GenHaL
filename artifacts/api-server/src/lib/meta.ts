@@ -82,6 +82,23 @@ export async function exchangeForLongLivedUserToken(shortLivedToken: string): Pr
   return { accessToken: json.access_token as string, expiresInSeconds: json.expires_in ?? null };
 }
 
+/**
+ * Re-exchanges a still-valid long-lived user token for a fresh ~60-day one —
+ * Meta has no separate refresh_token grant, but calling the same
+ * fb_exchange_token endpoint with a long-lived token (instead of a
+ * short-lived one) simply extends it, which is how "renewal" works here.
+ * Throws once the token has actually expired or been revoked, same as the
+ * initial exchange.
+ */
+export async function refreshLongLivedUserToken(currentLongLivedToken: string): Promise<{ accessToken: string; expiresInSeconds: number | null }> {
+  return exchangeForLongLivedUserToken(currentLongLivedToken);
+}
+
+/** Heuristic for "this Meta Graph API error means the access token is expired/invalid", used to trigger a refresh-and-retry. */
+export function isMetaAuthError(message: string): boolean {
+  return /session has expired|error validating access token|invalid oauth access token|access token could not be decrypted/i.test(message);
+}
+
 export interface ConnectedPage {
   id: string;
   name: string;

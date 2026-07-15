@@ -50,12 +50,18 @@ export function buildTwitterAuthUrl(state: string, redirectUri: string, codeChal
   return url.toString();
 }
 
-/** Exchanges the OAuth "code" from the redirect callback for an access token, using the matching PKCE verifier. */
+export interface TwitterTokenResult {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresInSeconds: number | null;
+}
+
+/** Exchanges the OAuth "code" from the redirect callback for an access token, using the matching PKCE verifier. Requesting the "offline.access" scope also returns a refresh token, needed to renew the ~2h access token without the vendor redoing OAuth. */
 export async function exchangeCodeForAccessToken(
   code: string,
   redirectUri: string,
   codeVerifier: string,
-): Promise<{ accessToken: string; expiresInSeconds: number | null }> {
+): Promise<TwitterTokenResult> {
   const { clientId, clientSecret } = requireTwitterEnv();
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -75,7 +81,40 @@ export async function exchangeCodeForAccessToken(
   });
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok || !json.access_token) throw new Error(json?.error_description || json?.error || "X did not return an access token");
-  return { accessToken: json.access_token as string, expiresInSeconds: json.expires_in ?? null };
+  return { accessToken: json.access_token as string, refreshToken: json.refresh_token ?? null, expiresInSeconds: json.expires_in ?? null };
+}
+
+/**
+ * Exchanges a stored refresh token for a fresh access token. X rotates the
+ * refresh token on every use (the old one stops working), so callers must
+ * persist the new `refreshToken` from the result, not just the access token.
+ */
+export async function refreshTwitterAccessToken(refreshToken: string): Promise<TwitterTokenResult> {
+  const { clientId, clientSecret } = requireTwitterEnv();
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+  });
+  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await fetch(`${X_API_BASE}/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basicAuth}`,
+    },
+    body,
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok || !json.access_token) {
+    throw new Error(json?.error_description || json?.error || "X refused to refresh the access token — the connection needs to be redone.");
+  }
+  return { accessToken: json.access_token as string, refreshToken: json.refresh_token ?? refreshToken, expiresInSeconds: json.expires_in ?? null };
+}
+
+/** Heuristic for "this X API error means the access token is expired/invalid", used to trigger a refresh-and-retry. */
+export function isTwitterAuthError(message: string): boolean {
+  return /unauthorized|invalid.*token|expired.*token|could not authenticate/i.test(message);
 }
 
 export interface TwitterProfile {

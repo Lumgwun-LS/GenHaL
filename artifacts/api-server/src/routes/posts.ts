@@ -3,10 +3,10 @@ import { getAuth } from "@clerk/express";
 import { randomBytes } from "node:crypto";
 import { eq, and, gt, desc, inArray } from "drizzle-orm";
 import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postPublicationsTable } from "@workspace/db";
-import { decrypt } from "../lib/encryption";
-import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
-import { publishLinkedInTextPost, publishLinkedInImagePost, publishLinkedInVideoPost } from "../lib/linkedin";
-import { publishTweet, publishTweetWithImage, publishTweetWithVideo } from "../lib/twitter";
+import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost, isMetaAuthError } from "../lib/meta";
+import { publishLinkedInTextPost, publishLinkedInImagePost, publishLinkedInVideoPost, isLinkedInAuthError } from "../lib/linkedin";
+import { publishTweet, publishTweetWithImage, publishTweetWithVideo, isTwitterAuthError } from "../lib/twitter";
+import { ensureFreshAccessToken } from "../lib/token-refresh";
 import { notifyScheduledPostFailed } from "../lib/post-notifications";
 import { logger } from "../lib/logger";
 import {
@@ -357,8 +357,48 @@ async function publishToPlatform(
     };
   }
 
+  const isAuthError = (message: string): boolean =>
+    platformKey === "facebook" || platformKey === "instagram"
+      ? isMetaAuthError(message)
+      : platformKey === "linkedin"
+        ? isLinkedInAuthError(message)
+        : isTwitterAuthError(message);
+
   try {
-    const accessToken = decrypt(account.accessTokenEncrypted);
+    const accessToken = await ensureFreshAccessToken(account);
+
+    try {
+      return await attemptPublish(platformKey, account, accessToken, caption, mediaUrls, base);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // The proactive expiry check can still miss a token the platform just
+      // invalidated (early revocation, clock skew, etc.) — on an auth-looking
+      // failure, force one renewal and retry exactly once before giving up.
+      if (!isAuthError(message)) throw err;
+      const refreshedToken = await ensureFreshAccessToken(account, { force: true });
+      return await attemptPublish(platformKey, account, refreshedToken, caption, mediaUrls, base);
+    }
+  } catch (err) {
+    return {
+      ...base,
+      status: "failed",
+      externalPostId: null,
+      externalUrl: null,
+      errorMessage: err instanceof Error ? err.message : "Publish failed",
+    };
+  }
+}
+
+/** Performs the actual per-platform publish call using an already-resolved-fresh access token. */
+async function attemptPublish(
+  platformKey: string,
+  account: typeof socialAccountsTable.$inferSelect,
+  accessToken: string,
+  caption: string,
+  mediaUrls: string[],
+  base: { platform: string; socialAccountId: number | null },
+): Promise<PublishOutcome> {
+  {
     const media = mediaUrls[0] ?? null;
 
     if (platformKey === "facebook") {
@@ -450,14 +490,6 @@ async function publishToPlatform(
     }
     const result = await publishInstagramPhotoPost(account.accountId!, accessToken, media, caption);
     return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
-  } catch (err) {
-    return {
-      ...base,
-      status: "failed",
-      externalPostId: null,
-      externalUrl: null,
-      errorMessage: err instanceof Error ? err.message : "Publish failed",
-    };
   }
 }
 

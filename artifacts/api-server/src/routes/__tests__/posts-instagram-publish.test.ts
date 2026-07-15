@@ -90,6 +90,7 @@ vi.mock("../../lib/meta", () => ({
   publishFacebookPhotoPost,
   publishFacebookVideoPost,
   publishInstagramPhotoPost,
+  isMetaAuthError: () => false,
 }));
 
 const publishLinkedInTextPost = vi.fn();
@@ -98,6 +99,7 @@ const publishLinkedInImagePost = vi.fn(async () => ({ externalPostId: "li-post-1
 vi.mock("../../lib/linkedin", () => ({
   publishLinkedInTextPost,
   publishLinkedInImagePost,
+  isLinkedInAuthError: () => false,
 }));
 
 const publishTweet = vi.fn();
@@ -106,6 +108,14 @@ const publishTweetWithImage = vi.fn(async () => ({ externalPostId: "tw-1", exter
 vi.mock("../../lib/twitter", () => ({
   publishTweet,
   publishTweetWithImage,
+  isTwitterAuthError: () => false,
+}));
+
+// Publish attempts resolve a fresh access token via lib/token-refresh, which
+// itself pulls in refresh flows, Slack alerting, and email — none of which
+// this test cares about. Stub it down to "just decrypt the stored token".
+vi.mock("../../lib/token-refresh", () => ({
+  ensureFreshAccessToken: async (account: { accessTokenEncrypted: string }) => `decrypted:${account.accessTokenEncrypted}`,
 }));
 
 describe("publishing a post whose image is a hosted object-storage URL (not base64)", () => {
