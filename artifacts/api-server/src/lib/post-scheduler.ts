@@ -33,7 +33,12 @@ import { recordJobRun } from "./job-run-status";
 // Name this tick's state is recorded under in job_run_status, for the admin panel.
 export const POST_SCHEDULER_JOB_NAME = "post-scheduler";
 
-async function publishDuePosts(): Promise<void> {
+/**
+ * Exported (in addition to being used internally by tick/startPostScheduler)
+ * so tests can exercise the DB-exception fallback / revert-and-notify path
+ * directly, without needing to fake setInterval or wait for the boot-time run.
+ */
+export async function publishDuePosts(): Promise<void> {
   const due = await db
     .select({ id: postsTable.id, vendorId: postsTable.vendorId, caption: postsTable.caption })
     .from(postsTable)
