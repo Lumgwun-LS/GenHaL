@@ -1,6 +1,6 @@
 kind = "video"
 previewPath = "/vendorhub-promo-video/"
-title = "VendorHub Promo Video"
+title = "Awa Promo Video"
 version = "1.0.0"
 id = "artifacts/vendorhub-promo-video"
 router = "path"

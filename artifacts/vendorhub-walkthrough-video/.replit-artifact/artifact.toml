@@ -1,6 +1,6 @@
 kind = "video"
 previewPath = "/vendorhub-walkthrough-video/"
-title = "VendorHub Walkthrough Video"
+title = "Walkthrough Video"
 version = "1.0.0"
 id = "artifacts/vendorhub-walkthrough-video"
 router = "path"

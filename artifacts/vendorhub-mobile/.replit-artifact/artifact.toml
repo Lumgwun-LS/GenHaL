@@ -1,6 +1,6 @@
 kind = "mobile"
 previewPath = "/vendorhub-mobile/"
-title = "VendorHub Mobile"
+title = "Awa Biz Suite Mobile"
 version = "1.0.0"
 id = "artifacts/vendorhub-mobile"
 router = "expo-domain"
