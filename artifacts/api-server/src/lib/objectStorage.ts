@@ -194,6 +194,31 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
+  /**
+   * Deletes an object entity (e.g. `/objects/uploads/<uuid>`) from the bucket.
+   * Used by the media-cleanup job to actually free storage for AI-generated
+   * media that's aged out unattached to any post. `ignoreNotFound` makes this
+   * safe to call twice (e.g. a retried job tick after a partial failure).
+   */
+  async deleteObject(objectPath: string): Promise<void> {
+    if (!objectPath.startsWith('/objects/')) {
+      return;
+    }
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) {
+      return;
+    }
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) {
+      entityDir = `${entityDir}/`;
+    }
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    await bucket.file(objectName).delete({ ignoreNotFound: true });
+  }
+
   async canAccessObjectEntity({
     userId,
     objectFile,

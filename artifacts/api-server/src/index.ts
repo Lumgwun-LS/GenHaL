@@ -10,6 +10,7 @@ import { startPostScheduler } from "./lib/post-scheduler";
 import { startVoiceBackfillScheduler } from "./lib/voice-backfill";
 import { startSocialAccountHealthScheduler } from "./lib/social-account-health-scheduler";
 import { startTokenRefreshScheduler } from "./lib/token-refresh-scheduler";
+import { startMediaCleanupScheduler } from "./lib/media-cleanup";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 
 const rawPort = process.env["PORT"];
@@ -44,4 +45,5 @@ app.listen(port, (err) => {
   startVoiceBackfillScheduler();
   startSocialAccountHealthScheduler();
   startTokenRefreshScheduler();
+  startMediaCleanupScheduler();
 });

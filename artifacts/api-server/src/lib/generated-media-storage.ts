@@ -58,3 +58,15 @@ export async function storeGeneratedMedia(buffer: Buffer, contentType: string): 
   const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
   return { publicUrl: `${base}/${objectId}`, objectPath };
 }
+
+/**
+ * Extracts the object-storage id from a `.../api/media/<objectId>` public URL
+ * (the shape `storeGeneratedMedia` returns above). Used by the media-cleanup
+ * job to turn a stored generation's result URL back into a deletable object
+ * path — shares the same regex `routes/ai.ts`'s upload-fetch path uses, kept
+ * here since this is where the URL shape is defined.
+ */
+export function extractMediaObjectId(url: string): string | null {
+  const match = url.match(/\/api\/media\/([^/?]+)/);
+  return match ? match[1] : null;
+}
