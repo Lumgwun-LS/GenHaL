@@ -7,6 +7,7 @@ import { startPendingReminderScheduler } from "./lib/pending-reminders";
 import { startGatewayHealthScheduler } from "./lib/gateway-health-scheduler";
 import { startSubscriptionSyncScheduler } from "./lib/subscription-sync-scheduler";
 import { startPostScheduler } from "./lib/post-scheduler";
+import { startVideoPublishFinalizer } from "./lib/video-publish-finalizer";
 import { startPostReminderScheduler } from "./lib/post-reminders";
 import { startVoiceBackfillScheduler } from "./lib/voice-backfill";
 import { startSocialAccountHealthScheduler } from "./lib/social-account-health-scheduler";
@@ -44,6 +45,7 @@ app.listen(port, (err) => {
   startGatewayHealthScheduler();
   startSubscriptionSyncScheduler();
   startPostScheduler();
+  startVideoPublishFinalizer();
   startPostReminderScheduler();
   startVoiceBackfillScheduler();
   startSocialAccountHealthScheduler();

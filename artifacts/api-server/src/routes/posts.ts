@@ -295,7 +295,11 @@ async function probeHostedMediaKind(url: string): Promise<"image" | "video" | nu
 interface PublishOutcome {
   platform: string;
   socialAccountId: number | null;
-  status: "success" | "failed";
+  // "processing" means Facebook accepted the video upload but hasn't finished
+  // async processing yet — the video-publish-finalizer background job (not
+  // this request) resolves it to "success" or "failed" once Facebook reports
+  // the outcome. See publishFacebookVideoPost in lib/meta.ts.
+  status: "success" | "failed" | "processing";
   externalPostId: string | null;
   externalUrl: string | null;
   errorMessage: string | null;
@@ -452,8 +456,11 @@ async function attemptPublish(
           if (kind === "video") {
             const decoded = await resolveMediaBuffer(media);
             if (!decoded) throw new Error("Failed to download the post's hosted video for Facebook publishing");
+            // Upload-only — does not wait for Facebook's async video processing.
+            // See publishFacebookVideoPost's doc comment; the background
+            // video-publish-finalizer job resolves this to success/failed.
             const result = await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption);
-            return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+            return { ...base, status: "processing", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
           }
           // Facebook's photo endpoint accepts a hosted URL directly — no need
           // to download and re-upload the bytes ourselves.
@@ -468,9 +475,11 @@ async function attemptPublish(
         }
         const decoded = bufferFromDataUri(media);
         if (decoded) {
-          const result = decoded.kind === "video"
-            ? await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption)
-            : await publishFacebookPhotoPost(account.accountId!, accessToken, decoded.buffer, caption);
+          if (decoded.kind === "video") {
+            const result = await publishFacebookVideoPost(account.accountId!, accessToken, decoded.buffer, caption);
+            return { ...base, status: "processing", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
+          }
+          const result = await publishFacebookPhotoPost(account.accountId!, accessToken, decoded.buffer, caption);
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
       }
@@ -582,7 +591,14 @@ export async function executeClaimedPublish(
       ).returning()
     : [];
 
-  const anySucceeded = outcomes.some((o) => o.status === "success");
+  // A Facebook video leg that's still "processing" (upload accepted, async
+  // processing not finished yet — see publishFacebookVideoPost) counts as
+  // succeeded for the purposes of moving the post out of "publishing": we
+  // don't hold the post (or this request) hostage to Facebook's processing
+  // wait. The video-publish-finalizer background job resolves that
+  // publication row to "success" or "failed" once Facebook reports the
+  // outcome, independent of the post's own status.
+  const anySucceeded = outcomes.some((o) => o.status === "success" || o.status === "processing");
   // Resolve the "publishing" claim: back to "approved" on total failure (so the
   // vendor can fix the connection and retry — manually, or by rescheduling), or
   // "published" if at least one platform went live. Guarded on status="publishing"

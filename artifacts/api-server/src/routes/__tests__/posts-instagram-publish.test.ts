@@ -83,7 +83,7 @@ vi.mock("../../lib/encryption", () => ({
 const publishInstagramPhotoPost = vi.fn(async () => ({ externalPostId: "ig-post-1", externalUrl: "https://www.instagram.com/p/ig-post-1" }));
 const publishFacebookFeedPost = vi.fn();
 const publishFacebookPhotoPost = vi.fn();
-const publishFacebookVideoPost = vi.fn(async () => ({ externalPostId: "fb-video-1", externalUrl: "https://www.facebook.com/fb-video-1" }));
+const publishFacebookVideoPost = vi.fn(async () => ({ externalPostId: "fb-video-1", externalUrl: "https://www.facebook.com/fb-video-1", processing: true as const }));
 
 vi.mock("../../lib/meta", () => ({
   publishFacebookFeedPost,
@@ -200,8 +200,12 @@ describe("publishing a post whose image is a hosted object-storage URL (not base
     const claimed = { ...POST_BASE, mediaUrls: [HOSTED_VIDEO_URL], platforms: ["facebook"], socialAccountIds: [1] } as any;
     const { publications, anySucceeded } = await executeClaimedPublish(claimed);
 
+    // The video upload is accepted immediately without waiting for Facebook's
+    // async processing — the post still counts as "succeeded" (so the request
+    // doesn't block), but the individual publication row stays "processing"
+    // until the video-publish-finalizer background job resolves it.
     expect(anySucceeded).toBe(true);
-    expect(publications[0].status).toBe("success");
+    expect(publications[0].status).toBe("processing");
     expect(publications[0].externalPostId).toBe("fb-video-1");
     expect(publishFacebookVideoPost).toHaveBeenCalledWith("ig-123", "decrypted:enc-token", FAKE_VIDEO_BYTES, POST_BASE.caption);
   });
