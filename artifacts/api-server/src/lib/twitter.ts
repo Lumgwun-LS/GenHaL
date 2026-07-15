@@ -138,3 +138,95 @@ export async function publishTweetWithImage(
   if (!res.ok || !json.data?.id) throw new Error(json?.detail || json?.title || `X rejected the tweet (${res.status})`);
   return { externalPostId: json.data.id as string, externalUrl: `https://twitter.com/${username}/status/${json.data.id}` };
 }
+
+const VIDEO_APPEND_CHUNK_BYTES = 4 * 1024 * 1024; // 4MB, well under X's 5MB-per-chunk limit
+
+/**
+ * Uploads a video via the v1.1 chunked media endpoint's INIT/APPEND/FINALIZE
+ * sequence (required for video — the simple single-request upload used for
+ * images only supports images/GIFs), waits for X's async processing to
+ * finish, then posts a tweet attaching the resulting media_id.
+ */
+export async function publishTweetWithVideo(
+  username: string,
+  accessToken: string,
+  videoBuffer: Buffer,
+  text: string,
+): Promise<PublishResult> {
+  const authHeader = { Authorization: `Bearer ${accessToken}` };
+
+  // INIT: declare the upload up front so X can allocate a media_id for it.
+  const initForm = new URLSearchParams({
+    command: "INIT",
+    media_type: "video/mp4",
+    total_bytes: String(videoBuffer.length),
+    media_category: "tweet_video",
+  });
+  const initRes = await fetch(`${X_UPLOAD_BASE}/media/upload.json`, {
+    method: "POST",
+    headers: { ...authHeader, "Content-Type": "application/x-www-form-urlencoded" },
+    body: initForm,
+  });
+  const initJson: any = await initRes.json().catch(() => ({}));
+  const mediaId = initJson?.media_id_string;
+  if (!initRes.ok || !mediaId) throw new Error(initJson?.error || initJson?.errors?.[0]?.message || "X rejected the video upload (INIT)");
+
+  // APPEND: upload the video in sequential chunks under the same media_id.
+  let segmentIndex = 0;
+  for (let offset = 0; offset < videoBuffer.length; offset += VIDEO_APPEND_CHUNK_BYTES) {
+    const chunk = videoBuffer.subarray(offset, offset + VIDEO_APPEND_CHUNK_BYTES);
+    const appendForm = new FormData();
+    appendForm.append("command", "APPEND");
+    appendForm.append("media_id", mediaId);
+    appendForm.append("segment_index", String(segmentIndex));
+    appendForm.append("media", new Blob([new Uint8Array(chunk)]), "chunk");
+    const appendRes = await fetch(`${X_UPLOAD_BASE}/media/upload.json`, {
+      method: "POST",
+      headers: authHeader,
+      body: appendForm,
+    });
+    if (!appendRes.ok) {
+      const appendJson: any = await appendRes.json().catch(() => ({}));
+      throw new Error(appendJson?.error || appendJson?.errors?.[0]?.message || `X rejected a video chunk (${appendRes.status})`);
+    }
+    segmentIndex++;
+  }
+
+  // FINALIZE: tell X the upload is complete so it can start processing.
+  const finalizeForm = new URLSearchParams({ command: "FINALIZE", media_id: mediaId });
+  const finalizeRes = await fetch(`${X_UPLOAD_BASE}/media/upload.json`, {
+    method: "POST",
+    headers: { ...authHeader, "Content-Type": "application/x-www-form-urlencoded" },
+    body: finalizeForm,
+  });
+  let finalizeJson: any = await finalizeRes.json().catch(() => ({}));
+  if (!finalizeRes.ok) throw new Error(finalizeJson?.error || finalizeJson?.errors?.[0]?.message || "X rejected the video upload (FINALIZE)");
+
+  // STATUS: video processing is asynchronous — poll until X reports success
+  // (or fail fast on an explicit "failed" state) before attaching it to a tweet.
+  let processingInfo = finalizeJson?.processing_info;
+  const deadline = Date.now() + 60_000;
+  while (processingInfo && processingInfo.state !== "succeeded") {
+    if (processingInfo.state === "failed") {
+      throw new Error(processingInfo?.error?.message || "X failed to process the uploaded video");
+    }
+    if (Date.now() > deadline) throw new Error("Timed out waiting for X to finish processing the uploaded video");
+    const waitMs = Math.min(Math.max((processingInfo.check_after_secs ?? 1) * 1000, 1000), 5000);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    const statusRes = await fetch(`${X_UPLOAD_BASE}/media/upload.json?command=STATUS&media_id=${encodeURIComponent(mediaId)}`, {
+      headers: authHeader,
+    });
+    const statusJson: any = await statusRes.json().catch(() => ({}));
+    if (!statusRes.ok) throw new Error(statusJson?.error || statusJson?.errors?.[0]?.message || "Failed to check X video processing status");
+    processingInfo = statusJson?.processing_info;
+  }
+
+  const res = await fetch(`${X_API_BASE}/tweets`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, media: { media_ids: [mediaId] } }),
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok || !json.data?.id) throw new Error(json?.detail || json?.title || `X rejected the tweet (${res.status})`);
+  return { externalPostId: json.data.id as string, externalUrl: `https://twitter.com/${username}/status/${json.data.id}` };
+}

@@ -165,3 +165,91 @@ export async function publishLinkedInImagePost(memberId: string, accessToken: st
   const externalPostId = postUrn.split(":").pop() || postUrn;
   return { externalPostId, externalUrl: postUrn ? `https://www.linkedin.com/feed/update/${postUrn}` : "https://www.linkedin.com/feed/" };
 }
+
+/**
+ * Publishes a video + caption to the connected member's LinkedIn feed via the
+ * Videos API's multi-step upload: initializeUpload (allocates per-part upload
+ * URLs sized to the file), PUT each part and collect its ETag, then
+ * finalizeUpload with those ETags before referencing the video URN in a post.
+ */
+export async function publishLinkedInVideoPost(memberId: string, accessToken: string, videoBuffer: Buffer, commentary: string): Promise<PublishResult> {
+  const authorUrn = `urn:li:person:${memberId}`;
+  const restliHeaders = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "X-Restli-Protocol-Version": "2.0.0",
+    "LinkedIn-Version": LINKEDIN_API_VERSION,
+  };
+
+  // Step 1: register the upload — LinkedIn returns one upload URL per byte
+  // range it wants uploaded, sized for the given file length.
+  const initRes = await fetch(`${LINKEDIN_REST_BASE}/videos?action=initializeUpload`, {
+    method: "POST",
+    headers: restliHeaders,
+    body: JSON.stringify({
+      initializeUploadRequest: {
+        owner: authorUrn,
+        fileSizeBytes: videoBuffer.length,
+        uploadCaptions: false,
+        uploadThumbnail: false,
+      },
+    }),
+  });
+  const initJson: any = await initRes.json().catch(() => ({}));
+  const uploadInstructions: { uploadUrl: string; firstByte: number; lastByte: number }[] = initJson?.value?.uploadInstructions;
+  const videoUrn = initJson?.value?.video;
+  const uploadToken = initJson?.value?.uploadToken ?? "";
+  if (!initRes.ok || !uploadInstructions?.length || !videoUrn) {
+    throw new Error(initJson?.message || "LinkedIn rejected the video upload request");
+  }
+
+  // Step 2: PUT each byte range to its own upload URL, collecting the ETag
+  // LinkedIn assigns each part — finalizeUpload needs them in order.
+  const uploadedPartIds: string[] = [];
+  for (const part of uploadInstructions) {
+    const partRes = await fetch(part.uploadUrl, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: videoBuffer.subarray(part.firstByte, part.lastByte + 1),
+    });
+    if (!partRes.ok) throw new Error(`LinkedIn video part upload failed (${partRes.status})`);
+    const etag = partRes.headers.get("etag") ?? "";
+    if (!etag) throw new Error("LinkedIn did not return an ETag for an uploaded video part");
+    uploadedPartIds.push(etag);
+  }
+
+  // Step 3: finalize the upload so LinkedIn assembles the parts and starts processing.
+  const finalizeRes = await fetch(`${LINKEDIN_REST_BASE}/videos?action=finalizeUpload`, {
+    method: "POST",
+    headers: restliHeaders,
+    body: JSON.stringify({
+      finalizeUploadRequest: { video: videoUrn, uploadToken, uploadedPartIds },
+    }),
+  });
+  if (!finalizeRes.ok) {
+    const text = await finalizeRes.text().catch(() => "");
+    throw new Error(text || `LinkedIn rejected the video finalize request (${finalizeRes.status})`);
+  }
+
+  // Step 4: create the post referencing the uploaded video.
+  const postRes = await fetch(`${LINKEDIN_REST_BASE}/posts`, {
+    method: "POST",
+    headers: restliHeaders,
+    body: JSON.stringify({
+      author: authorUrn,
+      commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      content: { media: { id: videoUrn } },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
+    }),
+  });
+  if (!postRes.ok) {
+    const text = await postRes.text().catch(() => "");
+    throw new Error(text || `LinkedIn rejected the post (${postRes.status})`);
+  }
+  const postUrn = postRes.headers.get("x-restli-id") || postRes.headers.get("x-linkedin-id") || "";
+  const externalPostId = postUrn.split(":").pop() || postUrn;
+  return { externalPostId, externalUrl: postUrn ? `https://www.linkedin.com/feed/update/${postUrn}` : "https://www.linkedin.com/feed/" };
+}

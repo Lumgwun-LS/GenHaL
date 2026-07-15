@@ -5,8 +5,8 @@ import { eq, and, gt, desc, inArray } from "drizzle-orm";
 import { db, postsTable, productsTable, vendorsTable, socialAccountsTable, postPublicationsTable } from "@workspace/db";
 import { decrypt } from "../lib/encryption";
 import { publishFacebookFeedPost, publishFacebookPhotoPost, publishFacebookVideoPost, publishInstagramPhotoPost } from "../lib/meta";
-import { publishLinkedInTextPost, publishLinkedInImagePost } from "../lib/linkedin";
-import { publishTweet, publishTweetWithImage } from "../lib/twitter";
+import { publishLinkedInTextPost, publishLinkedInImagePost, publishLinkedInVideoPost } from "../lib/linkedin";
+import { publishTweet, publishTweetWithImage, publishTweetWithVideo } from "../lib/twitter";
 import { notifyScheduledPostFailed } from "../lib/post-notifications";
 import { logger } from "../lib/logger";
 import {
@@ -409,7 +409,8 @@ async function publishToPlatform(
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
         if (decoded?.kind === "video") {
-          throw new Error("LinkedIn video publishing isn't wired up yet — remove the video or post the caption only.");
+          const result = await publishLinkedInVideoPost(account.accountId!, accessToken, decoded.buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
         throw new Error("Couldn't read this post's image/video to publish it to LinkedIn.");
       }
@@ -428,7 +429,8 @@ async function publishToPlatform(
           return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
         if (decoded?.kind === "video") {
-          throw new Error("X/Twitter video publishing isn't wired up yet — remove the video or post the caption only.");
+          const result = await publishTweetWithVideo(username, accessToken, decoded.buffer, caption);
+          return { ...base, status: "success", externalPostId: result.externalPostId, externalUrl: result.externalUrl, errorMessage: null };
         }
         throw new Error("Couldn't read this post's image/video to publish it to X/Twitter.");
       }
