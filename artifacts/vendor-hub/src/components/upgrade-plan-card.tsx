@@ -596,6 +596,12 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
                   ? "Payments are processed securely by PayPal in USD. Your plan activates after you approve on PayPal."
                   : "Payments are processed securely by Stripe. Your plan activates immediately after checkout."}
           </p>
+          <p className="text-xs text-muted-foreground mt-2 text-center border-t border-border pt-2">
+            <span className="text-amber-400 font-medium">Pay-as-you-go overage:</span>{" "}
+            Paid plans continue working after credits are used — extra usage is billed at{" "}
+            $0.50/AI image · $1.00/AI video · $0.15/voice min · $0.05/SMS · $0.01/email.
+            Overage is collected on your next invoice.
+          </p>
         </CardContent>
       </Card>
     </>

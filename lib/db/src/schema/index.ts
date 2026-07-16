@@ -39,3 +39,4 @@ export * from "./branches";
 export * from "./workers";
 export * from "./site-content-audit-log";
 export * from "./resource-usage";
+export * from "./vendor-overage-charges";

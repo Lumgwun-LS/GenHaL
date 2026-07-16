@@ -87,3 +87,4 @@
 - [VendorHub AI video scene preview/render split](vendorhub-ai-video-scene-preview.md) — preview/regenerate scenes spend aiImages quota; only final render spends aiVideos quota; previews reuse type:"image" cleanup path.
 - [VendorHub AI video music verification](vendorhub-ai-video-music-verification.md) — real ElevenLabs music always ≥ requested duration, so looping is unreachable at the current 3-scene cap; no click at loop point even when forced past it.
 - [Free trial + PayPal subscription billing](free-trial-paypal-billing.md) — trial is Stripe-only (14 days, withTrial flag); PayPal is subscription-only (no vendor order toggle); trialEndsAt managed via subscription.updated webhook.
+- [VendorHub pay-as-you-go overage billing](vendorhub-overage-billing.md) — paid-tier vendors never hard-blocked after credits exhaust; overage tracked in vendor_overage_charges + Stripe InvoiceItem; free tier still hard-blocked.

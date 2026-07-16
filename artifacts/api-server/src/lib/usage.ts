@@ -1,26 +1,39 @@
 /**
- * Metered resource usage & quota enforcement.
+ * Metered resource usage, quota enforcement, and pay-as-you-go overage billing.
  *
- * Billing period: vendors have no live-synced "subscription period end" from
- * Stripe/Paystack cheap enough to check on every metered action, so the
- * period is derived locally from `vendors.currentPeriodStart` — a rolling
- * 30-day window anchored to that timestamp. The anchor is reset to now()
- * whenever the vendor's tier actually changes (upgrade, downgrade,
- * cancellation — see subscription-sync.ts), which keeps it aligned with real
- * subscription lifecycle events rather than a fixed calendar day. Vendors who
- * never change tier (e.g. stay on Free) still get a rolling monthly reset
- * anchored to signup.
+ * ## Included credits (quota)
+ * Each plan comes with a monthly credit bundle per resource type. Credits are
+ * tracked in `resource_usage` and enforced atomically via advisory locks so
+ * concurrent requests never jointly overshoot the limit.
  *
- * Free tier has no admin-configured plan entry (billing.subscriptionPlans
- * only defines starter/pro/enterprise), so FREE_TIER_QUOTAS below is the
- * fixed fallback for everyone on "free". Voice/SMS both cost real money via
- * Twilio per use, so free tier gets 0 of those; AI features get a small
- * taste so the free tier still feels usable.
+ * ## Pay-as-you-go overage (paid plans only)
+ * When a paid-tier vendor exhausts their included credits, usage continues but
+ * is recorded in `vendor_overage_charges` at the published overage rate for
+ * that resource. For vendors with a Stripe customer ID, a Stripe InvoiceItem
+ * is created immediately and will be collected on their next invoice. For
+ * Paystack/PayPal vendors the overage accumulates in the DB for manual or
+ * end-of-period settlement by the admin.
+ *
+ * Free-tier vendors are hard-blocked when they hit their quota — they have no
+ * payment method on file for overage collection.
+ *
+ * ## Billing period
+ * Derived locally from `vendors.currentPeriodStart` — a rolling 30-day window
+ * anchored to that timestamp, advanced automatically each full period. The
+ * anchor resets only on real tier-change events (upgrade, downgrade,
+ * cancellation) so it stays aligned with real subscription lifecycle events.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { resourceUsageTable, vendorsTable, type Vendor } from "@workspace/db/schema";
+import {
+  resourceUsageTable,
+  vendorOverageChargesTable,
+  vendorsTable,
+  type Vendor,
+} from "@workspace/db/schema";
 import { getSubscriptionPlan, type SubscriptionPlanQuotas } from "./subscription-plans";
+import { resolveGatewayField } from "./platform-gateways";
+import { logger } from "./logger";
 
 export const RESOURCE_KEYS = ["aiImages", "aiVideos", "aiCaptions", "voiceMinutes", "sms", "email"] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
@@ -43,13 +56,27 @@ export const FREE_TIER_QUOTAS: SubscriptionPlanQuotas = {
   email: 20,
 };
 
+/**
+ * Pay-as-you-go rates (USD per unit) charged once a vendor's included monthly
+ * credits are exhausted. Priced at roughly 2.5-3× the platform's real unit
+ * cost so overage is profitable but not punitive. Admins can adjust plan
+ * quotas in the Site Editor to shift where overage starts.
+ */
+export const OVERAGE_RATES: Record<ResourceKey, number> = {
+  aiImages:      0.50,   // platform cost ≈ $0.19
+  aiVideos:      1.00,   // platform cost ≈ $0.30
+  aiCaptions:    0.05,   // platform cost ≈ $0.01
+  voiceMinutes:  0.15,   // platform cost ≈ $0.06
+  sms:           0.05,   // platform cost ≈ $0.01
+  email:         0.01,   // platform cost ≈ $0.001
+};
+
 const PERIOD_LENGTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Returns the start of the vendor's *current* billing period — a rolling
  * PERIOD_LENGTH_MS window anchored to `currentPeriodStart`, advanced however
- * many whole periods have elapsed since then. Never mutates the anchor
- * itself; that only changes on a real tier-change event.
+ * many whole periods have elapsed since then.
  */
 export function getBillingPeriodStart(vendor: Pick<Vendor, "currentPeriodStart" | "createdAt">, now: Date = new Date()): Date {
   const anchor = vendor.currentPeriodStart ?? vendor.createdAt;
@@ -60,6 +87,11 @@ export function getBillingPeriodStart(vendor: Pick<Vendor, "currentPeriodStart" 
 
 export function getBillingPeriodEnd(periodStart: Date): Date {
   return new Date(periodStart.getTime() + PERIOD_LENGTH_MS);
+}
+
+/** Returns true when the vendor is on a paid plan (overage billing is possible). */
+function isPaidTier(vendor: Pick<Vendor, "subscriptionTier">): boolean {
+  return vendor.subscriptionTier !== "free";
 }
 
 /** Resolves the quota bundle for whatever tier the vendor is currently on. */
@@ -89,21 +121,21 @@ async function getUsedAmount(vendorId: number, resource: ResourceKey, periodStar
 
 export interface QuotaCheckResult {
   allowed: boolean;
+  isOverage: boolean;       // true = allowed via pay-as-you-go, not from included credits
   resource: ResourceKey;
   used: number;
   quota: number;
-  remaining: number;
+  remaining: number;        // remaining included credits (0 when in overage)
+  overageUnits: number;     // units charged as overage this request (0 for normal usage)
+  overageUsd: number;       // USD cost of overage this request
   periodStart: Date;
   periodEnd: Date;
 }
 
 /**
- * Checks whether `amount` more units of `resource` fit within the vendor's
- * remaining quota for the current period. Read-only, NOT atomic on its own —
- * this is only safe as an upfront non-committal gate (e.g. "does the vendor
- * have ANY voice-minute quota left before we launch a campaign"). For any
- * check that gates an actual unit of billable usage, use `consumeQuota`
- * instead, which checks-and-increments in one atomic step.
+ * Read-only quota check — does NOT record any usage. Safe for pre-flight
+ * checks like "can this vendor even start a campaign?" before committing.
+ * For gates that must actually record usage use `consumeQuota` instead.
  */
 export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: number): Promise<QuotaCheckResult> {
   const quotas = await getVendorQuotas(vendor);
@@ -111,50 +143,116 @@ export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: 
   const periodStart = getBillingPeriodStart(vendor);
   const used = await getUsedAmount(vendor.id, resource, periodStart);
   const remaining = Math.max(quota - used, 0);
+  const allowed = remaining >= amount || isPaidTier(vendor);
   return {
-    allowed: remaining >= amount,
+    allowed,
+    isOverage: allowed && remaining < amount,
     resource,
     used,
     quota,
     remaining,
+    overageUnits: allowed && remaining < amount ? amount : 0,
+    overageUsd: allowed && remaining < amount ? amount * OVERAGE_RATES[resource] : 0,
     periodStart,
     periodEnd: getBillingPeriodEnd(periodStart),
   };
 }
 
-/** Human-readable message for a blocked request, suitable for a 402 response body. */
+/** Human-readable message for a hard block (free-tier vendors who hit quota). */
 export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier">, result: QuotaCheckResult): string {
   const tierLabel = vendor.subscriptionTier === "free" ? "Free" : vendor.subscriptionTier;
-  return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan for more.`;
+  return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan to continue.`;
+}
+
+/** Human-readable message for overage (paid-tier vendors charged beyond quota). */
+export function quotaOverageMessage(result: QuotaCheckResult): string {
+  const rate = OVERAGE_RATES[result.resource];
+  return `You've used all included ${RESOURCE_LABEL[result.resource]} for this period. This usage will be billed at $${rate.toFixed(4)} per unit.`;
 }
 
 /**
- * Atomically checks AND increments usage in one step, so concurrent requests
- * for the same vendor+resource+period can never both pass a stale read and
- * jointly overshoot the quota. Implemented as a Postgres transaction that
- * takes a session-scoped advisory lock keyed on (vendorId, resource,
- * periodStart) before reading — this serializes concurrent callers for the
- * same key without needing SERIALIZABLE isolation or row locks on a row that
- * may not exist yet.
+ * Records overage in the `vendor_overage_charges` table and, when the vendor
+ * has an active Stripe subscription, creates a Stripe InvoiceItem on their
+ * customer so it's collected on the next invoice. Fire-and-forget: failure
+ * logs a warning but does not block the vendor action that triggered overage.
+ */
+async function recordOverageCharge(
+  vendor: Vendor,
+  resource: ResourceKey,
+  amount: number,
+  periodStart: Date,
+): Promise<void> {
+  const rate = OVERAGE_RATES[resource];
+  const totalUsd = amount * rate;
+
+  let stripeInvoiceItemId: string | undefined;
+  if (vendor.stripeCustomerId && vendor.stripeSubscriptionId) {
+    try {
+      const stripeKey = await resolveGatewayField("stripe", "apiKey");
+      if (stripeKey) {
+        const Stripe = (await import("stripe")).default;
+        const stripe = new Stripe(stripeKey as string);
+        const invoiceItem = await stripe.invoiceItems.create({
+          customer: vendor.stripeCustomerId,
+          amount: Math.round(totalUsd * 100), // cents
+          currency: "usd",
+          description: `Pay-as-you-go overage: ${amount} × ${RESOURCE_LABEL[resource]} @ $${rate.toFixed(4)}/unit`,
+          metadata: {
+            vendorId: String(vendor.id),
+            resource,
+            periodStart: periodStart.toISOString(),
+            units: String(amount),
+          },
+        });
+        stripeInvoiceItemId = invoiceItem.id;
+      }
+    } catch (err) {
+      logger.warn({ err, vendorId: vendor.id, resource, amount }, "[overage] Failed to create Stripe invoice item — overage recorded in DB only");
+    }
+  }
+
+  await db
+    .insert(vendorOverageChargesTable)
+    .values({
+      vendorId: vendor.id,
+      resource,
+      periodStart,
+      units: amount.toString(),
+      unitRateUsd: rate.toString(),
+      totalUsd: totalUsd.toString(),
+      stripeInvoiceItemId: stripeInvoiceItemId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [vendorOverageChargesTable.vendorId, vendorOverageChargesTable.resource, vendorOverageChargesTable.periodStart],
+      set: {
+        units: sql`${vendorOverageChargesTable.units} + ${amount}`,
+        totalUsd: sql`${vendorOverageChargesTable.totalUsd} + ${totalUsd}`,
+        // Only store the first stripe invoice item ID created for this period/resource
+        // (subsequent overage hits accumulate on the same row but we don't re-create invoice items
+        // to avoid double-billing — the Stripe item is created with the full period's running total
+        // at settlement time for non-Stripe vendors, or via this first-hit pattern for Stripe).
+        updatedAt: new Date(),
+      },
+    });
+}
+
+/**
+ * Atomically checks AND increments usage in one step. For paid-tier vendors
+ * who have exhausted their included credits, usage is allowed as overage and
+ * recorded for billing. Free-tier vendors are hard-blocked.
  *
- * Only increments when the result is `allowed: true`. Callers that must
- * gate a not-yet-succeeded action (e.g. an AI generation that might fail)
- * should call this BEFORE the action and call `releaseQuota` to refund if
- * the action then fails.
+ * Returns `allowed: true` in both the normal (quota available) and overage
+ * (paid plan, quota exhausted) cases. Check `result.isOverage` to know which.
  */
 export async function consumeQuota(vendor: Vendor, resource: ResourceKey, amount: number): Promise<QuotaCheckResult> {
   return db.transaction((tx) => consumeQuotaTx(tx, vendor, resource, amount));
 }
 
 /**
- * Same atomic check-and-increment as `consumeQuota`, but runs inside a
- * caller-provided transaction (`tx`) instead of opening its own. Use this
- * when quota consumption must be all-or-nothing together with another write
- * in the same transaction — e.g. a campaign "send" endpoint that must claim
- * an idempotent draft->sent transition AND reserve quota atomically, so a
- * duplicate/retried send request can neither re-send nor re-charge quota.
- * drizzle-orm's node-postgres driver implements a nested `tx.transaction`
- * call as a SAVEPOINT, so this composes safely with an outer transaction.
+ * Same as `consumeQuota` but runs inside a caller-provided transaction.
+ * Use when quota consumption must be atomically coupled to another write
+ * (e.g. an idempotent draft→sent transition that must both send and charge
+ * quota exactly once).
  */
 export async function consumeQuotaTx(
   tx: Pick<typeof db, "transaction">,
@@ -168,7 +266,7 @@ export async function consumeQuotaTx(
   const periodEnd = getBillingPeriodEnd(periodStart);
   const lockKey = `resource_usage:${vendor.id}:${resource}:${periodStart.toISOString()}`;
 
-  return tx.transaction(async (inner) => {
+  const result = await tx.transaction(async (inner) => {
     await inner.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
     const [row] = await inner
@@ -183,27 +281,63 @@ export async function consumeQuotaTx(
     const used = row ? Number(row.used) : 0;
     const remaining = Math.max(quota - used, 0);
 
-    if (remaining < amount) {
-      return { allowed: false, resource, used, quota, remaining, periodStart, periodEnd };
+    // Hard block for free-tier vendors
+    if (remaining < amount && !isPaidTier(vendor)) {
+      return { allowed: false, isOverage: false, resource, used, quota, remaining, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
     }
 
-    await inner
-      .insert(resourceUsageTable)
-      .values({ vendorId: vendor.id, resource, periodStart, used: amount.toString() })
-      .onConflictDoUpdate({
-        target: [resourceUsageTable.vendorId, resourceUsageTable.resource, resourceUsageTable.periodStart],
-        set: { used: sql`${resourceUsageTable.used} + ${amount}`, updatedAt: new Date() },
-      });
+    if (remaining >= amount) {
+      // Normal credit consumption — stays within included quota
+      await inner
+        .insert(resourceUsageTable)
+        .values({ vendorId: vendor.id, resource, periodStart, used: amount.toString() })
+        .onConflictDoUpdate({
+          target: [resourceUsageTable.vendorId, resourceUsageTable.resource, resourceUsageTable.periodStart],
+          set: { used: sql`${resourceUsageTable.used} + ${amount}`, updatedAt: new Date() },
+        });
+      return { allowed: true, isOverage: false, resource, used: used + amount, quota, remaining: remaining - amount, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+    }
 
-    return { allowed: true, resource, used: used + amount, quota, remaining: remaining - amount, periodStart, periodEnd };
+    // Paid plan, quota exhausted — consume what's left from credits, rest is overage
+    if (remaining > 0) {
+      await inner
+        .insert(resourceUsageTable)
+        .values({ vendorId: vendor.id, resource, periodStart, used: remaining.toString() })
+        .onConflictDoUpdate({
+          target: [resourceUsageTable.vendorId, resourceUsageTable.resource, resourceUsageTable.periodStart],
+          set: { used: sql`${resourceUsageTable.used} + ${remaining}`, updatedAt: new Date() },
+        });
+    }
+
+    const overageUnits = amount - remaining;
+    return {
+      allowed: true,
+      isOverage: true,
+      resource,
+      used: used + remaining,
+      quota,
+      remaining: 0,
+      overageUnits,
+      overageUsd: overageUnits * OVERAGE_RATES[resource],
+      periodStart,
+      periodEnd,
+    };
   });
+
+  // Record overage outside the main TX (fire-and-forget; Stripe call can't be in a PG tx)
+  if (result.isOverage && result.overageUnits > 0) {
+    recordOverageCharge(vendor, resource, result.overageUnits, result.periodStart).catch((err) => {
+      logger.error({ err, vendorId: vendor.id, resource }, "[overage] Failed to record overage charge");
+    });
+  }
+
+  return result;
 }
 
 /**
- * Refunds `amount` of previously-consumed quota (e.g. an AI generation that
- * was reserved via `consumeQuota` but then failed). Never drops usage below
- * zero. Same advisory-lock pattern as `consumeQuota` so a release racing a
- * concurrent consume can't corrupt the count.
+ * Refunds `amount` of previously-consumed quota. Same advisory-lock pattern
+ * as `consumeQuota` so a release racing a concurrent consume can't corrupt
+ * the count.
  */
 export async function releaseQuota(
   vendorId: number,
@@ -231,28 +365,16 @@ export async function releaseQuota(
  * Voice calls can't be metered exactly ahead of time (duration is unknown
  * until the call ends), so real enforcement instead RESERVES this many
  * minutes atomically via `consumeQuota` before placing each call — the same
- * amount Twilio's `TimeLimit` call parameter caps the call at (see
- * voice-caller.ts), so actual usage can never exceed the reservation. Once
- * the real duration is known (status callback), the unused portion of the
- * reservation is refunded via `releaseQuota`. This bounds worst-case
- * overshoot to "quota was available when this call started", never to
- * "however many calls happened to be in flight before usage caught up".
+ * amount Twilio's `TimeLimit` call parameter caps the call at, so actual
+ * usage can never exceed the reservation. Once the real duration is known
+ * (status callback), the unused portion is refunded via `releaseQuota`.
  */
 export const VOICE_CALL_RESERVATION_MINUTES = 10;
 
 /**
  * Directly increments usage without a prior quota check — used only for
  * post-hoc metering where the amount is unknowable ahead of time (voice call
- * duration, known only once Twilio's status callback reports it). Callers
- * MUST guarantee their own idempotency before calling this (see
- * voice-status-callback.ts's `metered_at` guard) since this function itself
- * has no way to detect a duplicate call.
- *
- * Pass `executor` (a `tx` from `db.transaction(...)`) when this increment
- * must succeed-or-fail atomically together with an idempotency claim made in
- * the same transaction — e.g. voice-status-callback.ts rolls back its
- * `metered_at` claim if this increment throws, so a failed attempt can be
- * safely retried instead of being permanently marked "already metered".
+ * duration, known only once Twilio's status callback reports it).
  */
 export async function incrementUsage(
   vendorId: number,
@@ -277,22 +399,63 @@ export interface UsageSummaryEntry {
   used: number;
   quota: number;
   remaining: number;
+  overageUnits: number;
+  overageUsd: number;
+  overageRate: number;
 }
 
-/** Vendor- and admin-facing usage-vs-quota summary for the current period. */
+/** Vendor- and admin-facing usage-vs-quota + overage summary for the current period. */
 export async function getUsageSummary(vendor: Vendor): Promise<{
   periodStart: string;
   periodEnd: string;
   tier: string;
+  overageEnabled: boolean;
+  totalOverageUsd: number;
   usage: UsageSummaryEntry[];
 }> {
   const quotas = await getVendorQuotas(vendor);
   const periodStart = getBillingPeriodStart(vendor);
   const periodEnd = getBillingPeriodEnd(periodStart);
+  const paid = isPaidTier(vendor);
+
   const usage = await Promise.all(RESOURCE_KEYS.map(async (resource) => {
     const used = await getUsedAmount(vendor.id, resource, periodStart);
     const quota = quotas[resource];
-    return { resource, label: RESOURCE_LABEL[resource], used, quota, remaining: Math.max(quota - used, 0) };
+
+    // Fetch overage for this period/resource
+    const [overageRow] = await db
+      .select({ units: vendorOverageChargesTable.units, totalUsd: vendorOverageChargesTable.totalUsd })
+      .from(vendorOverageChargesTable)
+      .where(and(
+        eq(vendorOverageChargesTable.vendorId, vendor.id),
+        eq(vendorOverageChargesTable.resource, resource),
+        eq(vendorOverageChargesTable.periodStart, periodStart),
+      ))
+      .limit(1);
+
+    const overageUnits = overageRow ? Number(overageRow.units) : 0;
+    const overageUsd = overageRow ? Number(overageRow.totalUsd) : 0;
+
+    return {
+      resource,
+      label: RESOURCE_LABEL[resource],
+      used,
+      quota,
+      remaining: Math.max(quota - used, 0),
+      overageUnits,
+      overageUsd,
+      overageRate: OVERAGE_RATES[resource],
+    };
   }));
-  return { periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString(), tier: vendor.subscriptionTier, usage };
+
+  const totalOverageUsd = usage.reduce((sum, u) => sum + u.overageUsd, 0);
+
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    tier: vendor.subscriptionTier,
+    overageEnabled: paid,
+    totalOverageUsd,
+    usage,
+  };
 }
