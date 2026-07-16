@@ -18,8 +18,8 @@
  * can also trigger it on demand from the Admin Panel.
  */
 import { db } from "@workspace/db";
-import { voiceCallLogsTable, voiceCampaignCallsTable } from "@workspace/db/schema";
-import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { vendorsTable, voiceCallLogsTable, voiceCampaignCallsTable, voiceCampaignsTable } from "@workspace/db/schema";
+import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { logger } from "./logger";
 import { fetchCallStatus, isTwilioConfigured } from "./voice-caller";
 import { getSiteContentBlock, setSiteContentBlock } from "./site-content";
@@ -47,17 +47,33 @@ export type VoiceBackfillFix = {
   callSid: string;
   fromStatus: string;
   toStatus: string;
+  vendorId: number | null;
+  vendorName: string | null;
+  campaignId: number | null;
+  campaignName: string | null;
 };
 
 const MAX_RECENT_FIXES = 50;
 
-/** Maps each stuck callSid to the non-terminal status it was found in (log table takes priority). */
-async function findStuckCallSids(): Promise<Map<string, string>> {
+type StuckCallInfo = { fromStatus: string; vendorId: number | null; campaignId: number | null };
+
+/**
+ * Maps each stuck callSid to its status and owning vendor/campaign IDs.
+ * The voiceCallLogsTable is the authoritative source for vendorId/campaignId;
+ * voiceCampaignCallsTable fills in any SIDs not present there.
+ * Log rows take priority over campaign rows when both exist for the same SID.
+ */
+async function findStuckCallSids(): Promise<Map<string, StuckCallInfo>> {
   const cutoff = new Date(Date.now() - STUCK_AFTER_MS);
 
   const [logRows, campaignRows] = await Promise.all([
     db
-      .select({ callSid: voiceCallLogsTable.callSid, status: voiceCallLogsTable.status })
+      .select({
+        callSid: voiceCallLogsTable.callSid,
+        status: voiceCallLogsTable.status,
+        vendorId: voiceCallLogsTable.vendorId,
+        campaignId: voiceCallLogsTable.campaignId,
+      })
       .from(voiceCallLogsTable)
       .where(
         and(
@@ -67,7 +83,11 @@ async function findStuckCallSids(): Promise<Map<string, string>> {
         ),
       ),
     db
-      .select({ callSid: voiceCampaignCallsTable.callSid, status: voiceCampaignCallsTable.status })
+      .select({
+        callSid: voiceCampaignCallsTable.callSid,
+        status: voiceCampaignCallsTable.status,
+        campaignId: voiceCampaignCallsTable.campaignId,
+      })
       .from(voiceCampaignCallsTable)
       .where(
         and(
@@ -78,10 +98,13 @@ async function findStuckCallSids(): Promise<Map<string, string>> {
       ),
   ]);
 
-  const sids = new Map<string, string>();
+  const sids = new Map<string, StuckCallInfo>();
   // Campaign rows first so log rows (checked second) take priority if both exist.
-  for (const r of [...campaignRows, ...logRows]) {
-    if (r.callSid) sids.set(r.callSid, r.status);
+  for (const r of campaignRows) {
+    if (r.callSid) sids.set(r.callSid, { fromStatus: r.status, vendorId: null, campaignId: r.campaignId });
+  }
+  for (const r of logRows) {
+    if (r.callSid) sids.set(r.callSid, { fromStatus: r.status, vendorId: r.vendorId, campaignId: r.campaignId });
   }
   return sids;
 }
@@ -108,7 +131,23 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
     let failed = 0;
     const newFixes: VoiceBackfillFix[] = [];
 
-    for (const [callSid, fromStatus] of stuckSids) {
+    // Batch-load vendor and campaign names for link display in the admin UI.
+    const allVendorIds = [...new Set([...stuckSids.values()].map((v) => v.vendorId).filter((id): id is number => id != null))];
+    const allCampaignIds = [...new Set([...stuckSids.values()].map((v) => v.campaignId).filter((id): id is number => id != null))];
+
+    const [vendorRows, campaignRows] = await Promise.all([
+      allVendorIds.length > 0
+        ? db.select({ id: vendorsTable.id, name: vendorsTable.name }).from(vendorsTable).where(inArray(vendorsTable.id, allVendorIds))
+        : Promise.resolve([] as { id: number; name: string }[]),
+      allCampaignIds.length > 0
+        ? db.select({ id: voiceCampaignsTable.id, name: voiceCampaignsTable.name }).from(voiceCampaignsTable).where(inArray(voiceCampaignsTable.id, allCampaignIds))
+        : Promise.resolve([] as { id: number; name: string }[]),
+    ]);
+
+    const vendorNameById = new Map(vendorRows.map((r) => [r.id, r.name]));
+    const campaignNameById = new Map(campaignRows.map((r) => [r.id, r.name]));
+
+    for (const [callSid, { fromStatus, vendorId, campaignId }] of stuckSids) {
       try {
         const snapshot = await fetchCallStatus(callSid);
         if (!snapshot || NON_TERMINAL_STATUSES.includes(snapshot.status as (typeof NON_TERMINAL_STATUSES)[number])) {
@@ -133,7 +172,16 @@ export async function runVoiceBackfill(triggeredBy = "system"): Promise<VoiceBac
           .where(eq(voiceCampaignCallsTable.callSid, callSid));
 
         updated++;
-        newFixes.push({ ranAt, callSid, fromStatus, toStatus: snapshot.status });
+        newFixes.push({
+          ranAt,
+          callSid,
+          fromStatus,
+          toStatus: snapshot.status,
+          vendorId: vendorId ?? null,
+          vendorName: vendorId != null ? (vendorNameById.get(vendorId) ?? null) : null,
+          campaignId: campaignId ?? null,
+          campaignName: campaignId != null ? (campaignNameById.get(campaignId) ?? null) : null,
+        });
         logger.info({ callSid, status: snapshot.status }, "[voice-backfill] Reconciled stuck call from Twilio");
       } catch (err) {
         failed++;

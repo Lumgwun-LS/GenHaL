@@ -772,6 +772,10 @@ type VoiceBackfillFix = {
   callSid: string;
   fromStatus: string;
   toStatus: string;
+  vendorId: number | null;
+  vendorName: string | null;
+  campaignId: number | null;
+  campaignName: string | null;
 };
 
 type VoiceBackfillStatus = {
@@ -844,11 +848,13 @@ function VoiceBackfillCard({ status }: { status: VoiceBackfillStatus }) {
         )}
 
         {status.recentFixes.length > 0 && (
-          <div className="mt-4 rounded-md border">
+          <div className="mt-4 rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Call SID</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Campaign</TableHead>
                   <TableHead>Before</TableHead>
                   <TableHead>After</TableHead>
                   <TableHead>Fixed at</TableHead>
@@ -858,6 +864,24 @@ function VoiceBackfillCard({ status }: { status: VoiceBackfillStatus }) {
                 {status.recentFixes.map((fix) => (
                   <TableRow key={`${fix.callSid}-${fix.ranAt}`} data-testid={`row-voice-backfill-fix-${fix.callSid}`}>
                     <TableCell className="font-mono text-xs">{fix.callSid}</TableCell>
+                    <TableCell>
+                      {fix.vendorId != null ? (
+                        <Link href={`/vendors/${fix.vendorId}`} className="text-primary hover:underline text-sm font-medium">
+                          {fix.vendorName ?? `Vendor #${fix.vendorId}`}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {fix.campaignId != null ? (
+                        <Link href={`/voice-campaigns/${fix.campaignId}`} className="text-primary hover:underline text-sm font-medium">
+                          {fix.campaignName ?? `Campaign #${fix.campaignId}`}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="capitalize">{fix.fromStatus}</Badge>
                     </TableCell>

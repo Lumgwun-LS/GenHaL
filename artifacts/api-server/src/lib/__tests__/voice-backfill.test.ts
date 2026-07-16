@@ -13,17 +13,23 @@ let campaignRows: CampaignRow[] = [];
 const logUpdates: Array<{ callSid: string; status: string }> = [];
 const campaignUpdates: Array<{ callSid: string; status: string }> = [];
 
-const voiceCallLogsTableRef = { callSid: "logs.callSid", status: "logs.status", initiatedAt: "logs.initiatedAt" };
-const voiceCampaignCallsTableRef = { callSid: "campaign.callSid", status: "campaign.status", initiatedAt: "campaign.initiatedAt" };
+const voiceCallLogsTableRef = { callSid: "logs.callSid", status: "logs.status", initiatedAt: "logs.initiatedAt", vendorId: "logs.vendorId", campaignId: "logs.campaignId" };
+const voiceCampaignCallsTableRef = { callSid: "campaign.callSid", status: "campaign.status", initiatedAt: "campaign.initiatedAt", campaignId: "campaign.campaignId" };
+const vendorsTableRef = { id: "vendors.id", name: "vendors.name" };
+const voiceCampaignsTableRef = { id: "voiceCampaigns.id", name: "voiceCampaigns.name" };
 
 vi.mock("@workspace/db", () => ({
   db: {
     select: () => ({
       from: (table: unknown) => ({
-        where: () =>
-          table === voiceCallLogsTableRef
-            ? Promise.resolve(logRows.map((r) => ({ callSid: r.callSid, status: r.status })))
-            : Promise.resolve(campaignRows.map((r) => ({ callSid: r.callSid, status: r.status }))),
+        where: () => {
+          if (table === voiceCallLogsTableRef)
+            return Promise.resolve(logRows.map((r) => ({ callSid: r.callSid, status: r.status, vendorId: null, campaignId: null })));
+          if (table === voiceCampaignCallsTableRef)
+            return Promise.resolve(campaignRows.map((r) => ({ callSid: r.callSid, status: r.status, campaignId: null })));
+          // vendorsTable / voiceCampaignsTable name lookups — return empty (names stay null)
+          return Promise.resolve([]);
+        },
       }),
     }),
     update: (table: unknown) => ({
@@ -41,6 +47,8 @@ vi.mock("@workspace/db", () => ({
 vi.mock("@workspace/db/schema", () => ({
   voiceCallLogsTable: voiceCallLogsTableRef,
   voiceCampaignCallsTable: voiceCampaignCallsTableRef,
+  vendorsTable: vendorsTableRef,
+  voiceCampaignsTable: voiceCampaignsTableRef,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -50,6 +58,10 @@ vi.mock("drizzle-orm", () => ({
   isNotNull: () => true,
   lt: () => true,
   or: (...args: unknown[]) => args,
+}));
+
+vi.mock("../job-run-status", () => ({
+  recordJobRun: () => Promise.resolve(),
 }));
 
 const siteContent = new Map<string, unknown>();
