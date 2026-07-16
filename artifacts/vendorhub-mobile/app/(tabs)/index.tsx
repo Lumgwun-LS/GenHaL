@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { LoadingView } from '@/components/LoadingView';
 import { ErrorView } from '@/components/ErrorView';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AnimatedListItem } from '@/components/AnimatedListItem';
+import { MiniBarChart } from '@/components/MiniBarChart';
 import {
   getGetExternalAnalyticsSummaryQueryKey,
   getListExternalOrdersQueryKey,
@@ -83,6 +84,7 @@ export default function DashboardScreen() {
 
   const canOrders = features.includes('orders');
   const canAnalytics = features.includes('analytics');
+
   const summaryQuery = useGetExternalAnalyticsSummary({
     query: { enabled: canAnalytics, queryKey: getGetExternalAnalyticsSummaryQueryKey() },
   });
@@ -104,6 +106,30 @@ export default function DashboardScreen() {
   const isLoading = (canAnalytics && summaryQuery.isLoading) || paymentsQuery.isLoading;
   const hasError = (canAnalytics && summaryQuery.isError) || paymentsQuery.isError;
 
+  // Build a 7-day revenue trend from payments already in memory
+  const payments = paymentsQuery.data ?? [];
+  const revenueTrend = useMemo(() => {
+    const now = new Date();
+    const buckets: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = `${d.getMonth() + 1}/${d.getDate()}`;
+      buckets[key] = 0;
+    }
+    payments
+      .filter((p) => p.status === 'paid')
+      .forEach((p) => {
+        const d = new Date((p as any).createdAt ?? (p as any).created_at ?? '');
+        if (isNaN(d.getTime())) return;
+        const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+        if (diff > 6) return;
+        const key = `${d.getMonth() + 1}/${d.getDate()}`;
+        buckets[key] = (buckets[key] ?? 0) + p.amount;
+      });
+    return Object.entries(buckets).map(([label, value]) => ({ label, value }));
+  }, [payments]);
+
   if (isLoading) return <LoadingView />;
   if (hasError) {
     return (
@@ -117,12 +143,13 @@ export default function DashboardScreen() {
   }
 
   const summary = summaryQuery.data;
-  const payments = paymentsQuery.data ?? [];
   const recentOrders = (ordersQuery.data ?? []).slice(0, 3);
   const recentPayments = payments.slice(0, 3);
   const totalPaid = payments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0);
+
+  const currencyPrefix = vendor?.defaultCurrency === 'NGN' ? 'NGN ' : '$';
 
   return (
     <ScrollView
@@ -188,6 +215,26 @@ export default function DashboardScreen() {
           accent
         />
       </View>
+
+      {/* ── Revenue trend (last 7 days) ── */}
+      {revenueTrend.some((d) => d.value > 0) && (
+        <Animated.View
+          style={styles.section}
+          entering={FadeInDown.delay(340).springify().damping(18)}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Revenue — last 7 days
+          </Text>
+          <Card style={styles.chartCard}>
+            <MiniBarChart
+              data={revenueTrend}
+              barColor={colors.accent}
+              height={110}
+              prefix={currencyPrefix}
+            />
+          </Card>
+        </Animated.View>
+      )}
 
       {/* ── Recent orders ── */}
       {canOrders && (
@@ -372,5 +419,9 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
+  },
+  chartCard: {
+    padding: 16,
+    marginBottom: 0,
   },
 });

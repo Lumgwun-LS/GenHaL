@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation, useSearch, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, SignInButton } from "@clerk/react";
@@ -7,6 +7,10 @@ import type {
   Developer, App, PaymentInitResult,
   LinkedAccount, PlatformRepo, AppRepoLink, UpdateRequest, PlatformId
 } from "../lib/types";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
+} from "recharts";
 
 const AFRICA_CATEGORIES = [
   "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
@@ -556,6 +560,184 @@ function AppsTab({ apps, onPayApp, onRefresh }: { apps: App[]; onPayApp: (a: App
   );
 }
 
+// ── DeveloperDashboard ────────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  approved:        "#00c853",
+  pending_review:  "#a78bfa",
+  pending_payment: "#ffb300",
+  rejected:        "#ff5252",
+  draft:           "#556070",
+};
+
+function DeveloperDashboard({ apps, onPayApp, onSubmit }: {
+  apps: App[];
+  onPayApp: (a: App) => void;
+  onSubmit: () => void;
+}) {
+  // Per-app download data for bar chart
+  const downloadData = useMemo(
+    () => apps.map(a => ({ name: a.name.length > 14 ? a.name.slice(0, 12) + "…" : a.name, downloads: a.totalDownloads }))
+         .sort((a, b) => b.downloads - a.downloads).slice(0, 8),
+    [apps]
+  );
+
+  // Status distribution
+  const statusData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    apps.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
+    return Object.entries(counts).map(([status, count]) => ({ status, count, label: STATUS_STYLE[status]?.label ?? status }));
+  }, [apps]);
+
+  // Rating distribution (1–5 stars)
+  const ratingDist = useMemo(() => {
+    const dist: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    apps.forEach(a => { if (a.ratingCount > 0) dist[Math.round(a.rating)] = (dist[Math.round(a.rating)] ?? 0) + a.ratingCount; });
+    return [5, 4, 3, 2, 1].map(s => ({ stars: `${s}★`, count: dist[s] ?? 0 }));
+  }, [apps]);
+
+  const totalDownloads = apps.reduce((s, a) => s + a.totalDownloads, 0);
+  const ratedApps = apps.filter(a => a.rating > 0);
+  const avgRating = ratedApps.length ? (ratedApps.reduce((s, a) => s + a.rating, 0) / ratedApps.length) : null;
+
+  const kpis = [
+    { label: "Total Apps",      value: apps.length,                                              icon: "📱" },
+    { label: "Live Apps",       value: apps.filter(a => a.status === "approved").length,          icon: "✅", color: "#00c853" },
+    { label: "Total Downloads", value: totalDownloads.toLocaleString(),                          icon: "📥", color: "#7c4dff" },
+    { label: "Avg Rating",      value: avgRating != null ? `${avgRating.toFixed(1)} ⭐` : "—",   icon: "⭐", color: "#ffb300" },
+    { label: "Total Reviews",   value: apps.reduce((s, a) => s + (a.ratingCount ?? 0), 0),       icon: "💬" },
+    { label: "Pending",         value: apps.filter(a => a.status === "pending_review").length,   icon: "🔍", color: "#a78bfa" },
+  ];
+
+  return (
+    <div>
+      {/* KPI grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 32 }}>
+        {kpis.map(s => (
+          <div key={s.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+            <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.color ?? "#e8eaf0" }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: "#8892a4" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pending payment banner */}
+      {apps.filter(a => a.status === "pending_payment").length > 0 && (
+        <div style={{ background: "rgba(255,179,0,0.05)", border: "1px solid rgba(255,179,0,0.15)", borderRadius: 14, padding: 20, marginBottom: 28 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, color: "#ffb300" }}>💳 Awaiting Payment</div>
+          {apps.filter(a => a.status === "pending_payment").map(app => (
+            <div key={app.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <span style={{ fontSize: 14 }}>{app.name}</span>
+              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => onPayApp(app)}>Pay NGN 25,000</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {apps.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
+          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for NGN 25,000.</div>
+          <button className="btn-green" onClick={onSubmit}>Submit Your First App</button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Downloads per app */}
+          <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20, gridColumn: downloadData.length > 3 ? "1 / -1" : "auto" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 16, color: "#c0c8d8" }}>📥 Downloads by App</div>
+            {downloadData.every(d => d.downloads === 0) ? (
+              <div style={{ color: "#8892a4", fontSize: 13, textAlign: "center", padding: "24px 0" }}>No downloads recorded yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={downloadData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#8892a4" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#8892a4" }} />
+                  <Tooltip
+                    contentStyle={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                    formatter={(v: number) => [v.toLocaleString(), "Downloads"]}
+                  />
+                  <Bar dataKey="downloads" radius={[4, 4, 0, 0]}>
+                    {downloadData.map((_, i) => (
+                      <Cell key={i} fill={i === 0 ? "#00c853" : i === 1 ? "#7c4dff" : "#3d8bff"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Status distribution */}
+          <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 16, color: "#c0c8d8" }}>🗂 App Status</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {statusData.map(s => {
+                const pct = Math.round((s.count / apps.length) * 100);
+                return (
+                  <div key={s.status}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: STATUS_COLORS[s.status] ?? "#8892a4" }}>{s.label}</span>
+                      <span style={{ color: "#8892a4" }}>{s.count} · {pct}%</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, borderRadius: 3, background: STATUS_COLORS[s.status] ?? "#556070" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Rating distribution */}
+          <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 16, color: "#c0c8d8" }}>⭐ Rating Distribution</div>
+            {ratingDist.every(r => r.count === 0) ? (
+              <div style={{ color: "#8892a4", fontSize: 13, textAlign: "center", padding: "24px 0" }}>No ratings yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {ratingDist.map(r => {
+                  const total = ratingDist.reduce((s, x) => s + x.count, 0);
+                  const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+                  return (
+                    <div key={r.stars} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, color: "#ffb300", width: 24, textAlign: "right" }}>{r.stars}</span>
+                      <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: "#ffb300" }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: "#8892a4", width: 24 }}>{r.count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Top performers table */}
+          {totalDownloads > 0 && (
+            <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 16, color: "#c0c8d8" }}>🏆 Top Performers</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[...apps].sort((a, b) => b.totalDownloads - a.totalDownloads).slice(0, 5).map((app, i) => (
+                  <div key={app.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? "#ffb300" : "#8892a4", width: 18 }}>#{i + 1}</span>
+                    {app.iconUrl && <img src={app.iconUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.name}</div>
+                      <div style={{ fontSize: 11, color: "#8892a4" }}>{app.totalDownloads.toLocaleString()} downloads · {app.rating > 0 ? `${app.rating.toFixed(1)}★` : "no rating"}</div>
+                    </div>
+                    <div style={{ fontSize: 11, ...STATUS_STYLE[app.status] ? { color: STATUS_COLORS[app.status] } : {} }}>{STATUS_STYLE[app.status]?.label ?? app.status}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main DeveloperPortal ──────────────────────────────────────────────────────
 
 type View = "dashboard" | "apps" | "platforms" | "submit";
@@ -665,40 +847,7 @@ export default function DeveloperPortal() {
 
       {/* Dashboard */}
       {view === "dashboard" && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 32 }}>
-            {[
-              { label: "Total Apps",      value: apps.length,                                        icon: "📱" },
-              { label: "Live Apps",       value: apps.filter(a => a.status === "approved").length,    icon: "✅", color: "#00c853" },
-              { label: "Total Downloads", value: apps.reduce((s, a) => s + a.totalDownloads, 0).toLocaleString(), icon: "📥" },
-              { label: "Avg Rating",      value: apps.filter(a => a.rating > 0).length ? (apps.reduce((s,a)=>s+a.rating,0)/apps.filter(a=>a.rating>0).length).toFixed(1) : "—", icon: "⭐", color: "#ffb300" },
-            ].map(s => (
-              <div key={s.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
-                <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: s.color ?? "#e8eaf0" }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: "#8892a4" }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-          {apps.filter(a => a.status === "pending_payment").length > 0 && (
-            <div style={{ background: "rgba(255,179,0,0.05)", border: "1px solid rgba(255,179,0,0.15)", borderRadius: 14, padding: 20, marginBottom: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10, color: "#ffb300" }}>💳 Awaiting Payment</div>
-              {apps.filter(a => a.status === "pending_payment").map(app => (
-                <div key={app.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                  <span style={{ fontSize: 14 }}>{app.name}</span>
-                  <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => setPaymentApp(app)}>Pay NGN 25,000</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {apps.length === 0 && (
-            <div style={{ textAlign: "center", padding: "60px 0" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
-              <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for NGN 25,000.</div>
-              <button className="btn-green" onClick={() => setView("submit")}>Submit Your First App</button>
-            </div>
-          )}
-        </div>
+        <DeveloperDashboard apps={apps} onPayApp={setPaymentApp} onSubmit={() => setView("submit")} />
       )}
 
       {/* Apps */}
