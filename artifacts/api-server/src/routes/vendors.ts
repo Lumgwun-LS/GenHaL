@@ -5,6 +5,7 @@ import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
 import { syncVendorToAwajimaa } from "../lib/awajimaa-sync";
+import { notifyAdminSignup } from "../lib/signup-notify";
 import {
   ListVendorsQueryParams,
   CreateVendorBody,
@@ -162,6 +163,7 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
     res.status(201).json(OnboardVendorResponse.parse(serializeVendor(vendor)));
     // Dual-run identity bridge: best-effort, never blocks or fails onboarding.
     void syncVendorToAwajimaa(vendor);
+    notifyAdminSignup({ platform: "vendor-hub", name: vendor.name, email: vendor.email, phone: vendor.phone, country: vendor.country });
   } catch (err: any) {
     // Only swallow the specific clerk_user_id race — any other unique violation (or error)
     // is unexpected here and should surface rather than being masked as a successful onboard.

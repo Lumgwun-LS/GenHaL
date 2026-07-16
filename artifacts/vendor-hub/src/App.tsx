@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { trackPageView } from "@/lib/analytics";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -182,6 +183,12 @@ function AuthenticatedRoute({ component: Component }: { component: React.Compone
   );
 }
 
+function PageViewTracker() {
+  const [location] = useLocation();
+  useEffect(() => { trackPageView(location); }, [location]);
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const qc = useQueryClient();
@@ -219,6 +226,7 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
+        <PageViewTracker />
         <Switch>
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />

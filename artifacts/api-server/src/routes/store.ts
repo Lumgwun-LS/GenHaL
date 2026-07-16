@@ -12,6 +12,7 @@ import {
 import { eq, desc, asc, ilike, and, sql, or } from "drizzle-orm";
 import { requireAuth, getAuth } from "@clerk/express";
 import { logger } from "../lib/logger";
+import { notifyAdminSignup } from "../lib/signup-notify";
 import crypto from "crypto";
 
 const router = Router();
@@ -473,6 +474,7 @@ router.post("/developers/register", requireAuth(), async (req, res) => {
     } as any).returning();
 
     res.status(201).json({ ...serializeDev(dev), totalApps: 0, totalDownloads: 0 });
+    notifyAdminSignup({ platform: "app-store", name: displayName, email });
   } catch (err) {
     logger.error({ err }, "registerDeveloper error");
     res.status(500).json({ error: "Internal server error" });

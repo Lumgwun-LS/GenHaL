@@ -10,6 +10,7 @@ import {
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { FEATURE_ACCESS } from "../../middlewares/requireExternalAuth";
+import { notifyAdminSignup } from "../../lib/signup-notify";
 
 const router = Router();
 
@@ -154,6 +155,7 @@ async function performMobileHandshake({
       })
       .returning();
     vendor = created;
+    notifyAdminSignup({ platform: "mobile-app", name: vendor.name, email: vendor.email, phone: vendor.phone ?? undefined, userType: vendor.awajimaaUserType ?? undefined });
   }
 
   // The account type (and the feature set it grants) is decided once, at

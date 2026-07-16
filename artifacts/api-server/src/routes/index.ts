@@ -35,6 +35,7 @@ import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
 import subscriptionUpgradeRouter from "./subscription-upgrade";
 import siteContentPublicRouter from "./site-content-public";
+import analyticsPublicRouter from "./analytics-public";
 import publicVendorsRouter from "./public-vendors";
 import publicPostLinksRouter from "./public-post-links";
 import voiceStatusCallbackRouter from "./voice-status-callback";
@@ -73,6 +74,9 @@ router.use("/external", externalRouter);
 
 // Awajimaa App Store — auth handled per-route inside storeRouter (public browse + auth-gated portal)
 router.use("/store", storeRouter);
+
+// Visitor pageview beacon — public, no auth needed
+router.use(analyticsPublicRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

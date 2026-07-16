@@ -7,8 +7,8 @@
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable } from "@workspace/db";
-import { and, gte, lte } from "drizzle-orm";
+import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable } from "@workspace/db";
+import { and, gte, lte, sql } from "drizzle-orm";
 import { resolveDateRange } from "../lib/date-range";
 import { computeFinanceOverview } from "../lib/finance-overview";
 
@@ -91,10 +91,40 @@ router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
     revenueByDay[key] = (revenueByDay[key] ?? 0) + parseFloat(p.amount);
   }
 
+  // App Store developer signups in range
+  const developerSignupsInRange = await db
+    .select()
+    .from(storeDeveloperAccountsTable)
+    .where(and(gte(storeDeveloperAccountsTable.createdAt, from), lte(storeDeveloperAccountsTable.createdAt, to)));
+
+  // Visitor (page-view) stats in range
+  const pageViewRows = await db
+    .select()
+    .from(pageViewsTable)
+    .where(and(gte(pageViewsTable.createdAt, from), lte(pageViewsTable.createdAt, to)));
+
+  const totalPageViews = pageViewRows.length;
+  const uniqueSessions = new Set(pageViewRows.map((r) => r.sessionId).filter(Boolean)).size;
+  const pageViewsByPlatform = bucketCount(pageViewRows, (r) => r.platform);
+  const pageViewsByDay: Record<string, number> = {};
+  const uniqueSessionsByDay: Record<string, Set<string>> = {};
+  for (const r of pageViewRows) {
+    const key = dayKey(new Date(r.createdAt));
+    pageViewsByDay[key] = (pageViewsByDay[key] ?? 0) + 1;
+    if (r.sessionId) {
+      if (!uniqueSessionsByDay[key]) uniqueSessionsByDay[key] = new Set();
+      uniqueSessionsByDay[key]!.add(r.sessionId);
+    }
+  }
+
   res.json({
     range: { from: from.toISOString(), to: to.toISOString(), period },
     totalUsers: vendorsInRange.length,
+    totalDeveloperSignups: developerSignupsInRange.length,
     totalRevenue: paidPayments.reduce((s, p) => s + parseFloat(p.amount), 0),
+    totalPageViews,
+    uniqueSessions,
+    pageViewsByPlatform,
     usersByGender,
     usersByCountry,
     usersByState,
@@ -105,6 +135,11 @@ router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
     paymentsByCity,
     signupsOverTime: Object.entries(signupsByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
     revenueOverTime: Object.entries(revenueByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount })),
+    visitorsOverTime: Object.entries(pageViewsByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, views]) => ({
+      date,
+      views,
+      uniqueSessions: uniqueSessionsByDay[date]?.size ?? 0,
+    })),
   });
 });
 
