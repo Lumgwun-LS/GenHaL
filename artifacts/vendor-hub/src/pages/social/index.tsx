@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -198,6 +198,60 @@ function AutoPublishFailureNotice({ postId }: { postId: number }) {
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
 const MANUAL_ONLY_PLATFORMS = ["TikTok"];
+
+type GatewayAvailability = { provider: string; available: boolean; reason: string | null };
+
+async function fetchPaymentAvailability(vendorId: number): Promise<GatewayAvailability[]> {
+  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/payment-availability`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load payment availability");
+  const data = await res.json();
+  return data.gateways ?? [];
+}
+
+/**
+ * For a checkout-mode post, warns the vendor if any of their enabled payment
+ * gateways are currently unavailable — so they see the issue right where
+ * they're about to share the link, not buried in Payment Settings.
+ *
+ * Payment availability is fetched once per page render (React Query caches
+ * by key) so multiple checkout cards on the same page share a single request.
+ */
+function CheckoutPaymentHealthWarning({ vendorId }: { vendorId: number }) {
+  const { data: gateways } = useQuery({
+    queryKey: ["vendor-payment-availability", vendorId],
+    queryFn: () => fetchPaymentAvailability(vendorId),
+    enabled: !!vendorId,
+    staleTime: 60_000,
+  });
+
+  if (!gateways) return null;
+
+  const unavailable = gateways.filter((g) => !g.available);
+  if (unavailable.length === 0) return null;
+
+  const allUnavailable = unavailable.length === gateways.length;
+
+  return (
+    <div className={`rounded-md border px-3 py-2 mb-3 space-y-1.5 ${allUnavailable ? "border-destructive/30 bg-destructive/5" : "border-amber-500/30 bg-amber-500/5"}`}>
+      <div className={`flex items-center gap-1.5 text-xs font-medium ${allUnavailable ? "text-destructive" : "text-amber-600"}`}>
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+        {allUnavailable ? "No payment methods are working" : "Some payment methods unavailable"}
+      </div>
+      <div className="space-y-1">
+        {unavailable.map((g) => (
+          <p key={g.provider} className="text-xs text-muted-foreground">
+            <span className="font-medium capitalize">{g.provider}:</span>{" "}
+            {g.reason ?? "Credentials missing or not verified"}
+          </p>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Customers won't be able to pay with {unavailable.length === 1 ? "this method" : "these methods"} until you fix it in{" "}
+        <a href="/vendors/1" className="underline hover:text-foreground">Payment Settings</a>.
+      </p>
+    </div>
+  );
+}
 
 function ConnectedAccounts() {
   const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: 1 });
@@ -675,6 +729,8 @@ export default function Social() {
                 </div>
 
                 {post.autoPublishFailed && <AutoPublishFailureNotice postId={post.id} />}
+
+                {post.linkMode === "checkout" && <CheckoutPaymentHealthWarning vendorId={1} />}
 
                 {publishResults[post.id] && publishResults[post.id].length > 0 && (
                   <div className="space-y-1.5 mb-3">
