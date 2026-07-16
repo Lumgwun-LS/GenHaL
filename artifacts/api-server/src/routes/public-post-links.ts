@@ -6,8 +6,9 @@
  * GET  /public/post-links/:token             — vendor + product info for the link
  * POST /public/post-links/:token/interest    — capture a lead, no payment
  * POST /public/post-links/:token/checkout    — create an order + start a real payment
- * GET  /public/post-links/:token/orders/:orderId        — status of an order started via this link
- * POST /public/post-links/:token/orders/:orderId/retry  — retry payment for that order (same or different gateway)
+ * GET  /public/post-links/:token/orders/:orderId          — status of an order started via this link
+ * POST /public/post-links/:token/orders/:orderId/retry    — retry payment for that order (same or different gateway)
+ * POST /public/post-links/:token/orders/:orderId/cancel   — cancel an unpaid order
  *
  * Mounted before requireAuth in routes/index.ts, same as public-vendors.ts.
  * Prices are always re-read from the DB — never trusted from the client.
@@ -503,16 +504,17 @@ router.get("/public/post-links/:token/orders/:orderId", async (req, res): Promis
 
   const { available, unavailable } = await resolveProviderAvailability(link.vendor, link.vendor.id);
 
+  const isOpenUnpaid =
+    order.status !== "cancelled" && RETRYABLE_ORDER_PAYMENT_STATUSES.has(order.paymentStatus);
+
   res.json({
     orderId: order.id,
     status: order.status,
     paymentStatus: order.paymentStatus,
     totalAmount: parseFloat(order.totalAmount),
     currency: order.currency,
-    canRetry:
-      order.status !== "cancelled" &&
-      RETRYABLE_ORDER_PAYMENT_STATUSES.has(order.paymentStatus) &&
-      available.length > 0,
+    canRetry: isOpenUnpaid && available.length > 0,
+    canCancel: isOpenUnpaid,
     availableProviders: available,
     unavailableProviders: unavailable,
   });
@@ -609,6 +611,54 @@ router.post("/public/post-links/:token/orders/:orderId/retry", async (req, res):
   }
 
   res.json(chargeResult.body);
+});
+
+/**
+ * POST /public/post-links/:token/orders/:orderId/cancel
+ * Lets a customer explicitly cancel an unpaid shop-link order that is stuck
+ * in pending — instead of it sitting there indefinitely. Scoped by token +
+ * post (same as the retry endpoint). Voids the open provider session where
+ * supported (Stripe only) before marking everything cancelled.
+ */
+router.post("/public/post-links/:token/orders/:orderId/cancel", async (req, res): Promise<void> => {
+  const link = await loadLink(req.params.token);
+  if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
+
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId)) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  const order = await loadLinkOrder(link.vendor.id, link.post.id, orderId);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+
+  if (order.status === "cancelled") {
+    res.status(409).json({ error: "This order is already cancelled" });
+    return;
+  }
+  if (!RETRYABLE_ORDER_PAYMENT_STATUSES.has(order.paymentStatus)) {
+    res.status(409).json({ error: `This order is ${order.paymentStatus} and cannot be cancelled` });
+    return;
+  }
+
+  // Void the most recent open provider session before marking cancelled so the
+  // customer can't be charged after they've explicitly given up.
+  const [latestPayment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.orderId, order.id))
+    .orderBy(desc(paymentsTable.createdAt))
+    .limit(1);
+
+  if (latestPayment && OPEN_PAYMENT_STATUSES.has(latestPayment.status)) {
+    await voidProviderSession(link.vendor, latestPayment);
+    await db.update(paymentsTable).set({ status: "cancelled" }).where(eq(paymentsTable.id, latestPayment.id));
+  }
+
+  await db
+    .update(ordersTable)
+    .set({ status: "cancelled", paymentStatus: "cancelled" })
+    .where(eq(ordersTable.id, order.id));
+
+  res.json({ success: true, orderId: order.id });
 });
 
 export default router;

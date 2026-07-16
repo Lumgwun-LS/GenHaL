@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useSearch } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShoppingBag, Store, Check, Loader2, Minus, Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,7 @@ type OrderStatus = {
   totalAmount: number;
   currency: string;
   canRetry: boolean;
+  canCancel: boolean;
   availableProviders: PaymentProvider[];
   unavailableProviders: UnavailableProvider[];
 };
@@ -72,6 +73,7 @@ export default function ShopLinkPage() {
   const { token = "" } = useParams();
   const search = useSearch();
   const orderIdFromUrl = new URLSearchParams(search).get("order");
+  const queryClient = useQueryClient();
 
   const { data: link, isLoading, error } = useQuery({
     queryKey: ["post-link", token],
@@ -93,6 +95,8 @@ export default function ShopLinkPage() {
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [orderCancelled, setOrderCancelled] = useState(false);
   const [done, setDone] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | null>(null);
   const [retryProvider, setRetryProvider] = useState<PaymentProvider | null>(null);
@@ -209,6 +213,27 @@ export default function ShopLinkPage() {
     }
   };
 
+  const submitCancel = async () => {
+    if (!orderStatus) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/public/post-links/${token}/orders/${orderStatus.orderId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "failed");
+      // Mark cancelled locally immediately so the confirmation shows at once,
+      // then invalidate the cached query so a background refetch syncs server state.
+      setOrderCancelled(true);
+      queryClient.invalidateQueries({ queryKey: ["post-link-order", token, orderIdFromUrl] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong — please try again.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const total = selectedForCheckout.reduce((sum, p) => sum + (quantities[p.id] ? p.price * qty(p.id) : 0), 0);
 
   return (
@@ -246,7 +271,19 @@ export default function ShopLinkPage() {
           </div>
         )}
 
-        {orderIdFromUrl && orderStatus && orderStatus.paymentStatus !== "paid" && (
+        {orderIdFromUrl && orderStatus && orderCancelled && (
+          <div className="mb-6 flex flex-col items-center text-center gap-3 py-10 rounded-lg border">
+            <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+              <Store className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <h2 className="text-lg font-semibold">Order cancelled</h2>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              Order #{orderStatus.orderId} has been cancelled. No payment was taken.
+            </p>
+          </div>
+        )}
+
+        {orderIdFromUrl && orderStatus && orderStatus.paymentStatus !== "paid" && orderStatus.status !== "cancelled" && !orderCancelled && (
           <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -260,11 +297,23 @@ export default function ShopLinkPage() {
             </div>
 
             {!orderStatus.canRetry ? (
-              <p className="text-sm text-destructive">
-                {retryUnavailable.length > 0
-                  ? "None of this vendor's payment methods are working right now. Please check back later."
-                  : "This vendor has no payment method configured yet."}
-              </p>
+              <>
+                <p className="text-sm text-destructive">
+                  {retryUnavailable.length > 0
+                    ? "None of this vendor's payment methods are working right now. Please check back later."
+                    : "This vendor has no payment method configured yet."}
+                </p>
+                {orderStatus.canCancel && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={cancelling}
+                    onClick={submitCancel}
+                  >
+                    {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel this order"}
+                  </Button>
+                )}
+              </>
             ) : (
               <>
                 {retryProviders.length > 1 && (
@@ -297,9 +346,19 @@ export default function ShopLinkPage() {
                     ))}
                   </div>
                 )}
-                <Button className="w-full" disabled={submitting} onClick={submitRetry}>
+                <Button className="w-full" disabled={submitting || cancelling} onClick={submitRetry}>
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Try payment again"}
                 </Button>
+                {orderStatus.canCancel && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={submitting || cancelling}
+                    onClick={submitCancel}
+                  >
+                    {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel this order"}
+                  </Button>
+                )}
               </>
             )}
           </div>
