@@ -68,6 +68,7 @@ const TEST_PLANS = [
 vi.mock("../../lib/subscription-plans", () => ({
   getSubscriptionPlans: async () => TEST_PLANS,
   getSubscriptionPlan: async (tier: string) => TEST_PLANS.find((p) => p.tier === tier),
+  getEnabledSubscriptionGateways: async () => ({ stripe: true, paystack: true, paypal: true }),
 }));
 
 // Catalog/portal-configuration creation hits real Stripe Product/Price/portal
@@ -196,6 +197,124 @@ describe("POST /vendors/:id/subscription/checkout", () => {
     const args = (sessionsCreate.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
     expect(args.mode).toBe("subscription");
     expect(args.line_items).toMatchObject([{ price: "price_enterprise", quantity: 1 }]);
+  });
+});
+
+// ── Helper: single server, N concurrent POSTs ────────────────────────────────
+async function postCheckoutConcurrent(
+  bodies: unknown[],
+): Promise<Array<{ status: number; body: Record<string, unknown> | null }>> {
+  const { default: router } = await import("../subscription-upgrade");
+
+  const app = express();
+  app.use(express.json());
+  app.use(router);
+  app.use((err: unknown, _req: Request, res: Response, _next: (e?: unknown) => void) => {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  });
+
+  return new Promise((resolve, reject) => {
+    const server = createServer(app);
+    server.listen(0, () => {
+      const addr = server.address() as { port: number };
+      const url = `http://localhost:${addr.port}/vendors/1/subscription/checkout`;
+      Promise.all(
+        bodies.map((body) =>
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }).then(async (r) => {
+            const text = await r.text();
+            let json: Record<string, unknown> | null = null;
+            try {
+              json = JSON.parse(text) as Record<string, unknown>;
+            } catch {
+              json = null;
+            }
+            return { status: r.status, body: json };
+          }),
+        ),
+      )
+        .then((results) => {
+          server.close();
+          resolve(results);
+        })
+        .catch((err: unknown) => {
+          server.close();
+          reject(err);
+        });
+    });
+  });
+}
+
+describe("POST /vendors/:id/subscription/checkout — de-duplication", () => {
+  const CHECKOUT_BODY = {
+    tier: "enterprise",
+    successUrl: "https://app.test/success",
+    cancelUrl: "https://app.test/cancel",
+  };
+
+  beforeEach(() => {
+    sessionsCreate = vi.fn(async () => ({ id: "cs_new", url: "https://stripe.test/cs_new" }));
+    portalSessionsCreate = vi.fn(async () => ({ url: "https://stripe.test/portal" }));
+    platformStripeKey = "sk_test_platform";
+    MOCK_VENDOR.stripeCustomerId = null;
+    vi.resetModules();
+  });
+
+  it("fires two concurrent requests but only calls Stripe once, returning the same sessionId to both", async () => {
+    // Delay the Stripe call by 50 ms so the second HTTP request is fully
+    // received and its handler starts executing before the first one resolves.
+    sessionsCreate = vi.fn(
+      () =>
+        new Promise<{ id: string; url: string }>((resolve) =>
+          setTimeout(() => resolve({ id: "cs_dedup", url: "https://stripe.test/cs_dedup" }), 50),
+        ),
+    );
+
+    const results = await postCheckoutConcurrent([CHECKOUT_BODY, CHECKOUT_BODY]);
+
+    expect(results).toHaveLength(2);
+
+    // Both responses must be successful.
+    expect(results[0].status).toBe(200);
+    expect(results[1].status).toBe(200);
+
+    // Both must carry the same session id.
+    expect(results[0].body).toMatchObject({ sessionId: "cs_dedup" });
+    expect(results[1].body).toMatchObject({ sessionId: "cs_dedup" });
+
+    // Exactly one response is the original; the other is the deduplicated piggyback.
+    const original = results.filter((r) => r.body?.deduplicated === false);
+    const deduped = results.filter((r) => r.body?.deduplicated === true);
+    expect(original).toHaveLength(1);
+    expect(deduped).toHaveLength(1);
+
+    // Stripe was only called once despite two concurrent requests.
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the in-flight lock after an error so a genuine retry is not stuck", async () => {
+    // First attempt: Stripe is not configured → 503.
+    platformStripeKey = undefined;
+
+    const { status: status1, body: body1 } = await postCheckout(CHECKOUT_BODY);
+
+    expect(status1).toBe(503);
+    expect(body1).toMatchObject({ error: expect.stringContaining("Stripe") });
+
+    // Configure Stripe and retry — the lock must have been cleared by the
+    // finally block so this second request creates a new session normally.
+    platformStripeKey = "sk_test_platform";
+    sessionsCreate = vi.fn(async () => ({ id: "cs_retry", url: "https://stripe.test/cs_retry" }));
+
+    const { status: status2, body: body2 } = await postCheckout(CHECKOUT_BODY);
+
+    expect(status2).toBe(200);
+    expect(body2).toMatchObject({ sessionId: "cs_retry", deduplicated: false });
+    // A fresh Stripe call was made — not a piggyback on the failed one.
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
   });
 });
 
