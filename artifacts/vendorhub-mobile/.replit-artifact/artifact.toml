@@ -1,5 +1,5 @@
 kind = "mobile"
-previewPath = "/vendorhub-mobile/"
+previewPath = "/mobileApp/"
 title = "Awa Biz Suite Mobile"
 version = "1.0.0"
 id = "artifacts/vendorhub-mobile"
@@ -8,7 +8,7 @@ router = "expo-domain"
 [[services]]
 name = "expo"
 ensurePreviewReachable = "/status"
-paths = [ "/vendorhub-mobile/" ]
+paths = [ "/mobileApp/" ]
 localPort = 19306
 
 [services.development]
@@ -20,4 +20,4 @@ run = [ "pnpm", "--filter", "@workspace/vendorhub-mobile", "run", "serve" ]
 
 [services.env]
 PORT = "19306"
-BASE_PATH = "/vendorhub-mobile/"
+BASE_PATH = "/mobileApp/"
