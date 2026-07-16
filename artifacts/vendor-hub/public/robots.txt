@@ -1,2 +1,14 @@
 User-agent: *
 Allow: /
+
+# Disallow internal/auth routes
+Disallow: /api/
+Disallow: /onboarding
+Disallow: /account
+Disallow: /admin
+
+# Allow important public paths
+Allow: /
+Allow: /shop/
+
+Sitemap: https://awajimaaai.com/sitemap.xml
