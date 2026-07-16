@@ -436,6 +436,14 @@ router.post("/admin/export-alerts/:adminUserId/acknowledge", async (req, res): P
     return;
   }
 
+  if (userId === targetAdminUserId) {
+    res.status(403).json({
+      error:
+        "You cannot acknowledge your own export-burst flag. A different admin must review and clear it.",
+    });
+    return;
+  }
+
   let acknowledgedByDisplayName: string | null = null;
   try {
     const adminUser = await clerkClient.users.getUser(userId);

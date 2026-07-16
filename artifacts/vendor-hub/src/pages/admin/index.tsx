@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCreateVendorNotification,
@@ -1571,6 +1572,7 @@ async function fetchTierChangeHistory(): Promise<PlanChangeEntry[]> {
 export default function AdminPanel() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
+  const { user: currentUser } = useUser();
 
   const [auditVendorSearch, setAuditVendorSearch] = useState("");
   const [auditFieldFilter, setAuditFieldFilter] = useState(AUDIT_FIELD_ANY);
@@ -2113,7 +2115,13 @@ export default function AdminPanel() {
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
                             <ExportAcknowledgmentHistoryButton adminUserId={f.adminUserId} />
-                            {f.blocked && <AcknowledgeExportBurstButton adminUserId={f.adminUserId} />}
+                            {f.blocked && currentUser?.id === f.adminUserId ? (
+                              <span className="text-xs text-muted-foreground italic">
+                                A different admin must review this
+                              </span>
+                            ) : (
+                              f.blocked && <AcknowledgeExportBurstButton adminUserId={f.adminUserId} />
+                            )}
                           </div>
                         </div>
                       </AlertDescription>
