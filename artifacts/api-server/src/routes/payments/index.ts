@@ -4,11 +4,12 @@ import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/d
 import { eq, desc } from "drizzle-orm";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
+import paypalRouter from "./paypal";
 import flutterwaveRouter, { FLUTTERWAVE_BASE } from "./flutterwave";
 import nombaRouter, { NOMBA_BASE, getNombaCreds, issueNombaToken } from "./nomba";
 import remitaRouter from "./remita";
 import { retryWebhookEventById } from "./webhooks";
-import { resolveGatewayField, callWithPlatformStripe } from "../../lib/platform-gateways";
+import { resolveGatewayField, callWithPlatformStripe, getPlatformCredentials } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -27,6 +28,7 @@ const router = Router();
 // Mount sub-routers
 router.use(stripeRouter);
 router.use(paystackRouter);
+router.use(paypalRouter);
 router.use(flutterwaveRouter);
 router.use(nombaRouter);
 router.use(remitaRouter);
@@ -155,6 +157,52 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     };
     if (!refundResponse.ok) {
       res.status(502).json({ error: `Nomba refund error: ${refundData.description ?? refundData.message ?? "refund failed"}` });
+      return;
+    }
+  } else if (payment.provider === "paypal") {
+    const paypalCreds = await getPlatformCredentials("paypal");
+    if (!paypalCreds?.clientId || !paypalCreds?.clientSecret) {
+      res.status(503).json({ error: "PayPal is not configured. Add platform PayPal credentials in Admin → Payment Gateways." });
+      return;
+    }
+
+    const { getPayPalAccessToken, paypalBaseUrl } = await import("../../lib/paypal-catalog");
+    const mode = paypalCreds.mode ?? "live";
+    const base = paypalBaseUrl(mode);
+
+    let ppToken: string;
+    try {
+      ppToken = await getPayPalAccessToken(paypalCreds.clientId, paypalCreds.clientSecret, mode);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ error: `PayPal auth failed: ${msg}` });
+      return;
+    }
+
+    // The providerReference is the PayPal Order ID.
+    // We need to find the capture ID from the order to refund it.
+    const orderRes = await fetch(`${base}/v2/checkout/orders/${payment.providerReference}`, {
+      headers: { Authorization: `Bearer ${ppToken}` },
+    });
+    const orderData = (await orderRes.json().catch(() => ({}))) as {
+      purchase_units?: Array<{
+        payments?: { captures?: Array<{ id: string; status: string }> };
+      }>;
+    };
+    const captureId = orderData.purchase_units?.[0]?.payments?.captures?.find((c) => c.status === "COMPLETED")?.id;
+    if (!captureId) {
+      res.status(502).json({ error: "PayPal: could not find a completed capture to refund for this order" });
+      return;
+    }
+
+    const refundRes = await fetch(`${base}/v2/payments/captures/${captureId}/refund`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ppToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!refundRes.ok) {
+      const text = await refundRes.text().catch(() => "(no body)");
+      res.status(502).json({ error: `PayPal refund failed (${refundRes.status}): ${text}` });
       return;
     }
   } else if (payment.provider === "remita") {

@@ -3456,6 +3456,8 @@ components:
           type: boolean
         nombaEnabled:
           type: boolean
+        paypalEnabled:
+          type: boolean
         defaultCurrency:
           type: string
         brandTheme:

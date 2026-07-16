@@ -1452,10 +1452,16 @@ interface PayPalWebhookEvent {
   id: string;
   event_type: string;
   resource: {
-    id: string;          // subscription ID (I-XXXXX)
+    id: string;          // subscription ID (I-XXXXX) or capture/order ID
     plan_id?: string;
     status?: string;
-    custom_id?: string;  // JSON: { upgradeVendorId, upgradeTier, upgradeClerkUserId }
+    custom_id?: string;  // JSON: { upgradeVendorId, upgradeTier } or { orderId, vendorId }
+    supplementary_data?: {
+      related_ids?: {
+        order_id?: string;   // PayPal Order ID — present on capture events
+      };
+    };
+    amount?: { value?: string; currency_code?: string };
   };
 }
 
@@ -1558,6 +1564,65 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
     }
 
     console.info(`[paypal webhook] ${eventType} — vendor=${vendor.id} downgraded from ${previousTier} to free`);
+    return { matched: true };
+  }
+
+  // ── Order-level payment events (vendor customer checkout) ─────────────────
+  // These fire when a customer pays via PayPal on a vendor's storefront.
+  // The providerReference stored at checkout is the PayPal Order ID, which is
+  // echoed back on capture events via resource.supplementary_data.related_ids.order_id.
+
+  if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
+    const paypalOrderId = resource.supplementary_data?.related_ids?.order_id ?? resource.id;
+    if (!paypalOrderId) {
+      console.warn(`[paypal webhook] PAYMENT.CAPTURE.COMPLETED — no order_id — event=${event.id}`);
+      return { matched: false };
+    }
+
+    const result = await applyPaymentStatusTransition(paypalOrderId, "paid", "paypal");
+    if (result.outcome === "conflict") {
+      return { matched: true };
+    }
+    const updatedPayment = result.outcome === "updated" ? result.payment : null;
+
+    if (updatedPayment?.orderId) {
+      await db
+        .update(ordersTable)
+        .set({ paymentStatus: "paid", updatedAt: new Date() })
+        .where(eq(ordersTable.id, updatedPayment.orderId));
+    }
+
+    if (updatedPayment) {
+      await notifyVendorPaymentStatus(updatedPayment.vendorId, "paid", updatedPayment.amount, updatedPayment.currency);
+    }
+
+    console.info(`[paypal webhook] PAYMENT.CAPTURE.COMPLETED — orderId=${paypalOrderId} matched=${result.outcome !== "not_found"}`);
+    if (!updatedPayment) {
+      // No matching payment row — could be a manual/external PayPal capture
+      console.warn(`[paypal webhook] PAYMENT.CAPTURE.COMPLETED — no matching payment for order=${paypalOrderId}`);
+      return { matched: false };
+    }
+    return { matched: true };
+  }
+
+  if (eventType === "PAYMENT.CAPTURE.DENIED" || eventType === "PAYMENT.CAPTURE.REVERSED") {
+    const paypalOrderId = resource.supplementary_data?.related_ids?.order_id ?? resource.id;
+    if (!paypalOrderId) {
+      console.warn(`[paypal webhook] ${eventType} — no order_id — event=${event.id}`);
+      return { matched: false };
+    }
+
+    const result = await applyPaymentStatusTransition(paypalOrderId, "failed", "paypal");
+    if (result.outcome === "conflict") {
+      return { matched: true };
+    }
+    const updatedPayment = result.outcome === "updated" ? result.payment : null;
+
+    if (updatedPayment) {
+      await notifyVendorPaymentStatus(updatedPayment.vendorId, "failed", updatedPayment.amount, updatedPayment.currency);
+    }
+
+    console.info(`[paypal webhook] ${eventType} — orderId=${paypalOrderId}`);
     return { matched: true };
   }
 
