@@ -203,15 +203,23 @@ async function initializeCheckout(vendorId: number, input: InitializeInput): Pro
  *
  * Provider support:
  *   - Stripe: checkout.sessions.expire — fully supported for open sessions.
- *   - Paystack: no API to void/expire an initialized transaction before the
- *     customer completes it; the authorization link simply becomes unusable
- *     once we stop honoring it locally, so this is a documented no-op.
+ *   - Paystack: **no void/expire API exists** for an initialized transaction.
+ *     Investigated endpoints (all ruled out):
+ *       • There is no `DELETE /transaction/:reference` or "expire transaction" endpoint.
+ *       • `POST /page/:id_or_slug/toggle_status` disables reusable Payment Pages,
+ *         not one-time `transaction/initialize` access codes — a different product entirely.
+ *       • `POST /customer/:customer_code/deauthorize` deactivates a stored card
+ *         authorization, but only after a successful payment (it can't touch a
+ *         pending/unconfirmed transaction reference).
+ *     The access_code / authorization_url becomes unreachable from our side the
+ *     moment we mark the local payment as cancelled and stop accepting its
+ *     webhook; no further provider-side action is possible.
  */
 async function voidProviderSession(
   vendorId: number,
   payment: { id: number; provider: string; providerReference: string; metadata: unknown },
 ): Promise<void> {
-  if (payment.provider !== "stripe") return; // Paystack: no void endpoint; nothing to do.
+  if (payment.provider !== "stripe") return; // Paystack: no void endpoint — see JSDoc above.
 
   try {
     const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
