@@ -385,6 +385,16 @@ export async function recheckPlatformCredentials(provider: GatewayProvider): Pro
           `This key previously worked — it may have been revoked, expired, or rotated on the provider's side. ` +
           `Update it from Admin \u2192 Payment Gateways.`,
       );
+
+      // Notify vendors whose only working gateway just became this failing one.
+      // Dynamic import breaks the circular-module cycle (gateway-notifications
+      // imports from this file for GATEWAY_DEFS / GatewayProvider types).
+      try {
+        const { notifyVendorsOfGatewayFailure } = await import("./gateway-notifications");
+        await notifyVendorsOfGatewayFailure(provider, message);
+      } catch (notifyErr) {
+        console.error("[platform-gateways] vendor gateway-failure notification threw:", notifyErr);
+      }
     }
 
     return { provider, checked: true, testPassed: false, becameFailing, recovered: false, error: message };
