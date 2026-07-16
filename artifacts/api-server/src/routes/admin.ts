@@ -1160,6 +1160,15 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
     `[admin] payment reconciliation conflict resolved — payment=${paymentId} admin=${userId} resolution=${resolution}`,
   );
 
+  const adminLabel = adminDisplayName ? `*${adminDisplayName}* (${userId})` : `*${userId}*`;
+  const resolutionLabel =
+    resolution === "dismiss"
+      ? "dismissed (kept local status)"
+      : `manually set to *${resolution}*`;
+  await sendSlackAlert(
+    `:white_check_mark: Payment conflict resolved — payment #${paymentId} was ${resolutionLabel} by ${adminLabel}.`,
+  );
+
   res.json({ success: true, payment: updated });
 });
 
