@@ -1657,9 +1657,13 @@ async function retryVoiceCall(logId: number): Promise<void> {
   }
 }
 
-async function retryAllFailedCampaignCalls(
-  campaignId: number,
-): Promise<{ attempted: number; succeeded: number; failed: number }> {
+type RetryJobState =
+  | { status: "running"; total: number; attempted: number; succeeded: number; failed: number }
+  | { status: "done"; total: number; attempted: number; succeeded: number; failed: number }
+  | { status: "error"; error: string }
+  | { status: "idle" };
+
+async function startRetryAllFailedCampaignCalls(campaignId: number): Promise<RetryJobState> {
   const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-failed`, {
     method: "POST",
     credentials: "include",
@@ -1668,7 +1672,15 @@ async function retryAllFailedCampaignCalls(
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to retry campaign calls");
   }
-  return res.json() as Promise<{ attempted: number; succeeded: number; failed: number }>;
+  return res.json() as Promise<RetryJobState>;
+}
+
+async function pollRetryStatus(campaignId: number): Promise<RetryJobState> {
+  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-status`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to fetch retry status");
+  return res.json() as Promise<RetryJobState>;
 }
 
 function RetryAllFailedButton({
@@ -1680,22 +1692,45 @@ function RetryAllFailedButton({
   failedCount: number;
   onDone: () => void;
 }) {
-  const [retrying, setRetrying] = useState(false);
+  const [jobState, setJobState] = useState<RetryJobState>({ status: "idle" });
+
+  // Poll for progress while the job is running
+  useQuery({
+    queryKey: ["retry-job-status", campaignId],
+    queryFn: async () => {
+      const state = await pollRetryStatus(campaignId);
+      setJobState(state);
+      if (state.status === "done") {
+        toast.success(
+          `Retried ${state.attempted} call(s): ${state.succeeded} placed, ${state.failed} still failed.`,
+        );
+        onDone();
+      } else if (state.status === "error") {
+        toast.error(`Retry failed: ${state.error}`);
+      }
+      return state;
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.status === "running" ? 1500 : false;
+    },
+    enabled: jobState.status === "running",
+    refetchIntervalInBackground: true,
+  });
 
   async function handleRetryAll() {
-    setRetrying(true);
     try {
-      const result = await retryAllFailedCampaignCalls(campaignId);
-      toast.success(
-        `Retried ${result.attempted} call(s): ${result.succeeded} placed, ${result.failed} still failed.`,
-      );
-      onDone();
+      const initial = await startRetryAllFailedCampaignCalls(campaignId);
+      setJobState(initial);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to retry campaign calls");
-    } finally {
-      setRetrying(false);
     }
   }
+
+  const isRunning = jobState.status === "running";
+  const progressLabel = isRunning
+    ? `${jobState.attempted} of ${jobState.total} retried…`
+    : `Retry all failed (${failedCount})`;
 
   return (
     <Button
@@ -1703,11 +1738,11 @@ function RetryAllFailedButton({
       size="sm"
       className="h-7 gap-1.5 text-xs shrink-0"
       onClick={handleRetryAll}
-      disabled={retrying}
+      disabled={isRunning}
       data-testid={`button-retry-all-failed-${campaignId}`}
     >
-      <RefreshCw className="w-3.5 h-3.5" />
-      {retrying ? "Retrying…" : `Retry all failed (${failedCount})`}
+      <RefreshCw className={`w-3.5 h-3.5 ${isRunning ? "animate-spin" : ""}`} />
+      {progressLabel}
     </Button>
   );
 }

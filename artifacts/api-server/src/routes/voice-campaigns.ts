@@ -260,6 +260,7 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
  */
 export async function retryAllFailedCampaignCalls(
   campaignId: number,
+  onProgress?: (state: { attempted: number; total: number; succeeded: number; failed: number }) => void,
 ): Promise<{ attempted: number; succeeded: number; failed: number }> {
   const failedLogs = await db
     .select({ id: voiceCallLogsTable.id })
@@ -271,6 +272,7 @@ export async function retryAllFailedCampaignCalls(
     ))
     .orderBy(desc(voiceCallLogsTable.initiatedAt));
 
+  const total = failedLogs.length;
   let succeeded = 0;
   let failed = 0;
   for (const log of failedLogs) {
@@ -280,16 +282,17 @@ export async function retryAllFailedCampaignCalls(
     } else {
       failed++;
     }
+    onProgress?.({ attempted: succeeded + failed, total, succeeded, failed });
     // Small delay between calls to avoid rate-limiting — mirrors the launch loop.
     await new Promise((r) => setTimeout(r, 500));
   }
 
   logger.info(
-    { campaignId, attempted: failedLogs.length, succeeded, failed },
+    { campaignId, attempted: total, succeeded, failed },
     "[voice-campaign] Bulk retry of failed calls finished",
   );
 
-  return { attempted: failedLogs.length, succeeded, failed };
+  return { attempted: total, succeeded, failed };
 }
 
 /**

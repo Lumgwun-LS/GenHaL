@@ -739,13 +739,31 @@ router.post("/admin/voice-call-logs/:id/retry", async (req, res): Promise<void> 
   res.json({ success: true });
 });
 
+// ─── Bulk-retry job progress store ────────────────────────────────────────────
+
+/**
+ * In-memory store for bulk campaign-call retry jobs. Keyed by campaignId.
+ * Each entry holds the live progress of an ongoing (or recently finished)
+ * retry run so the frontend can poll without blocking on a long HTTP request.
+ *
+ * Intentionally in-process rather than in the DB: this state is transient
+ * (a server restart loses it, which is fine — the admin can just retry again)
+ * and we want zero DB overhead per-tick during the hot loop.
+ */
+type RetryJobState =
+  | { status: "running"; total: number; attempted: number; succeeded: number; failed: number }
+  | { status: "done";    total: number; attempted: number; succeeded: number; failed: number }
+  | { status: "error";   error: string };
+
+const retryJobs = new Map<number, RetryJobState>();
+
 // ─── POST /admin/voice-campaigns/:cid/retry-failed ─────────────────────────────
 
 /**
- * Retries every failed campaign call for one campaign in one click, instead
- * of an admin clicking Retry per row. Reuses retryAllFailedCampaignCalls,
- * which calls retryCampaignCall per row with the same rate-limiting delay
- * runCampaignCalls uses.
+ * Starts a background bulk-retry for all failed calls in a campaign and
+ * returns immediately (HTTP 202) with the initial job state. The caller
+ * should poll GET /admin/voice-campaigns/:cid/retry-status for progress.
+ * A second POST while a retry is already running returns 409.
  */
 router.post("/admin/voice-campaigns/:cid/retry-failed", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
@@ -758,12 +776,66 @@ router.post("/admin/voice-campaigns/:cid/retry-failed", async (req, res): Promis
     return;
   }
 
-  const result = await retryAllFailedCampaignCalls(campaignId);
-  if (result.attempted === 0) {
-    res.status(400).json({ error: "No failed calls to retry for this campaign.", ...result });
+  // Prevent double-starting a retry for the same campaign.
+  const existing = retryJobs.get(campaignId);
+  if (existing?.status === "running") {
+    res.status(409).json({ error: "A retry is already running for this campaign.", ...existing });
     return;
   }
-  res.json({ success: true, ...result });
+
+  // Quick pre-flight: count failed calls so we can reject early and seed `total`.
+  const failedRows = await db
+    .select({ id: voiceCallLogsTable.id })
+    .from(voiceCallLogsTable)
+    .where(and(
+      eq(voiceCallLogsTable.campaignId, campaignId),
+      eq(voiceCallLogsTable.purpose, "campaign"),
+      eq(voiceCallLogsTable.status, "failed"),
+    ));
+
+  if (failedRows.length === 0) {
+    res.status(400).json({ error: "No failed calls to retry for this campaign." });
+    return;
+  }
+
+  const total = failedRows.length;
+  const initialState: RetryJobState = { status: "running", total, attempted: 0, succeeded: 0, failed: 0 };
+  retryJobs.set(campaignId, initialState);
+
+  // Fire-and-forget — the loop updates the Map; the caller polls the status route.
+  retryAllFailedCampaignCalls(campaignId, (progress) => {
+    retryJobs.set(campaignId, { status: "running", ...progress });
+  })
+    .then((result) => {
+      retryJobs.set(campaignId, { status: "done", total, ...result });
+    })
+    .catch((err) => {
+      retryJobs.set(campaignId, { status: "error", error: String(err) });
+    });
+
+  res.status(202).json(initialState);
+});
+
+// ─── GET /admin/voice-campaigns/:cid/retry-status ──────────────────────────────
+
+/**
+ * Returns the current progress of a bulk retry job for the given campaign.
+ * Returns `{ status: "idle" }` when no retry has been started (or after the
+ * server was restarted). Admins poll this every ~1.5 s while a retry runs.
+ */
+router.get("/admin/voice-campaigns/:cid/retry-status", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const campaignId = Number(req.params.cid);
+  if (!Number.isInteger(campaignId) || campaignId <= 0) {
+    res.status(400).json({ error: "Invalid campaign id." });
+    return;
+  }
+
+  const state = retryJobs.get(campaignId);
+  res.json(state ?? { status: "idle" });
 });
 
 // ─── GET /admin/audit-log ─────────────────────────────────────────────────────
