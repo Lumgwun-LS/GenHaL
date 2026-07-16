@@ -14,16 +14,22 @@ export const storeAppsTable = pgTable("store_apps", {
   iconUrl: text("icon_url").notNull(),
   // JSON array of screenshot URLs
   screenshots: jsonb("screenshots").$type<string[]>().notNull().default([]),
-  downloadUrl: text("download_url"),   // APK/AAB URL or App Store link
-  webUrl: text("web_url"),             // Web app URL
+  // Required: direct download/install link (APK, App Store, Play Store, web)
+  downloadUrl: text("download_url").notNull(),
+  webUrl: text("web_url"),
   currentVersion: text("current_version"),
   // Stats
   totalDownloads: integer("total_downloads").notNull().default(0),
   rating: real("rating").notNull().default(0),
   ratingCount: integer("rating_count").notNull().default(0),
-  // Status: draft | pending_review | approved | rejected | removed
+  // Status: draft | pending_payment | pending_review | approved | rejected | removed
   status: text("status").notNull().default("draft"),
   isFeatured: boolean("is_featured").notNull().default(false),
+  // Publishing fee: NGN 25,000 per app
+  publishingFeePaid: boolean("publishing_fee_paid").notNull().default(false),
+  publishingFeeRef: text("publishing_fee_ref"),
+  publishingFeeGateway: text("publishing_fee_gateway"),  // paystack | interswitch
+  publishingFeeAmountKobo: integer("publishing_fee_amount_kobo"),
   // Admin decision fields
   reviewedByClerkId: text("reviewed_by_clerk_id"),
   reviewedAt: timestamp("reviewed_at"),
@@ -31,7 +37,7 @@ export const storeAppsTable = pgTable("store_apps", {
   // AI analysis fields
   aiSummary: text("ai_summary"),
   aiCategory: text("ai_category"),
-  aiPolicyFlags: text("ai_policy_flags"),   // JSON array of flag strings, stored as text
+  aiPolicyFlags: text("ai_policy_flags"),
   aiReviewScore: real("ai_review_score"),
   aiReviewedAt: timestamp("ai_reviewed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
