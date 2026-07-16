@@ -9,7 +9,7 @@ import { logger } from "./logger";
 
 const ADMIN_EMAIL = "Lumgwunsolutions@gmail.com";
 
-export type SignupPlatform = "vendor-hub" | "mobile-app" | "app-store";
+export type SignupPlatform = "vendor-hub" | "mobile-app" | "app-store" | "app-store-user";
 
 interface SignupInfo {
   platform: SignupPlatform;
@@ -24,9 +24,10 @@ export function notifyAdminSignup(info: SignupInfo): void {
   void (async () => {
     try {
       const platformLabel: Record<SignupPlatform, string> = {
-        "vendor-hub": "Awa Biz Suite (Web)",
-        "mobile-app": "Awa Biz Suite (Mobile)",
-        "app-store": "Awajimaa App Store",
+        "vendor-hub":     "Awa Biz Suite (Web)",
+        "mobile-app":     "Awa Biz Suite (Mobile)",
+        "app-store":      "Awajimaa App Store (Developer)",
+        "app-store-user": "Awajimaa App Store (User)",
       };
 
       const label = platformLabel[info.platform];

@@ -3,6 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
 import { apiFetch } from "../lib/api";
 import type { App, AdminStats, Developer, UpdateRequest } from "../lib/types";
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell,
+} from "recharts";
 
 const STATUS_COLOR: Record<string, string> = {
   pending_payment: "#ffb300", pending_review: "#a78bfa",
@@ -21,7 +25,156 @@ const PLATFORM_ICON: Record<string, string> = {
   heroku: "🚂", netlify: "🌐", vercel: "▲", render: "🎨",
 };
 
-type Tab = "overview" | "pending" | "all" | "developers" | "updates";
+type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics";
+
+// ── Analytics tab ─────────────────────────────────────────────────────────────
+
+interface EventAnalytics {
+  period: number;
+  totalViews: number;
+  totalInstalls: number;
+  totalUninstalls: number;
+  totalNewUsers: number;
+  conversionRate: number;
+  viewsByCountry: { country: string; count: number }[];
+  installsByCountry: { country: string; count: number }[];
+  newUsersByCountry: { country: string; count: number }[];
+  topAppsByInstalls: { name: string; count: number }[];
+  topAppsByViews: { name: string; count: number }[];
+  daily: { date: string; views: number; installs: number; uninstalls: number; newUsers: number }[];
+}
+
+const COUNTRY_FLAG: Record<string, string> = {
+  NG: "🇳🇬", GH: "🇬🇭", KE: "🇰🇪", ZA: "🇿🇦", ET: "🇪🇹", TZ: "🇹🇿",
+  UG: "🇺🇬", RW: "🇷🇼", SN: "🇸🇳", CM: "🇨🇲", US: "🇺🇸", GB: "🇬🇧",
+  CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IN: "🇮🇳",
+};
+
+function AnalyticsTab() {
+  const [data, setData] = useState<EventAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(30);
+
+  useEffect(() => {
+    setLoading(true);
+    apiFetch<EventAnalytics>(`/admin/event-analytics?days=${days}`)
+      .then(setData).catch(() => {}).finally(() => setLoading(false));
+  }, [days]);
+
+  if (loading) return <div style={{ textAlign: "center", padding: 60 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>;
+  if (!data) return <div style={{ color: "#8892a4", padding: 40 }}>No data yet.</div>;
+
+  const kpis = [
+    { icon: "👁️",  label: "Page Views",      value: data.totalViews.toLocaleString(),     color: "#a78bfa" },
+    { icon: "📥",  label: "Installs",         value: data.totalInstalls.toLocaleString(),  color: "#00c853" },
+    { icon: "🗑️",  label: "Uninstalls",       value: data.totalUninstalls.toLocaleString(), color: "#ff5252" },
+    { icon: "🙋",  label: "New Users",        value: data.totalNewUsers.toLocaleString(),  color: "#ffb300" },
+    { icon: "🔄",  label: "Conversion Rate",  value: `${data.conversionRate}%`,             color: "#38bdf8" },
+  ];
+
+  const section = (title: string) => (
+    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14, marginTop: 28 }}>{title}</div>
+  );
+
+  return (
+    <div>
+      {/* Period selector */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[7, 14, 30, 90].map(d => (
+          <button key={d} onClick={() => setDays(d)}
+            style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${days === d ? "#00c853" : "rgba(255,255,255,0.1)"}`,
+              background: days === d ? "rgba(0,200,83,0.1)" : "transparent",
+              color: days === d ? "#00c853" : "#8892a4" }}>
+            {d}d
+          </button>
+        ))}
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+        {kpis.map(k => (
+          <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+            <div style={{ fontSize: 22, marginBottom: 8 }}>{k.icon}</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: k.color }}>{k.value}</div>
+            <div style={{ fontSize: 12, color: "#8892a4" }}>{k.label}</div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Activity trend */}
+      {section("📈 Daily Activity")}
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={data.daily} margin={{ left: -20, right: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+            <XAxis dataKey="date" tick={{ fill: "#8892a4", fontSize: 10 }} tickFormatter={d => d.slice(5)} />
+            <YAxis tick={{ fill: "#8892a4", fontSize: 10 }} />
+            <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#e8eaf0" }} />
+            <Line type="monotone" dataKey="views"     stroke="#a78bfa" strokeWidth={2} dot={false} name="Views" />
+            <Line type="monotone" dataKey="installs"  stroke="#00c853" strokeWidth={2} dot={false} name="Installs" />
+            <Line type="monotone" dataKey="uninstalls" stroke="#ff5252" strokeWidth={2} dot={false} name="Uninstalls" />
+            <Line type="monotone" dataKey="newUsers"  stroke="#ffb300" strokeWidth={2} dot={false} name="New Users" />
+          </LineChart>
+        </ResponsiveContainer>
+        <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
+          {[["#a78bfa","Views"],["#00c853","Installs"],["#ff5252","Uninstalls"],["#ffb300","New Users"]].map(([color,label]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#8892a4" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />{label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Top apps */}
+      {section("🏆 Top Apps by Installs")}
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={data.topAppsByInstalls} margin={{ left: -20, right: 8 }} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#8892a4", fontSize: 10 }} />
+            <YAxis type="category" dataKey="name" tick={{ fill: "#8892a4", fontSize: 11 }} width={120} />
+            <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }} />
+            <Bar dataKey="count" name="Installs" radius={[0,6,6,0]}>
+              {data.topAppsByInstalls.map((_, i) => (
+                <Cell key={i} fill={i === 0 ? "#00c853" : i === 1 ? "#38bdf8" : "#a78bfa"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Countries */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 28 }}>
+        {[
+          { title: "📥 Installs by Country", items: data.installsByCountry },
+          { title: "🙋 New Users by Country", items: data.newUsersByCountry },
+        ].map(({ title, items }) => (
+          <div key={title} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>{title}</div>
+            {items.length === 0 ? (
+              <div style={{ color: "#8892a4", fontSize: 13 }}>No data yet</div>
+            ) : items.slice(0, 8).map(({ country, count }) => {
+              const max = items[0]!.count;
+              return (
+                <div key={country} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                    <span>{COUNTRY_FLAG[country] ?? "🌍"} {country}</span>
+                    <span style={{ color: "#8892a4" }}>{count}</span>
+                  </div>
+                  <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 5 }}>
+                    <div style={{ background: "#00c853", borderRadius: 4, height: 5, width: `${(count / max) * 100}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function cell(extra?: React.CSSProperties): React.CSSProperties {
   return { padding: "12px 14px", fontSize: 13, color: "#e8eaf0", ...extra };
@@ -245,6 +398,7 @@ export default function Admin() {
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "overview",   label: "📊 Overview" },
+    { id: "analytics",  label: "📈 Analytics" },
     { id: "pending",    label: `🔍 Pending (${pending.length})` },
     { id: "all",        label: "📱 All Apps" },
     { id: "developers", label: "👥 Developers" },
@@ -282,6 +436,9 @@ export default function Admin() {
           <StatCard icon="📥" label="Total Downloads" value={(stats.totalDownloads ?? 0).toLocaleString()} />
         </div>
       )}
+
+      {/* Analytics */}
+      {tab === "analytics" && <AnalyticsTab />}
 
       {/* Pending review */}
       {tab === "pending" && (

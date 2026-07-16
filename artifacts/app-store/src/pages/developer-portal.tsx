@@ -734,6 +734,130 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit }: {
           )}
         </div>
       )}
+
+      {/* Per-app engagement stats */}
+      {apps.filter(a => a.status === "approved").length > 0 && (
+        <AppEngagementStats apps={apps.filter(a => a.status === "approved")} />
+      )}
+    </div>
+  );
+}
+
+// ── AppEngagementStats ────────────────────────────────────────────────────────
+
+interface AppStats {
+  totalViews: number;
+  totalInstalls: number;
+  totalUninstalls: number;
+  conversionRate: number;
+  viewsByCountry: { country: string; count: number }[];
+  installsByCountry: { country: string; count: number }[];
+  daily: { date: string; views: number; installs: number; uninstalls: number }[];
+}
+
+const COUNTRY_FLAG: Record<string, string> = {
+  NG:"🇳🇬",GH:"🇬🇭",KE:"🇰🇪",ZA:"🇿🇦",ET:"🇪🇹",TZ:"🇹🇿",
+  UG:"🇺🇬",RW:"🇷🇼",SN:"🇸🇳",CM:"🇨🇲",US:"🇺🇸",GB:"🇬🇧",
+};
+
+function AppEngagementStats({ apps }: { apps: App[] }) {
+  const [selected, setSelected] = useState(apps[0]?.slug ?? "");
+  const [stats, setStats] = useState<AppStats | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selected) return;
+    setLoading(true);
+    apiFetch<AppStats>(`/apps/${selected}/stats`)
+      .then(setStats).catch(() => setStats(null)).finally(() => setLoading(false));
+  }, [selected]);
+
+  const app = apps.find(a => a.slug === selected);
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>📊 Engagement Analytics</div>
+
+      {/* App selector */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+        {apps.map(a => (
+          <button key={a.slug} onClick={() => setSelected(a.slug)}
+            style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${selected === a.slug ? "#00c853" : "rgba(255,255,255,0.1)"}`,
+              background: selected === a.slug ? "rgba(0,200,83,0.1)" : "transparent",
+              color: selected === a.slug ? "#00c853" : "#8892a4" }}>
+            {a.name}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>}
+
+      {!loading && stats && (
+        <div>
+          {/* KPI row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
+            {[
+              { icon: "👁️", label: "Views",       value: stats.totalViews.toLocaleString(),       color: "#a78bfa" },
+              { icon: "📥", label: "Installs",    value: stats.totalInstalls.toLocaleString(),    color: "#00c853" },
+              { icon: "🗑️", label: "Uninstalls",  value: stats.totalUninstalls.toLocaleString(),  color: "#ff5252" },
+              { icon: "🔄", label: "Conversion",  value: `${stats.conversionRate}%`,               color: "#38bdf8" },
+            ].map(k => (
+              <div key={k.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 20, marginBottom: 6 }}>{k.icon}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: k.color }}>{k.value}</div>
+                <div style={{ fontSize: 11, color: "#8892a4" }}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 30-day trend */}
+          {stats.daily.length > 0 && (
+            <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18, marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: "#c0c8d8" }}>📈 30-day Trend — {app?.name}</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={stats.daily} margin={{ left: -20, right: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="date" tick={{ fill: "#8892a4", fontSize: 9 }} tickFormatter={d => d.slice(5)} />
+                  <YAxis allowDecimals={false} tick={{ fill: "#8892a4", fontSize: 10 }} />
+                  <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#e8eaf0" }} />
+                  <Bar dataKey="views"    name="Views"     stackId="a" fill="#a78bfa" radius={[0,0,0,0]} />
+                  <Bar dataKey="installs" name="Installs"  stackId="b" fill="#00c853" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Countries */}
+          {stats.viewsByCountry.length > 0 && (
+            <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: "#c0c8d8" }}>🌍 Views by Country</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {stats.viewsByCountry.slice(0, 6).map(({ country, count }) => {
+                  const max = stats.viewsByCountry[0]!.count;
+                  return (
+                    <div key={country}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                        <span>{COUNTRY_FLAG[country] ?? "🌍"} {country}</span>
+                        <span style={{ color: "#8892a4" }}>{count}</span>
+                      </div>
+                      <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 5 }}>
+                        <div style={{ background: "#a78bfa", borderRadius: 4, height: 5, width: `${(count / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && !stats && (
+        <div style={{ color: "#8892a4", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+          No engagement data yet — it appears once users view or install your app.
+        </div>
+      )}
     </div>
   );
 }

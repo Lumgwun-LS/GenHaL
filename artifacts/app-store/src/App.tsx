@@ -1,7 +1,8 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { trackPageView } from "./lib/analytics";
-import { ClerkProvider } from "@clerk/react";
+import { ClerkProvider, useUser } from "@clerk/react";
+import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
 import Home from "./pages/home";
 import Search from "./pages/search";
@@ -16,6 +17,25 @@ function PageViewTracker() {
   return null;
 }
 
+/** Fires once per authenticated session to register first-time users. */
+function UserTracker() {
+  const { isSignedIn, user } = useUser();
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!isSignedIn || fired.current) return;
+    fired.current = true;
+    apiFetch("/users/track", {
+      method: "POST",
+      body: JSON.stringify({
+        email: user?.primaryEmailAddress?.emailAddress,
+        displayName: user?.fullName ?? user?.firstName,
+        country: Intl.DateTimeFormat().resolvedOptions().timeZone?.startsWith("Africa") ? "NG" : undefined,
+      }),
+    }).catch(() => {});
+  }, [isSignedIn, user]);
+  return null;
+}
+
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -25,6 +45,7 @@ export default function App() {
       <WouterRouter base={basePath}>
         <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
           <PageViewTracker />
+          <UserTracker />
           <Nav />
           <Switch>
             <Route path="/" component={Home} />

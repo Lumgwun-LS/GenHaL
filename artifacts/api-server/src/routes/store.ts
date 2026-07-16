@@ -8,8 +8,31 @@ import {
   storeLinkedAccountsTable,
   storeAppRepoLinksTable,
   storeAppUpdateRequestsTable,
+  storeAppEventsTable,
+  storeUserSignupsTable,
 } from "@workspace/db";
-import { eq, desc, asc, ilike, and, sql, or } from "drizzle-orm";
+import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
+
+/** Best-effort country extraction from request headers (Cloudflare / Replit proxy). */
+function extractCountry(req: import("express").Request): string | null {
+  return (
+    (req.headers["cf-ipcountry"] as string | undefined) ??
+    (req.headers["x-country-code"] as string | undefined) ??
+    null
+  );
+}
+
+/** Fire-and-forget event insert — never blocks the response. */
+function logAppEvent(appId: number, eventType: string, req: import("express").Request, extra?: { clerkUserId?: string; sessionId?: string }) {
+  db.insert(storeAppEventsTable).values({
+    appId,
+    eventType,
+    sessionId: extra?.sessionId ?? null,
+    clerkUserId: extra?.clerkUserId ?? null,
+    country: extractCountry(req),
+    userAgent: (req.headers["user-agent"] ?? "").slice(0, 512) || null,
+  }).catch(() => {});
+}
 import { requireAuth, getAuth } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { notifyAdminSignup } from "../lib/signup-notify";
@@ -340,7 +363,7 @@ router.get("/apps/:slug", async (req, res) => {
   }
 });
 
-// POST /store/apps/:slug/download — increment counter + return download URL
+// POST /store/apps/:slug/download — increment counter, log install event, return URL
 router.post("/apps/:slug/download", async (req, res) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
@@ -348,9 +371,158 @@ router.post("/apps/:slug/download", async (req, res) => {
     });
     if (!app) return void res.status(404).json({ error: "App not found" });
     await db.update(storeAppsTable).set({ totalDownloads: app.totalDownloads + 1 }).where(eq(storeAppsTable.id, app.id));
+    const authData = getAuth(req);
+    logAppEvent(app.id, "install", req, { clerkUserId: authData.userId ?? undefined, sessionId: req.body?.sessionId });
     res.json({ downloadUrl: app.downloadUrl ?? "", webUrl: app.webUrl ?? null });
   } catch (err) {
     logger.error({ err }, "downloadApp error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/apps/:slug/event — public beacon: "view" on page load, "uninstall" when reported
+router.post("/apps/:slug/event", async (req, res) => {
+  try {
+    const { eventType, sessionId } = req.body ?? {};
+    if (!["view", "uninstall"].includes(eventType)) return void res.status(400).json({ error: "eventType must be view or uninstall" });
+    const app = await db.query.storeAppsTable.findFirst({
+      where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+    const authData = getAuth(req);
+    logAppEvent(app.id, eventType, req, { clerkUserId: authData.userId ?? undefined, sessionId });
+    res.status(204).end();
+  } catch (err) {
+    logger.error({ err }, "logAppEvent error");
+    res.status(204).end(); // never fail the caller
+  }
+});
+
+// POST /store/users/track — called once per Clerk session; records first-time users + notifies admin
+router.post("/users/track", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const { email, displayName, country } = req.body ?? {};
+    // INSERT … ON CONFLICT DO NOTHING — idempotent
+    const result = await db.insert(storeUserSignupsTable)
+      .values({ clerkUserId: userId!, email: email ?? null, displayName: displayName ?? null, country: country ?? extractCountry(req) })
+      .onConflictDoNothing()
+      .returning();
+    if (result.length > 0) {
+      // Genuinely new user — fire admin email
+      notifyAdminSignup({ platform: "app-store-user", name: displayName ?? "App Store User", email: email ?? undefined, country: country ?? undefined });
+    }
+    res.status(204).end();
+  } catch (err) {
+    logger.error({ err }, "trackStoreUser error");
+    res.status(204).end();
+  }
+});
+
+// GET /store/apps/:slug/stats — developer-only per-app event stats
+router.get("/apps/:slug/stats", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
+    if (!dev || (dev.id !== app.developerId && !isAdmin(req))) return void res.status(403).json({ error: "Forbidden" });
+
+    const events = await db.select().from(storeAppEventsTable).where(eq(storeAppEventsTable.appId, app.id));
+    const byType = (t: string) => events.filter(e => e.eventType === t);
+    const countByCountry = (evts: typeof events) => {
+      const m: Record<string, number> = {};
+      evts.forEach(e => { const c = e.country ?? "Unknown"; m[c] = (m[c] ?? 0) + 1; });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([country, count]) => ({ country, count }));
+    };
+    const views = byType("view"), installs = byType("install"), uninstalls = byType("uninstall");
+    const conversionRate = views.length > 0 ? +(installs.length / views.length * 100).toFixed(1) : 0;
+
+    // Last 30 days daily breakdown
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 29);
+    const recentEvents = events.filter(e => new Date(e.createdAt) >= cutoff);
+    const byDay: Record<string, { views: number; installs: number; uninstalls: number }> = {};
+    recentEvents.forEach(e => {
+      const day = e.createdAt.toISOString().slice(0, 10);
+      if (!byDay[day]) byDay[day] = { views: 0, installs: 0, uninstalls: 0 };
+      if (e.eventType === "view") byDay[day]!.views++;
+      if (e.eventType === "install") byDay[day]!.installs++;
+      if (e.eventType === "uninstall") byDay[day]!.uninstalls++;
+    });
+
+    res.json({
+      totalViews: views.length,
+      totalInstalls: app.totalDownloads,
+      totalUninstalls: uninstalls.length,
+      conversionRate,
+      viewsByCountry: countByCountry(views),
+      installsByCountry: countByCountry(installs),
+      daily: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d })),
+    });
+  } catch (err) {
+    logger.error({ err }, "appStats error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/admin/event-analytics — admin overview of all store events
+router.get("/admin/event-analytics", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const days = parseInt(String(req.query.days ?? "30"), 10) || 30;
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+
+    const [events, newUsers, apps] = await Promise.all([
+      db.select().from(storeAppEventsTable).where(gte(storeAppEventsTable.createdAt, cutoff)),
+      db.select().from(storeUserSignupsTable).where(gte(storeUserSignupsTable.createdAt, cutoff)),
+      db.select({ id: storeAppsTable.id, name: storeAppsTable.name, totalDownloads: storeAppsTable.totalDownloads }).from(storeAppsTable),
+    ]);
+
+    const byType = (t: string) => events.filter(e => e.eventType === t);
+    const views = byType("view"), installs = byType("install"), uninstalls = byType("uninstall");
+
+    const countByCountry = (evts: typeof events) => {
+      const m: Record<string, number> = {};
+      evts.forEach(e => { const c = e.country ?? "Unknown"; m[c] = (m[c] ?? 0) + 1; });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([country, count]) => ({ country, count }));
+    };
+
+    const byDay: Record<string, { views: number; installs: number; uninstalls: number; newUsers: number }> = {};
+    const addDay = (day: string) => { if (!byDay[day]) byDay[day] = { views: 0, installs: 0, uninstalls: 0, newUsers: 0 }; };
+    events.forEach(e => {
+      const day = e.createdAt.toISOString().slice(0, 10); addDay(day);
+      if (e.eventType === "view") byDay[day]!.views++;
+      if (e.eventType === "install") byDay[day]!.installs++;
+      if (e.eventType === "uninstall") byDay[day]!.uninstalls++;
+    });
+    newUsers.forEach(u => {
+      const day = u.createdAt.toISOString().slice(0, 10); addDay(day);
+      byDay[day]!.newUsers++;
+    });
+
+    const appIdMap: Record<number, string> = {};
+    apps.forEach(a => { appIdMap[a.id] = a.name; });
+    const installsByApp: Record<string, number> = {};
+    installs.forEach(e => { const n = appIdMap[e.appId] ?? "Unknown"; installsByApp[n] = (installsByApp[n] ?? 0) + 1; });
+    const viewsByApp: Record<string, number> = {};
+    views.forEach(e => { const n = appIdMap[e.appId] ?? "Unknown"; viewsByApp[n] = (viewsByApp[n] ?? 0) + 1; });
+
+    res.json({
+      period: days,
+      totalViews: views.length,
+      totalInstalls: installs.length,
+      totalUninstalls: uninstalls.length,
+      totalNewUsers: newUsers.length,
+      conversionRate: views.length > 0 ? +(installs.length / views.length * 100).toFixed(1) : 0,
+      viewsByCountry: countByCountry(views),
+      installsByCountry: countByCountry(installs),
+      newUsersByCountry: countByCountry(newUsers.map(u => ({ ...u, eventType: "signup", appId: 0, sessionId: null, clerkUserId: u.clerkUserId, userAgent: null }))),
+      topAppsByInstalls: Object.entries(installsByApp).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      topAppsByViews: Object.entries(viewsByApp).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      daily: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d })),
+    });
+  } catch (err) {
+    logger.error({ err }, "eventAnalytics error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -1,8 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "wouter";
 import { useUser, SignInButton } from "@clerk/react";
 import { apiFetch } from "../lib/api";
 import type { App, Review, AppVersion } from "../lib/types";
+
+/** Session ID stored in sessionStorage so we don't repeat on tab reopen. */
+function getSessionId(): string {
+  const key = "awa_sid";
+  let sid = sessionStorage.getItem(key);
+  if (!sid) { sid = Math.random().toString(36).slice(2); sessionStorage.setItem(key, sid); }
+  return sid;
+}
+
+/** Fire-and-forget event beacon. */
+function fireEvent(slug: string, eventType: "view" | "uninstall") {
+  navigator.sendBeacon
+    ? navigator.sendBeacon(`${import.meta.env.BASE_URL}api/store/apps/${slug}/event`, new Blob([JSON.stringify({ eventType, sessionId: getSessionId() })], { type: "application/json" }))
+    : apiFetch(`/apps/${slug}/event`, { method: "POST", body: JSON.stringify({ eventType, sessionId: getSessionId() }) }).catch(() => {});
+}
 
 function Stars({ rating, interactive = false, onRate }: { rating: number; interactive?: boolean; onRate?: (r: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -37,6 +52,8 @@ export default function AppDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
 
+  const viewFired = useRef(false);
+
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
@@ -48,6 +65,8 @@ export default function AppDetail() {
       setApp(a);
       setReviews(r ?? []);
       setVersions(v ?? []);
+      // Fire view event once per page load
+      if (!viewFired.current) { viewFired.current = true; fireEvent(slug, "view"); }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [slug]);
 
@@ -58,6 +77,11 @@ export default function AppDetail() {
       const target = downloadUrl || webUrl;
       if (target) window.open(target, "_blank");
     } catch {}
+  }
+
+  function handleUninstall() {
+    if (!app || !confirm(`Report that you've uninstalled "${app.name}"? This helps developers track retention.`)) return;
+    fireEvent(slug!, "uninstall");
   }
 
   async function submitReview() {
@@ -126,6 +150,9 @@ export default function AppDetail() {
             {app.webUrl && app.platform !== "web" && (
               <a href={app.webUrl} target="_blank" rel="noreferrer" className="btn-outline" style={{ fontSize: 14 }}>🌐 Open Web Version</a>
             )}
+            <button onClick={handleUninstall} style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "#8892a4", fontSize: 12, cursor: "pointer" }} title="Report that you uninstalled this app">
+              🗑 Report Uninstall
+            </button>
           </div>
         </div>
       </div>
