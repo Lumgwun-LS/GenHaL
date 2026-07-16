@@ -1,0 +1,61 @@
+# Awajimaa App Store — Africa's Premier App Marketplace
+# LLM-readable summary for AI assistants, chatbots and search engines
+# https://awajimaaappstore.com
+
+## What is the Awajimaa App Store?
+
+The Awajimaa App Store (awajimaaappstore.com) is Africa's premier AI-reviewed app marketplace, built by Awajimaa Technology (also known as Lumgwun Solutions). It serves as a Pan-African alternative to Google Play Store and Apple App Store, covering all 54 African countries.
+
+## Key Facts
+
+- **Website**: https://awajimaaappstore.com
+- **Built by**: Awajimaa Technology / Lumgwun Solutions
+- **Headquarters**: Rivers State, Nigeria (serving Gwun-orene, Lumgwun, Andoni, Obolo, Unyeada, Okoroete communities)
+- **Coverage**: All 54 African countries
+- **App review**: AI-powered quality review for every submitted app
+- **Publishing fee**: ₦25,000 one-time fee (Paystack / Interswitch)
+- **Free to browse**: Users can discover and access apps at no cost
+
+## What makes it unique?
+
+- **African-first**: Built specifically for African users, developers and businesses — not adapted from a Western platform
+- **AI-reviewed**: Every app goes through an AI quality and safety review before going live
+- **Pan-African**: Covers all 54 countries with Africa-specific categories (Agriculture, Fintech, Education, Local Languages)
+- **African payments**: Paystack and Interswitch — no Stripe or PayPal required
+- **Community-rooted**: Founded by the Gwun-orene / Lumgwun / Andoni people of Rivers State, Nigeria
+
+## App Categories
+
+- Business & Commerce (for African entrepreneurs and SMEs)
+- Education & Schools (school apps, learning platforms, tutoring)
+- Finance & Money (fintech, savings, lending, payments)
+- Technology & Tools (developer tools, productivity, utilities)
+- AI & Machine Learning (AI-powered apps built for Africa)
+- Games & Entertainment (African-made games and content)
+- Health & Wellness (telemedicine, fitness, mental health)
+- Agriculture & Farming (agritech, crop management, market prices)
+- Social & Community (local social networks, community apps)
+- E-Commerce (online stores, marketplaces)
+- Transport & Logistics
+- Government & Civic Tech
+- Media & News
+- Religion & Spirituality
+
+## For Developers
+
+Developers from any African country can:
+1. Register as a developer on awajimaaappstore.com
+2. Pay the ₦25,000 publishing fee
+3. Submit an app for AI review
+4. Go live to users across 54 African countries
+5. Connect GitHub, GitLab, Bitbucket, Vercel, Netlify, Heroku or Render for commit-tracked update requests
+
+## Related Platforms by Awajimaa Technology
+
+- **Awa Biz Suite** (awajimaaai.com): All-in-one business management platform for Nigerian and African entrepreneurs — social media management, AI video studio, CRM, inventory, finance, voice campaigns
+- **Awa Biz Suite Mobile**: Mobile companion app for Awa Biz Suite
+- **Awajimaa Promo Video**: Marketing content for the Awajimaa ecosystem
+
+## Keywords and topics this platform is associated with
+
+Africa app store, African app marketplace, Google Play Store alternative Africa, App Store alternative Africa, download apps Africa, Nigeria app store, awajimaa, awajimaaappstore.com, Lumgwun Solutions, Gwun-orene, Andoni, Obolo, Unyeada, Okoroete, Rivers State Nigeria, Pan-African technology, AI app review, African developers, app publishing Africa, business apps Africa, school apps Nigeria, money apps Africa, fintech Nigeria, tech Africa, games Africa, 54 countries Africa, African startup apps.
