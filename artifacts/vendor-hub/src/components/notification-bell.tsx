@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import { Bell, Cake, TrendingUp, Info, PhoneCall, Link2Off, ShieldCheck, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useListVendors } from "@workspace/api-client-react";
+import { useListVendors, useMarkVendorNotificationRead } from "@workspace/api-client-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -48,13 +48,17 @@ export function NotificationBell() {
 
   const unreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
 
-  async function markAsRead(notificationId: number) {
+  const { mutate: markRead } = useMarkVendorNotificationRead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ["vendor-notifications", vendorId] });
+      },
+    },
+  });
+
+  function markAsRead(notificationId: number) {
     if (!vendorId) return;
-    await fetch(`${BASE_URL}/api/vendors/${vendorId}/notifications/${notificationId}/read`, {
-      method: "PATCH",
-      credentials: "include",
-    });
-    qc.invalidateQueries({ queryKey: ["vendor-notifications", vendorId] });
+    markRead({ id: vendorId, nid: notificationId });
   }
 
   if (!vendorId) return null;

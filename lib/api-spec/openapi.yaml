@@ -2284,6 +2284,37 @@ paths:
         "404":
           description: Vendor not found
 
+  /vendors/{id}/notifications/{nid}/read:
+    patch:
+      operationId: markVendorNotificationRead
+      tags: [vendors]
+      summary: Mark a notification as read
+      description: >
+        Sets readAt to the current timestamp on the given notification.
+        Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: nid
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated notification with readAt set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorNotification"
+        "403":
+          description: Forbidden — not this vendor's owner and not an admin
+        "404":
+          description: Vendor or notification not found
+
   /vendors/notifications/bulk:
     post:
       operationId: createBulkVendorNotifications

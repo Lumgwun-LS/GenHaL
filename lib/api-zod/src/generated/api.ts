@@ -2818,6 +2818,29 @@ export const CreateVendorNotificationResponse = zod.object({
 
 
 /**
+ * Sets readAt to the current timestamp on the given notification. Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+ * @summary Mark a notification as read
+ */
+export const MarkVendorNotificationReadParams = zod.object({
+  "id": zod.coerce.number(),
+  "nid": zod.coerce.number()
+})
+
+export const MarkVendorNotificationReadResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string().describe('\"birthday\" | \"tier_change\" | \"verification_change\" | \"general\"'),
+  "message": zod.string(),
+  "adminUserId": zod.string().nullish(),
+  "adminDisplayName": zod.string().nullish(),
+  "previousTier": zod.string().nullish(),
+  "newTier": zod.string().nullish(),
+  "readAt": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * Targets either an explicit `vendorIds` list or, when `all` is true, every vendor. The in-app notification is always created; the announcement email is best-effort and does not block or fail the request if delivery to some vendors fails.
  * @summary Admin sends a custom in-app + email message to several vendors at once
  */

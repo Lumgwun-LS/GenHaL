@@ -7883,6 +7883,79 @@ export const useCreateVendorNotification = <TError = ErrorType<void>,
       return useMutation(getCreateVendorNotificationMutationOptions(options));
     }
 
+export const getMarkVendorNotificationReadUrl = (id: number,
+    nid: number,) => {
+
+
+
+
+  return `/api/vendors/${id}/notifications/${nid}/read`
+}
+
+/**
+ * Sets readAt to the current timestamp on the given notification. Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+ * @summary Mark a notification as read
+ */
+export const markVendorNotificationRead = async (id: number,
+    nid: number, options?: RequestInit): Promise<VendorNotification> => {
+
+  return customFetch<VendorNotification>(getMarkVendorNotificationReadUrl(id,nid),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+export const getMarkVendorNotificationReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markVendorNotificationRead>>, TError,{id: number;nid: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markVendorNotificationRead>>, TError,{id: number;nid: number}, TContext> => {
+
+const mutationKey = ['markVendorNotificationRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markVendorNotificationRead>>, {id: number;nid: number}> = (props) => {
+          const {id,nid} = props ?? {};
+
+          return  markVendorNotificationRead(id,nid,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkVendorNotificationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markVendorNotificationRead>>>
+
+    export type MarkVendorNotificationReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark a notification as read
+ */
+export const useMarkVendorNotificationRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markVendorNotificationRead>>, TError,{id: number;nid: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markVendorNotificationRead>>,
+        TError,
+        {id: number;nid: number},
+        TContext
+      > => {
+      return useMutation(getMarkVendorNotificationReadMutationOptions(options));
+    }
+
 export const getCreateBulkVendorNotificationsUrl = () => {
 
 
