@@ -20,8 +20,8 @@ export const SCENE_DURATIONS = {
   scene3: 5500,
   scene4: 5500,
   scene5: 7500,
-  scene6: 11000,
   scene8: 8000,
+  scene6: 11000,
   scene7: 5000,
 };
 
@@ -32,8 +32,8 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene3: Scene3,
   scene4: Scene4,
   scene5: Scene5,
-  scene6: Scene6,
   scene8: Scene8,
+  scene6: Scene6,
   scene7: Scene7,
 };
 
