@@ -237,4 +237,84 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
   });
 });
 
+// ─── POST /vendors/notifications/bulk/retry-emails ────────────────────────────
+// Re-sends the announcement email to a specific set of vendors (no new in-app
+// notification). Only intended for vendors whose email delivery previously failed
+// with a transient error (reason="send_failed"). opted_out and no_email vendors
+// are silently skipped so the caller can pass the full failure list without filtering.
+
+router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!message) { res.status(400).json({ error: "Message is required" }); return; }
+  if (message.length > 1000) { res.status(400).json({ error: "Message is too long" }); return; }
+
+  const rawIds = Array.isArray(req.body?.vendorIds) ? req.body.vendorIds : [];
+  const vendorIds: number[] = Array.from(
+    new Set(rawIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isInteger(n) && n > 0)),
+  );
+  if (vendorIds.length === 0) { res.status(400).json({ error: "Select at least one vendor" }); return; }
+
+  const targetVendors = await db
+    .select({
+      id: vendorsTable.id,
+      name: vendorsTable.name,
+      email: vendorsTable.email,
+      announcementEmailOptOut: vendorsTable.announcementEmailOptOut,
+    })
+    .from(vendorsTable)
+    .where(inArray(vendorsTable.id, vendorIds));
+
+  if (targetVendors.length === 0) { res.status(404).json({ error: "No matching vendors found" }); return; }
+
+  // Skip opted-out and no-email vendors — only attempt those who can actually receive email.
+  type EmailFailure = { vendorId: number; vendorName: string; reason: "opted_out" | "no_email" | "send_failed" };
+  const skipped: EmailFailure[] = [];
+  const eligible = targetVendors.filter((v) => {
+    if (v.announcementEmailOptOut) {
+      skipped.push({ vendorId: v.id, vendorName: v.name, reason: "opted_out" });
+      return false;
+    }
+    if (!v.email) {
+      skipped.push({ vendorId: v.id, vendorName: v.name, reason: "no_email" });
+      return false;
+    }
+    return true;
+  });
+
+  let succeeded = 0;
+  const newFailures: EmailFailure[] = [];
+
+  await Promise.all(
+    eligible.map(async (v) => {
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from VendorHub</h1>
+          <p style="font-size: 14px; line-height: 1.6; color: #444;">Hi ${escapeHtml(v.name)},</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #444; white-space: pre-wrap;">${escapeHtml(message)}</p>
+        `,
+      });
+      const result = await sendEmail({
+        to: v.email!,
+        subject: "Announcement from VendorHub",
+        html,
+      });
+      if (result.status === "sent") {
+        succeeded += 1;
+      } else {
+        newFailures.push({ vendorId: v.id, vendorName: v.name, reason: "send_failed" });
+      }
+    }),
+  );
+
+  res.json({
+    retried: eligible.length,
+    succeeded,
+    failures: [...skipped, ...newFailures],
+  });
+});
+
 export default router;

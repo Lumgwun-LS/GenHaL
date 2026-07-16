@@ -1277,6 +1277,23 @@ function emailFailureReasonLabel(reason: BulkEmailFailure["reason"]): string {
   }
 }
 
+async function retryBulkAnnouncementEmails(
+  message: string,
+  vendorIds: number[],
+): Promise<{ retried: number; succeeded: number; failures: BulkEmailFailure[] }> {
+  const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk/retry-emails`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ message, vendorIds }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to retry emails");
+  }
+  return res.json() as Promise<{ retried: number; succeeded: number; failures: BulkEmailFailure[] }>;
+}
+
 function BulkMessageDialog({
   selectedIds,
   allSelected,
@@ -1298,7 +1315,10 @@ function BulkMessageDialog({
     emailsSent: number;
     emailAttempted: number;
     failures: BulkEmailFailure[];
+    /** The message text used for the original send, kept for email retry */
+    sentMessage: string;
   } | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const { mutateAsync: sendBulkMessage, isPending: sending } = useCreateBulkVendorNotifications();
 
   const recipientCount = allSelected ? totalVendors : selectedIds.length;
@@ -1321,18 +1341,50 @@ function BulkMessageDialog({
         `Message sent to ${sent} vendor${sent === 1 ? "" : "s"}` +
           (emailsSent > 0 ? ` — email also sent to ${emailsSent} of them` : " (email not sent — SMTP isn't configured)"),
       );
+      const sentMessage = trimmed;
       setMessage("");
       qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
       onSent();
       if (failures.length > 0) {
         // Keep the dialog open so the admin can see exactly who to follow up with.
-        setLastResult({ sent, emailsSent, emailAttempted, failures });
+        setLastResult({ sent, emailsSent, emailAttempted, failures, sentMessage });
       } else {
         setLastResult(null);
         setOpen(false);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send message");
+    }
+  }
+
+  async function handleRetryEmails() {
+    if (!lastResult) return;
+    const retryIds = lastResult.failures
+      .filter((f) => f.reason === "send_failed")
+      .map((f) => f.vendorId);
+    if (retryIds.length === 0) return;
+    setRetrying(true);
+    try {
+      const result = await retryBulkAnnouncementEmails(lastResult.sentMessage, retryIds);
+      const recovered = result.succeeded;
+      toast.success(
+        recovered > 0
+          ? `Email delivered to ${recovered} vendor${recovered === 1 ? "" : "s"}.`
+          : "Retry completed — emails still couldn't be delivered.",
+      );
+      // Replace the old send_failed entries with the new failure set from the retry.
+      const nonRetryable = lastResult.failures.filter((f) => f.reason !== "send_failed");
+      const remaining = [...nonRetryable, ...result.failures.filter((f) => f.reason === "send_failed")];
+      if (remaining.length === 0) {
+        setLastResult(null);
+        setOpen(false);
+      } else {
+        setLastResult({ ...lastResult, failures: remaining });
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to retry emails");
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -1379,14 +1431,23 @@ function BulkMessageDialog({
                   data-testid={`row-bulk-message-email-failure-${f.vendorId}`}
                 >
                   <span className="font-medium truncate">{f.vendorName}</span>
-                  <Badge variant="secondary" className="shrink-0">
+                  <Badge
+                    variant={f.reason === "send_failed" ? "destructive" : "secondary"}
+                    className="shrink-0"
+                  >
                     {emailFailureReasonLabel(f.reason)}
                   </Badge>
                 </li>
               ))}
             </ul>
-            <DialogFooter>
+            {lastResult.failures.some((f) => f.reason === "send_failed") && (
+              <p className="text-xs text-muted-foreground">
+                Vendors marked <span className="font-medium text-destructive">Email failed to send</span> may have been affected by a transient SMTP error — you can retry delivery for just those vendors below.
+              </p>
+            )}
+            <DialogFooter className="gap-2 sm:gap-0">
               <Button
+                variant="outline"
                 onClick={() => {
                   setLastResult(null);
                   setOpen(false);
@@ -1395,6 +1456,18 @@ function BulkMessageDialog({
               >
                 Done
               </Button>
+              {lastResult.failures.some((f) => f.reason === "send_failed") && (
+                <Button
+                  onClick={handleRetryEmails}
+                  disabled={retrying}
+                  data-testid="button-retry-bulk-message-emails"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  {retrying
+                    ? "Retrying…"
+                    : `Retry ${lastResult.failures.filter((f) => f.reason === "send_failed").length} failed email${lastResult.failures.filter((f) => f.reason === "send_failed").length === 1 ? "" : "s"}`}
+                </Button>
+              )}
             </DialogFooter>
           </>
         ) : (
