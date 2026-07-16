@@ -95,10 +95,12 @@ async function resolveProviderAvailability(
 ): Promise<{ available: PostLinkProvider[]; unavailable: UnavailableProvider[] }> {
   const enabled = enabledProviders(vendor);
   const results = await Promise.all(enabled.map((p) => getPaymentMethodAvailability(p, vendorId, vendor)));
-  const available = results.filter((r) => r.available).map((r) => r.provider);
+  // getPaymentMethodAvailability returns GatewayProvider (which includes "paypal"),
+  // but enabledProviders only returns PostLinkProvider values; cast is safe here.
+  const available = results.filter((r) => r.available).map((r) => r.provider as PostLinkProvider);
   const unavailable = results
     .filter((r): r is typeof r & { reason: string } => !r.available)
-    .map((r) => ({ provider: r.provider, label: GATEWAY_DEFS[r.provider].label, reason: r.reason ?? "Not available." }));
+    .map((r) => ({ provider: r.provider as PostLinkProvider, label: GATEWAY_DEFS[r.provider].label, reason: r.reason ?? "Not available." }));
   return { available, unavailable };
 }
 

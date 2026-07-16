@@ -18,7 +18,10 @@ import { GATEWAY_PROVIDERS, type GatewayProvider } from "../lib/platform-gateway
 import { getAuth, clerkClient } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
 
-const GATEWAY_ENABLED_FIELD: Record<GatewayProvider, keyof Vendor> = {
+// PayPal is subscription-only (platform billing) — it has no per-vendor order-payment toggle,
+// so it is intentionally absent from this map. Gateways missing here are treated as disabled
+// for order payments.
+const GATEWAY_ENABLED_FIELD: Partial<Record<GatewayProvider, keyof Vendor>> = {
   stripe: "stripeEnabled",
   paystack: "paystackEnabled",
   remita: "remitaEnabled",
@@ -150,7 +153,10 @@ router.get("/vendors/:id/payment-availability", async (req, res): Promise<void> 
     return;
   }
 
-  const enabled = GATEWAY_PROVIDERS.filter((p) => Boolean(vendor[GATEWAY_ENABLED_FIELD[p]]));
+  const enabled = GATEWAY_PROVIDERS.filter((p) => {
+    const field = GATEWAY_ENABLED_FIELD[p];
+    return field ? Boolean(vendor[field]) : false;
+  });
   const gateways = await Promise.all(
     enabled.map((provider) => getPaymentMethodAvailability(provider, id, vendor)),
   );

@@ -155,6 +155,7 @@ export const DEFAULT_SITE_CONTENT = {
   "billing.paymentGateways": {
     stripe: true,
     paystack: true,
+    paypal: false,
   },
 } as const;
 
@@ -268,8 +269,9 @@ const paymentGatewaysSchema = z
   .object({
     stripe: z.boolean(),
     paystack: z.boolean(),
+    paypal: z.boolean(),
   })
-  .refine((v) => v.stripe || v.paystack, {
+  .refine((v) => v.stripe || v.paystack || v.paypal, {
     message: "At least one payment gateway must stay enabled.",
   });
 

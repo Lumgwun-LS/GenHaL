@@ -29,6 +29,7 @@ import type { Vendor } from "@workspace/db/schema";
 import { resolveGatewayField } from "../lib/platform-gateways";
 import { ensureStripeCatalog, ensurePortalConfiguration } from "../lib/stripe-catalog";
 import { ensurePaystackCatalog } from "../lib/paystack-catalog";
+import { ensurePayPalCatalog, createPayPalSubscription, cancelPayPalSubscription } from "../lib/paypal-catalog";
 import { reconcileVendorSubscription, applyVendorTierDowngrade } from "../lib/subscription-sync";
 import { reconcileVendorPaystackSubscription } from "../lib/paystack-sync";
 import { getSubscriptionPlans, getEnabledSubscriptionGateways, type SubscriptionGateway } from "../lib/subscription-plans";
@@ -81,6 +82,9 @@ const checkoutInFlight = new Map<
 type PlanTier = "starter" | "pro" | "enterprise";
 const VALID_UPGRADE_TIERS: PlanTier[] = ["starter", "pro", "enterprise"];
 
+/** Number of days in the free trial period. Vendors enter their card at checkout but are not charged until the trial ends. */
+const TRIAL_PERIOD_DAYS = 14;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function isAdmin(userId: string): boolean {
@@ -130,6 +134,10 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
 
   res.json({
     currentTier: vendor.subscriptionTier,
+    trialEndsAt: vendor.trialEndsAt?.toISOString() ?? null,
+    trialAvailable:
+      vendor.subscriptionTier === "free" && !vendor.stripeSubscriptionId && !vendor.trialEndsAt,
+    trialPeriodDays: TRIAL_PERIOD_DAYS,
     plans: await getSubscriptionPlans(),
     enabledGateways: await getEnabledSubscriptionGateways(),
   });
@@ -175,11 +183,12 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const { tier, provider, successUrl, cancelUrl } = req.body as {
+  const { tier, provider, successUrl, cancelUrl, withTrial } = req.body as {
     tier?: string;
     provider?: string;
     successUrl?: string;
     cancelUrl?: string;
+    withTrial?: boolean;
   };
 
   if (!tier || !successUrl || !cancelUrl) {
@@ -194,7 +203,8 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     return;
   }
 
-  const gatewayProvider: SubscriptionGateway = provider === "paystack" ? "paystack" : "stripe";
+  const gatewayProvider: SubscriptionGateway =
+    provider === "paystack" ? "paystack" : provider === "paypal" ? "paypal" : "stripe";
   const enabledGateways = await getEnabledSubscriptionGateways();
   if (!enabledGateways[gatewayProvider]) {
     res.status(400).json({ error: `${gatewayProvider} is not currently enabled for subscription billing.` });
@@ -216,6 +226,20 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
       currentTier: vendor.subscriptionTier,
     });
     return;
+  }
+
+  // Trial guard — validate trial eligibility before creating any checkout session.
+  if (withTrial) {
+    if (gatewayProvider !== "stripe") {
+      res.status(400).json({ error: "Free trials are only available via Stripe (card payment)." });
+      return;
+    }
+    if (vendor.stripeSubscriptionId) {
+      res.status(409).json({
+        error: "You already have an active Stripe subscription. Free trials are only available for new subscribers.",
+      });
+      return;
+    }
   }
 
   // A checkout-session creation is already running for this vendor (e.g. a
@@ -273,6 +297,34 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
 
           return { sessionId: initData.data.reference, url: initData.data.authorization_url };
         })()
+      : gatewayProvider === "paypal"
+      ? (async () => {
+          const paypalClientId = await resolveGatewayField("paypal", "clientId");
+          const paypalClientSecret = await resolveGatewayField("paypal", "clientSecret");
+          const paypalMode = (await resolveGatewayField("paypal", "mode")) ?? "live";
+          if (!paypalClientId || !paypalClientSecret) {
+            throw Object.assign(new Error("PayPal is not configured on this platform."), { statusCode: 503 });
+          }
+
+          const catalog = await ensurePayPalCatalog(paypalClientId, paypalClientSecret, paypalMode, plans);
+          const catalogEntry = catalog.find((c) => c.tier === tier);
+          if (!catalogEntry) {
+            throw Object.assign(new Error(`No PayPal plan configured for tier '${tier}'`), { statusCode: 500 });
+          }
+
+          const { subscriptionId, approvalUrl } = await createPayPalSubscription(
+            paypalClientId,
+            paypalClientSecret,
+            paypalMode,
+            catalogEntry.planId,
+            vendor.email,
+            successUrl,
+            cancelUrl,
+            { upgradeVendorId: id.toString(), upgradeTier: tier, upgradeClerkUserId: userId },
+          );
+
+          return { sessionId: subscriptionId, url: approvalUrl };
+        })()
       : (async () => {
     const stripeKey = await resolveGatewayField("stripe", "secretKey");
     if (!stripeKey) {
@@ -323,8 +375,12 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
         upgradeVendorId: id.toString(),
         upgradeTier: tier,
         upgradeClerkUserId: userId,
+        ...(withTrial ? { withTrial: "true" } : {}),
       },
       subscription_data: {
+        // When withTrial is true, Stripe captures the card but does not charge
+        // it until the trial ends. The vendor gets full plan access immediately.
+        ...(withTrial ? { trial_period_days: TRIAL_PERIOD_DAYS } : {}),
         metadata: {
           upgradeVendorId: id.toString(),
           upgradeTier: tier,
@@ -464,6 +520,52 @@ router.post("/vendors/:id/subscription/paystack/cancel", async (req, res): Promi
     res.status(502).json({ error: `Paystack could not cancel the subscription: ${disableData.message}` });
     return;
   }
+
+  await applyVendorTierDowngrade(vendor, "vendor-cancel");
+  res.json({ cancelled: true, currentTier: "free" });
+});
+
+// ─── POST /vendors/:id/subscription/paypal/cancel ────────────────────────────
+// PayPal has no self-service portal; vendors cancel via this dedicated route.
+// Calls the PayPal API to cancel the subscription, then immediately downgrades
+// the vendor to free (same pattern as Paystack cancel).
+
+router.post("/vendors/:id/subscription/paypal/cancel", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const vendor = await getVendorOr404(res, id);
+  if (!vendor) return;
+
+  if (!canManageVendor(userId, vendor)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  if (vendor.subscriptionProvider !== "paypal" || !vendor.paypalSubscriptionId) {
+    res.status(409).json({ error: "No active PayPal subscription found to cancel." });
+    return;
+  }
+
+  const paypalClientId = await resolveGatewayField("paypal", "clientId");
+  const paypalClientSecret = await resolveGatewayField("paypal", "clientSecret");
+  const paypalMode = (await resolveGatewayField("paypal", "mode")) ?? "live";
+
+  if (!paypalClientId || !paypalClientSecret) {
+    res.status(503).json({ error: "PayPal is not configured on this platform." });
+    return;
+  }
+
+  await cancelPayPalSubscription(
+    paypalClientId,
+    paypalClientSecret,
+    paypalMode,
+    vendor.paypalSubscriptionId,
+    "Vendor requested cancellation via dashboard",
+  );
 
   await applyVendorTierDowngrade(vendor, "vendor-cancel");
   res.json({ cancelled: true, currentTier: "free" });

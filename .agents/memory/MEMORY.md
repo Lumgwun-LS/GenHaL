@@ -86,3 +86,4 @@
 - [VendorHub scheduled-post pre-publish reminder](vendorhub-post-reminders.md) — reminderSentAt sentinel column + atomic claim, reset whenever scheduledAt changes; new push category wiring touches 5 places (schema, push.ts, external/profile.ts, openapi.yaml x3, mobile toggle).
 - [VendorHub AI video scene preview/render split](vendorhub-ai-video-scene-preview.md) — preview/regenerate scenes spend aiImages quota; only final render spends aiVideos quota; previews reuse type:"image" cleanup path.
 - [VendorHub AI video music verification](vendorhub-ai-video-music-verification.md) — real ElevenLabs music always ≥ requested duration, so looping is unreachable at the current 3-scene cap; no click at loop point even when forced past it.
+- [Free trial + PayPal subscription billing](free-trial-paypal-billing.md) — trial is Stripe-only (14 days, withTrial flag); PayPal is subscription-only (no vendor order toggle); trialEndsAt managed via subscription.updated webhook.

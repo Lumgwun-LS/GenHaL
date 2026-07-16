@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "./encryption";
 import { sendSlackAlert } from "./slack";
 
-export const GATEWAY_PROVIDERS = ["stripe", "paystack", "remita", "flutterwave", "nomba"] as const;
+export const GATEWAY_PROVIDERS = ["stripe", "paystack", "paypal", "remita", "flutterwave", "nomba"] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 export interface GatewayFieldDef {
@@ -104,6 +104,32 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
       }
     },
   },
+  paypal: {
+    label: "PayPal",
+    fields: [
+      { key: "clientId", label: "Client ID", secret: false },
+      { key: "clientSecret", label: "Client secret", secret: true },
+      { key: "webhookId", label: "Webhook ID (for signature verification)", secret: false },
+      { key: "mode", label: "Mode (sandbox or live)", secret: false },
+    ],
+    liveVerification: true,
+    test: async (creds) => {
+      const mode = creds.mode === "sandbox" ? "sandbox" : "live";
+      const base = mode === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+      const res = await fetch(`${base}/v1/oauth2/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`,
+        },
+        body: "grant_type=client_credentials",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error_description?: string };
+        throw new Error(body.error_description ?? `PayPal rejected the credentials (HTTP ${res.status})`);
+      }
+    },
+  },
   remita: {
     label: "Remita",
     fields: [
@@ -130,6 +156,7 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
 const ENV_FALLBACK: Partial<Record<GatewayProvider, Record<string, string | undefined>>> = {
   stripe: { secretKey: process.env.STRIPE_SECRET_KEY, webhookSecret: process.env.STRIPE_WEBHOOK_SECRET },
   paystack: { secretKey: process.env.PAYSTACK_SECRET_KEY, webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET },
+  paypal: { clientId: process.env.PAYPAL_CLIENT_ID, clientSecret: process.env.PAYPAL_CLIENT_SECRET },
 };
 
 /**

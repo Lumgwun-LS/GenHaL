@@ -9,12 +9,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { CheckCircle2, Zap, Building2, Rocket, Loader2, ArrowUpCircle, RefreshCw, ChevronDown } from "lucide-react";
+import { CheckCircle2, Zap, Building2, Rocket, Loader2, ArrowUpCircle, RefreshCw, ChevronDown, Gift } from "lucide-react";
+import TrialBanner from "./trial-banner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 type PlanTier = "starter" | "pro" | "enterprise";
-type Gateway = "stripe" | "paystack";
+type Gateway = "stripe" | "paystack" | "paypal";
 
 interface PlanQuotas {
   aiImages: number;
@@ -52,7 +53,11 @@ const TIER_BADGE_CLASS: Record<PlanTier, string> = {
   enterprise: "bg-amber-600 text-amber-100",
 };
 
-const GATEWAY_LABEL: Record<Gateway, string> = { stripe: "Card (Stripe, USD)", paystack: "Paystack (NGN)" };
+const GATEWAY_LABEL: Record<Gateway, string> = {
+  stripe: "Card (Stripe, USD)",
+  paystack: "Paystack (NGN)",
+  paypal: "PayPal (USD)",
+};
 
 const TIER_RANK: Record<string, number> = {
   free: 0,
@@ -223,10 +228,43 @@ export function ManageBillingButton({
     }
   }
 
+  async function handleCancelPayPal() {
+    if (!window.confirm("Cancel your PayPal subscription now? This takes effect immediately and you'll drop to the Free plan right away.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/subscription/paypal/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not cancel the PayPal subscription.");
+        return;
+      }
+      toast.success("PayPal subscription cancelled — you're back on the Free plan.");
+      onChanged?.();
+    } catch {
+      toast.error("Network error — could not cancel the PayPal subscription.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (subscriptionProvider === "paystack") {
     return (
       <Button size="sm" variant="outline" disabled={loading} onClick={handleCancelPaystack}>
         {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cancel Subscription"}
+      </Button>
+    );
+  }
+
+  if (subscriptionProvider === "paypal") {
+    return (
+      <Button size="sm" variant="outline" disabled={loading} onClick={handleCancelPayPal}>
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cancel PayPal Subscription"}
       </Button>
     );
   }
@@ -240,6 +278,9 @@ export function ManageBillingButton({
 
 interface PlansResponse {
   currentTier: string;
+  trialEndsAt: string | null;
+  trialAvailable: boolean;
+  trialPeriodDays: number;
   plans: Plan[];
   enabledGateways: Record<Gateway, boolean>;
 }
@@ -253,26 +294,33 @@ async function fetchPlans(vendorId: number): Promise<PlansResponse> {
 
 export default function UpgradePlanCard({ vendorId, currentTier, subscriptionProvider, onUpgradeInitiated }: Props) {
   const [busy, setBusy] = useState<PlanTier | null>(null);
+  const [trialBusy, setTrialBusy] = useState<PlanTier | null>(null);
   const [plansData, setPlansData] = useState<PlansResponse | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const inFlightRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  function reload() {
     setLoadingPlans(true);
     fetchPlans(vendorId)
-      .then((data) => { if (!cancelled) setPlansData(data); })
-      .catch((err) => { if (!cancelled) toast.error(err instanceof Error ? err.message : "Could not load plans."); })
-      .finally(() => { if (!cancelled) setLoadingPlans(false); });
-    return () => { cancelled = true; };
-  }, [vendorId]);
+      .then((data) => setPlansData(data))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Could not load plans."))
+      .finally(() => setLoadingPlans(false));
+  }
+
+  useEffect(() => {
+    reload();
+  }, [vendorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentRank = TIER_RANK[currentTier] ?? 0;
 
-  async function handleUpgrade(tier: PlanTier, provider: Gateway) {
+  async function handleUpgrade(tier: PlanTier, provider: Gateway, withTrial = false) {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
-    setBusy(tier);
+    if (withTrial) {
+      setTrialBusy(tier);
+    } else {
+      setBusy(tier);
+    }
     try {
       const successUrl = `${window.location.origin}${window.location.pathname}?upgrade=success&tier=${tier}`;
       const cancelUrl = `${window.location.origin}${window.location.pathname}?upgrade=cancelled`;
@@ -283,7 +331,7 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ tier, provider, successUrl, cancelUrl }),
+          body: JSON.stringify({ tier, provider, successUrl, cancelUrl, withTrial }),
         },
       );
 
@@ -305,6 +353,7 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
       toast.error("Network error — could not start checkout.");
     } finally {
       setBusy(null);
+      setTrialBusy(null);
       inFlightRef.current = false;
     }
   }
@@ -319,14 +368,45 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
     );
   }
 
-  const { plans, enabledGateways } = plansData;
+  const { plans, enabledGateways, trialEndsAt, trialAvailable, trialPeriodDays } = plansData;
   const availableGateways = (Object.keys(enabledGateways) as Gateway[]).filter((g) => enabledGateways[g]);
 
   function priceLabel(plan: Plan): string {
     const parts: string[] = [];
     if (enabledGateways.stripe) parts.push(`$${plan.pricing.usd}`);
+    if (enabledGateways.paypal) parts.push(`$${plan.pricing.usd} (PayPal)`);
     if (enabledGateways.paystack) parts.push(`₦${plan.pricing.ngn.toLocaleString()}`);
-    return parts.length > 0 ? parts.join(" / ") : `$${plan.pricing.usd}`;
+    // De-duplicate USD entries when both stripe and paypal show the same price
+    const seen = new Set<string>();
+    const uniqueParts: string[] = [];
+    for (const p of parts) {
+      if (!seen.has(p)) { seen.add(p); uniqueParts.push(p); }
+    }
+    return uniqueParts.length > 0 ? uniqueParts.join(" / ") : `$${plan.pricing.usd}`;
+  }
+
+  function TrialButton({ plan }: { plan: Plan }) {
+    if (!trialAvailable) return null;
+    if (trialBusy === plan.tier) {
+      return (
+        <Button size="sm" className="w-full mt-1" variant="outline" disabled>
+          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+          Starting trial…
+        </Button>
+      );
+    }
+    return (
+      <Button
+        size="sm"
+        className="w-full mt-1 border-dashed"
+        variant="outline"
+        disabled={busy !== null || trialBusy !== null}
+        onClick={() => handleUpgrade(plan.tier, "stripe", true)}
+      >
+        <Gift className="w-3.5 h-3.5 mr-1.5 text-violet-400" />
+        Start {trialPeriodDays}-day free trial
+      </Button>
+    );
   }
 
   function UpgradeButton({ plan, isUnavailable, isCurrent }: { plan: Plan; isUnavailable: boolean; isCurrent: boolean }) {
@@ -354,7 +434,7 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
           size="sm"
           className="w-full"
           variant={plan.highlight ? "default" : "outline"}
-          disabled={busy !== null || availableGateways.length === 0}
+          disabled={busy !== null || trialBusy !== null || availableGateways.length === 0}
           onClick={() => handleUpgrade(plan.tier, provider)}
         >
           {availableGateways.length === 0 ? "No gateway available" : `Upgrade to ${plan.name}`}
@@ -365,7 +445,7 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" className="w-full" variant={plan.highlight ? "default" : "outline"} disabled={busy !== null}>
+          <Button size="sm" className="w-full" variant={plan.highlight ? "default" : "outline"} disabled={busy !== null || trialBusy !== null}>
             {`Upgrade to ${plan.name}`}
             <ChevronDown className="w-3.5 h-3.5 ml-1.5" />
           </Button>
@@ -381,19 +461,60 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
     );
   }
 
+  // Trial banner — shown when vendor has an active trial
+  const trialBanner = trialEndsAt ? (
+    <TrialBanner
+      trialEndsAt={trialEndsAt}
+      subscriptionTier={currentTier}
+      vendorId={vendorId}
+      onManageBilling={reload}
+    />
+  ) : null;
+
   // If vendor is already on enterprise there's nothing to upgrade to — but
   // they may still want to manage billing (invoices, payment method, cancel).
   if (currentRank >= TIER_RANK["enterprise"]) {
     return (
+      <>
+        {trialBanner}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowUpCircle className="w-4 h-4 text-violet-400" />
+                Your Plan
+              </CardTitle>
+              <CardDescription>
+                You're on the Enterprise plan. Manage billing details, invoices, or cancel below.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <RefreshBillingStatusButton vendorId={vendorId} onSynced={() => onUpgradeInitiated?.()} />
+              <ManageBillingButton
+                vendorId={vendorId}
+                currentTier={currentTier}
+                subscriptionProvider={subscriptionProvider}
+                onChanged={() => onUpgradeInitiated?.()}
+              />
+            </div>
+          </CardHeader>
+        </Card>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {trialBanner}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <ArrowUpCircle className="w-4 h-4 text-violet-400" />
-              Your Plan
+              Upgrade Your Plan
             </CardTitle>
             <CardDescription>
-              You're on the Enterprise plan. Manage billing details, invoices, or cancel below.
+              Unlock direct payment routing and more by upgrading your subscription.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -406,99 +527,77 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
             />
           </div>
         </CardHeader>
-      </Card>
-    );
-  }
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {plans.map((plan) => {
+              const targetRank = TIER_RANK[plan.tier];
+              const isCurrent = plan.tier === currentTier;
+              const isDowngrade = targetRank <= currentRank && !isCurrent;
+              const isUnavailable = isCurrent || isDowngrade;
+              const Icon = TIER_ICON[plan.tier];
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <ArrowUpCircle className="w-4 h-4 text-violet-400" />
-            Upgrade Your Plan
-          </CardTitle>
-          <CardDescription>
-            Unlock direct payment routing and more by upgrading your subscription.
-          </CardDescription>
-        </div>
-        <div className="flex items-center gap-2">
-          <RefreshBillingStatusButton vendorId={vendorId} onSynced={() => onUpgradeInitiated?.()} />
-          <ManageBillingButton
-            vendorId={vendorId}
-            currentTier={currentTier}
-            subscriptionProvider={subscriptionProvider}
-            onChanged={() => onUpgradeInitiated?.()}
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {plans.map((plan) => {
-            const targetRank = TIER_RANK[plan.tier];
-            const isCurrent = plan.tier === currentTier;
-            const isDowngrade = targetRank <= currentRank && !isCurrent;
-            const isUnavailable = isCurrent || isDowngrade;
-            const Icon = TIER_ICON[plan.tier];
-
-            return (
-              <div
-                key={plan.tier}
-                className={`relative rounded-xl border p-5 flex flex-col gap-4 transition-colors ${
-                  plan.highlight
-                    ? `${TIER_BORDER_COLOR[plan.tier]} bg-violet-950/20`
-                    : `${TIER_BORDER_COLOR[plan.tier]} bg-zinc-900/40`
-                } ${isUnavailable ? "opacity-50" : ""}`}
-              >
-                {plan.highlight && (
-                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full">
-                    Most Popular
-                  </span>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${TIER_ICON_COLOR[plan.tier]}`} />
-                    <span className="font-semibold text-sm">{plan.name}</span>
-                  </div>
-                  {isCurrent && (
-                    <Badge className={`text-[10px] px-2 py-0 ${TIER_BADGE_CLASS[plan.tier]}`}>
-                      Current
-                    </Badge>
+              return (
+                <div
+                  key={plan.tier}
+                  className={`relative rounded-xl border p-5 flex flex-col gap-4 transition-colors ${
+                    plan.highlight
+                      ? `${TIER_BORDER_COLOR[plan.tier]} bg-violet-950/20`
+                      : `${TIER_BORDER_COLOR[plan.tier]} bg-zinc-900/40`
+                  } ${isUnavailable ? "opacity-50" : ""}`}
+                >
+                  {plan.highlight && (
+                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full">
+                      Most Popular
+                    </span>
                   )}
-                </div>
 
-                <div>
-                  <div className="text-xl font-bold">
-                    {priceLabel(plan)}
-                    <span className="text-sm font-normal text-muted-foreground"> /mo</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`w-4 h-4 ${TIER_ICON_COLOR[plan.tier]}`} />
+                      <span className="font-semibold text-sm">{plan.name}</span>
+                    </div>
+                    {isCurrent && (
+                      <Badge className={`text-[10px] px-2 py-0 ${TIER_BADGE_CLASS[plan.tier]}`}>
+                        Current
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+
+                  <div>
+                    <div className="text-xl font-bold">
+                      {priceLabel(plan)}
+                      <span className="text-sm font-normal text-muted-foreground"> /mo</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+                  </div>
+
+                  <ul className="space-y-1.5 flex-1">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-green-500" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <UpgradeButton plan={plan} isUnavailable={isUnavailable} isCurrent={isCurrent} />
+                  {!isUnavailable && <TrialButton plan={plan} />}
                 </div>
+              );
+            })}
+          </div>
 
-                <ul className="space-y-1.5 flex-1">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-green-500" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <UpgradeButton plan={plan} isUnavailable={isUnavailable} isCurrent={isCurrent} />
-              </div>
-            );
-          })}
-        </div>
-
-        <p className="text-xs text-muted-foreground mt-4 text-center">
-          {availableGateways.length > 1
-            ? "Choose Stripe (USD, card) or Paystack (NGN) at checkout. Your plan activates immediately after payment."
-            : availableGateways[0] === "paystack"
-              ? "Payments are processed securely by Paystack in NGN. Your plan activates immediately after payment."
-              : "Payments are processed securely by Stripe. Your plan activates immediately after checkout."}
-        </p>
-      </CardContent>
-    </Card>
+          <p className="text-xs text-muted-foreground mt-4 text-center">
+            {availableGateways.length > 1
+              ? `Choose ${availableGateways.map((g) => GATEWAY_LABEL[g]).join(" or ")} at checkout. Your plan activates immediately after payment.`
+              : availableGateways[0] === "paystack"
+                ? "Payments are processed securely by Paystack in NGN. Your plan activates immediately after payment."
+                : availableGateways[0] === "paypal"
+                  ? "Payments are processed securely by PayPal in USD. Your plan activates after you approve on PayPal."
+                  : "Payments are processed securely by Stripe. Your plan activates immediately after checkout."}
+          </p>
+        </CardContent>
+      </Card>
+    </>
   );
 }

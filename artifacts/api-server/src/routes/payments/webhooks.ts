@@ -496,6 +496,14 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
     const item = subscription.items.data[0];
     const newTier = item?.price?.metadata?.tier;
 
+    // Compute trialEndsAt from the subscription state, regardless of tier change:
+    // - status "trialing" with trial_end set → vendor is in trial → store the date
+    // - anything else → trial is over (converted to active or cancelled) → clear it
+    const trialEndsAt =
+      subscription.status === "trialing" && subscription.trial_end
+        ? new Date(subscription.trial_end * 1000)
+        : null;
+
     if (newTier) {
       const [vendorBefore] = await db
         .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
@@ -509,7 +517,13 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
 
       const [updated] = await db
         .update(vendorsTable)
-        .set({ subscriptionTier: newTier, stripeSubscriptionId: subscription.id, updatedAt: new Date() })
+        .set({
+          subscriptionTier: newTier,
+          stripeSubscriptionId: subscription.id,
+          subscriptionProvider: "stripe",
+          trialEndsAt,
+          updatedAt: new Date(),
+        })
         .where(eq(vendorsTable.stripeCustomerId, customerId))
         .returning({ id: vendorsTable.id });
 
@@ -592,6 +606,71 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       console.warn(`[stripe webhook] subscription cancelled — no vendor found for customer=${customerId}`);
       return { matched: false };
     }
+    return { matched: true };
+  }
+
+  // ── Trial ending soon ─────────────────────────────────────────────────────────
+  // Stripe fires this 3 days before the trial ends (the window is configurable in
+  // the Stripe dashboard). We send the vendor an in-app notification and email so
+  // they know their card is about to be charged.
+  if (event.type === "customer.subscription.trial_will_end") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+
+    const item = subscription.items.data[0];
+    const amountCents = item?.price?.unit_amount ?? 0;
+    const currency = (item?.price?.currency ?? "usd").toUpperCase();
+    const rawTier = item?.price?.metadata?.tier ?? "";
+    const tierName = rawTier ? rawTier.charAt(0).toUpperCase() + rawTier.slice(1) : "paid";
+    const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
+
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.stripeCustomerId, customerId));
+
+    if (!vendor) {
+      console.warn(`[stripe webhook] trial_will_end — no vendor found for customer=${customerId}`);
+      return { matched: false };
+    }
+
+    const dateStr = trialEnd
+      ? trialEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : "soon";
+    const amountStr = amountCents ? `${(amountCents / 100).toFixed(2)} ${currency}` : "the subscription amount";
+
+    await db.insert(vendorNotificationsTable).values({
+      vendorId: vendor.id,
+      type: "subscription",
+      message: `Your ${tierName} free trial ends on ${dateStr}. Your card will be charged ${amountStr} to continue your subscription.`,
+    });
+
+    if (vendor.email) {
+      const bodyHtml = `
+        <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Your free trial is ending soon</h1>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          Hi ${escapeHtml(vendor.name)}, your VendorHub ${escapeHtml(tierName)} free trial ends on <strong>${escapeHtml(dateStr)}</strong>.
+        </p>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          Your card on file will be automatically charged <strong>${escapeHtml(amountStr)}</strong> to continue your subscription.
+          No action is needed if you'd like to keep your plan.
+        </p>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          To cancel before being charged, open the billing portal from your dashboard.
+        </p>`;
+      const html = wrapVendorEmail({ bodyHtml });
+      const emailResult = await sendEmail({
+        to: vendor.email,
+        subject: `Your ${tierName} trial ends on ${dateStr}`,
+        html,
+      });
+      if (emailResult.status !== "sent") {
+        console.warn(`[stripe webhook] trial_will_end email did not send — vendor=${vendor.id} reason=${emailResult.error}`);
+      }
+    }
+
+    console.info(`[stripe webhook] trial_will_end — vendor=${vendor.id} customer=${customerId} ends=${dateStr}`);
     return { matched: true };
   }
 
@@ -1037,6 +1116,8 @@ export async function retryWebhookEventById(id: number): Promise<{ eventId: stri
       }));
     } else if (row.provider === "remita") {
       ({ matched } = await processRemitaEvent(row.rawPayload as unknown as { rrr: string }));
+    } else if (row.provider === "paypal") {
+      ({ matched } = await processPayPalEvent(row.rawPayload as unknown as PayPalWebhookEvent));
     } else {
       throw new Error(`Unknown provider '${row.provider}'`);
     }
@@ -1355,6 +1436,205 @@ router.post("/payments/remita/webhook", async (req, res): Promise<void> => {
       res.json({ received: true, buffered: true });
     } else {
       console.error(`[remita webhook] Processing failed — event=${eventId}:`, err);
+      res.status(500).json({ error: "Internal processing error — will retry" });
+    }
+  }
+});
+
+// ── PayPal webhook ────────────────────────────────────────────────────────────
+// PayPal subscription billing events (BILLING.SUBSCRIPTION.*).
+// Uses PayPal's verify-webhook-signature API instead of HMAC — the verification
+// call sends the event body back to PayPal for certificate-based validation.
+// If no webhookId is configured in the platform credentials, we skip verification
+// (permissive dev/sandbox mode) and log a warning.
+
+interface PayPalWebhookEvent {
+  id: string;
+  event_type: string;
+  resource: {
+    id: string;          // subscription ID (I-XXXXX)
+    plan_id?: string;
+    status?: string;
+    custom_id?: string;  // JSON: { upgradeVendorId, upgradeTier, upgradeClerkUserId }
+  };
+}
+
+async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched: boolean }> {
+  const { event_type: eventType, resource } = event;
+
+  // Parse the custom_id that we attached at subscription creation time
+  let metadata: { upgradeVendorId?: string; upgradeTier?: string } = {};
+  try {
+    if (resource.custom_id) {
+      metadata = JSON.parse(resource.custom_id) as typeof metadata;
+    }
+  } catch {
+    console.warn(`[paypal webhook] could not parse custom_id — event=${event.id}`);
+  }
+
+  const upgradeVendorId = metadata.upgradeVendorId ? parseInt(metadata.upgradeVendorId) : null;
+  const upgradeTier = metadata.upgradeTier ?? null;
+  const subscriptionId = resource.id;
+
+  const VALID_TIERS = ["starter", "pro", "enterprise"];
+
+  if (eventType === "BILLING.SUBSCRIPTION.ACTIVATED") {
+    if (!upgradeVendorId || !upgradeTier || !VALID_TIERS.includes(upgradeTier)) {
+      console.warn(`[paypal webhook] ACTIVATED — missing/invalid metadata — event=${event.id}`);
+      return { matched: false };
+    }
+
+    const [vendorBefore] = await db
+      .select({ id: vendorsTable.id, subscriptionTier: vendorsTable.subscriptionTier })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, upgradeVendorId));
+
+    if (!vendorBefore) {
+      console.warn(`[paypal webhook] ACTIVATED — no vendor found — vendorId=${upgradeVendorId} event=${event.id}`);
+      return { matched: false };
+    }
+
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({
+        subscriptionTier: upgradeTier,
+        paypalSubscriptionId: subscriptionId,
+        subscriptionProvider: "paypal",
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorsTable.id, upgradeVendorId))
+      .returning({ id: vendorsTable.id });
+
+    if (updated) {
+      const previousTier = vendorBefore.subscriptionTier;
+      if (previousTier !== upgradeTier) {
+        await insertTierChangeNotification(
+          updated.id,
+          `Your plan was upgraded from ${previousTier} to ${upgradeTier} via PayPal.`,
+          previousTier,
+          upgradeTier,
+        );
+      }
+      console.info(`[paypal webhook] ACTIVATED — vendor=${upgradeVendorId} tier=${upgradeTier} sub=${subscriptionId}`);
+    }
+
+    return { matched: !!updated };
+  }
+
+  if (
+    eventType === "BILLING.SUBSCRIPTION.CANCELLED" ||
+    eventType === "BILLING.SUBSCRIPTION.EXPIRED" ||
+    eventType === "BILLING.SUBSCRIPTION.SUSPENDED"
+  ) {
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.paypalSubscriptionId, subscriptionId));
+
+    if (!vendor) {
+      console.info(`[paypal webhook] ${eventType} — no vendor found for sub=${subscriptionId} (may already be cancelled)`);
+      return { matched: true }; // treat as success — nothing to do
+    }
+
+    if (vendor.subscriptionTier === "free") {
+      return { matched: true }; // already downgraded
+    }
+
+    const previousTier = vendor.subscriptionTier;
+    await db
+      .update(vendorsTable)
+      .set({ subscriptionTier: "free", paypalSubscriptionId: null, subscriptionProvider: null, updatedAt: new Date() })
+      .where(eq(vendorsTable.id, vendor.id));
+
+    await insertTierChangeNotification(
+      vendor.id,
+      `Your ${previousTier} PayPal subscription was ${eventType === "BILLING.SUBSCRIPTION.CANCELLED" ? "cancelled" : eventType === "BILLING.SUBSCRIPTION.EXPIRED" ? "expired" : "suspended"}, so your account has been moved back to the Free tier.`,
+      previousTier,
+      "free",
+    );
+
+    if (vendor.email) {
+      await sendSubscriptionCancelledEmail(vendor.email, vendor.name, previousTier);
+    }
+
+    console.info(`[paypal webhook] ${eventType} — vendor=${vendor.id} downgraded from ${previousTier} to free`);
+    return { matched: true };
+  }
+
+  console.info(`[paypal webhook] unhandled event type skipped — type=${eventType} id=${event.id}`);
+  return { matched: true };
+}
+
+router.post("/payments/paypal/webhook", async (req, res): Promise<void> => {
+  const paypalClientId = await resolveGatewayField("paypal", "clientId");
+  const paypalClientSecret = await resolveGatewayField("paypal", "clientSecret");
+  if (!paypalClientId || !paypalClientSecret) {
+    res.status(503).json({ error: "PayPal is not configured. Add platform PayPal credentials in Admin → Payment Gateways." });
+    return;
+  }
+  const paypalMode = (await resolveGatewayField("paypal", "mode")) ?? "live";
+  const webhookId = await resolveGatewayField("paypal", "webhookId");
+
+  const event = req.body as PayPalWebhookEvent;
+  if (!event?.event_type || !event?.id) {
+    res.status(400).json({ error: "Invalid PayPal webhook body" });
+    return;
+  }
+
+  // Verify signature via PayPal's verification API
+  const { verifyPayPalWebhookSignature } = await import("../../lib/paypal-catalog");
+  const verified = await verifyPayPalWebhookSignature(
+    paypalClientId,
+    paypalClientSecret,
+    paypalMode,
+    webhookId,
+    {
+      transmissionId: req.headers["paypal-transmission-id"] as string ?? "",
+      transmissionTime: req.headers["paypal-transmission-time"] as string ?? "",
+      certUrl: req.headers["paypal-cert-url"] as string ?? "",
+      transmissionSig: req.headers["paypal-transmission-sig"] as string ?? "",
+      authAlgo: req.headers["paypal-auth-algo"] as string ?? "SHA256withRSA",
+    },
+    event,
+  );
+
+  if (!verified) {
+    res.status(400).json({ error: "PayPal webhook signature verification failed" });
+    return;
+  }
+
+  const eventId = `paypal-${event.id}`;
+
+  async function fullPipeline(): Promise<void> {
+    const { isDuplicate } = await logWebhookEvent({
+      provider:   "paypal",
+      eventType:  event.event_type,
+      eventId,
+      reference:  event.resource?.id ?? null,
+      rawPayload: event,
+    });
+
+    if (isDuplicate) return;
+
+    try {
+      await processPayPalEvent(event);
+      await markWebhookProcessed(eventId);
+    } catch (bizErr) {
+      await markWebhookFailed(eventId, "paypal", event.event_type, bizErr).catch(() => {});
+      throw bizErr;
+    }
+  }
+
+  try {
+    await fullPipeline();
+    res.json({ received: true });
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      enqueueWebhookEvent({ eventId, provider: "paypal", eventType: event.event_type, process: fullPipeline });
+      console.warn(`[paypal webhook] DB unavailable — event ${eventId} buffered`);
+      res.json({ received: true, buffered: true });
+    } else {
+      console.error(`[paypal webhook] Processing failed — event=${eventId}:`, err);
       res.status(500).json({ error: "Internal processing error — will retry" });
     }
   }

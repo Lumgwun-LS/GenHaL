@@ -52,7 +52,7 @@ export interface SubscriptionPlan {
 }
 
 /** Which gateway bills which currency for platform subscriptions — fixed, not admin-editable. */
-export const SUBSCRIPTION_GATEWAY_CURRENCY = { stripe: "usd", paystack: "ngn" } as const;
+export const SUBSCRIPTION_GATEWAY_CURRENCY = { stripe: "usd", paystack: "ngn", paypal: "usd" } as const;
 export type SubscriptionGateway = keyof typeof SUBSCRIPTION_GATEWAY_CURRENCY;
 
 /** Returns the current admin-configured plan list (falls back to defaults if never edited). */
