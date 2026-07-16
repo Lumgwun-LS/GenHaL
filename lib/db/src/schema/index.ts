@@ -44,4 +44,7 @@ export * from "./store-developer-accounts";
 export * from "./store-apps";
 export * from "./store-app-versions";
 export * from "./store-app-reviews";
+export * from "./store-linked-accounts";
+export * from "./store-app-repo-links";
+export * from "./store-app-update-requests";
 export * from "./store-relations";

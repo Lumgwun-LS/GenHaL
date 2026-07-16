@@ -5,6 +5,9 @@ import {
   storeDeveloperAccountsTable,
   storeAppVersionsTable,
   storeAppReviewsTable,
+  storeLinkedAccountsTable,
+  storeAppRepoLinksTable,
+  storeAppUpdateRequestsTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or } from "drizzle-orm";
 import { requireAuth, getAuth } from "@clerk/express";
@@ -983,6 +986,535 @@ router.post("/admin/apps/:id/assign-download", requireAuth(), async (req, res) =
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "assignDownload error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── PLATFORM LINKING ──────────────────────────────────────────────────────────
+
+// Token encryption (AES-256-GCM keyed from SESSION_SECRET)
+const _encKey = (() => {
+  const secret = process.env.SESSION_SECRET ?? "africa-store-fallback-key-dev";
+  return crypto.scryptSync(secret, "store-platform-v1", 32);
+})();
+function encryptToken(token: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", _encKey, iv);
+  const enc = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), enc]).toString("base64");
+}
+function decryptToken(stored: string): string {
+  try {
+    const buf = Buffer.from(stored, "base64");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", _encKey, buf.subarray(0, 12));
+    decipher.setAuthTag(buf.subarray(12, 28));
+    return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
+  } catch { return ""; }
+}
+
+// Platform configs
+const PLATFORM_META: Record<string, { name: string; icon: string; supportsRepos: boolean; selfHosted: boolean }> = {
+  github:    { name: "GitHub",    icon: "🐙", supportsRepos: true,  selfHosted: false },
+  gitlab:    { name: "GitLab",    icon: "🦊", supportsRepos: true,  selfHosted: true  },
+  gitbucket: { name: "Gitbucket", icon: "🪣", supportsRepos: true,  selfHosted: true  },
+  bitbucket: { name: "Bitbucket", icon: "🗂️", supportsRepos: true,  selfHosted: false },
+  heroku:    { name: "Heroku",    icon: "🚂", supportsRepos: false, selfHosted: false },
+  netlify:   { name: "Netlify",   icon: "🌐", supportsRepos: false, selfHosted: false },
+  vercel:    { name: "Vercel",    icon: "▲",  supportsRepos: false, selfHosted: false },
+  render:    { name: "Render",    icon: "🎨", supportsRepos: false, selfHosted: false },
+};
+
+async function verifyPlatformPAT(platform: string, token: string, instanceUrl?: string): Promise<{ ok: boolean; username?: string; displayName?: string; avatarUrl?: string }> {
+  try {
+    const h = (extra?: Record<string, string>) => ({ ...extra });
+    switch (platform) {
+      case "github": {
+        const r = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.login, displayName: d.name ?? d.login, avatarUrl: d.avatar_url };
+      }
+      case "gitlab": {
+        const base = instanceUrl ?? "https://gitlab.com";
+        const r = await fetch(`${base}/api/v4/user`, { headers: { "PRIVATE-TOKEN": token } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.username, displayName: d.name, avatarUrl: d.avatar_url };
+      }
+      case "gitbucket": {
+        if (!instanceUrl) return { ok: false };
+        const r = await fetch(`${instanceUrl}/api/v3/user`, { headers: { Authorization: `token ${token}` } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.login, displayName: d.name ?? d.login, avatarUrl: d.avatar_url };
+      }
+      case "bitbucket": {
+        const r = await fetch("https://api.bitbucket.org/2.0/user", { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.username, displayName: d.display_name };
+      }
+      case "heroku": {
+        const r = await fetch("https://api.heroku.com/account", { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.heroku+json; version=3" } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.email, displayName: d.name ?? d.email };
+      }
+      case "netlify": {
+        const r = await fetch("https://api.netlify.com/api/v1/user", { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.email, displayName: d.full_name ?? d.email, avatarUrl: d.avatar_url };
+      }
+      case "vercel": {
+        const r = await fetch("https://api.vercel.com/v2/user", { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.user?.username, displayName: d.user?.name ?? d.user?.username };
+      }
+      case "render": {
+        const r = await fetch("https://api.render.com/v1/owner", { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return { ok: false };
+        const d = await r.json() as any;
+        return { ok: true, username: d.owner?.email, displayName: d.owner?.name ?? d.owner?.email };
+      }
+      default: return { ok: false };
+    }
+  } catch { return { ok: false }; }
+}
+
+async function listPlatformRepos(platform: string, token: string, instanceUrl?: string): Promise<Array<{ path: string; name: string; url: string; defaultBranch: string; description?: string }>> {
+  try {
+    switch (platform) {
+      case "github": {
+        const r = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated&type=owner", { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.full_name, name: x.name, url: x.html_url, defaultBranch: x.default_branch ?? "main", description: x.description })) : [];
+      }
+      case "gitlab": {
+        const base = instanceUrl ?? "https://gitlab.com";
+        const r = await fetch(`${base}/api/v4/projects?membership=true&per_page=100&order_by=updated_at`, { headers: { "PRIVATE-TOKEN": token } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.path_with_namespace, name: x.name, url: x.web_url, defaultBranch: x.default_branch ?? "main", description: x.description })) : [];
+      }
+      case "gitbucket": {
+        if (!instanceUrl) return [];
+        const r = await fetch(`${instanceUrl}/api/v3/user/repos`, { headers: { Authorization: `token ${token}` } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.full_name, name: x.name, url: x.html_url, defaultBranch: "main" })) : [];
+      }
+      case "bitbucket": {
+        const r = await fetch("https://api.bitbucket.org/2.0/repositories?role=member&pagelen=100", { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json() as any;
+        return (d.values ?? []).map((x: any) => ({ path: x.full_name, name: x.name, url: x.links?.html?.href, defaultBranch: x.mainbranch?.name ?? "main", description: x.description }));
+      }
+      case "heroku": {
+        const r = await fetch("https://api.heroku.com/apps", { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.heroku+json; version=3" } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.name, name: x.name, url: x.web_url, defaultBranch: "main", description: `Region: ${x.region?.name}` })) : [];
+      }
+      case "netlify": {
+        const r = await fetch("https://api.netlify.com/api/v1/sites", { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.id, name: x.name, url: x.ssl_url ?? x.url, defaultBranch: x.build_settings?.branch ?? "main", description: x.custom_domain })) : [];
+      }
+      case "vercel": {
+        const r = await fetch("https://api.vercel.com/v9/projects", { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json() as any;
+        return (d.projects ?? []).map((x: any) => ({ path: x.id, name: x.name, url: `https://${x.name}.vercel.app`, defaultBranch: x.link?.productionBranch ?? "main" }));
+      }
+      case "render": {
+        const r = await fetch("https://api.render.com/v1/services?limit=100", { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json() as any[];
+        return Array.isArray(d) ? d.map((x: any) => ({ path: x.service?.id ?? x.id, name: x.service?.name ?? x.id, url: x.service?.serviceDetails?.url ?? "", defaultBranch: "main" })) : [];
+      }
+      default: return [];
+    }
+  } catch { return []; }
+}
+
+async function getLatestCommit(platform: string, token: string, repoPath: string, branch: string, instanceUrl?: string): Promise<{ sha: string; message: string; author: string; url: string; date: string } | null> {
+  try {
+    switch (platform) {
+      case "github": {
+        const r = await fetch(`https://api.github.com/repos/${repoPath}/commits/${branch}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+        if (!r.ok) return null;
+        const d = await r.json() as any;
+        return { sha: String(d.sha ?? "").slice(0, 8), message: String(d.commit?.message ?? "").split("\n")[0], author: d.commit?.author?.name ?? "Unknown", url: d.html_url ?? "", date: d.commit?.author?.date ?? "" };
+      }
+      case "gitlab": {
+        const base = instanceUrl ?? "https://gitlab.com";
+        const r = await fetch(`${base}/api/v4/projects/${encodeURIComponent(repoPath)}/repository/commits?ref_name=${branch}&per_page=1`, { headers: { "PRIVATE-TOKEN": token } });
+        if (!r.ok) return null;
+        const d = (await r.json() as any[])[0];
+        if (!d) return null;
+        return { sha: d.short_id ?? String(d.id ?? "").slice(0, 8), message: d.title ?? "", author: d.author_name ?? "Unknown", url: d.web_url ?? "", date: d.committed_date ?? "" };
+      }
+      case "gitbucket": {
+        if (!instanceUrl) return null;
+        const r = await fetch(`${instanceUrl}/api/v3/repos/${repoPath}/commits?sha=${branch}&per_page=1`, { headers: { Authorization: `token ${token}` } });
+        if (!r.ok) return null;
+        const d = (await r.json() as any[])[0];
+        if (!d) return null;
+        return { sha: String(d.sha ?? "").slice(0, 8), message: String(d.commit?.message ?? "").split("\n")[0], author: d.commit?.author?.name ?? "Unknown", url: d.html_url ?? "", date: d.commit?.author?.date ?? "" };
+      }
+      case "bitbucket": {
+        const r = await fetch(`https://api.bitbucket.org/2.0/repositories/${repoPath}/commits/${branch}?pagelen=1`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return null;
+        const d = (await r.json() as any).values?.[0];
+        if (!d) return null;
+        return { sha: String(d.hash ?? "").slice(0, 8), message: String(d.message ?? "").split("\n")[0], author: d.author?.raw ?? "Unknown", url: d.links?.html?.href ?? "", date: d.date ?? "" };
+      }
+      default: return null;
+    }
+  } catch { return null; }
+}
+
+function serializeLinkedAccount(a: any) {
+  return {
+    id: a.id, developerId: a.developerId, platform: a.platform,
+    username: a.username ?? null, displayName: a.displayName ?? null,
+    instanceUrl: a.instanceUrl ?? null, avatarUrl: a.avatarUrl ?? null,
+    verified: a.verified, createdAt: a.createdAt.toISOString(),
+  };
+}
+
+function serializeRepoLink(rl: any, account?: any) {
+  return {
+    id: rl.id, appId: rl.appId, linkedAccountId: rl.linkedAccountId,
+    platform: account?.platform ?? null, username: account?.username ?? null,
+    repoPath: rl.repoPath, branch: rl.branch ?? "main",
+    deploymentUrl: rl.deploymentUrl ?? null,
+    lastCommitSha: rl.lastCommitSha ?? null, lastCommitMessage: rl.lastCommitMessage ?? null,
+    lastCommitAuthor: rl.lastCommitAuthor ?? null, lastCommitUrl: rl.lastCommitUrl ?? null,
+    lastSyncedAt: rl.lastSyncedAt?.toISOString() ?? null,
+    createdAt: rl.createdAt.toISOString(),
+  };
+}
+
+function serializeUpdateRequest(req: any, app?: any, dev?: any) {
+  return {
+    id: req.id, appId: req.appId,
+    appName: app?.name ?? "Unknown", appSlug: app?.slug ?? "",
+    developerName: dev?.displayName ?? "Unknown", developerId: req.developerId,
+    platform: req.platform, repoPath: req.repoPath ?? null,
+    commitSha: req.commitSha ?? null, commitMessage: req.commitMessage ?? null,
+    commitUrl: req.commitUrl ?? null, commitAuthor: req.commitAuthor ?? null,
+    newVersion: req.newVersion ?? null, newDownloadUrl: req.newDownloadUrl ?? null,
+    newDescription: req.newDescription ?? null, changesSummary: req.changesSummary ?? null,
+    status: req.status, adminUserId: req.adminUserId ?? null,
+    adminNote: req.adminNote ?? null, reviewedAt: req.reviewedAt?.toISOString() ?? null,
+    createdAt: req.createdAt.toISOString(),
+  };
+}
+
+// GET /store/linked-accounts
+router.get("/linked-accounts", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const accounts = await db.query.storeLinkedAccountsTable.findMany({
+      where: eq(storeLinkedAccountsTable.developerId, dev.id),
+      orderBy: desc(storeLinkedAccountsTable.createdAt),
+    });
+    res.json(accounts.map(serializeLinkedAccount));
+  } catch (err) {
+    logger.error({ err }, "listLinkedAccounts error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/linked-accounts — connect a platform with a PAT
+router.post("/linked-accounts", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const { platform, accessToken, instanceUrl } = req.body;
+    if (!platform || !accessToken) return void res.status(400).json({ error: "platform and accessToken are required" });
+    if (!PLATFORM_META[platform]) return void res.status(400).json({ error: `Unknown platform: ${platform}` });
+
+    // Verify the token against the platform
+    const verified = await verifyPlatformPAT(platform, accessToken, instanceUrl);
+    if (!verified.ok) return void res.status(400).json({ error: `Could not verify token with ${PLATFORM_META[platform].name}. Check your PAT and permissions.` });
+
+    // One account per platform per developer (upsert pattern)
+    const existing = await db.query.storeLinkedAccountsTable.findFirst({
+      where: and(eq(storeLinkedAccountsTable.developerId, dev.id), eq(storeLinkedAccountsTable.platform, platform)),
+    });
+    const encrypted = encryptToken(accessToken);
+    if (existing) {
+      const [updated] = await db.update(storeLinkedAccountsTable)
+        .set({ accessToken: encrypted, username: verified.username ?? null, displayName: verified.displayName ?? null, avatarUrl: verified.avatarUrl ?? null, instanceUrl: instanceUrl ?? null, verified: true })
+        .where(eq(storeLinkedAccountsTable.id, existing.id)).returning();
+      return void res.json(serializeLinkedAccount(updated));
+    }
+    const [created] = await db.insert(storeLinkedAccountsTable).values({
+      developerId: dev.id, platform, accessToken: encrypted,
+      username: verified.username ?? null, displayName: verified.displayName ?? null,
+      avatarUrl: verified.avatarUrl ?? null, instanceUrl: instanceUrl ?? null, verified: true,
+    }).returning();
+    res.status(201).json(serializeLinkedAccount(created));
+  } catch (err) {
+    logger.error({ err }, "connectPlatform error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /store/linked-accounts/:id
+router.delete("/linked-accounts/:id", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const acct = await db.query.storeLinkedAccountsTable.findFirst({
+      where: and(eq(storeLinkedAccountsTable.id, parseInt(String(req.params.id))), eq(storeLinkedAccountsTable.developerId, dev.id)),
+    });
+    if (!acct) return void res.status(404).json({ error: "Not found" });
+    await db.delete(storeLinkedAccountsTable).where(eq(storeLinkedAccountsTable.id, acct.id));
+    res.status(204).send();
+  } catch (err) {
+    logger.error({ err }, "disconnectPlatform error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/linked-accounts/:id/repos — list repos/sites for a connected account
+router.get("/linked-accounts/:id/repos", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const acct = await db.query.storeLinkedAccountsTable.findFirst({
+      where: and(eq(storeLinkedAccountsTable.id, parseInt(String(req.params.id))), eq(storeLinkedAccountsTable.developerId, dev.id)),
+    });
+    if (!acct) return void res.status(404).json({ error: "Not found" });
+    const token = decryptToken(acct.accessToken);
+    const repos = await listPlatformRepos(acct.platform, token, acct.instanceUrl ?? undefined);
+    res.json(repos);
+  } catch (err) {
+    logger.error({ err }, "listRepos error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/apps/:id/repo-link
+router.get("/apps/:id/repo-link", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const appId = parseInt(String(req.params.id));
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    const link = await db.query.storeAppRepoLinksTable.findFirst({ where: eq(storeAppRepoLinksTable.appId, appId) });
+    if (!link) return void res.json(null);
+    const acct = await db.query.storeLinkedAccountsTable.findFirst({ where: eq(storeLinkedAccountsTable.id, link.linkedAccountId) });
+    res.json(serializeRepoLink(link, acct));
+  } catch (err) {
+    logger.error({ err }, "getRepoLink error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/apps/:id/repo-link — link an app to a repo/deployment
+router.post("/apps/:id/repo-link", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const appId = parseInt(req.params.id);
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    const { linkedAccountId, repoPath, branch, deploymentUrl } = req.body;
+    if (!linkedAccountId || !repoPath) return void res.status(400).json({ error: "linkedAccountId and repoPath are required" });
+    const acct = await db.query.storeLinkedAccountsTable.findFirst({
+      where: and(eq(storeLinkedAccountsTable.id, parseInt(linkedAccountId)), eq(storeLinkedAccountsTable.developerId, dev.id)),
+    });
+    if (!acct) return void res.status(404).json({ error: "Linked account not found" });
+
+    // Remove existing link first
+    await db.delete(storeAppRepoLinksTable).where(eq(storeAppRepoLinksTable.appId, appId));
+
+    const [link] = await db.insert(storeAppRepoLinksTable).values({
+      appId, linkedAccountId: acct.id, repoPath, branch: branch ?? "main",
+      deploymentUrl: deploymentUrl ?? null,
+    }).returning();
+    res.status(201).json(serializeRepoLink(link, acct));
+  } catch (err) {
+    logger.error({ err }, "linkRepo error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /store/apps/:id/repo-link
+router.delete("/apps/:id/repo-link", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const appId = parseInt(req.params.id);
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    await db.delete(storeAppRepoLinksTable).where(eq(storeAppRepoLinksTable.appId, appId));
+    res.status(204).send();
+  } catch (err) {
+    logger.error({ err }, "unlinkRepo error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/apps/:id/request-update — fetch latest commit and create update request
+router.post("/apps/:id/request-update", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const appId = parseInt(req.params.id);
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+
+    const link = await db.query.storeAppRepoLinksTable.findFirst({ where: eq(storeAppRepoLinksTable.appId, appId) });
+    if (!link) return void res.status(400).json({ error: "No repository linked to this app. Link a repository first." });
+
+    const acct = await db.query.storeLinkedAccountsTable.findFirst({ where: eq(storeLinkedAccountsTable.id, link.linkedAccountId) });
+    if (!acct) return void res.status(400).json({ error: "Linked account not found" });
+
+    const { newVersion, newDownloadUrl, newDescription } = req.body;
+    const token = decryptToken(acct.accessToken);
+
+    // Fetch latest commit info
+    const commit = await getLatestCommit(acct.platform, token, link.repoPath, link.branch ?? "main", acct.instanceUrl ?? undefined);
+
+    // Check for duplicate pending request with same commit
+    if (commit?.sha) {
+      const dupe = await db.query.storeAppUpdateRequestsTable.findFirst({
+        where: and(eq(storeAppUpdateRequestsTable.appId, appId), eq(storeAppUpdateRequestsTable.commitSha, commit.sha), eq(storeAppUpdateRequestsTable.status, "pending")),
+      });
+      if (dupe) return void res.status(409).json({ error: "A pending update request already exists for this commit." });
+    }
+
+    const [request] = await db.insert(storeAppUpdateRequestsTable).values({
+      appId, developerId: dev.id, repoLinkId: link.id,
+      platform: acct.platform, repoPath: link.repoPath,
+      commitSha: commit?.sha ?? null, commitMessage: commit?.message ?? null,
+      commitUrl: commit?.url ?? null, commitAuthor: commit?.author ?? null,
+      newVersion: newVersion ?? null, newDownloadUrl: newDownloadUrl ?? null,
+      newDescription: newDescription ?? null,
+      changesSummary: commit ? `Latest commit on ${link.branch ?? "main"}: ${commit.sha} by ${commit.author}` : "Deployment platform — no commit info available",
+    }).returning();
+
+    // Update the link's last-synced info
+    if (commit) {
+      await db.update(storeAppRepoLinksTable).set({
+        lastCommitSha: commit.sha, lastCommitMessage: commit.message,
+        lastCommitAuthor: commit.author, lastCommitUrl: commit.url, lastSyncedAt: new Date(),
+      }).where(eq(storeAppRepoLinksTable.id, link.id));
+    }
+
+    res.status(201).json(serializeUpdateRequest(request, app, dev));
+  } catch (err) {
+    logger.error({ err }, "requestUpdate error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/apps/:id/update-requests — developer's own request history for one app
+router.get("/apps/:id/update-requests", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const appId = parseInt(req.params.id);
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    const requests = await db.query.storeAppUpdateRequestsTable.findMany({
+      where: eq(storeAppUpdateRequestsTable.appId, appId),
+      orderBy: desc(storeAppUpdateRequestsTable.createdAt),
+      limit: 30,
+    });
+    res.json(requests.map((r) => serializeUpdateRequest(r, app, dev)));
+  } catch (err) {
+    logger.error({ err }, "myUpdateRequests error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── ADMIN: UPDATE REQUEST ROUTES ─────────────────────────────────────────────
+
+// GET /store/admin/update-requests
+router.get("/admin/update-requests", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { status = "pending" } = req.query as Record<string, string>;
+    const where = status === "all" ? undefined : eq(storeAppUpdateRequestsTable.status, status);
+    const requests = await db.query.storeAppUpdateRequestsTable.findMany({
+      where,
+      orderBy: desc(storeAppUpdateRequestsTable.createdAt),
+      limit: 100,
+    });
+    // Enrich with app + dev names
+    const appIds = [...new Set(requests.map((r) => r.appId))];
+    const devIds = [...new Set(requests.map((r) => r.developerId))];
+    const [apps, devs] = await Promise.all([
+      appIds.length ? db.query.storeAppsTable.findMany({ where: sql`id = ANY(ARRAY[${sql.raw(appIds.join(","))}]::int[])` }) : Promise.resolve([]),
+      devIds.length ? db.query.storeDeveloperAccountsTable.findMany({ where: sql`id = ANY(ARRAY[${sql.raw(devIds.join(","))}]::int[])` }) : Promise.resolve([]),
+    ]);
+    const appMap = Object.fromEntries(apps.map((a) => [a.id, a]));
+    const devMap = Object.fromEntries(devs.map((d) => [d.id, d]));
+    res.json(requests.map((r) => serializeUpdateRequest(r, appMap[r.appId], devMap[r.developerId])));
+  } catch (err) {
+    logger.error({ err }, "adminUpdateRequests error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/update-requests/:id/approve
+router.post("/admin/update-requests/:id/approve", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(req.params.id)) });
+    if (!request) return void res.status(404).json({ error: "Not found" });
+    if (request.status !== "pending") return void res.status(400).json({ error: "Request is not pending" });
+
+    // Apply the update to the app
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (request.newVersion) updates.currentVersion = request.newVersion;
+    if (request.newDownloadUrl) updates.downloadUrl = request.newDownloadUrl;
+    if (request.newDescription) updates.description = request.newDescription;
+    await db.update(storeAppsTable).set(updates as any).where(eq(storeAppsTable.id, request.appId));
+
+    // If approved and app had been rejected/pending, auto-move to pending_review
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, request.appId) });
+    if (app && app.status === "approved") {
+      // Add a version record
+      if (request.newVersion) {
+        await db.insert(storeAppVersionsTable).values({
+          appId: request.appId, version: request.newVersion,
+          releaseNotes: request.commitMessage ?? null,
+          downloadUrl: request.newDownloadUrl ?? null,
+        });
+      }
+    }
+
+    await db.update(storeAppUpdateRequestsTable).set({
+      status: "approved", adminUserId: userId, adminNote: req.body.note ?? null, reviewedAt: new Date(),
+    } as any).where(eq(storeAppUpdateRequestsTable.id, request.id));
+
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "approveUpdate error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/update-requests/:id/reject
+router.post("/admin/update-requests/:id/reject", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(req.params.id)) });
+    if (!request) return void res.status(404).json({ error: "Not found" });
+    if (request.status !== "pending") return void res.status(400).json({ error: "Request is not pending" });
+    await db.update(storeAppUpdateRequestsTable).set({
+      status: "rejected", adminUserId: userId, adminNote: req.body.note ?? "Did not meet update requirements.", reviewedAt: new Date(),
+    } as any).where(eq(storeAppUpdateRequestsTable.id, request.id));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "rejectUpdate error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -109,3 +109,70 @@ export interface InterswitchInitResult {
 }
 
 export type PaymentInitResult = PaystackInitResult | InterswitchInitResult;
+
+// ── Platform linking ─────────────────────────────────────────────────────────
+
+export type PlatformId =
+  | "github" | "gitlab" | "gitbucket" | "bitbucket"
+  | "heroku" | "netlify" | "vercel" | "render";
+
+export interface LinkedAccount {
+  id: number;
+  developerId: number;
+  platform: PlatformId;
+  username: string | null;
+  displayName: string | null;
+  instanceUrl: string | null;
+  avatarUrl: string | null;
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface PlatformRepo {
+  path: string;
+  name: string;
+  url: string;
+  defaultBranch: string;
+  description?: string;
+}
+
+export interface AppRepoLink {
+  id: number;
+  appId: number;
+  linkedAccountId: number;
+  platform: PlatformId;
+  username: string | null;
+  repoPath: string;
+  branch: string;
+  deploymentUrl: string | null;
+  lastCommitSha: string | null;
+  lastCommitMessage: string | null;
+  lastCommitAuthor: string | null;
+  lastCommitUrl: string | null;
+  lastSyncedAt: string | null;
+  createdAt: string;
+}
+
+export interface UpdateRequest {
+  id: number;
+  appId: number;
+  appName: string;
+  appSlug: string;
+  developerName: string;
+  developerId: number;
+  platform: PlatformId;
+  repoPath: string | null;
+  commitSha: string | null;
+  commitMessage: string | null;
+  commitUrl: string | null;
+  commitAuthor: string | null;
+  newVersion: string | null;
+  newDownloadUrl: string | null;
+  newDescription: string | null;
+  changesSummary: string | null;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  adminUserId: string | null;
+  adminNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
