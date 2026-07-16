@@ -648,6 +648,23 @@ async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureA
   return res.json() as Promise<VoiceSignatureFailureAlert>;
 }
 
+async function fetchVoiceSignatureFailureAlertSettingsHistory(): Promise<ExportAlertSettingsHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings/history`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load threshold change history");
+  return res.json() as Promise<ExportAlertSettingsHistoryEntry[]>;
+}
+
+function formatVoiceSignatureFailureAlertSettingsValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as { threshold?: number; windowMinutes?: number };
+    return `${v.threshold ?? "?"} failures / ${v.windowMinutes ?? "?"} min`;
+  } catch {
+    return raw;
+  }
+}
+
 async function saveVoiceSignatureFailureAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings`, {
     method: "PATCH",
@@ -799,6 +816,7 @@ function VoiceSignatureFailureAlertSettingsDialog({ threshold, windowMinutes }: 
       await saveVoiceSignatureFailureAlertSettings({ threshold: t, windowMinutes: w });
       toast.success("Signature-failure alert threshold updated.");
       qc.invalidateQueries({ queryKey: ["admin-voice-signature-failure-alert"] });
+      qc.invalidateQueries({ queryKey: ["admin-voice-signature-failure-alert-settings-history"] });
       setOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
@@ -1665,6 +1683,12 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: voiceSignatureFailureAlertSettingsHistory, isLoading: voiceSignatureFailureAlertSettingsHistoryLoading } = useQuery({
+    queryKey: ["admin-voice-signature-failure-alert-settings-history"],
+    queryFn: fetchVoiceSignatureFailureAlertSettingsHistory,
+    enabled: isAdmin,
+  });
+
   const { data: paymentConflicts } = useQuery({
     queryKey: ["admin-payment-conflicts"],
     queryFn: fetchPaymentConflicts,
@@ -2301,6 +2325,53 @@ export default function AdminPanel() {
                 <VoiceSignatureFailureHistoryButton />
               </div>
             )}
+
+            <Card className="mt-2" data-testid="card-voice-signature-failure-alert-settings-history">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="w-4 h-4" /> Threshold Change History
+                </CardTitle>
+                <CardDescription>
+                  Every edit to the signature-failure alert threshold and window — who changed it, from what, and when. Read-only.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {voiceSignatureFailureAlertSettingsHistoryLoading ? (
+                  <div className="p-8 text-center text-muted-foreground">Loading history…</div>
+                ) : !voiceSignatureFailureAlertSettingsHistory?.length ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">No changes recorded yet.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Changed By</TableHead>
+                        <TableHead>Previous</TableHead>
+                        <TableHead>New</TableHead>
+                        <TableHead className="text-right">Changed</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {voiceSignatureFailureAlertSettingsHistory.map((entry) => (
+                        <TableRow key={entry.id} data-testid={`row-voice-sig-failure-threshold-change-${entry.id}`}>
+                          <TableCell className="text-xs">
+                            {entry.adminDisplayName ?? <span className="font-mono">{entry.adminUserId}</span>}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatVoiceSignatureFailureAlertSettingsValue(entry.oldValue)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatVoiceSignatureFailureAlertSettingsValue(entry.newValue)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {new Date(entry.changedAt).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
 
             {voiceBackfillStatus && <VoiceBackfillCard status={voiceBackfillStatus} />}
 
