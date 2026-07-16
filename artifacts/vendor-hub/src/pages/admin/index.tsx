@@ -2450,7 +2450,7 @@ export default function AdminPanel() {
                 <ClipboardList className="w-5 h-5 text-primary" /> Tier Change Audit Log
               </CardTitle>
               <CardDescription>
-                The last 50 changes to vendor subscription tiers and verification levels. Read-only — entries cannot be deleted.
+                The last 50 changes to vendor subscription tiers, verification levels, and payment conflict resolutions. Read-only — entries cannot be deleted.
               </CardDescription>
               <div className="flex flex-wrap items-end gap-3 pt-3">
                 <div className="space-y-1">
@@ -2470,6 +2470,7 @@ export default function AdminPanel() {
                       <SelectItem value={AUDIT_FIELD_ANY} className="text-xs">Any field</SelectItem>
                       <SelectItem value="subscriptionTier" className="text-xs">Tier</SelectItem>
                       <SelectItem value="verificationLevel" className="text-xs">Verification</SelectItem>
+                      <SelectItem value="payment_conflict_resolution" className="text-xs">Conflict Resolution</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2543,15 +2544,33 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {entry.field === "subscriptionTier" ? "Tier" : "Verification"}
+                            {entry.field === "subscriptionTier"
+                              ? "Tier"
+                              : entry.field === "verificationLevel"
+                              ? "Verification"
+                              : "Conflict Resolution"}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1.5 text-sm">
-                            <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
-                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <Badge variant="default" className="text-xs capitalize">{entry.newValue}</Badge>
-                          </div>
+                          {entry.field === "payment_conflict_resolution" ? (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-xs text-muted-foreground">attempted:</span>
+                              <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <Badge
+                                variant={entry.newValue === "dismiss" ? "outline" : "default"}
+                                className="text-xs capitalize"
+                              >
+                                {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <Badge variant="default" className="text-xs capitalize">{entry.newValue}</Badge>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {entry.adminDisplayName ? (

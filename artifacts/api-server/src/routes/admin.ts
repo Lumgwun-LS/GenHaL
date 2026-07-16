@@ -1126,6 +1126,36 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
     await notifyVendorPaymentStatus(updated.vendorId, resolution, updated.amount, updated.currency);
   }
 
+  // Resolve the admin's display name from Clerk so the audit entry is readable
+  // without a separate lookup later — follows the admin-sender-attribution pattern.
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
+  // Write a durable audit entry so this resolution shows up in the Audit Log
+  // tab alongside vendor-field edits, rather than only being visible in the
+  // payment's metadata or Slack.
+  const attemptedStatus = (conflict as Record<string, unknown>).attemptedStatus as string | undefined;
+  await db.insert(adminAuditLogTable).values({
+    adminUserId: userId,
+    adminDisplayName,
+    vendorId: existing.vendorId,
+    field: "payment_conflict_resolution",
+    oldValue: attemptedStatus ?? "conflict",
+    newValue: resolution,
+    changedAt: new Date(),
+  });
+
   console.info(
     `[admin] payment reconciliation conflict resolved — payment=${paymentId} admin=${userId} resolution=${resolution}`,
   );
