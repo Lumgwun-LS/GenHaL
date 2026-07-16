@@ -257,4 +257,84 @@ describe("PATCH /vendors/:id/tier", () => {
     // No change → no audit row
     expect(committed[0].auditRows).toHaveLength(0);
   });
+
+  // ── Notification-type correctness tests ──────────────────────────────────
+
+  it("inserts a verification_change notification (not tier_change) when only verificationLevel changes", async () => {
+    // MOCK_VENDOR has verificationLevel = "unverified"
+    const { status, body } = await callRoute("PATCH", "/vendors/1/tier", {
+      verificationLevel: "basic",
+    });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ id: 1 });
+
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    // Exactly one notification row, typed correctly
+    expect(commit.notificationRows).toHaveLength(1);
+    expect(commit.notificationRows[0]).toMatchObject({
+      vendorId: 1,
+      type: "verification_change",
+    });
+    // Must NOT carry tier-change fields
+    expect((commit.notificationRows[0] as Record<string, unknown>).previousTier).toBeUndefined();
+    expect((commit.notificationRows[0] as Record<string, unknown>).newTier).toBeUndefined();
+    // No tier_change notification at all
+    const tierChangeRows = commit.notificationRows.filter(
+      (r: unknown) => (r as Record<string, unknown>).type === "tier_change",
+    );
+    expect(tierChangeRows).toHaveLength(0);
+  });
+
+  it("inserts a tier_change notification with previousTier/newTier when only subscriptionTier changes", async () => {
+    // MOCK_VENDOR has subscriptionTier = "free"
+    const { status } = await callRoute("PATCH", "/vendors/1/tier", {
+      subscriptionTier: "pro",
+    });
+
+    expect(status).toBe(200);
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    expect(commit.notificationRows).toHaveLength(1);
+    expect(commit.notificationRows[0]).toMatchObject({
+      vendorId: 1,
+      type: "tier_change",
+      previousTier: "free",
+      newTier: "pro",
+    });
+    // Must NOT be a verification_change
+    expect((commit.notificationRows[0] as Record<string, unknown>).type).not.toBe("verification_change");
+  });
+
+  it("inserts one tier_change and one verification_change notification when both fields change", async () => {
+    // MOCK_VENDOR has subscriptionTier = "free" and verificationLevel = "unverified"
+    const { status } = await callRoute("PATCH", "/vendors/1/tier", {
+      subscriptionTier: "starter",
+      verificationLevel: "verified",
+    });
+
+    expect(status).toBe(200);
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    expect(commit.notificationRows).toHaveLength(2);
+
+    const tierRow = commit.notificationRows.find(
+      (r: unknown) => (r as Record<string, unknown>).type === "tier_change",
+    ) as Record<string, unknown> | undefined;
+    const verRow = commit.notificationRows.find(
+      (r: unknown) => (r as Record<string, unknown>).type === "verification_change",
+    ) as Record<string, unknown> | undefined;
+
+    expect(tierRow).toBeDefined();
+    expect(tierRow).toMatchObject({ vendorId: 1, type: "tier_change", previousTier: "free", newTier: "starter" });
+
+    expect(verRow).toBeDefined();
+    expect(verRow).toMatchObject({ vendorId: 1, type: "verification_change" });
+    expect(verRow!.previousTier).toBeUndefined();
+    expect(verRow!.newTier).toBeUndefined();
+  });
 });
