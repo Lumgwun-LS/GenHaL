@@ -18,12 +18,15 @@ export default function Nav() {
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px", height: 60, display: "flex", alignItems: "center", gap: 20 }}>
 
         {/* Logo */}
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, textDecoration: "none" }}>
-          <span style={{ fontSize: 26 }}>🌍</span>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#fff", lineHeight: 1 }}>Africa</div>
-            <div style={{ fontWeight: 700, fontSize: 11, color: "#00c853", lineHeight: 1 }}>APP STORE</div>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, textDecoration: "none" }}>
+          <div style={{ background: "#fff", borderRadius: 8, padding: "3px 8px", display: "flex", alignItems: "center" }}>
+            <img
+              src="/app-store/logo-color.jpg"
+              alt="Awajimaa"
+              style={{ height: 28, width: "auto", display: "block", objectFit: "contain" }}
+            />
           </div>
+          <div style={{ fontWeight: 700, fontSize: 10, color: "#00c853", letterSpacing: 1, textTransform: "uppercase" }}>APP STORE</div>
         </Link>
 
         {/* Search */}
