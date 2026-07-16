@@ -29,6 +29,7 @@ import expensesRouter from "./expenses";
 import investmentsRouter from "./investments";
 import branchesRouter from "./branches";
 import workersRouter from "./workers";
+import storeRouter from "./store";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
@@ -69,6 +70,9 @@ router.use(mediaRouter);
 
 // External / Awajimaa bridge — has its own auth (API key + JWT), no Clerk required
 router.use("/external", externalRouter);
+
+// Awajimaa App Store — auth handled per-route inside storeRouter (public browse + auth-gated portal)
+router.use("/store", storeRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

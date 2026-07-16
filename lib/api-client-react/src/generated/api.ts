@@ -97,6 +97,7 @@ import type {
   LeadUpdate,
   LeadsStats,
   ListAiGenerationsParams,
+  ListAllStoreAppsParams,
   ListBranchesParams,
   ListEmailCampaignsParams,
   ListExpensesParams,
@@ -109,6 +110,8 @@ import type {
   ListSalesParams,
   ListSmsCampaignsParams,
   ListSocialAccountsParams,
+  ListStoreAppsParams,
+  ListStoreDevelopersParams,
   ListVendorsParams,
   ListWorkersParams,
   Order,
@@ -125,6 +128,7 @@ import type {
   ProductInput,
   ProductUpdate,
   PublishPost502,
+  RecordStoreAppDownload200,
   Sale,
   SaleInput,
   SaleUpdate,
@@ -137,6 +141,28 @@ import type {
   SocialAccount,
   SocialAccountInput,
   SocialAnalytics,
+  StoreAdminStats,
+  StoreAiReviewResult,
+  StoreApp,
+  StoreAppDecisionInput,
+  StoreAppFeatureInput,
+  StoreAppInput,
+  StoreAppPage,
+  StoreAppSummary,
+  StoreAppUpdate,
+  StoreAppVersion,
+  StoreAppVersionInput,
+  StoreCategory,
+  StoreDeveloper,
+  StoreDeveloperDashboard,
+  StoreDeveloperInput,
+  StoreDeveloperPaymentInput,
+  StoreDeveloperPaymentResult,
+  StoreDeveloperSuspendInput,
+  StoreDeveloperUpdate,
+  StoreReview,
+  StoreReviewFlagInput,
+  StoreReviewInput,
   Vendor,
   VendorInput,
   VendorNotification,
@@ -9259,5 +9285,2162 @@ export const useRetryExternalPayment = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRetryExternalPaymentMutationOptions(options));
+    }
+
+export const getListStoreAppsUrl = (params?: ListStoreAppsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/store/apps?${stringifiedParams}` : `/api/store/apps`
+}
+
+/**
+ * @summary Browse published apps
+ */
+export const listStoreApps = async (params?: ListStoreAppsParams, options?: RequestInit): Promise<StoreAppPage> => {
+
+  return customFetch<StoreAppPage>(getListStoreAppsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStoreAppsQueryKey = (params?: ListStoreAppsParams,) => {
+    return [
+    `/api/store/apps`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listStoreApps>>, TError = ErrorType<unknown>>(params?: ListStoreAppsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStoreAppsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoreApps>>> = ({ signal }) => listStoreApps(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listStoreApps>>>
+export type ListStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Browse published apps
+ */
+
+export function useListStoreApps<TData = Awaited<ReturnType<typeof listStoreApps>>, TError = ErrorType<unknown>>(
+ params?: ListStoreAppsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStoreAppsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListFeaturedStoreAppsUrl = () => {
+
+
+
+
+  return `/api/store/apps/featured`
+}
+
+/**
+ * @summary Curated featured apps
+ */
+export const listFeaturedStoreApps = async ( options?: RequestInit): Promise<StoreAppSummary[]> => {
+
+  return customFetch<StoreAppSummary[]>(getListFeaturedStoreAppsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFeaturedStoreAppsQueryKey = () => {
+    return [
+    `/api/store/apps/featured`
+    ] as const;
+    }
+
+
+export const getListFeaturedStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listFeaturedStoreApps>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeaturedStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFeaturedStoreAppsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFeaturedStoreApps>>> = ({ signal }) => listFeaturedStoreApps({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFeaturedStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFeaturedStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listFeaturedStoreApps>>>
+export type ListFeaturedStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Curated featured apps
+ */
+
+export function useListFeaturedStoreApps<TData = Awaited<ReturnType<typeof listFeaturedStoreApps>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeaturedStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFeaturedStoreAppsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListTrendingStoreAppsUrl = () => {
+
+
+
+
+  return `/api/store/apps/trending`
+}
+
+/**
+ * @summary Trending apps (top downloads this week)
+ */
+export const listTrendingStoreApps = async ( options?: RequestInit): Promise<StoreAppSummary[]> => {
+
+  return customFetch<StoreAppSummary[]>(getListTrendingStoreAppsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTrendingStoreAppsQueryKey = () => {
+    return [
+    `/api/store/apps/trending`
+    ] as const;
+    }
+
+
+export const getListTrendingStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listTrendingStoreApps>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTrendingStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTrendingStoreAppsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTrendingStoreApps>>> = ({ signal }) => listTrendingStoreApps({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTrendingStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTrendingStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listTrendingStoreApps>>>
+export type ListTrendingStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Trending apps (top downloads this week)
+ */
+
+export function useListTrendingStoreApps<TData = Awaited<ReturnType<typeof listTrendingStoreApps>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTrendingStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTrendingStoreAppsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListStoreCategoriesUrl = () => {
+
+
+
+
+  return `/api/store/apps/categories`
+}
+
+/**
+ * @summary List all categories with app counts
+ */
+export const listStoreCategories = async ( options?: RequestInit): Promise<StoreCategory[]> => {
+
+  return customFetch<StoreCategory[]>(getListStoreCategoriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStoreCategoriesQueryKey = () => {
+    return [
+    `/api/store/apps/categories`
+    ] as const;
+    }
+
+
+export const getListStoreCategoriesQueryOptions = <TData = Awaited<ReturnType<typeof listStoreCategories>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreCategories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStoreCategoriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoreCategories>>> = ({ signal }) => listStoreCategories({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStoreCategories>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStoreCategoriesQueryResult = NonNullable<Awaited<ReturnType<typeof listStoreCategories>>>
+export type ListStoreCategoriesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all categories with app counts
+ */
+
+export function useListStoreCategories<TData = Awaited<ReturnType<typeof listStoreCategories>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreCategories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStoreCategoriesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetStoreAppUrl = (slug: string,) => {
+
+
+
+
+  return `/api/store/apps/${slug}`
+}
+
+/**
+ * @summary Get full app details by slug
+ */
+export const getStoreApp = async (slug: string, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getGetStoreAppUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStoreAppQueryKey = (slug: string,) => {
+    return [
+    `/api/store/apps/${slug}`
+    ] as const;
+    }
+
+
+export const getGetStoreAppQueryOptions = <TData = Awaited<ReturnType<typeof getStoreApp>>, TError = ErrorType<void>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreApp>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStoreAppQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoreApp>>> = ({ signal }) => getStoreApp(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStoreApp>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStoreAppQueryResult = NonNullable<Awaited<ReturnType<typeof getStoreApp>>>
+export type GetStoreAppQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get full app details by slug
+ */
+
+export function useGetStoreApp<TData = Awaited<ReturnType<typeof getStoreApp>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreApp>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStoreAppQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordStoreAppDownloadUrl = (slug: string,) => {
+
+
+
+
+  return `/api/store/apps/${slug}/download`
+}
+
+/**
+ * @summary Record a download / install click (increments counter)
+ */
+export const recordStoreAppDownload = async (slug: string, options?: RequestInit): Promise<RecordStoreAppDownload200> => {
+
+  return customFetch<RecordStoreAppDownload200>(getRecordStoreAppDownloadUrl(slug),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRecordStoreAppDownloadMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordStoreAppDownload>>, TError,{slug: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordStoreAppDownload>>, TError,{slug: string}, TContext> => {
+
+const mutationKey = ['recordStoreAppDownload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordStoreAppDownload>>, {slug: string}> = (props) => {
+          const {slug} = props ?? {};
+
+          return  recordStoreAppDownload(slug,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordStoreAppDownloadMutationResult = NonNullable<Awaited<ReturnType<typeof recordStoreAppDownload>>>
+
+    export type RecordStoreAppDownloadMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Record a download / install click (increments counter)
+ */
+export const useRecordStoreAppDownload = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordStoreAppDownload>>, TError,{slug: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordStoreAppDownload>>,
+        TError,
+        {slug: string},
+        TContext
+      > => {
+      return useMutation(getRecordStoreAppDownloadMutationOptions(options));
+    }
+
+export const getListStoreAppReviewsUrl = (slug: string,) => {
+
+
+
+
+  return `/api/store/apps/${slug}/reviews`
+}
+
+/**
+ * @summary List reviews for an app
+ */
+export const listStoreAppReviews = async (slug: string, options?: RequestInit): Promise<StoreReview[]> => {
+
+  return customFetch<StoreReview[]>(getListStoreAppReviewsUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStoreAppReviewsQueryKey = (slug: string,) => {
+    return [
+    `/api/store/apps/${slug}/reviews`
+    ] as const;
+    }
+
+
+export const getListStoreAppReviewsQueryOptions = <TData = Awaited<ReturnType<typeof listStoreAppReviews>>, TError = ErrorType<unknown>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreAppReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStoreAppReviewsQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoreAppReviews>>> = ({ signal }) => listStoreAppReviews(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStoreAppReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStoreAppReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof listStoreAppReviews>>>
+export type ListStoreAppReviewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List reviews for an app
+ */
+
+export function useListStoreAppReviews<TData = Awaited<ReturnType<typeof listStoreAppReviews>>, TError = ErrorType<unknown>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreAppReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStoreAppReviewsQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitStoreAppReviewUrl = (slug: string,) => {
+
+
+
+
+  return `/api/store/apps/${slug}/reviews`
+}
+
+/**
+ * @summary Submit a review (requires Clerk auth)
+ */
+export const submitStoreAppReview = async (slug: string,
+    storeReviewInput: StoreReviewInput, options?: RequestInit): Promise<StoreReview> => {
+
+  return customFetch<StoreReview>(getSubmitStoreAppReviewUrl(slug),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeReviewInput)
+  }
+);}
+
+
+
+
+export const getSubmitStoreAppReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStoreAppReview>>, TError,{slug: string;data: BodyType<StoreReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitStoreAppReview>>, TError,{slug: string;data: BodyType<StoreReviewInput>}, TContext> => {
+
+const mutationKey = ['submitStoreAppReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitStoreAppReview>>, {slug: string;data: BodyType<StoreReviewInput>}> = (props) => {
+          const {slug,data} = props ?? {};
+
+          return  submitStoreAppReview(slug,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitStoreAppReviewMutationResult = NonNullable<Awaited<ReturnType<typeof submitStoreAppReview>>>
+    export type SubmitStoreAppReviewMutationBody = BodyType<StoreReviewInput>
+    export type SubmitStoreAppReviewMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit a review (requires Clerk auth)
+ */
+export const useSubmitStoreAppReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStoreAppReview>>, TError,{slug: string;data: BodyType<StoreReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitStoreAppReview>>,
+        TError,
+        {slug: string;data: BodyType<StoreReviewInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitStoreAppReviewMutationOptions(options));
+    }
+
+export const getListStoreAppVersionsUrl = (slug: string,) => {
+
+
+
+
+  return `/api/store/apps/${slug}/versions`
+}
+
+/**
+ * @summary Version history for an app
+ */
+export const listStoreAppVersions = async (slug: string, options?: RequestInit): Promise<StoreAppVersion[]> => {
+
+  return customFetch<StoreAppVersion[]>(getListStoreAppVersionsUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStoreAppVersionsQueryKey = (slug: string,) => {
+    return [
+    `/api/store/apps/${slug}/versions`
+    ] as const;
+    }
+
+
+export const getListStoreAppVersionsQueryOptions = <TData = Awaited<ReturnType<typeof listStoreAppVersions>>, TError = ErrorType<unknown>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreAppVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStoreAppVersionsQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoreAppVersions>>> = ({ signal }) => listStoreAppVersions(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStoreAppVersions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStoreAppVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof listStoreAppVersions>>>
+export type ListStoreAppVersionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Version history for an app
+ */
+
+export function useListStoreAppVersions<TData = Awaited<ReturnType<typeof listStoreAppVersions>>, TError = ErrorType<unknown>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreAppVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStoreAppVersionsQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMyStoreDeveloperUrl = () => {
+
+
+
+
+  return `/api/store/developers/me`
+}
+
+/**
+ * @summary Get the signed-in user's developer account (if registered)
+ */
+export const getMyStoreDeveloper = async ( options?: RequestInit): Promise<StoreDeveloper> => {
+
+  return customFetch<StoreDeveloper>(getGetMyStoreDeveloperUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyStoreDeveloperQueryKey = () => {
+    return [
+    `/api/store/developers/me`
+    ] as const;
+    }
+
+
+export const getGetMyStoreDeveloperQueryOptions = <TData = Awaited<ReturnType<typeof getMyStoreDeveloper>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyStoreDeveloper>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyStoreDeveloperQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyStoreDeveloper>>> = ({ signal }) => getMyStoreDeveloper({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyStoreDeveloper>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyStoreDeveloperQueryResult = NonNullable<Awaited<ReturnType<typeof getMyStoreDeveloper>>>
+export type GetMyStoreDeveloperQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the signed-in user's developer account (if registered)
+ */
+
+export function useGetMyStoreDeveloper<TData = Awaited<ReturnType<typeof getMyStoreDeveloper>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyStoreDeveloper>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyStoreDeveloperQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateMyStoreDeveloperUrl = () => {
+
+
+
+
+  return `/api/store/developers/me`
+}
+
+/**
+ * @summary Update developer profile
+ */
+export const updateMyStoreDeveloper = async (storeDeveloperUpdate: StoreDeveloperUpdate, options?: RequestInit): Promise<StoreDeveloper> => {
+
+  return customFetch<StoreDeveloper>(getUpdateMyStoreDeveloperUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeDeveloperUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateMyStoreDeveloperMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreDeveloper>>, TError,{data: BodyType<StoreDeveloperUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreDeveloper>>, TError,{data: BodyType<StoreDeveloperUpdate>}, TContext> => {
+
+const mutationKey = ['updateMyStoreDeveloper'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMyStoreDeveloper>>, {data: BodyType<StoreDeveloperUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMyStoreDeveloper(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMyStoreDeveloperMutationResult = NonNullable<Awaited<ReturnType<typeof updateMyStoreDeveloper>>>
+    export type UpdateMyStoreDeveloperMutationBody = BodyType<StoreDeveloperUpdate>
+    export type UpdateMyStoreDeveloperMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update developer profile
+ */
+export const useUpdateMyStoreDeveloper = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreDeveloper>>, TError,{data: BodyType<StoreDeveloperUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMyStoreDeveloper>>,
+        TError,
+        {data: BodyType<StoreDeveloperUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateMyStoreDeveloperMutationOptions(options));
+    }
+
+export const getGetStoreDeveloperDashboardUrl = () => {
+
+
+
+
+  return `/api/store/developers/me/dashboard`
+}
+
+/**
+ * @summary Developer dashboard — downloads, ratings, revenue breakdown per app
+ */
+export const getStoreDeveloperDashboard = async ( options?: RequestInit): Promise<StoreDeveloperDashboard> => {
+
+  return customFetch<StoreDeveloperDashboard>(getGetStoreDeveloperDashboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStoreDeveloperDashboardQueryKey = () => {
+    return [
+    `/api/store/developers/me/dashboard`
+    ] as const;
+    }
+
+
+export const getGetStoreDeveloperDashboardQueryOptions = <TData = Awaited<ReturnType<typeof getStoreDeveloperDashboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreDeveloperDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStoreDeveloperDashboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoreDeveloperDashboard>>> = ({ signal }) => getStoreDeveloperDashboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStoreDeveloperDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStoreDeveloperDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof getStoreDeveloperDashboard>>>
+export type GetStoreDeveloperDashboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Developer dashboard — downloads, ratings, revenue breakdown per app
+ */
+
+export function useGetStoreDeveloperDashboard<TData = Awaited<ReturnType<typeof getStoreDeveloperDashboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreDeveloperDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStoreDeveloperDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListMyStoreAppsUrl = () => {
+
+
+
+
+  return `/api/store/developers/me/apps`
+}
+
+/**
+ * @summary All apps owned by the signed-in developer
+ */
+export const listMyStoreApps = async ( options?: RequestInit): Promise<StoreApp[]> => {
+
+  return customFetch<StoreApp[]>(getListMyStoreAppsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyStoreAppsQueryKey = () => {
+    return [
+    `/api/store/developers/me/apps`
+    ] as const;
+    }
+
+
+export const getListMyStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listMyStoreApps>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyStoreAppsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyStoreApps>>> = ({ signal }) => listMyStoreApps({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyStoreApps>>>
+export type ListMyStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary All apps owned by the signed-in developer
+ */
+
+export function useListMyStoreApps<TData = Awaited<ReturnType<typeof listMyStoreApps>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyStoreAppsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitStoreAppUrl = () => {
+
+
+
+
+  return `/api/store/developers/me/apps`
+}
+
+/**
+ * @summary Submit a new app for review
+ */
+export const submitStoreApp = async (storeAppInput: StoreAppInput, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getSubmitStoreAppUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppInput)
+  }
+);}
+
+
+
+
+export const getSubmitStoreAppMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStoreApp>>, TError,{data: BodyType<StoreAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitStoreApp>>, TError,{data: BodyType<StoreAppInput>}, TContext> => {
+
+const mutationKey = ['submitStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitStoreApp>>, {data: BodyType<StoreAppInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitStoreApp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof submitStoreApp>>>
+    export type SubmitStoreAppMutationBody = BodyType<StoreAppInput>
+    export type SubmitStoreAppMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit a new app for review
+ */
+export const useSubmitStoreApp = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStoreApp>>, TError,{data: BodyType<StoreAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitStoreApp>>,
+        TError,
+        {data: BodyType<StoreAppInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitStoreAppMutationOptions(options));
+    }
+
+export const getUpdateMyStoreAppUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/developers/me/apps/${id}`
+}
+
+/**
+ * @summary Update an owned app
+ */
+export const updateMyStoreApp = async (id: number,
+    storeAppUpdate: StoreAppUpdate, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getUpdateMyStoreAppUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateMyStoreAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreApp>>, TError,{id: number;data: BodyType<StoreAppUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreApp>>, TError,{id: number;data: BodyType<StoreAppUpdate>}, TContext> => {
+
+const mutationKey = ['updateMyStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMyStoreApp>>, {id: number;data: BodyType<StoreAppUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMyStoreApp(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMyStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof updateMyStoreApp>>>
+    export type UpdateMyStoreAppMutationBody = BodyType<StoreAppUpdate>
+    export type UpdateMyStoreAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an owned app
+ */
+export const useUpdateMyStoreApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyStoreApp>>, TError,{id: number;data: BodyType<StoreAppUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMyStoreApp>>,
+        TError,
+        {id: number;data: BodyType<StoreAppUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateMyStoreAppMutationOptions(options));
+    }
+
+export const getRemoveMyStoreAppUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/developers/me/apps/${id}`
+}
+
+/**
+ * @summary Remove / de-list an owned app
+ */
+export const removeMyStoreApp = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRemoveMyStoreAppUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getRemoveMyStoreAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeMyStoreApp>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeMyStoreApp>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['removeMyStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeMyStoreApp>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  removeMyStoreApp(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveMyStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof removeMyStoreApp>>>
+
+    export type RemoveMyStoreAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove / de-list an owned app
+ */
+export const useRemoveMyStoreApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeMyStoreApp>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeMyStoreApp>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRemoveMyStoreAppMutationOptions(options));
+    }
+
+export const getAddStoreAppVersionUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/developers/me/apps/${id}/versions`
+}
+
+/**
+ * @summary Release a new version for an owned app
+ */
+export const addStoreAppVersion = async (id: number,
+    storeAppVersionInput: StoreAppVersionInput, options?: RequestInit): Promise<StoreAppVersion> => {
+
+  return customFetch<StoreAppVersion>(getAddStoreAppVersionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppVersionInput)
+  }
+);}
+
+
+
+
+export const getAddStoreAppVersionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addStoreAppVersion>>, TError,{id: number;data: BodyType<StoreAppVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addStoreAppVersion>>, TError,{id: number;data: BodyType<StoreAppVersionInput>}, TContext> => {
+
+const mutationKey = ['addStoreAppVersion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addStoreAppVersion>>, {id: number;data: BodyType<StoreAppVersionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addStoreAppVersion(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddStoreAppVersionMutationResult = NonNullable<Awaited<ReturnType<typeof addStoreAppVersion>>>
+    export type AddStoreAppVersionMutationBody = BodyType<StoreAppVersionInput>
+    export type AddStoreAppVersionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Release a new version for an owned app
+ */
+export const useAddStoreAppVersion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addStoreAppVersion>>, TError,{id: number;data: BodyType<StoreAppVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addStoreAppVersion>>,
+        TError,
+        {id: number;data: BodyType<StoreAppVersionInput>},
+        TContext
+      > => {
+      return useMutation(getAddStoreAppVersionMutationOptions(options));
+    }
+
+export const getInitiateStoreDeveloperPaymentUrl = () => {
+
+
+
+
+  return `/api/store/payments/developer-signup`
+}
+
+/**
+ * @summary Initiate the $15 developer registration fee (Stripe, Paystack, or PayPal)
+ */
+export const initiateStoreDeveloperPayment = async (storeDeveloperPaymentInput: StoreDeveloperPaymentInput, options?: RequestInit): Promise<StoreDeveloperPaymentResult> => {
+
+  return customFetch<StoreDeveloperPaymentResult>(getInitiateStoreDeveloperPaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeDeveloperPaymentInput)
+  }
+);}
+
+
+
+
+export const getInitiateStoreDeveloperPaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>, TError,{data: BodyType<StoreDeveloperPaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>, TError,{data: BodyType<StoreDeveloperPaymentInput>}, TContext> => {
+
+const mutationKey = ['initiateStoreDeveloperPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>, {data: BodyType<StoreDeveloperPaymentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  initiateStoreDeveloperPayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitiateStoreDeveloperPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>>
+    export type InitiateStoreDeveloperPaymentMutationBody = BodyType<StoreDeveloperPaymentInput>
+    export type InitiateStoreDeveloperPaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Initiate the $15 developer registration fee (Stripe, Paystack, or PayPal)
+ */
+export const useInitiateStoreDeveloperPayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>, TError,{data: BodyType<StoreDeveloperPaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initiateStoreDeveloperPayment>>,
+        TError,
+        {data: BodyType<StoreDeveloperPaymentInput>},
+        TContext
+      > => {
+      return useMutation(getInitiateStoreDeveloperPaymentMutationOptions(options));
+    }
+
+export const getCompleteStoreDeveloperRegistrationUrl = () => {
+
+
+
+
+  return `/api/store/developers/register`
+}
+
+/**
+ * @summary Complete developer registration after payment is confirmed
+ */
+export const completeStoreDeveloperRegistration = async (storeDeveloperInput: StoreDeveloperInput, options?: RequestInit): Promise<StoreDeveloper> => {
+
+  return customFetch<StoreDeveloper>(getCompleteStoreDeveloperRegistrationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeDeveloperInput)
+  }
+);}
+
+
+
+
+export const getCompleteStoreDeveloperRegistrationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>, TError,{data: BodyType<StoreDeveloperInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>, TError,{data: BodyType<StoreDeveloperInput>}, TContext> => {
+
+const mutationKey = ['completeStoreDeveloperRegistration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>, {data: BodyType<StoreDeveloperInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeStoreDeveloperRegistration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteStoreDeveloperRegistrationMutationResult = NonNullable<Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>>
+    export type CompleteStoreDeveloperRegistrationMutationBody = BodyType<StoreDeveloperInput>
+    export type CompleteStoreDeveloperRegistrationMutationError = ErrorType<void>
+
+    /**
+ * @summary Complete developer registration after payment is confirmed
+ */
+export const useCompleteStoreDeveloperRegistration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>, TError,{data: BodyType<StoreDeveloperInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeStoreDeveloperRegistration>>,
+        TError,
+        {data: BodyType<StoreDeveloperInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteStoreDeveloperRegistrationMutationOptions(options));
+    }
+
+export const getGetStoreAdminStatsUrl = () => {
+
+
+
+
+  return `/api/store/admin/stats`
+}
+
+/**
+ * @summary Store-wide stats (total apps, developers, downloads, pending reviews)
+ */
+export const getStoreAdminStats = async ( options?: RequestInit): Promise<StoreAdminStats> => {
+
+  return customFetch<StoreAdminStats>(getGetStoreAdminStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStoreAdminStatsQueryKey = () => {
+    return [
+    `/api/store/admin/stats`
+    ] as const;
+    }
+
+
+export const getGetStoreAdminStatsQueryOptions = <TData = Awaited<ReturnType<typeof getStoreAdminStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreAdminStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStoreAdminStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoreAdminStats>>> = ({ signal }) => getStoreAdminStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStoreAdminStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStoreAdminStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getStoreAdminStats>>>
+export type GetStoreAdminStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Store-wide stats (total apps, developers, downloads, pending reviews)
+ */
+
+export function useGetStoreAdminStats<TData = Awaited<ReturnType<typeof getStoreAdminStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStoreAdminStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStoreAdminStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListPendingStoreAppsUrl = () => {
+
+
+
+
+  return `/api/store/admin/apps/pending`
+}
+
+/**
+ * @summary Apps awaiting review
+ */
+export const listPendingStoreApps = async ( options?: RequestInit): Promise<StoreApp[]> => {
+
+  return customFetch<StoreApp[]>(getListPendingStoreAppsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPendingStoreAppsQueryKey = () => {
+    return [
+    `/api/store/admin/apps/pending`
+    ] as const;
+    }
+
+
+export const getListPendingStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listPendingStoreApps>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPendingStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPendingStoreAppsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPendingStoreApps>>> = ({ signal }) => listPendingStoreApps({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPendingStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPendingStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listPendingStoreApps>>>
+export type ListPendingStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Apps awaiting review
+ */
+
+export function useListPendingStoreApps<TData = Awaited<ReturnType<typeof listPendingStoreApps>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPendingStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPendingStoreAppsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAllStoreAppsUrl = (params?: ListAllStoreAppsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/store/admin/apps?${stringifiedParams}` : `/api/store/admin/apps`
+}
+
+/**
+ * @summary All apps (any status) with filtering
+ */
+export const listAllStoreApps = async (params?: ListAllStoreAppsParams, options?: RequestInit): Promise<StoreApp[]> => {
+
+  return customFetch<StoreApp[]>(getListAllStoreAppsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAllStoreAppsQueryKey = (params?: ListAllStoreAppsParams,) => {
+    return [
+    `/api/store/admin/apps`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAllStoreAppsQueryOptions = <TData = Awaited<ReturnType<typeof listAllStoreApps>>, TError = ErrorType<unknown>>(params?: ListAllStoreAppsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAllStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAllStoreAppsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAllStoreApps>>> = ({ signal }) => listAllStoreApps(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAllStoreApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAllStoreAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listAllStoreApps>>>
+export type ListAllStoreAppsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary All apps (any status) with filtering
+ */
+
+export function useListAllStoreApps<TData = Awaited<ReturnType<typeof listAllStoreApps>>, TError = ErrorType<unknown>>(
+ params?: ListAllStoreAppsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAllStoreApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAllStoreAppsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getTriggerStoreAppAiReviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/apps/${id}/ai-review`
+}
+
+/**
+ * @summary Run AI analysis on app (policy check, categorize, generate summary)
+ */
+export const triggerStoreAppAiReview = async (id: number, options?: RequestInit): Promise<StoreAiReviewResult> => {
+
+  return customFetch<StoreAiReviewResult>(getTriggerStoreAppAiReviewUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getTriggerStoreAppAiReviewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof triggerStoreAppAiReview>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof triggerStoreAppAiReview>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['triggerStoreAppAiReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof triggerStoreAppAiReview>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  triggerStoreAppAiReview(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TriggerStoreAppAiReviewMutationResult = NonNullable<Awaited<ReturnType<typeof triggerStoreAppAiReview>>>
+
+    export type TriggerStoreAppAiReviewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run AI analysis on app (policy check, categorize, generate summary)
+ */
+export const useTriggerStoreAppAiReview = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof triggerStoreAppAiReview>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof triggerStoreAppAiReview>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getTriggerStoreAppAiReviewMutationOptions(options));
+    }
+
+export const getApproveStoreAppUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/apps/${id}/approve`
+}
+
+/**
+ * @summary Approve an app — makes it live in the store
+ */
+export const approveStoreApp = async (id: number,
+    storeAppDecisionInput?: StoreAppDecisionInput, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getApproveStoreAppUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppDecisionInput)
+  }
+);}
+
+
+
+
+export const getApproveStoreAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveStoreApp>>, TError,{id: number;data?: BodyType<StoreAppDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveStoreApp>>, TError,{id: number;data?: BodyType<StoreAppDecisionInput>}, TContext> => {
+
+const mutationKey = ['approveStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveStoreApp>>, {id: number;data?: BodyType<StoreAppDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  approveStoreApp(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof approveStoreApp>>>
+    export type ApproveStoreAppMutationBody = BodyType<StoreAppDecisionInput> | undefined
+    export type ApproveStoreAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Approve an app — makes it live in the store
+ */
+export const useApproveStoreApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveStoreApp>>, TError,{id: number;data?: BodyType<StoreAppDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveStoreApp>>,
+        TError,
+        {id: number;data?: BodyType<StoreAppDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getApproveStoreAppMutationOptions(options));
+    }
+
+export const getRejectStoreAppUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/apps/${id}/reject`
+}
+
+/**
+ * @summary Reject an app with a reason sent to the developer
+ */
+export const rejectStoreApp = async (id: number,
+    storeAppDecisionInput: StoreAppDecisionInput, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getRejectStoreAppUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppDecisionInput)
+  }
+);}
+
+
+
+
+export const getRejectStoreAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectStoreApp>>, TError,{id: number;data: BodyType<StoreAppDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectStoreApp>>, TError,{id: number;data: BodyType<StoreAppDecisionInput>}, TContext> => {
+
+const mutationKey = ['rejectStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectStoreApp>>, {id: number;data: BodyType<StoreAppDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rejectStoreApp(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof rejectStoreApp>>>
+    export type RejectStoreAppMutationBody = BodyType<StoreAppDecisionInput>
+    export type RejectStoreAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reject an app with a reason sent to the developer
+ */
+export const useRejectStoreApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectStoreApp>>, TError,{id: number;data: BodyType<StoreAppDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectStoreApp>>,
+        TError,
+        {id: number;data: BodyType<StoreAppDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getRejectStoreAppMutationOptions(options));
+    }
+
+export const getFeatureStoreAppUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/apps/${id}/feature`
+}
+
+/**
+ * @summary Toggle featured status for an approved app
+ */
+export const featureStoreApp = async (id: number,
+    storeAppFeatureInput: StoreAppFeatureInput, options?: RequestInit): Promise<StoreApp> => {
+
+  return customFetch<StoreApp>(getFeatureStoreAppUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeAppFeatureInput)
+  }
+);}
+
+
+
+
+export const getFeatureStoreAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof featureStoreApp>>, TError,{id: number;data: BodyType<StoreAppFeatureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof featureStoreApp>>, TError,{id: number;data: BodyType<StoreAppFeatureInput>}, TContext> => {
+
+const mutationKey = ['featureStoreApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof featureStoreApp>>, {id: number;data: BodyType<StoreAppFeatureInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  featureStoreApp(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FeatureStoreAppMutationResult = NonNullable<Awaited<ReturnType<typeof featureStoreApp>>>
+    export type FeatureStoreAppMutationBody = BodyType<StoreAppFeatureInput>
+    export type FeatureStoreAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Toggle featured status for an approved app
+ */
+export const useFeatureStoreApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof featureStoreApp>>, TError,{id: number;data: BodyType<StoreAppFeatureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof featureStoreApp>>,
+        TError,
+        {id: number;data: BodyType<StoreAppFeatureInput>},
+        TContext
+      > => {
+      return useMutation(getFeatureStoreAppMutationOptions(options));
+    }
+
+export const getListStoreDevelopersUrl = (params?: ListStoreDevelopersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/store/admin/developers?${stringifiedParams}` : `/api/store/admin/developers`
+}
+
+/**
+ * @summary List all developer accounts
+ */
+export const listStoreDevelopers = async (params?: ListStoreDevelopersParams, options?: RequestInit): Promise<StoreDeveloper[]> => {
+
+  return customFetch<StoreDeveloper[]>(getListStoreDevelopersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStoreDevelopersQueryKey = (params?: ListStoreDevelopersParams,) => {
+    return [
+    `/api/store/admin/developers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListStoreDevelopersQueryOptions = <TData = Awaited<ReturnType<typeof listStoreDevelopers>>, TError = ErrorType<unknown>>(params?: ListStoreDevelopersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreDevelopers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStoreDevelopersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoreDevelopers>>> = ({ signal }) => listStoreDevelopers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStoreDevelopers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStoreDevelopersQueryResult = NonNullable<Awaited<ReturnType<typeof listStoreDevelopers>>>
+export type ListStoreDevelopersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all developer accounts
+ */
+
+export function useListStoreDevelopers<TData = Awaited<ReturnType<typeof listStoreDevelopers>>, TError = ErrorType<unknown>>(
+ params?: ListStoreDevelopersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStoreDevelopers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStoreDevelopersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSuspendStoreDeveloperUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/developers/${id}/suspend`
+}
+
+/**
+ * @summary Suspend a developer account
+ */
+export const suspendStoreDeveloper = async (id: number,
+    storeDeveloperSuspendInput: StoreDeveloperSuspendInput, options?: RequestInit): Promise<StoreDeveloper> => {
+
+  return customFetch<StoreDeveloper>(getSuspendStoreDeveloperUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeDeveloperSuspendInput)
+  }
+);}
+
+
+
+
+export const getSuspendStoreDeveloperMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendStoreDeveloper>>, TError,{id: number;data: BodyType<StoreDeveloperSuspendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suspendStoreDeveloper>>, TError,{id: number;data: BodyType<StoreDeveloperSuspendInput>}, TContext> => {
+
+const mutationKey = ['suspendStoreDeveloper'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suspendStoreDeveloper>>, {id: number;data: BodyType<StoreDeveloperSuspendInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  suspendStoreDeveloper(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuspendStoreDeveloperMutationResult = NonNullable<Awaited<ReturnType<typeof suspendStoreDeveloper>>>
+    export type SuspendStoreDeveloperMutationBody = BodyType<StoreDeveloperSuspendInput>
+    export type SuspendStoreDeveloperMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Suspend a developer account
+ */
+export const useSuspendStoreDeveloper = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendStoreDeveloper>>, TError,{id: number;data: BodyType<StoreDeveloperSuspendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suspendStoreDeveloper>>,
+        TError,
+        {id: number;data: BodyType<StoreDeveloperSuspendInput>},
+        TContext
+      > => {
+      return useMutation(getSuspendStoreDeveloperMutationOptions(options));
+    }
+
+export const getFlagStoreReviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/store/admin/reviews/${id}/flag`
+}
+
+/**
+ * @summary Flag a review as fake or policy-violating
+ */
+export const flagStoreReview = async (id: number,
+    storeReviewFlagInput: StoreReviewFlagInput, options?: RequestInit): Promise<StoreReview> => {
+
+  return customFetch<StoreReview>(getFlagStoreReviewUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(storeReviewFlagInput)
+  }
+);}
+
+
+
+
+export const getFlagStoreReviewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof flagStoreReview>>, TError,{id: number;data: BodyType<StoreReviewFlagInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof flagStoreReview>>, TError,{id: number;data: BodyType<StoreReviewFlagInput>}, TContext> => {
+
+const mutationKey = ['flagStoreReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof flagStoreReview>>, {id: number;data: BodyType<StoreReviewFlagInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  flagStoreReview(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FlagStoreReviewMutationResult = NonNullable<Awaited<ReturnType<typeof flagStoreReview>>>
+    export type FlagStoreReviewMutationBody = BodyType<StoreReviewFlagInput>
+    export type FlagStoreReviewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Flag a review as fake or policy-violating
+ */
+export const useFlagStoreReview = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof flagStoreReview>>, TError,{id: number;data: BodyType<StoreReviewFlagInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof flagStoreReview>>,
+        TError,
+        {id: number;data: BodyType<StoreReviewFlagInput>},
+        TContext
+      > => {
+      return useMutation(getFlagStoreReviewMutationOptions(options));
     }
 

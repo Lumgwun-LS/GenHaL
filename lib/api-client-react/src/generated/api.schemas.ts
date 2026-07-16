@@ -1458,6 +1458,287 @@ export interface SocialAnalytics {
   totalEngagement: number;
 }
 
+export interface StoreAppSummary {
+  id: number;
+  name: string;
+  slug: string;
+  tagline: string;
+  category: string;
+  platform: string;
+  iconUrl: string;
+  rating: number;
+  ratingCount: number;
+  totalDownloads: number;
+  status: string;
+  isFeatured?: boolean;
+  createdAt: string;
+}
+
+export interface StoreApp {
+  id: number;
+  name: string;
+  slug: string;
+  tagline: string;
+  description: string;
+  category: string;
+  platform: string;
+  iconUrl: string;
+  screenshots: string[];
+  /** @nullable */
+  downloadUrl?: string | null;
+  /** @nullable */
+  webUrl?: string | null;
+  /** @nullable */
+  currentVersion?: string | null;
+  rating: number;
+  ratingCount: number;
+  totalDownloads: number;
+  status: string;
+  isFeatured?: boolean;
+  developerId: number;
+  developerName: string;
+  /** @nullable */
+  developerWebsite?: string | null;
+  /** @nullable */
+  aiSummary?: string | null;
+  /** @nullable */
+  aiCategory?: string | null;
+  /** @nullable */
+  aiPolicyFlags?: string | null;
+  /** @nullable */
+  aiReviewScore?: number | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type StoreAppInputPlatform = typeof StoreAppInputPlatform[keyof typeof StoreAppInputPlatform];
+
+
+export const StoreAppInputPlatform = {
+  android: 'android',
+  ios: 'ios',
+  web: 'web',
+  all: 'all',
+} as const;
+
+export interface StoreAppInput {
+  /** @minLength 2 */
+  name: string;
+  /** @maxLength 120 */
+  tagline: string;
+  /** @minLength 50 */
+  description: string;
+  category: string;
+  platform: StoreAppInputPlatform;
+  iconUrl: string;
+  /** @maxItems 8 */
+  screenshots?: string[];
+  downloadUrl?: string;
+  webUrl?: string;
+  currentVersion?: string;
+}
+
+export interface StoreAppUpdate {
+  tagline?: string;
+  description?: string;
+  category?: string;
+  platform?: string;
+  iconUrl?: string;
+  screenshots?: string[];
+  downloadUrl?: string;
+  webUrl?: string;
+}
+
+export interface StoreAppPage {
+  apps: StoreAppSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface StoreCategory {
+  name: string;
+  count: number;
+  iconEmoji: string;
+}
+
+export interface StoreReview {
+  id: number;
+  appId: number;
+  reviewerClerkId?: string;
+  reviewerName: string;
+  rating: number;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  sentimentLabel?: string | null;
+  /** @nullable */
+  sentimentScore?: number | null;
+  isFlagged?: boolean;
+  helpfulCount?: number;
+  createdAt: string;
+}
+
+export interface StoreReviewInput {
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  /** @maxLength 1000 */
+  comment?: string;
+}
+
+export interface StoreAppVersion {
+  id: number;
+  appId: number;
+  version: string;
+  /** @nullable */
+  releaseNotes?: string | null;
+  /** @nullable */
+  fileUrl?: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface StoreAppVersionInput {
+  version: string;
+  releaseNotes?: string;
+  fileUrl?: string;
+}
+
+export interface StoreDeveloper {
+  id: number;
+  clerkUserId: string;
+  displayName: string;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  status: string;
+  registrationFeePaid: boolean;
+  totalApps?: number;
+  totalDownloads?: number;
+  createdAt: string;
+}
+
+export interface StoreDeveloperInput {
+  displayName: string;
+  bio?: string;
+  website?: string;
+  company?: string;
+  avatarUrl?: string;
+  paymentRef?: string;
+}
+
+export interface StoreDeveloperUpdate {
+  displayName?: string;
+  bio?: string;
+  website?: string;
+  company?: string;
+  avatarUrl?: string;
+}
+
+export type StoreDeveloperPaymentInputGateway = typeof StoreDeveloperPaymentInputGateway[keyof typeof StoreDeveloperPaymentInputGateway];
+
+
+export const StoreDeveloperPaymentInputGateway = {
+  stripe: 'stripe',
+  paystack: 'paystack',
+  paypal: 'paypal',
+} as const;
+
+export interface StoreDeveloperPaymentInput {
+  gateway: StoreDeveloperPaymentInputGateway;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface StoreDeveloperPaymentResult {
+  gateway: string;
+  paymentRef: string;
+  /** @nullable */
+  checkoutUrl?: string | null;
+  /** @nullable */
+  clientSecret?: string | null;
+  /** @nullable */
+  paystackAuthorizationUrl?: string | null;
+  /** @nullable */
+  paypalOrderId?: string | null;
+}
+
+export type StoreDeveloperDashboardAppBreakdownItem = {
+  appId: number;
+  appName: string;
+  downloads: number;
+  rating: number;
+  ratingCount: number;
+  status: string;
+};
+
+export interface StoreDeveloperDashboard {
+  totalApps: number;
+  totalDownloads: number;
+  totalReviews: number;
+  averageRating: number;
+  downloadsThisWeek?: number;
+  downloadsThisMonth?: number;
+  appBreakdown: StoreDeveloperDashboardAppBreakdownItem[];
+}
+
+export interface StoreAdminStats {
+  totalApps: number;
+  totalDevelopers: number;
+  totalDownloads: number;
+  totalReviews: number;
+  pendingReview: number;
+  approvedApps: number;
+  rejectedApps: number;
+  topApps?: StoreAppSummary[];
+}
+
+export type StoreAiReviewResultRecommendation = typeof StoreAiReviewResultRecommendation[keyof typeof StoreAiReviewResultRecommendation];
+
+
+export const StoreAiReviewResultRecommendation = {
+  approve: 'approve',
+  review: 'review',
+  reject: 'reject',
+} as const;
+
+export interface StoreAiReviewResult {
+  appId: number;
+  policyFlags: string[];
+  category: string;
+  summary: string;
+  score: number;
+  recommendation: StoreAiReviewResultRecommendation;
+  malwareHints?: string[];
+}
+
+export interface StoreAppDecisionInput {
+  reason?: string;
+  note?: string;
+}
+
+export interface StoreAppFeatureInput {
+  featured: boolean;
+}
+
+export interface StoreDeveloperSuspendInput {
+  reason: string;
+}
+
+export interface StoreReviewFlagInput {
+  reason: string;
+}
+
 export type ListVendorsParams = {
 search?: string;
 industry?: string;
@@ -1652,5 +1933,39 @@ export type VerifyVendorDeletion200 = {
 
 export type GetAdminMessageHistoryParams = {
 vendorId?: number;
+};
+
+export type ListStoreAppsParams = {
+category?: string;
+platform?: string;
+search?: string;
+sort?: ListStoreAppsSort;
+page?: number;
+limit?: number;
+};
+
+export type ListStoreAppsSort = typeof ListStoreAppsSort[keyof typeof ListStoreAppsSort];
+
+
+export const ListStoreAppsSort = {
+  newest: 'newest',
+  rating: 'rating',
+  downloads: 'downloads',
+  trending: 'trending',
+} as const;
+
+export type RecordStoreAppDownload200 = {
+  downloadUrl: string;
+  /** @nullable */
+  webUrl?: string | null;
+};
+
+export type ListAllStoreAppsParams = {
+status?: string;
+search?: string;
+};
+
+export type ListStoreDevelopersParams = {
+status?: string;
 };
 

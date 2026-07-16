@@ -46,6 +46,14 @@ tags:
     description: Awajimaa bridge — mobile app / external partner access
   - name: admin
     description: Admin-only operations
+  - name: store-apps
+    description: Awajimaa App Store — public app catalogue
+  - name: store-developers
+    description: Awajimaa App Store — developer portal
+  - name: store-reviews
+    description: Awajimaa App Store — user reviews
+  - name: store-admin
+    description: Awajimaa App Store — admin review & moderation
 
 paths:
   /healthz:
@@ -2685,6 +2693,604 @@ paths:
         "503":
           description: No payment gateway available
 
+  # ─── AWAJIMAA APP STORE — PUBLIC ─────────────────────────────────────────
+  /store/apps:
+    get:
+      operationId: listStoreApps
+      tags: [store-apps]
+      summary: Browse published apps
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: platform
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, rating, downloads, trending]
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated app list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreAppPage"
+
+  /store/apps/featured:
+    get:
+      operationId: listFeaturedStoreApps
+      tags: [store-apps]
+      summary: Curated featured apps
+      responses:
+        "200":
+          description: Featured apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreAppSummary"
+
+  /store/apps/trending:
+    get:
+      operationId: listTrendingStoreApps
+      tags: [store-apps]
+      summary: Trending apps (top downloads this week)
+      responses:
+        "200":
+          description: Trending apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreAppSummary"
+
+  /store/apps/categories:
+    get:
+      operationId: listStoreCategories
+      tags: [store-apps]
+      summary: List all categories with app counts
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreCategory"
+
+  /store/apps/{slug}:
+    get:
+      operationId: getStoreApp
+      tags: [store-apps]
+      summary: Get full app details by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: App detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+        "404":
+          description: Not found
+
+  /store/apps/{slug}/download:
+    post:
+      operationId: recordStoreAppDownload
+      tags: [store-apps]
+      summary: Record a download / install click (increments counter)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Download recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [downloadUrl]
+                properties:
+                  downloadUrl:
+                    type: string
+                  webUrl:
+                    type: ["string", "null"]
+
+  /store/apps/{slug}/reviews:
+    get:
+      operationId: listStoreAppReviews
+      tags: [store-reviews]
+      summary: List reviews for an app
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreReview"
+    post:
+      operationId: submitStoreAppReview
+      tags: [store-reviews]
+      summary: Submit a review (requires Clerk auth)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreReviewInput"
+      responses:
+        "201":
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreReview"
+        "409":
+          description: Already reviewed this app
+
+  /store/apps/{slug}/versions:
+    get:
+      operationId: listStoreAppVersions
+      tags: [store-apps]
+      summary: Version history for an app
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreAppVersion"
+
+  # ─── AWAJIMAA APP STORE — DEVELOPER PORTAL ───────────────────────────────
+  /store/developers/me:
+    get:
+      operationId: getMyStoreDeveloper
+      tags: [store-developers]
+      summary: Get the signed-in user's developer account (if registered)
+      responses:
+        "200":
+          description: Developer account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloper"
+        "404":
+          description: Not registered as a developer yet
+    patch:
+      operationId: updateMyStoreDeveloper
+      tags: [store-developers]
+      summary: Update developer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreDeveloperUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloper"
+
+  /store/developers/me/dashboard:
+    get:
+      operationId: getStoreDeveloperDashboard
+      tags: [store-developers]
+      summary: Developer dashboard — downloads, ratings, revenue breakdown per app
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloperDashboard"
+
+  /store/developers/me/apps:
+    get:
+      operationId: listMyStoreApps
+      tags: [store-developers]
+      summary: All apps owned by the signed-in developer
+      responses:
+        "200":
+          description: Developer's apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreApp"
+    post:
+      operationId: submitStoreApp
+      tags: [store-developers]
+      summary: Submit a new app for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppInput"
+      responses:
+        "201":
+          description: App submitted for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+        "403":
+          description: Developer account not active / payment not complete
+
+  /store/developers/me/apps/{id}:
+    patch:
+      operationId: updateMyStoreApp
+      tags: [store-developers]
+      summary: Update an owned app
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppUpdate"
+      responses:
+        "200":
+          description: Updated app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+    delete:
+      operationId: removeMyStoreApp
+      tags: [store-developers]
+      summary: Remove / de-list an owned app
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  /store/developers/me/apps/{id}/versions:
+    post:
+      operationId: addStoreAppVersion
+      tags: [store-developers]
+      summary: Release a new version for an owned app
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppVersionInput"
+      responses:
+        "201":
+          description: Version submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreAppVersion"
+
+  /store/payments/developer-signup:
+    post:
+      operationId: initiateStoreDeveloperPayment
+      tags: [store-developers]
+      summary: Initiate the $15 developer registration fee (Stripe, Paystack, or PayPal)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreDeveloperPaymentInput"
+      responses:
+        "200":
+          description: Payment session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloperPaymentResult"
+
+  /store/developers/register:
+    post:
+      operationId: completeStoreDeveloperRegistration
+      tags: [store-developers]
+      summary: Complete developer registration after payment is confirmed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreDeveloperInput"
+      responses:
+        "201":
+          description: Developer account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloper"
+        "409":
+          description: Already registered
+
+  # ─── AWAJIMAA APP STORE — ADMIN ───────────────────────────────────────────
+  /store/admin/stats:
+    get:
+      operationId: getStoreAdminStats
+      tags: [store-admin]
+      summary: Store-wide stats (total apps, developers, downloads, pending reviews)
+      responses:
+        "200":
+          description: Store stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreAdminStats"
+
+  /store/admin/apps/pending:
+    get:
+      operationId: listPendingStoreApps
+      tags: [store-admin]
+      summary: Apps awaiting review
+      responses:
+        "200":
+          description: Pending apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreApp"
+
+  /store/admin/apps:
+    get:
+      operationId: listAllStoreApps
+      tags: [store-admin]
+      summary: All apps (any status) with filtering
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreApp"
+
+  /store/admin/apps/{id}/ai-review:
+    post:
+      operationId: triggerStoreAppAiReview
+      tags: [store-admin]
+      summary: Run AI analysis on app (policy check, categorize, generate summary)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI review results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreAiReviewResult"
+
+  /store/admin/apps/{id}/approve:
+    post:
+      operationId: approveStoreApp
+      tags: [store-admin]
+      summary: Approve an app — makes it live in the store
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppDecisionInput"
+      responses:
+        "200":
+          description: App approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+
+  /store/admin/apps/{id}/reject:
+    post:
+      operationId: rejectStoreApp
+      tags: [store-admin]
+      summary: Reject an app with a reason sent to the developer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppDecisionInput"
+      responses:
+        "200":
+          description: App rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+
+  /store/admin/apps/{id}/feature:
+    post:
+      operationId: featureStoreApp
+      tags: [store-admin]
+      summary: Toggle featured status for an approved app
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAppFeatureInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreApp"
+
+  /store/admin/developers:
+    get:
+      operationId: listStoreDevelopers
+      tags: [store-admin]
+      summary: List all developer accounts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Developers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreDeveloper"
+
+  /store/admin/developers/{id}/suspend:
+    post:
+      operationId: suspendStoreDeveloper
+      tags: [store-admin]
+      summary: Suspend a developer account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreDeveloperSuspendInput"
+      responses:
+        "200":
+          description: Developer suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDeveloper"
+
+  /store/admin/reviews/{id}/flag:
+    post:
+      operationId: flagStoreReview
+      tags: [store-admin]
+      summary: Flag a review as fake or policy-violating
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreReviewFlagInput"
+      responses:
+        "200":
+          description: Review flagged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreReview"
+
 components:
   securitySchemes:
     externalBearerAuth:
@@ -5119,3 +5725,446 @@ components:
             $ref: "#/components/schemas/Post"
         totalEngagement:
           type: integer
+
+    # ─── AWAJIMAA APP STORE SCHEMAS ─────────────────────────────────────────
+
+    StoreAppSummary:
+      type: object
+      required: [id, name, slug, tagline, category, platform, iconUrl, rating, ratingCount, totalDownloads, status, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        tagline:
+          type: string
+        category:
+          type: string
+        platform:
+          type: string
+        iconUrl:
+          type: string
+        rating:
+          type: number
+        ratingCount:
+          type: integer
+        totalDownloads:
+          type: integer
+        status:
+          type: string
+        isFeatured:
+          type: boolean
+        createdAt:
+          type: string
+
+    StoreApp:
+      type: object
+      required: [id, name, slug, tagline, description, category, platform, iconUrl, screenshots, rating, ratingCount, totalDownloads, status, developerId, developerName, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        tagline:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        platform:
+          type: string
+        iconUrl:
+          type: string
+        screenshots:
+          type: array
+          items:
+            type: string
+        downloadUrl:
+          type: ["string", "null"]
+        webUrl:
+          type: ["string", "null"]
+        currentVersion:
+          type: ["string", "null"]
+        rating:
+          type: number
+        ratingCount:
+          type: integer
+        totalDownloads:
+          type: integer
+        status:
+          type: string
+        isFeatured:
+          type: boolean
+        developerId:
+          type: integer
+        developerName:
+          type: string
+        developerWebsite:
+          type: ["string", "null"]
+        aiSummary:
+          type: ["string", "null"]
+        aiCategory:
+          type: ["string", "null"]
+        aiPolicyFlags:
+          type: ["string", "null"]
+        aiReviewScore:
+          type: ["number", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    StoreAppInput:
+      type: object
+      required: [name, tagline, description, category, platform, iconUrl]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        tagline:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          minLength: 50
+        category:
+          type: string
+        platform:
+          type: string
+          enum: [android, ios, web, all]
+        iconUrl:
+          type: string
+        screenshots:
+          type: array
+          items:
+            type: string
+          maxItems: 8
+        downloadUrl:
+          type: string
+        webUrl:
+          type: string
+        currentVersion:
+          type: string
+
+    StoreAppUpdate:
+      type: object
+      properties:
+        tagline:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        platform:
+          type: string
+        iconUrl:
+          type: string
+        screenshots:
+          type: array
+          items:
+            type: string
+        downloadUrl:
+          type: string
+        webUrl:
+          type: string
+
+    StoreAppPage:
+      type: object
+      required: [apps, total, page, limit]
+      properties:
+        apps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreAppSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    StoreCategory:
+      type: object
+      required: [name, count, iconEmoji]
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        iconEmoji:
+          type: string
+
+    StoreReview:
+      type: object
+      required: [id, appId, reviewerName, rating, createdAt]
+      properties:
+        id:
+          type: integer
+        appId:
+          type: integer
+        reviewerClerkId:
+          type: string
+        reviewerName:
+          type: string
+        rating:
+          type: integer
+        comment:
+          type: ["string", "null"]
+        sentimentLabel:
+          type: ["string", "null"]
+        sentimentScore:
+          type: ["number", "null"]
+        isFlagged:
+          type: boolean
+        helpfulCount:
+          type: integer
+        createdAt:
+          type: string
+
+    StoreReviewInput:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+
+    StoreAppVersion:
+      type: object
+      required: [id, appId, version, status, createdAt]
+      properties:
+        id:
+          type: integer
+        appId:
+          type: integer
+        version:
+          type: string
+        releaseNotes:
+          type: ["string", "null"]
+        fileUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    StoreAppVersionInput:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+        releaseNotes:
+          type: string
+        fileUrl:
+          type: string
+
+    StoreDeveloper:
+      type: object
+      required: [id, clerkUserId, displayName, status, registrationFeePaid, createdAt]
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        company:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+        registrationFeePaid:
+          type: boolean
+        totalApps:
+          type: integer
+        totalDownloads:
+          type: integer
+        createdAt:
+          type: string
+
+    StoreDeveloperInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+        bio:
+          type: string
+        website:
+          type: string
+        company:
+          type: string
+        avatarUrl:
+          type: string
+        paymentRef:
+          type: string
+
+    StoreDeveloperUpdate:
+      type: object
+      properties:
+        displayName:
+          type: string
+        bio:
+          type: string
+        website:
+          type: string
+        company:
+          type: string
+        avatarUrl:
+          type: string
+
+    StoreDeveloperPaymentInput:
+      type: object
+      required: [gateway]
+      properties:
+        gateway:
+          type: string
+          enum: [stripe, paystack, paypal]
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+
+    StoreDeveloperPaymentResult:
+      type: object
+      required: [gateway, paymentRef]
+      properties:
+        gateway:
+          type: string
+        paymentRef:
+          type: string
+        checkoutUrl:
+          type: ["string", "null"]
+        clientSecret:
+          type: ["string", "null"]
+        paystackAuthorizationUrl:
+          type: ["string", "null"]
+        paypalOrderId:
+          type: ["string", "null"]
+
+    StoreDeveloperDashboard:
+      type: object
+      required: [totalApps, totalDownloads, totalReviews, averageRating, appBreakdown]
+      properties:
+        totalApps:
+          type: integer
+        totalDownloads:
+          type: integer
+        totalReviews:
+          type: integer
+        averageRating:
+          type: number
+        downloadsThisWeek:
+          type: integer
+        downloadsThisMonth:
+          type: integer
+        appBreakdown:
+          type: array
+          items:
+            type: object
+            required: [appId, appName, downloads, rating, ratingCount, status]
+            properties:
+              appId:
+                type: integer
+              appName:
+                type: string
+              downloads:
+                type: integer
+              rating:
+                type: number
+              ratingCount:
+                type: integer
+              status:
+                type: string
+
+    StoreAdminStats:
+      type: object
+      required: [totalApps, totalDevelopers, totalDownloads, totalReviews, pendingReview, approvedApps, rejectedApps]
+      properties:
+        totalApps:
+          type: integer
+        totalDevelopers:
+          type: integer
+        totalDownloads:
+          type: integer
+        totalReviews:
+          type: integer
+        pendingReview:
+          type: integer
+        approvedApps:
+          type: integer
+        rejectedApps:
+          type: integer
+        topApps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreAppSummary"
+
+    StoreAiReviewResult:
+      type: object
+      required: [appId, policyFlags, category, summary, score, recommendation]
+      properties:
+        appId:
+          type: integer
+        policyFlags:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        summary:
+          type: string
+        score:
+          type: number
+        recommendation:
+          type: string
+          enum: [approve, review, reject]
+        malwareHints:
+          type: array
+          items:
+            type: string
+
+    StoreAppDecisionInput:
+      type: object
+      properties:
+        reason:
+          type: string
+        note:
+          type: string
+
+    StoreAppFeatureInput:
+      type: object
+      required: [featured]
+      properties:
+        featured:
+          type: boolean
+
+    StoreDeveloperSuspendInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+
+    StoreReviewFlagInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string

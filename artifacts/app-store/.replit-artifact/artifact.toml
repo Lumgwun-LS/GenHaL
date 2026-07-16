@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/app-store/"
+title = "Awajimaa App Store"
+version = "1.0.0"
+id = "artifacts/app-store"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/app-store/" ]
+localPort = 19851
+
+[services.development]
+run = "pnpm --filter @workspace/app-store run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/app-store", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/app-store/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19851"
+BASE_PATH = "/app-store/"

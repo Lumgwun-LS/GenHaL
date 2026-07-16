@@ -3259,3 +3259,832 @@ export const RetryExternalPaymentResponse = zod.object({
 })
 
 
+/**
+ * @summary Browse published apps
+ */
+export const ListStoreAppsQueryParams = zod.object({
+  "category": zod.coerce.string().optional(),
+  "platform": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional(),
+  "sort": zod.enum(['newest', 'rating', 'downloads', 'trending']).optional(),
+  "page": zod.coerce.number().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListStoreAppsResponse = zod.object({
+  "apps": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "createdAt": zod.string()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Curated featured apps
+ */
+export const ListFeaturedStoreAppsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "createdAt": zod.string()
+})
+export const ListFeaturedStoreAppsResponse = zod.array(ListFeaturedStoreAppsResponseItem)
+
+
+/**
+ * @summary Trending apps (top downloads this week)
+ */
+export const ListTrendingStoreAppsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "createdAt": zod.string()
+})
+export const ListTrendingStoreAppsResponse = zod.array(ListTrendingStoreAppsResponseItem)
+
+
+/**
+ * @summary List all categories with app counts
+ */
+export const ListStoreCategoriesResponseItem = zod.object({
+  "name": zod.string(),
+  "count": zod.number(),
+  "iconEmoji": zod.string()
+})
+export const ListStoreCategoriesResponse = zod.array(ListStoreCategoriesResponseItem)
+
+
+/**
+ * @summary Get full app details by slug
+ */
+export const GetStoreAppParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Record a download / install click (increments counter)
+ */
+export const RecordStoreAppDownloadParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const RecordStoreAppDownloadResponse = zod.object({
+  "downloadUrl": zod.string(),
+  "webUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary List reviews for an app
+ */
+export const ListStoreAppReviewsParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const ListStoreAppReviewsResponseItem = zod.object({
+  "id": zod.number(),
+  "appId": zod.number(),
+  "reviewerClerkId": zod.string().optional(),
+  "reviewerName": zod.string(),
+  "rating": zod.number(),
+  "comment": zod.string().nullish(),
+  "sentimentLabel": zod.string().nullish(),
+  "sentimentScore": zod.number().nullish(),
+  "isFlagged": zod.boolean().optional(),
+  "helpfulCount": zod.number().optional(),
+  "createdAt": zod.string()
+})
+export const ListStoreAppReviewsResponse = zod.array(ListStoreAppReviewsResponseItem)
+
+
+/**
+ * @summary Submit a review (requires Clerk auth)
+ */
+export const SubmitStoreAppReviewParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const submitStoreAppReviewBodyRatingMax = 5;
+
+export const submitStoreAppReviewBodyCommentMax = 1000;
+
+
+
+export const SubmitStoreAppReviewBody = zod.object({
+  "rating": zod.number().min(1).max(submitStoreAppReviewBodyRatingMax),
+  "comment": zod.string().max(submitStoreAppReviewBodyCommentMax).optional()
+})
+
+export const SubmitStoreAppReviewResponse = zod.object({
+  "id": zod.number(),
+  "appId": zod.number(),
+  "reviewerClerkId": zod.string().optional(),
+  "reviewerName": zod.string(),
+  "rating": zod.number(),
+  "comment": zod.string().nullish(),
+  "sentimentLabel": zod.string().nullish(),
+  "sentimentScore": zod.number().nullish(),
+  "isFlagged": zod.boolean().optional(),
+  "helpfulCount": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Version history for an app
+ */
+export const ListStoreAppVersionsParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const ListStoreAppVersionsResponseItem = zod.object({
+  "id": zod.number(),
+  "appId": zod.number(),
+  "version": zod.string(),
+  "releaseNotes": zod.string().nullish(),
+  "fileUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListStoreAppVersionsResponse = zod.array(ListStoreAppVersionsResponseItem)
+
+
+/**
+ * @summary Get the signed-in user's developer account (if registered)
+ */
+export const GetMyStoreDeveloperResponse = zod.object({
+  "id": zod.number(),
+  "clerkUserId": zod.string(),
+  "displayName": zod.string(),
+  "bio": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "registrationFeePaid": zod.boolean(),
+  "totalApps": zod.number().optional(),
+  "totalDownloads": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update developer profile
+ */
+export const UpdateMyStoreDeveloperBody = zod.object({
+  "displayName": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "website": zod.string().optional(),
+  "company": zod.string().optional(),
+  "avatarUrl": zod.string().optional()
+})
+
+export const UpdateMyStoreDeveloperResponse = zod.object({
+  "id": zod.number(),
+  "clerkUserId": zod.string(),
+  "displayName": zod.string(),
+  "bio": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "registrationFeePaid": zod.boolean(),
+  "totalApps": zod.number().optional(),
+  "totalDownloads": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Developer dashboard — downloads, ratings, revenue breakdown per app
+ */
+export const GetStoreDeveloperDashboardResponse = zod.object({
+  "totalApps": zod.number(),
+  "totalDownloads": zod.number(),
+  "totalReviews": zod.number(),
+  "averageRating": zod.number(),
+  "downloadsThisWeek": zod.number().optional(),
+  "downloadsThisMonth": zod.number().optional(),
+  "appBreakdown": zod.array(zod.object({
+  "appId": zod.number(),
+  "appName": zod.string(),
+  "downloads": zod.number(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "status": zod.string()
+}))
+})
+
+
+/**
+ * @summary All apps owned by the signed-in developer
+ */
+export const ListMyStoreAppsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListMyStoreAppsResponse = zod.array(ListMyStoreAppsResponseItem)
+
+
+/**
+ * @summary Submit a new app for review
+ */
+export const submitStoreAppBodyNameMin = 2;
+
+export const submitStoreAppBodyTaglineMax = 120;
+
+export const submitStoreAppBodyDescriptionMin = 50;
+
+export const submitStoreAppBodyScreenshotsMax = 8;
+
+
+
+export const SubmitStoreAppBody = zod.object({
+  "name": zod.string().min(submitStoreAppBodyNameMin),
+  "tagline": zod.string().max(submitStoreAppBodyTaglineMax),
+  "description": zod.string().min(submitStoreAppBodyDescriptionMin),
+  "category": zod.string(),
+  "platform": zod.enum(['android', 'ios', 'web', 'all']),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()).max(submitStoreAppBodyScreenshotsMax).optional(),
+  "downloadUrl": zod.string().optional(),
+  "webUrl": zod.string().optional(),
+  "currentVersion": zod.string().optional()
+})
+
+export const SubmitStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Update an owned app
+ */
+export const UpdateMyStoreAppParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateMyStoreAppBody = zod.object({
+  "tagline": zod.string().optional(),
+  "description": zod.string().optional(),
+  "category": zod.string().optional(),
+  "platform": zod.string().optional(),
+  "iconUrl": zod.string().optional(),
+  "screenshots": zod.array(zod.string()).optional(),
+  "downloadUrl": zod.string().optional(),
+  "webUrl": zod.string().optional()
+})
+
+export const UpdateMyStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Remove / de-list an owned app
+ */
+export const RemoveMyStoreAppParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RemoveMyStoreAppResponse = zod.void()
+
+
+/**
+ * @summary Release a new version for an owned app
+ */
+export const AddStoreAppVersionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddStoreAppVersionBody = zod.object({
+  "version": zod.string(),
+  "releaseNotes": zod.string().optional(),
+  "fileUrl": zod.string().optional()
+})
+
+export const AddStoreAppVersionResponse = zod.object({
+  "id": zod.number(),
+  "appId": zod.number(),
+  "version": zod.string(),
+  "releaseNotes": zod.string().nullish(),
+  "fileUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Initiate the $15 developer registration fee (Stripe, Paystack, or PayPal)
+ */
+export const InitiateStoreDeveloperPaymentBody = zod.object({
+  "gateway": zod.enum(['stripe', 'paystack', 'paypal']),
+  "successUrl": zod.string().optional(),
+  "cancelUrl": zod.string().optional()
+})
+
+export const InitiateStoreDeveloperPaymentResponse = zod.object({
+  "gateway": zod.string(),
+  "paymentRef": zod.string(),
+  "checkoutUrl": zod.string().nullish(),
+  "clientSecret": zod.string().nullish(),
+  "paystackAuthorizationUrl": zod.string().nullish(),
+  "paypalOrderId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Complete developer registration after payment is confirmed
+ */
+export const CompleteStoreDeveloperRegistrationBody = zod.object({
+  "displayName": zod.string(),
+  "bio": zod.string().optional(),
+  "website": zod.string().optional(),
+  "company": zod.string().optional(),
+  "avatarUrl": zod.string().optional(),
+  "paymentRef": zod.string().optional()
+})
+
+export const CompleteStoreDeveloperRegistrationResponse = zod.object({
+  "id": zod.number(),
+  "clerkUserId": zod.string(),
+  "displayName": zod.string(),
+  "bio": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "registrationFeePaid": zod.boolean(),
+  "totalApps": zod.number().optional(),
+  "totalDownloads": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Store-wide stats (total apps, developers, downloads, pending reviews)
+ */
+export const GetStoreAdminStatsResponse = zod.object({
+  "totalApps": zod.number(),
+  "totalDevelopers": zod.number(),
+  "totalDownloads": zod.number(),
+  "totalReviews": zod.number(),
+  "pendingReview": zod.number(),
+  "approvedApps": zod.number(),
+  "rejectedApps": zod.number(),
+  "topApps": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "createdAt": zod.string()
+})).optional()
+})
+
+
+/**
+ * @summary Apps awaiting review
+ */
+export const ListPendingStoreAppsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListPendingStoreAppsResponse = zod.array(ListPendingStoreAppsResponseItem)
+
+
+/**
+ * @summary All apps (any status) with filtering
+ */
+export const ListAllStoreAppsQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional()
+})
+
+export const ListAllStoreAppsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListAllStoreAppsResponse = zod.array(ListAllStoreAppsResponseItem)
+
+
+/**
+ * @summary Run AI analysis on app (policy check, categorize, generate summary)
+ */
+export const TriggerStoreAppAiReviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const TriggerStoreAppAiReviewResponse = zod.object({
+  "appId": zod.number(),
+  "policyFlags": zod.array(zod.string()),
+  "category": zod.string(),
+  "summary": zod.string(),
+  "score": zod.number(),
+  "recommendation": zod.enum(['approve', 'review', 'reject']),
+  "malwareHints": zod.array(zod.string()).optional()
+})
+
+
+/**
+ * @summary Approve an app — makes it live in the store
+ */
+export const ApproveStoreAppParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveStoreAppBody = zod.object({
+  "reason": zod.string().optional(),
+  "note": zod.string().optional()
+})
+
+export const ApproveStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Reject an app with a reason sent to the developer
+ */
+export const RejectStoreAppParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RejectStoreAppBody = zod.object({
+  "reason": zod.string().optional(),
+  "note": zod.string().optional()
+})
+
+export const RejectStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Toggle featured status for an approved app
+ */
+export const FeatureStoreAppParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const FeatureStoreAppBody = zod.object({
+  "featured": zod.boolean()
+})
+
+export const FeatureStoreAppResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "tagline": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "platform": zod.string(),
+  "iconUrl": zod.string(),
+  "screenshots": zod.array(zod.string()),
+  "downloadUrl": zod.string().nullish(),
+  "webUrl": zod.string().nullish(),
+  "currentVersion": zod.string().nullish(),
+  "rating": zod.number(),
+  "ratingCount": zod.number(),
+  "totalDownloads": zod.number(),
+  "status": zod.string(),
+  "isFeatured": zod.boolean().optional(),
+  "developerId": zod.number(),
+  "developerName": zod.string(),
+  "developerWebsite": zod.string().nullish(),
+  "aiSummary": zod.string().nullish(),
+  "aiCategory": zod.string().nullish(),
+  "aiPolicyFlags": zod.string().nullish(),
+  "aiReviewScore": zod.number().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary List all developer accounts
+ */
+export const ListStoreDevelopersQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListStoreDevelopersResponseItem = zod.object({
+  "id": zod.number(),
+  "clerkUserId": zod.string(),
+  "displayName": zod.string(),
+  "bio": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "registrationFeePaid": zod.boolean(),
+  "totalApps": zod.number().optional(),
+  "totalDownloads": zod.number().optional(),
+  "createdAt": zod.string()
+})
+export const ListStoreDevelopersResponse = zod.array(ListStoreDevelopersResponseItem)
+
+
+/**
+ * @summary Suspend a developer account
+ */
+export const SuspendStoreDeveloperParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SuspendStoreDeveloperBody = zod.object({
+  "reason": zod.string()
+})
+
+export const SuspendStoreDeveloperResponse = zod.object({
+  "id": zod.number(),
+  "clerkUserId": zod.string(),
+  "displayName": zod.string(),
+  "bio": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "registrationFeePaid": zod.boolean(),
+  "totalApps": zod.number().optional(),
+  "totalDownloads": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Flag a review as fake or policy-violating
+ */
+export const FlagStoreReviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const FlagStoreReviewBody = zod.object({
+  "reason": zod.string()
+})
+
+export const FlagStoreReviewResponse = zod.object({
+  "id": zod.number(),
+  "appId": zod.number(),
+  "reviewerClerkId": zod.string().optional(),
+  "reviewerName": zod.string(),
+  "rating": zod.number(),
+  "comment": zod.string().nullish(),
+  "sentimentLabel": zod.string().nullish(),
+  "sentimentScore": zod.number().nullish(),
+  "isFlagged": zod.boolean().optional(),
+  "helpfulCount": zod.number().optional(),
+  "createdAt": zod.string()
+})
+
+
