@@ -1,8 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { Card } from '@/components/Card';
 import { LoadingView } from '@/components/LoadingView';
@@ -10,7 +12,13 @@ import { ErrorView } from '@/components/ErrorView';
 import { EmptyState } from '@/components/EmptyState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AnimatedListItem } from '@/components/AnimatedListItem';
-import { getGetExternalVoiceCampaignQueryKey, useGetExternalVoiceCampaign } from '@workspace/api-client-react';
+import { GradientButton } from '@/components/GradientButton';
+import {
+  getGetExternalVoiceCampaignQueryKey,
+  getListExternalVoiceCampaignsQueryKey,
+  useLaunchExternalVoiceCampaign,
+  useGetExternalVoiceCampaign,
+} from '@workspace/api-client-react';
 import type { ExternalVoiceCampaignCall } from '@workspace/api-client-react';
 
 const CALL_STATUS_ICON: Record<string, React.ComponentProps<typeof Feather>['name']> = {
@@ -39,6 +47,7 @@ export default function VoiceCampaignDetailScreen() {
   const campaignId = Number(id);
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: campaign, isLoading, isError, refetch } = useGetExternalVoiceCampaign(campaignId, {
@@ -49,6 +58,39 @@ export default function VoiceCampaignDetailScreen() {
     },
   });
 
+  const { mutateAsync: launchCampaign, isPending: isLaunching } = useLaunchExternalVoiceCampaign();
+
+  const handleLaunch = useCallback(() => {
+    Alert.alert(
+      'Launch campaign?',
+      'This will immediately start placing outbound calls to all your leads with valid phone numbers.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Launch',
+          style: 'default',
+          onPress: async () => {
+            if (Platform.OS !== 'web') {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            }
+            try {
+              await launchCampaign({ id: campaignId });
+              // Refresh the campaign detail + list
+              await queryClient.invalidateQueries({ queryKey: getGetExternalVoiceCampaignQueryKey(campaignId) });
+              await queryClient.invalidateQueries({ queryKey: getListExternalVoiceCampaignsQueryKey() });
+            } catch (err: unknown) {
+              const msg =
+                err && typeof err === 'object' && 'message' in err
+                  ? String((err as { message: string }).message)
+                  : 'Could not launch campaign. Please try again.';
+              Alert.alert('Launch failed', msg);
+            }
+          },
+        },
+      ],
+    );
+  }, [campaignId, launchCampaign, queryClient]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
@@ -57,6 +99,8 @@ export default function VoiceCampaignDetailScreen() {
 
   if (isLoading) return <LoadingView />;
   if (isError || !campaign) return <ErrorView onRetry={() => refetch()} />;
+
+  const canLaunch = campaign.status === 'draft' || campaign.status === 'scheduled';
 
   const renderCall = ({ item, index }: { item: ExternalVoiceCampaignCall; index: number }) => (
     <AnimatedListItem index={index} baseDelay={40}>
@@ -108,6 +152,16 @@ export default function VoiceCampaignDetailScreen() {
           <Text style={[styles.createdAt, { color: colors.mutedForeground }]}>
             Created {formatDate(campaign.createdAt)}
           </Text>
+
+          {canLaunch && (
+            <GradientButton
+              onPress={handleLaunch}
+              label={isLaunching ? 'Launching…' : 'Launch campaign'}
+              loading={isLaunching}
+              disabled={isLaunching}
+              style={styles.launchBtn}
+            />
+          )}
 
           <View style={styles.statsGrid}>
             <StatTile
@@ -203,6 +257,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     marginTop: 4,
+  },
+  launchBtn: {
+    marginTop: 16,
   },
   statsGrid: {
     flexDirection: 'row',

@@ -520,18 +520,30 @@ router.post("/vendors/:id/voice-campaigns/:cid/launch", async (req, res): Promis
     return;
   }
 
+  // Only draft/scheduled campaigns may be launched. Block completed, failed,
+  // running, and any other terminal status from being relaunched — otherwise a
+  // direct API call on a completed campaign would place all its calls again.
+  if (campaign.status !== "draft" && campaign.status !== "scheduled") {
+    const msg =
+      campaign.status === "running"
+        ? "Campaign is already running"
+        : `Campaign cannot be launched — its current status is '${campaign.status}'`;
+    res.status(409).json({ error: msg });
+    return;
+  }
+
   // Atomic status transition — prevents duplicate launch from concurrent requests.
-  // Only succeeds if the campaign is not already running; returns nothing if it is.
+  // Only succeeds if the campaign is still in a launchable status (draft/scheduled).
   const [transitioned] = await db
     .update(voiceCampaignsTable)
     .set({ status: "running" })
     .where(and(
       eq(voiceCampaignsTable.id, campaignId),
       eq(voiceCampaignsTable.vendorId, vendorId),
-      sql`${voiceCampaignsTable.status} != 'running'`,
+      sql`${voiceCampaignsTable.status} IN ('draft', 'scheduled')`,
     ))
     .returning();
-  if (!transitioned) { res.status(409).json({ error: "Campaign is already running" }); return; }
+  if (!transitioned) { res.status(409).json({ error: "Campaign is already running or cannot be launched" }); return; }
 
   res.json({ message: `Launching campaign — placing ${callable.length} call(s) now.`, totalCalls: callable.length });
 

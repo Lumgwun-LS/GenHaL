@@ -69,6 +69,9 @@ import type {
   ExternalRevokeInput,
   ExternalRevokeResponse,
   ExternalVoiceCampaignDetail,
+  ExternalVoiceCampaignInput,
+  ExternalVoiceCampaignLaunchResponse,
+  ExternalVoiceCampaignPatch,
   ExternalVoiceCampaignSummary,
   FinanceOverviewAnalytics,
   GetAdminDemographicsAnalyticsParams,
@@ -8933,6 +8936,76 @@ export function useListExternalVoiceCampaigns<TData = Awaited<ReturnType<typeof 
 
 
 
+export const getCreateExternalVoiceCampaignUrl = () => {
+
+
+
+
+  return `/api/external/voice-campaigns`
+}
+
+/**
+ * @summary Create a new voice campaign (draft or scheduled)
+ */
+export const createExternalVoiceCampaign = async (externalVoiceCampaignInput: ExternalVoiceCampaignInput, options?: RequestInit): Promise<ExternalVoiceCampaignSummary> => {
+
+  return customFetch<ExternalVoiceCampaignSummary>(getCreateExternalVoiceCampaignUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalVoiceCampaignInput)
+  }
+);}
+
+
+
+
+export const getCreateExternalVoiceCampaignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExternalVoiceCampaign>>, TError,{data: BodyType<ExternalVoiceCampaignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createExternalVoiceCampaign>>, TError,{data: BodyType<ExternalVoiceCampaignInput>}, TContext> => {
+
+const mutationKey = ['createExternalVoiceCampaign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExternalVoiceCampaign>>, {data: BodyType<ExternalVoiceCampaignInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createExternalVoiceCampaign(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateExternalVoiceCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof createExternalVoiceCampaign>>>
+    export type CreateExternalVoiceCampaignMutationBody = BodyType<ExternalVoiceCampaignInput>
+    export type CreateExternalVoiceCampaignMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a new voice campaign (draft or scheduled)
+ */
+export const useCreateExternalVoiceCampaign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExternalVoiceCampaign>>, TError,{data: BodyType<ExternalVoiceCampaignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createExternalVoiceCampaign>>,
+        TError,
+        {data: BodyType<ExternalVoiceCampaignInput>},
+        TContext
+      > => {
+      return useMutation(getCreateExternalVoiceCampaignMutationOptions(options));
+    }
+
 export const getGetExternalVoiceCampaignUrl = (id: number,) => {
 
 
@@ -9009,6 +9082,147 @@ export function useGetExternalVoiceCampaign<TData = Awaited<ReturnType<typeof ge
 
 
 
+
+export const getUpdateExternalVoiceCampaignUrl = (id: number,) => {
+
+
+
+
+  return `/api/external/voice-campaigns/${id}`
+}
+
+/**
+ * @summary Update a draft or scheduled voice campaign's name, script, or schedule
+ */
+export const updateExternalVoiceCampaign = async (id: number,
+    externalVoiceCampaignPatch: ExternalVoiceCampaignPatch, options?: RequestInit): Promise<ExternalVoiceCampaignSummary> => {
+
+  return customFetch<ExternalVoiceCampaignSummary>(getUpdateExternalVoiceCampaignUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(externalVoiceCampaignPatch)
+  }
+);}
+
+
+
+
+export const getUpdateExternalVoiceCampaignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalVoiceCampaign>>, TError,{id: number;data: BodyType<ExternalVoiceCampaignPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExternalVoiceCampaign>>, TError,{id: number;data: BodyType<ExternalVoiceCampaignPatch>}, TContext> => {
+
+const mutationKey = ['updateExternalVoiceCampaign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExternalVoiceCampaign>>, {id: number;data: BodyType<ExternalVoiceCampaignPatch>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateExternalVoiceCampaign(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateExternalVoiceCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof updateExternalVoiceCampaign>>>
+    export type UpdateExternalVoiceCampaignMutationBody = BodyType<ExternalVoiceCampaignPatch>
+    export type UpdateExternalVoiceCampaignMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a draft or scheduled voice campaign's name, script, or schedule
+ */
+export const useUpdateExternalVoiceCampaign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalVoiceCampaign>>, TError,{id: number;data: BodyType<ExternalVoiceCampaignPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateExternalVoiceCampaign>>,
+        TError,
+        {id: number;data: BodyType<ExternalVoiceCampaignPatch>},
+        TContext
+      > => {
+      return useMutation(getUpdateExternalVoiceCampaignMutationOptions(options));
+    }
+
+export const getLaunchExternalVoiceCampaignUrl = (id: number,) => {
+
+
+
+
+  return `/api/external/voice-campaigns/${id}/launch`
+}
+
+/**
+ * @summary Launch a draft or scheduled voice campaign immediately
+ */
+export const launchExternalVoiceCampaign = async (id: number, options?: RequestInit): Promise<ExternalVoiceCampaignLaunchResponse> => {
+
+  return customFetch<ExternalVoiceCampaignLaunchResponse>(getLaunchExternalVoiceCampaignUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getLaunchExternalVoiceCampaignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof launchExternalVoiceCampaign>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof launchExternalVoiceCampaign>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['launchExternalVoiceCampaign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof launchExternalVoiceCampaign>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  launchExternalVoiceCampaign(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LaunchExternalVoiceCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof launchExternalVoiceCampaign>>>
+
+    export type LaunchExternalVoiceCampaignMutationError = ErrorType<void>
+
+    /**
+ * @summary Launch a draft or scheduled voice campaign immediately
+ */
+export const useLaunchExternalVoiceCampaign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof launchExternalVoiceCampaign>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof launchExternalVoiceCampaign>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getLaunchExternalVoiceCampaignMutationOptions(options));
+    }
 
 export const getRegisterExternalPushTokenUrl = () => {
 

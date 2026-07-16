@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -100,28 +100,49 @@ export default function VoiceCampaignsScreen() {
   };
 
   return (
-    <FlatList
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[
-        styles.content,
-        campaigns.length === 0 && styles.emptyContent,
-        { paddingBottom: insets.bottom + 32 },
-      ]}
-      data={campaigns}
-      keyExtractor={(item) => String(item.id)}
-      renderItem={renderItem}
-      scrollEnabled={campaigns.length > 0}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-      }
-      ListEmptyComponent={
-        <EmptyState
-          icon="phone"
-          title="No voice campaigns yet"
-          message="Campaigns you create on the web will show up here once they start placing calls."
-        />
-      }
-    />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <FlatList
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.content,
+          campaigns.length === 0 && styles.emptyContent,
+          { paddingBottom: insets.bottom + 88 },
+        ]}
+        data={campaigns}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderItem}
+        scrollEnabled={campaigns.length > 0}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="phone"
+            title="No voice campaigns yet"
+            message="Create your first campaign below to start placing outbound calls to your leads."
+          />
+        }
+      />
+
+      {/* ── Create FAB ── */}
+      <Pressable
+        onPress={() => router.push('/voice-campaigns/new')}
+        style={({ pressed }) => [
+          styles.fab,
+          { bottom: insets.bottom + 24, opacity: pressed ? 0.85 : 1 },
+        ]}
+      >
+        <LinearGradient
+          colors={['#7F50FF', '#FF7F50']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <Feather name="plus" size={22} color="#FFFFFF" />
+          <Text style={styles.fabLabel}>New campaign</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
   );
 }
 
@@ -136,6 +157,29 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 10,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    borderRadius: 28,
+    shadowColor: '#7F50FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 28,
+  },
+  fabLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
   row: {
     flexDirection: 'row',

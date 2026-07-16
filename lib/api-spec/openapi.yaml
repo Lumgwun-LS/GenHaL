@@ -2585,6 +2585,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExternalVoiceCampaignSummary"
+    post:
+      operationId: createExternalVoiceCampaign
+      tags: [external]
+      summary: Create a new voice campaign (draft or scheduled)
+      security: [{ externalBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalVoiceCampaignInput"
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalVoiceCampaignSummary"
+        "400":
+          description: Validation error
 
   /external/voice-campaigns/{id}:
     get:
@@ -2607,6 +2627,60 @@ paths:
                 $ref: "#/components/schemas/ExternalVoiceCampaignDetail"
         "404":
           description: Campaign not found
+    patch:
+      operationId: updateExternalVoiceCampaign
+      tags: [external]
+      summary: Update a draft or scheduled voice campaign's name, script, or schedule
+      security: [{ externalBearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalVoiceCampaignPatch"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalVoiceCampaignSummary"
+        "404":
+          description: Campaign not found or cannot be edited
+
+  /external/voice-campaigns/{id}/launch:
+    post:
+      operationId: launchExternalVoiceCampaign
+      tags: [external]
+      summary: Launch a draft or scheduled voice campaign immediately
+      security: [{ externalBearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign launch started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalVoiceCampaignLaunchResponse"
+        "400":
+          description: No callable leads found
+        "402":
+          description: Voice-minute quota exhausted
+        "404":
+          description: Campaign not found
+        "409":
+          description: Campaign already running
 
   /external/push/register:
     post:
@@ -4638,6 +4712,46 @@ components:
           type: ["string", "null"]
         reference:
           type: string
+
+    ExternalVoiceCampaignInput:
+      type: object
+      required: [name, script]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        script:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        scheduledAt:
+          type: string
+          description: ISO 8601 datetime; omit or null for an immediate draft
+
+    ExternalVoiceCampaignPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        script:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        scheduledAt:
+          type: ["string", "null"]
+          description: ISO 8601 datetime or null to revert to draft
+
+    ExternalVoiceCampaignLaunchResponse:
+      type: object
+      required: [message, totalCalls]
+      properties:
+        message:
+          type: string
+        totalCalls:
+          type: integer
 
     ExternalVoiceCampaignSummary:
       type: object

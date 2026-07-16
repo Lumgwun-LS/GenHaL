@@ -3169,6 +3169,33 @@ export const ListExternalVoiceCampaignsResponse = zod.array(ListExternalVoiceCam
 
 
 /**
+ * @summary Create a new voice campaign (draft or scheduled)
+ */
+export const createExternalVoiceCampaignBodyNameMax = 200;
+
+export const createExternalVoiceCampaignBodyScriptMax = 2000;
+
+
+
+export const CreateExternalVoiceCampaignBody = zod.object({
+  "name": zod.string().min(1).max(createExternalVoiceCampaignBodyNameMax),
+  "script": zod.string().min(1).max(createExternalVoiceCampaignBodyScriptMax),
+  "scheduledAt": zod.string().optional().describe('ISO 8601 datetime; omit or null for an immediate draft')
+})
+
+export const CreateExternalVoiceCampaignResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "script": zod.string(),
+  "status": zod.string(),
+  "scheduledAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "totalCalls": zod.number(),
+  "answeredCalls": zod.number()
+})
+
+
+/**
  * @summary Get a single voice campaign, its stats, and individual call records
  */
 export const GetExternalVoiceCampaignParams = zod.object({
@@ -3197,6 +3224,50 @@ export const GetExternalVoiceCampaignResponse = zod.object({
   "callSid": zod.string().nullable(),
   "initiatedAt": zod.string()
 }))
+})
+
+
+/**
+ * @summary Update a draft or scheduled voice campaign's name, script, or schedule
+ */
+export const UpdateExternalVoiceCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateExternalVoiceCampaignBodyNameMax = 200;
+
+export const updateExternalVoiceCampaignBodyScriptMax = 2000;
+
+
+
+export const UpdateExternalVoiceCampaignBody = zod.object({
+  "name": zod.string().min(1).max(updateExternalVoiceCampaignBodyNameMax).optional(),
+  "script": zod.string().min(1).max(updateExternalVoiceCampaignBodyScriptMax).optional(),
+  "scheduledAt": zod.string().nullish().describe('ISO 8601 datetime or null to revert to draft')
+})
+
+export const UpdateExternalVoiceCampaignResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "script": zod.string(),
+  "status": zod.string(),
+  "scheduledAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "totalCalls": zod.number(),
+  "answeredCalls": zod.number()
+})
+
+
+/**
+ * @summary Launch a draft or scheduled voice campaign immediately
+ */
+export const LaunchExternalVoiceCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const LaunchExternalVoiceCampaignResponse = zod.object({
+  "message": zod.string(),
+  "totalCalls": zod.number()
 })
 
 

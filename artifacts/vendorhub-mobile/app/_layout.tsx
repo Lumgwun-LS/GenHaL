@@ -43,6 +43,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="voice-campaigns/index" options={{ title: 'Voice Campaigns' }} />
+      <Stack.Screen name="voice-campaigns/new" options={{ title: 'New Campaign' }} />
       <Stack.Screen name="voice-campaigns/[id]" options={{ title: 'Campaign' }} />
     </Stack>
   );

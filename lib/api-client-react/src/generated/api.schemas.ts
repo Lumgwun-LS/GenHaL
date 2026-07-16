@@ -767,6 +767,44 @@ export interface ExternalPaymentInitializeResponse {
   reference: string;
 }
 
+export interface ExternalVoiceCampaignInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  script: string;
+  /** ISO 8601 datetime; omit or null for an immediate draft */
+  scheduledAt?: string;
+}
+
+export interface ExternalVoiceCampaignPatch {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  script?: string;
+  /**
+     * ISO 8601 datetime or null to revert to draft
+     * @nullable
+     */
+  scheduledAt?: string | null;
+}
+
+export interface ExternalVoiceCampaignLaunchResponse {
+  message: string;
+  totalCalls: number;
+}
+
 export interface ExternalVoiceCampaignSummary {
   id: number;
   name: string;
