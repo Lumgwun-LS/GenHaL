@@ -30,6 +30,7 @@ import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 import AdminFinanceRollupPanel from "./finance-rollup";
 import PaymentConflictsPanel from "./payment-conflicts";
+import VoidErrorsPanel from "./void-errors";
 import BackgroundJobsPanel from "./background-jobs";
 import SocialAccountHealthPanel from "./social-account-health";
 
@@ -631,6 +632,14 @@ async function fetchPaymentConflicts(): Promise<PaymentConflictSummary> {
   const res = await fetch(`${BASE_URL}/api/admin/payment-conflicts`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load payment conflicts");
   return res.json() as Promise<PaymentConflictSummary>;
+}
+
+type VoidErrorSummary = { id: number }[];
+
+async function fetchVoidErrors(): Promise<VoidErrorSummary> {
+  const res = await fetch(`${BASE_URL}/api/admin/void-errors`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load void errors");
+  return res.json() as Promise<VoidErrorSummary>;
 }
 
 async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureAlert> {
@@ -1663,6 +1672,13 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: voidErrors } = useQuery({
+    queryKey: ["admin-void-errors"],
+    queryFn: fetchVoidErrors,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const { data: voiceBackfillStatus } = useQuery({
     queryKey: ["admin-voice-backfill"],
     queryFn: fetchVoiceBackfillStatus,
@@ -1814,6 +1830,14 @@ export default function AdminPanel() {
             {(paymentConflicts?.length ?? 0) > 0 && (
               <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px] leading-4">
                 {paymentConflicts!.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="void-errors" className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4" /> Void Errors
+            {(voidErrors?.length ?? 0) > 0 && (
+              <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px] leading-4">
+                {voidErrors!.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -2787,9 +2811,14 @@ export default function AdminPanel() {
           </Card>
         </TabsContent>
 
-        {/* ── Payment Gateways tab ─────────────────────────────────────── */}
+        {/* ── Payment Conflicts tab ────────────────────────────────────── */}
         <TabsContent value="payment-conflicts">
           <PaymentConflictsPanel />
+        </TabsContent>
+
+        {/* ── Void Errors tab ──────────────────────────────────────────── */}
+        <TabsContent value="void-errors">
+          <VoidErrorsPanel />
         </TabsContent>
 
         <TabsContent value="payment-gateways">

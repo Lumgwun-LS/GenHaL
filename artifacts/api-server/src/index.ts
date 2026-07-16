@@ -14,6 +14,7 @@ import { startSocialAccountHealthScheduler } from "./lib/social-account-health-s
 import { startTokenRefreshScheduler } from "./lib/token-refresh-scheduler";
 import { startMediaCleanupScheduler } from "./lib/media-cleanup";
 import { startRecurringExpenseScheduler } from "./lib/recurring-expenses";
+import { startVoidErrorCheckScheduler } from "./lib/void-error-check-scheduler";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 
 const rawPort = process.env["PORT"];
@@ -52,4 +53,5 @@ app.listen(port, (err) => {
   startTokenRefreshScheduler();
   startMediaCleanupScheduler();
   startRecurringExpenseScheduler();
+  startVoidErrorCheckScheduler();
 });
