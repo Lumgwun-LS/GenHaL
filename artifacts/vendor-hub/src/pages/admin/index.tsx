@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Redirect } from "wouter";
+import { Redirect, Link } from "wouter";
 import SiteEditor from "./site-editor";
 import PlansEditor from "./plans";
 import PaymentGatewaysPanel from "./payment-gateways";
@@ -2952,8 +2952,10 @@ export default function AdminPanel() {
                     {filteredMessageHistory.map((entry) => (
                       <TableRow key={entry.id}>
                         <TableCell>
-                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
-                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                          <Link href={`/vendors/${entry.vendorId}`} className="group">
+                            <div className="font-medium group-hover:underline">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                            <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                          </Link>
                         </TableCell>
                         <TableCell className="max-w-md">
                           <p className="text-sm whitespace-pre-wrap break-words">{entry.message}</p>
