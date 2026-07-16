@@ -50,6 +50,7 @@ type AdminVendor = {
   verificationLevel: string;
   featureUnlocked: boolean;
   createdAt: string;
+  announcementEmailOptOut: boolean;
   stripe: { hasKey: boolean; testPassed: boolean };
   paystack: { hasKey: boolean; testPassed: boolean };
 };
@@ -1280,11 +1281,13 @@ function BulkMessageDialog({
   selectedIds,
   allSelected,
   totalVendors,
+  vendors,
   onSent,
 }: {
   selectedIds: number[];
   allSelected: boolean;
   totalVendors: number;
+  vendors: AdminVendor[];
   onSent: () => void;
 }) {
   const qc = useQueryClient();
@@ -1300,6 +1303,12 @@ function BulkMessageDialog({
 
   const recipientCount = allSelected ? totalVendors : selectedIds.length;
   const disabled = recipientCount === 0;
+
+  // Count how many targeted vendors have opted out of announcement emails.
+  // When "all" is selected we use the full vendor list; otherwise filter by selectedIds.
+  const optOutCount = allSelected
+    ? vendors.filter((v) => v.announcementEmailOptOut).length
+    : vendors.filter((v) => selectedIds.includes(v.id) && v.announcementEmailOptOut).length;
 
   async function handleSend() {
     const trimmed = message.trim();
@@ -1397,6 +1406,18 @@ function BulkMessageDialog({
                 appear in their notification bell, and we'll also email each vendor a copy of the announcement.
               </DialogDescription>
             </DialogHeader>
+            {optOutCount > 0 && (
+              <div
+                className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                data-testid="alert-bulk-message-opt-out-count"
+              >
+                <span className="mt-0.5 shrink-0">⚠</span>
+                <span>
+                  <strong>{optOutCount}</strong> of {recipientCount} vendor{recipientCount === 1 ? "" : "s"} ha{optOutCount === 1 ? "s" : "ve"} opted out of announcement
+                  emails — {optOutCount === 1 ? "they" : "they"} will still receive the in-app notification, but no email will be sent to {optOutCount === 1 ? "them" : "them"}.
+                </span>
+              </div>
+            )}
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -2014,6 +2035,7 @@ export default function AdminPanel() {
                   selectedIds={selectedVendorIds}
                   allSelected={selectAllVendors}
                   totalVendors={totalVendors}
+                  vendors={vendors ?? []}
                   onSent={clearVendorSelection}
                 />
                 <ExportFilterPopover

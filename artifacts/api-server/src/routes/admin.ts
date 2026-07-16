@@ -256,6 +256,7 @@ router.get("/admin/vendors", async (req, res): Promise<void> => {
       verificationLevel: v.verificationLevel,
       featureUnlocked: canAddPaymentKeys(v),
       createdAt: v.createdAt,
+      announcementEmailOptOut: v.announcementEmailOptOut,
       stripe: {
         hasKey: Boolean(c?.stripeSecretEncrypted),
         testPassed: c?.stripeTestPassed ?? false,
