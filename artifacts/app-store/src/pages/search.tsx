@@ -1,172 +1,154 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { AppCard } from "@/components/app-card";
-import { Search, SlidersHorizontal, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useSearch } from "wouter";
-import type { StoreAppPage, StoreCategory } from "@/lib/types";
+import { useSearch, useLocation } from "wouter";
+import AppCard from "../components/app-card";
+import { apiFetch } from "../lib/api";
+import type { AppSummary, Category } from "../lib/types";
 
-const PLATFORMS = ["All Platforms", "android", "ios", "web", "all"];
+const AFRICA_CATEGORIES = [
+  "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
+  "Logistics & Delivery","Food & Restaurant","Entertainment & Music","Social & Community",
+  "Business & Commerce","Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
+  "Fashion & Beauty","Real Estate",
+];
+
+const PLATFORMS = ["all","android","ios","web"];
 const SORTS = [
   { value: "newest", label: "Newest" },
   { value: "rating", label: "Top Rated" },
   { value: "downloads", label: "Most Downloaded" },
-  { value: "trending", label: "Trending" },
 ];
 
-export default function SearchPage() {
-  const searchStr = useSearch();
-  const params = new URLSearchParams(searchStr);
+export default function Search() {
+  const searchString = useSearch();
+  const [, navigate] = useLocation();
+  const [apps, setApps] = useState<AppSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-  const [query, setQuery] = useState(params.get("q") ?? "");
-  const [category, setCategory] = useState(params.get("category") ?? "");
-  const [platform, setPlatform] = useState(params.get("platform") ?? "");
-  const [sort, setSort] = useState(params.get("sort") ?? "newest");
-  const [page, setPage] = useState(1);
-  const [showFilters, setShowFilters] = useState(false);
+  const params = new URLSearchParams(searchString);
+  const q = params.get("q") ?? "";
+  const category = params.get("category") ?? "";
+  const platform = params.get("platform") ?? "all";
+  const sort = params.get("sort") ?? "newest";
+  const page = parseInt(params.get("page") ?? "1");
+  const LIMIT = 24;
 
-  useEffect(() => { setPage(1); }, [query, category, platform, sort]);
+  function update(patch: Record<string, string>) {
+    const next = new URLSearchParams(searchString);
+    Object.entries(patch).forEach(([k, v]) => v ? next.set(k, v) : next.delete(k));
+    next.delete("page");
+    navigate(`/search?${next.toString()}`);
+  }
 
-  const buildQuery = () => {
-    const p = new URLSearchParams();
-    if (query) p.set("search", query);
-    if (category) p.set("category", category);
-    if (platform && platform !== "All Platforms") p.set("platform", platform);
-    p.set("sort", sort);
-    p.set("page", String(page));
-    p.set("limit", "24");
-    return p.toString();
-  };
+  function setPage(p: number) {
+    const next = new URLSearchParams(searchString);
+    next.set("page", String(p));
+    navigate(`/search?${next.toString()}`);
+  }
 
-  const { data, isLoading } = useQuery<StoreAppPage>({
-    queryKey: ["store", "search", query, category, platform, sort, page],
-    queryFn: () => apiFetch(`/apps?${buildQuery()}`),
-  });
+  useEffect(() => {
+    apiFetch<Category[]>("/apps/categories").then(setCategories).catch(() => {});
+  }, []);
 
-  const { data: categories } = useQuery<StoreCategory[]>({
-    queryKey: ["store", "categories"],
-    queryFn: () => apiFetch("/apps/categories"),
-  });
+  useEffect(() => {
+    setLoading(true);
+    const qs = new URLSearchParams({ sort, page: String(page), limit: String(LIMIT) });
+    if (q) qs.set("search", q);
+    if (category) qs.set("category", category);
+    if (platform && platform !== "all") qs.set("platform", platform);
+    apiFetch<{ apps: AppSummary[]; total: number }>(`/apps?${qs}`)
+      .then(d => { setApps(d.apps ?? []); setTotal(d.total ?? 0); })
+      .catch(() => {}).finally(() => setLoading(false));
+  }, [q, category, platform, sort, page]);
 
-  const totalPages = data ? Math.ceil(data.total / 24) : 1;
+  const totalPages = Math.ceil(total / LIMIT);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-white mb-6">Browse Apps</h1>
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 20px 80px", display: "grid", gridTemplateColumns: "220px 1fr", gap: 32, alignItems: "start" }}>
 
-      {/* Search + filter bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search apps..."
-            className="w-full bg-[#0d0d1a] border border-[#7F50FF]/25 text-white placeholder-gray-500 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#7F50FF]/60"
-          />
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors
-            ${showFilters ? "bg-[#7F50FF]/20 border-[#7F50FF]/50 text-[#7F50FF]" : "bg-[#0d0d1a] border-white/15 text-gray-400 hover:text-white"}`}
-        >
-          <SlidersHorizontal className="w-4 h-4" /> Filters
-        </button>
-      </div>
+      {/* Sidebar filters */}
+      <aside>
+        <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 16, position: "sticky", top: 80 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Platform</div>
+          {PLATFORMS.map(p => (
+            <button key={p} onClick={() => update({ platform: p })} style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 8, background: platform === p ? "rgba(0,200,83,0.1)" : "transparent", color: platform === p ? "#00c853" : "#c0c8d8", border: "none", cursor: "pointer", fontSize: 13, fontWeight: platform === p ? 600 : 400, textTransform: "capitalize", marginBottom: 2 }}>
+              {p === "all" ? "All Platforms" : p === "android" ? "🤖 Android" : p === "ios" ? "🍎 iOS" : "🌐 Web"}
+            </button>
+          ))}
 
-      {/* Filters panel */}
-      {showFilters && (
-        <div className="bg-[#0d0d1a] border border-[#7F50FF]/20 rounded-2xl p-5 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Category */}
-          <div>
-            <label className="text-xs text-gray-400 font-medium mb-2 block">Category</label>
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className="w-full bg-[#141428] border border-white/15 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#7F50FF]/50"
-            >
-              <option value="">All Categories</option>
-              {categories?.map(c => (
-                <option key={c.name} value={c.name}>{c.iconEmoji} {c.name}</option>
-              ))}
-            </select>
-          </div>
-          {/* Platform */}
-          <div>
-            <label className="text-xs text-gray-400 font-medium mb-2 block">Platform</label>
-            <select
-              value={platform}
-              onChange={e => setPlatform(e.target.value)}
-              className="w-full bg-[#141428] border border-white/15 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#7F50FF]/50"
-            >
-              {PLATFORMS.map(p => <option key={p} value={p === "All Platforms" ? "" : p}>{p}</option>)}
-            </select>
-          </div>
-          {/* Sort */}
-          <div>
-            <label className="text-xs text-gray-400 font-medium mb-2 block">Sort by</label>
-            <select
-              value={sort}
-              onChange={e => setSort(e.target.value)}
-              className="w-full bg-[#141428] border border-white/15 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#7F50FF]/50"
-            >
-              {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
+          <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "14px 0" }} />
 
-      {/* Sort pills (quick) */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {SORTS.map(s => (
-          <button
-            key={s.value}
-            onClick={() => setSort(s.value)}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors
-              ${sort === s.value ? "bg-[#7F50FF] text-white" : "bg-[#0d0d1a] border border-white/15 text-gray-400 hover:text-white"}`}
-          >
-            {s.label}
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Category</div>
+          <button onClick={() => update({ category: "" })} style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 8, background: !category ? "rgba(0,200,83,0.1)" : "transparent", color: !category ? "#00c853" : "#c0c8d8", border: "none", cursor: "pointer", fontSize: 13, fontWeight: !category ? 600 : 400, marginBottom: 2 }}>
+            All Categories
           </button>
-        ))}
-      </div>
+          {AFRICA_CATEGORIES.map(c => (
+            <button key={c} onClick={() => update({ category: c })} style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 8, background: category === c ? "rgba(0,200,83,0.1)" : "transparent", color: category === c ? "#00c853" : "#c0c8d8", border: "none", cursor: "pointer", fontSize: 12, fontWeight: category === c ? 600 : 400, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {categories.find(x => x.name === c)?.iconEmoji ?? "•"} {c}
+            </button>
+          ))}
+        </div>
+      </aside>
 
       {/* Results */}
-      {isLoading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-[#7F50FF] animate-spin" /></div>
-      ) : (data?.apps?.length ?? 0) === 0 ? (
-        <div className="text-center py-20 text-gray-500">
-          <span className="text-5xl block mb-4">🔍</span>
-          <p>No apps found. Try different filters.</p>
+      <main>
+        {/* Search bar + sort */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+          <input
+            defaultValue={q}
+            placeholder="Search apps..."
+            className="input"
+            style={{ flex: 1, minWidth: 200 }}
+            onKeyDown={(e) => { if (e.key === "Enter") update({ q: (e.target as HTMLInputElement).value }); }}
+          />
+          <select
+            value={sort}
+            onChange={(e) => update({ sort: e.target.value })}
+            className="input"
+            style={{ width: 160 }}
+          >
+            {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
         </div>
-      ) : (
-        <>
-          <p className="text-gray-500 text-sm mb-5">{data?.total ?? 0} apps found</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {data!.apps.map(app => <AppCard key={app.id} app={app} />)}
-          </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-10">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
-                className="px-4 py-2 rounded-lg bg-[#0d0d1a] border border-white/15 text-gray-400 hover:text-white disabled:opacity-40 text-sm"
-              >
-                ← Prev
-              </button>
-              <span className="px-4 py-2 text-gray-400 text-sm">Page {page} of {totalPages}</span>
-              <button
-                disabled={page === totalPages}
-                onClick={() => setPage(p => p + 1)}
-                className="px-4 py-2 rounded-lg bg-[#0d0d1a] border border-white/15 text-gray-400 hover:text-white disabled:opacity-40 text-sm"
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </>
-      )}
+        {/* Active filters */}
+        {(category || q) && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+            {q && <span style={{ background: "rgba(0,200,83,0.1)", color: "#00c853", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 16, padding: "3px 10px", fontSize: 12 }}>🔍 "{q}" <button onClick={() => update({ q: "" })} style={{ background: "none", border: "none", color: "#00c853", cursor: "pointer", marginLeft: 4 }}>×</button></span>}
+            {category && <span style={{ background: "rgba(0,200,83,0.1)", color: "#00c853", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 16, padding: "3px 10px", fontSize: 12 }}>{category} <button onClick={() => update({ category: "" })} style={{ background: "none", border: "none", color: "#00c853", cursor: "pointer", marginLeft: 4 }}>×</button></span>}
+          </div>
+        )}
+
+        <div style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>
+          {loading ? "Searching..." : `${total.toLocaleString()} app${total !== 1 ? "s" : ""} found`}
+        </div>
+
+        {loading ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+            {Array.from({ length: 12 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 16 }} />)}
+          </div>
+        ) : apps.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>No apps found</div>
+            <div style={{ color: "#8892a4", fontSize: 14 }}>Try a different search or category.</div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+            {apps.map(app => <AppCard key={app.id} app={app} />)}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 40 }}>
+            {page > 1 && <button className="btn-outline" style={{ padding: "6px 16px", fontSize: 13 }} onClick={() => setPage(page - 1)}>← Prev</button>}
+            <span style={{ padding: "6px 16px", color: "#8892a4", fontSize: 13 }}>Page {page} of {totalPages}</span>
+            {page < totalPages && <button className="btn-outline" style={{ padding: "6px 16px", fontSize: 13 }} onClick={() => setPage(page + 1)}>Next →</button>}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

@@ -9,21 +9,51 @@ import {
 import { eq, desc, asc, ilike, and, sql, or } from "drizzle-orm";
 import { requireAuth, getAuth } from "@clerk/express";
 import { logger } from "../lib/logger";
-import Stripe from "stripe";
+import crypto from "crypto";
 
 const router = Router();
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PUBLISHING_FEE_KOBO = 2_500_000; // NGN 25,000
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? "";
+const IS_MERCHANT_CODE = process.env.INTERSWITCH_MERCHANT_CODE ?? "";
+const IS_PAY_ITEM_ID = process.env.INTERSWITCH_PAY_ITEM_ID ?? "";
+const IS_SECRET_KEY = process.env.INTERSWITCH_SECRET_KEY ?? "";
+const IS_CLIENT_ID = process.env.INTERSWITCH_CLIENT_ID ?? "";
+
+function getBaseUrl(req: any): string {
+  const dev = process.env.REPLIT_DEV_DOMAIN;
+  if (dev) return `https://${dev}`;
+  return `${req.protocol}://${req.get("host")}`;
+}
+
+// ─── Africa Categories ────────────────────────────────────────────────────────
+
+export const AFRICA_CATEGORIES = [
+  { name: "Mobile Money & Fintech", iconEmoji: "💳", color: "#00c853" },
+  { name: "Agriculture & Farming", iconEmoji: "🌾", color: "#8bc34a" },
+  { name: "Health & Telemedicine", iconEmoji: "🏥", color: "#26c6da" },
+  { name: "Education & E-Learning", iconEmoji: "📚", color: "#7c4dff" },
+  { name: "Logistics & Delivery", iconEmoji: "🚚", color: "#ff9800" },
+  { name: "Food & Restaurant", iconEmoji: "🍲", color: "#f44336" },
+  { name: "Entertainment & Music", iconEmoji: "🎵", color: "#e91e63" },
+  { name: "Social & Community", iconEmoji: "🤝", color: "#2196f3" },
+  { name: "Business & Commerce", iconEmoji: "💼", color: "#ffb300" },
+  { name: "Government & E-Services", iconEmoji: "🏛️", color: "#546e7a" },
+  { name: "Transport & Ride-Hailing", iconEmoji: "🚗", color: "#00bcd4" },
+  { name: "Utilities & Infrastructure", iconEmoji: "⚡", color: "#ffc107" },
+  { name: "Fashion & Beauty", iconEmoji: "👗", color: "#9c27b0" },
+  { name: "Real Estate", iconEmoji: "🏠", color: "#795548" },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80);
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 }
 
-function serializeApp(app: typeof storeAppsTable.$inferSelect, developer?: typeof storeDeveloperAccountsTable.$inferSelect | null) {
+function serializeApp(app: any, developer?: any) {
   return {
     id: app.id,
     name: app.name,
@@ -42,6 +72,8 @@ function serializeApp(app: typeof storeAppsTable.$inferSelect, developer?: typeo
     totalDownloads: app.totalDownloads,
     status: app.status,
     isFeatured: app.isFeatured,
+    publishingFeePaid: app.publishingFeePaid ?? false,
+    publishingFeeGateway: app.publishingFeeGateway ?? null,
     developerId: app.developerId,
     developerName: developer?.displayName ?? "Unknown",
     developerWebsite: developer?.website ?? null,
@@ -55,7 +87,7 @@ function serializeApp(app: typeof storeAppsTable.$inferSelect, developer?: typeo
   };
 }
 
-function serializeAppSummary(app: typeof storeAppsTable.$inferSelect, developerName = "Unknown") {
+function serializeAppSummary(app: any, developerName = "Unknown") {
   return {
     id: app.id,
     name: app.name,
@@ -69,89 +101,156 @@ function serializeAppSummary(app: typeof storeAppsTable.$inferSelect, developerN
     totalDownloads: app.totalDownloads,
     status: app.status,
     isFeatured: app.isFeatured,
+    publishingFeePaid: app.publishingFeePaid ?? false,
     developerName,
     createdAt: app.createdAt.toISOString(),
   };
 }
 
+function serializeDev(dev: any) {
+  return {
+    id: dev.id,
+    clerkUserId: dev.clerkUserId,
+    displayName: dev.displayName,
+    email: dev.email ?? "",
+    bio: dev.bio ?? null,
+    website: dev.website ?? null,
+    company: dev.company ?? null,
+    country: dev.country ?? "Nigeria",
+    avatarUrl: dev.avatarUrl ?? null,
+    status: dev.status,
+    paystackCustomerCode: dev.paystackCustomerCode ?? null,
+    dedicatedNgnAccount: dev.dedicatedNgnAccount ?? null,
+    dedicatedUsdAccount: dev.dedicatedUsdAccount ?? null,
+    createdAt: dev.createdAt.toISOString(),
+    updatedAt: dev.updatedAt.toISOString(),
+  };
+}
+
 function isAdmin(req: any): boolean {
   const { userId } = getAuth(req);
-  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return !!userId && adminIds.includes(userId);
 }
 
-async function requireDeveloper(req: any, res: any): Promise<typeof storeDeveloperAccountsTable.$inferSelect | null> {
+async function requireDeveloper(req: any, res: any) {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
   const dev = await db.query.storeDeveloperAccountsTable.findFirst({
     where: eq(storeDeveloperAccountsTable.clerkUserId, userId),
   });
-  if (!dev) { res.status(404).json({ error: "Developer account not found" }); return null; }
-  if (dev.status !== "active") { res.status(403).json({ error: "Developer account not active" }); return null; }
+  if (!dev) { res.status(404).json({ error: "Developer account not found. Register first." }); return null; }
+  if (dev.status !== "active") { res.status(403).json({ error: "Developer account is suspended." }); return null; }
   return dev;
 }
 
-// ─── CATEGORY config ──────────────────────────────────────────────────────────
+// ─── Paystack ─────────────────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  { name: "Productivity", iconEmoji: "⚡" },
-  { name: "Finance", iconEmoji: "💰" },
-  { name: "Education", iconEmoji: "📚" },
-  { name: "Health & Fitness", iconEmoji: "🏃" },
-  { name: "Entertainment", iconEmoji: "🎮" },
-  { name: "Social", iconEmoji: "🤝" },
-  { name: "Business", iconEmoji: "💼" },
-  { name: "Utilities", iconEmoji: "🔧" },
-  { name: "Lifestyle", iconEmoji: "🌟" },
-  { name: "Shopping", iconEmoji: "🛒" },
-  { name: "Travel", iconEmoji: "✈️" },
-  { name: "Food & Drink", iconEmoji: "🍔" },
-  { name: "Other", iconEmoji: "📦" },
-];
+async function paystackRequest(method: string, path: string, body?: object) {
+  const res = await fetch(`https://api.paystack.co${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json() as Promise<any>;
+}
+
+async function createPaystackCustomer(email: string, firstName: string) {
+  try {
+    const parts = firstName.split(" ");
+    const data = await paystackRequest("POST", "/customer", {
+      email, first_name: parts[0] ?? firstName, last_name: parts.slice(1).join(" ") || "",
+    });
+    return (data?.data?.customer_code as string) ?? null;
+  } catch { return null; }
+}
+
+async function requestPaystackDedicatedAccount(customerCode: string) {
+  try {
+    const data = await paystackRequest("POST", "/dedicated_account", {
+      customer: customerCode, preferred_bank: "wema-bank",
+    });
+    if (data?.data?.account_number) {
+      return {
+        accountNumber: data.data.account_number as string,
+        bankName: (data.data.bank?.name as string) ?? "Wema Bank",
+        bankSlug: (data.data.bank?.slug as string) ?? "wema-bank",
+      };
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function initPaystackTransaction(email: string, amountKobo: number, metadata: object, callbackUrl: string) {
+  try {
+    const data = await paystackRequest("POST", "/transaction/initialize", {
+      email, amount: amountKobo, currency: "NGN", metadata, callback_url: callbackUrl,
+    });
+    return data?.data ?? null;
+  } catch { return null; }
+}
+
+async function verifyPaystackTransaction(reference: string) {
+  try {
+    const data = await paystackRequest("GET", `/transaction/verify/${reference}`);
+    return data?.data ?? null;
+  } catch { return null; }
+}
+
+// ─── Interswitch ──────────────────────────────────────────────────────────────
+
+function interswitchHash(txnRef: string, amount: number, redirectUrl: string): string {
+  const raw = `${txnRef}${IS_MERCHANT_CODE}${IS_PAY_ITEM_ID}${amount}${redirectUrl}${IS_SECRET_KEY}`;
+  return crypto.createHash("sha512").update(raw).digest("hex");
+}
+
+function buildInterswitchFormData(txnRef: string, redirectUrl: string, amount = PUBLISHING_FEE_KOBO) {
+  const hash = interswitchHash(txnRef, amount, redirectUrl);
+  return {
+    paymentUrl: "https://webpay.interswitchgroup.com/collections/w/pay",
+    formData: {
+      merchantCode: IS_MERCHANT_CODE,
+      payItemId: IS_PAY_ITEM_ID,
+      amount: String(amount),
+      siteRedirectUrl: redirectUrl,
+      transactionreference: txnRef,
+      hash,
+      currency: "566",
+    },
+  };
+}
+
+async function verifyInterswitchPayment(txnRef: string, amount = PUBLISHING_FEE_KOBO) {
+  try {
+    const creds = Buffer.from(`${IS_CLIENT_ID}:${IS_SECRET_KEY}`).toString("base64");
+    const url = `https://webpay.interswitchgroup.com/api/v2/purchases/fulfillment?merchantcode=${IS_MERCHANT_CODE}&transactionreference=${encodeURIComponent(txnRef)}&amount=${amount}`;
+    const res = await fetch(url, { headers: { Authorization: `Basic ${creds}` } });
+    return (await res.json()) as any;
+  } catch { return null; }
+}
 
 // ─── PUBLIC ROUTES ─────────────────────────────────────────────────────────────
 
-// GET /store/apps — browse with filters + pagination
+// GET /store/apps
 router.get("/apps", async (req, res) => {
   try {
     const { category, platform, search, sort = "newest", page = "1", limit = "24" } = req.query as Record<string, string>;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(48, Math.max(1, parseInt(limit)));
     const offset = (pageNum - 1) * limitNum;
-
-    const conditions = [eq(storeAppsTable.status, "approved")];
+    const conditions: any[] = [eq(storeAppsTable.status, "approved")];
     if (category) conditions.push(eq(storeAppsTable.category, category));
-    if (platform) conditions.push(eq(storeAppsTable.platform, platform));
-    if (search) conditions.push(or(
-      ilike(storeAppsTable.name, `%${search}%`),
-      ilike(storeAppsTable.tagline, `%${search}%`),
-    )!);
-
+    if (platform && platform !== "all") conditions.push(eq(storeAppsTable.platform, platform));
+    if (search) conditions.push(or(ilike(storeAppsTable.name, `%${search}%`), ilike(storeAppsTable.tagline, `%${search}%`))!);
     const orderBy = sort === "rating" ? desc(storeAppsTable.rating)
       : sort === "downloads" ? desc(storeAppsTable.totalDownloads)
       : sort === "trending" ? desc(storeAppsTable.totalDownloads)
       : desc(storeAppsTable.createdAt);
-
-    const [apps, totalResult] = await Promise.all([
-      db.query.storeAppsTable.findMany({
-        where: and(...conditions),
-        orderBy,
-        limit: limitNum,
-        offset,
-        with: { developer: true },
-      }),
-      db.select({ count: sql<number>`count(*)::int` })
-        .from(storeAppsTable)
-        .where(and(...conditions)),
+    const [apps, [{ count }]] = await Promise.all([
+      db.query.storeAppsTable.findMany({ where: and(...conditions), orderBy, limit: limitNum, offset, with: { developer: true } }),
+      db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(and(...conditions)),
     ]);
-
-    const total = totalResult[0]?.count ?? 0;
-    res.json({
-      apps: apps.map(a => serializeAppSummary(a, (a as any).developer?.displayName ?? "Unknown")),
-      total,
-      page: pageNum,
-      limit: limitNum,
-    });
+    res.json({ apps: apps.map((a) => serializeAppSummary(a, (a as any).developer?.displayName)), total: count, page: pageNum, limit: limitNum });
   } catch (err) {
     logger.error({ err }, "listStoreApps error");
     res.status(500).json({ error: "Internal server error" });
@@ -164,12 +263,12 @@ router.get("/apps/featured", async (_req, res) => {
     const apps = await db.query.storeAppsTable.findMany({
       where: and(eq(storeAppsTable.status, "approved"), eq(storeAppsTable.isFeatured, true)),
       orderBy: desc(storeAppsTable.totalDownloads),
-      limit: 12,
+      limit: 10,
       with: { developer: true },
     });
-    res.json(apps.map(a => serializeAppSummary(a, (a as any).developer?.displayName)));
+    res.json(apps.map((a) => serializeAppSummary(a, (a as any).developer?.displayName)));
   } catch (err) {
-    logger.error({ err }, "listFeaturedStoreApps error");
+    logger.error({ err }, "featured error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -183,9 +282,25 @@ router.get("/apps/trending", async (_req, res) => {
       limit: 12,
       with: { developer: true },
     });
-    res.json(apps.map(a => serializeAppSummary(a, (a as any).developer?.displayName)));
+    res.json(apps.map((a) => serializeAppSummary(a, (a as any).developer?.displayName)));
   } catch (err) {
-    logger.error({ err }, "listTrendingStoreApps error");
+    logger.error({ err }, "trending error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/apps/new-arrivals
+router.get("/apps/new-arrivals", async (_req, res) => {
+  try {
+    const apps = await db.query.storeAppsTable.findMany({
+      where: eq(storeAppsTable.status, "approved"),
+      orderBy: desc(storeAppsTable.createdAt),
+      limit: 12,
+      with: { developer: true },
+    });
+    res.json(apps.map((a) => serializeAppSummary(a, (a as any).developer?.displayName)));
+  } catch (err) {
+    logger.error({ err }, "new-arrivals error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -198,16 +313,10 @@ router.get("/apps/categories", async (_req, res) => {
       .from(storeAppsTable)
       .where(eq(storeAppsTable.status, "approved"))
       .groupBy(storeAppsTable.category);
-
-    const countMap = Object.fromEntries(counts.map(r => [r.category, r.count]));
-    const result = CATEGORIES.map(c => ({
-      name: c.name,
-      iconEmoji: c.iconEmoji,
-      count: countMap[c.name] ?? 0,
-    }));
-    res.json(result);
+    const countMap = Object.fromEntries(counts.map((r) => [r.category, r.count]));
+    res.json(AFRICA_CATEGORIES.map((c) => ({ ...c, count: countMap[c.name] ?? 0 })));
   } catch (err) {
-    logger.error({ err }, "listStoreCategories error");
+    logger.error({ err }, "categories error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -219,7 +328,7 @@ router.get("/apps/:slug", async (req, res) => {
       where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
       with: { developer: true },
     });
-    if (!app) return void res.status(404).json({ error: "Not found" });
+    if (!app) return void res.status(404).json({ error: "App not found" });
     res.json(serializeApp(app, (app as any).developer));
   } catch (err) {
     logger.error({ err }, "getStoreApp error");
@@ -227,19 +336,17 @@ router.get("/apps/:slug", async (req, res) => {
   }
 });
 
-// POST /store/apps/:slug/download
+// POST /store/apps/:slug/download — increment counter + return download URL
 router.post("/apps/:slug/download", async (req, res) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
       where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
     });
-    if (!app) return void res.status(404).json({ error: "Not found" });
-    await db.update(storeAppsTable)
-      .set({ totalDownloads: app.totalDownloads + 1 })
-      .where(eq(storeAppsTable.id, app.id));
+    if (!app) return void res.status(404).json({ error: "App not found" });
+    await db.update(storeAppsTable).set({ totalDownloads: app.totalDownloads + 1 }).where(eq(storeAppsTable.id, app.id));
     res.json({ downloadUrl: app.downloadUrl ?? "", webUrl: app.webUrl ?? null });
   } catch (err) {
-    logger.error({ err }, "recordStoreAppDownload error");
+    logger.error({ err }, "downloadApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -247,72 +354,49 @@ router.post("/apps/:slug/download", async (req, res) => {
 // GET /store/apps/:slug/reviews
 router.get("/apps/:slug/reviews", async (req, res) => {
   try {
-    const app = await db.query.storeAppsTable.findFirst({
-      where: eq(storeAppsTable.slug, req.params.slug),
-    });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const reviews = await db.query.storeAppReviewsTable.findMany({
       where: and(eq(storeAppReviewsTable.appId, app.id), eq(storeAppReviewsTable.isFlagged, false)),
       orderBy: desc(storeAppReviewsTable.createdAt),
       limit: 50,
     });
-    res.json(reviews.map(r => ({
-      ...r,
-      createdAt: r.createdAt.toISOString(),
-    })));
+    res.json(reviews.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
   } catch (err) {
-    logger.error({ err }, "listStoreAppReviews error");
+    logger.error({ err }, "listReviews error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /store/apps/:slug/reviews — requires auth
+// POST /store/apps/:slug/reviews
 router.post("/apps/:slug/reviews", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { rating, comment } = req.body;
-    if (!rating || rating < 1 || rating > 5) {
-      return void res.status(400).json({ error: "Rating must be 1-5" });
-    }
-    const app = await db.query.storeAppsTable.findFirst({
-      where: eq(storeAppsTable.slug, req.params.slug),
-    });
+    const { rating, comment, reviewerName } = req.body;
+    if (!rating || rating < 1 || rating > 5) return void res.status(400).json({ error: "Rating 1–5 required" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
     if (!app) return void res.status(404).json({ error: "Not found" });
-
-    // Prevent duplicate reviews
     const existing = await db.query.storeAppReviewsTable.findFirst({
       where: and(eq(storeAppReviewsTable.appId, app.id), eq(storeAppReviewsTable.reviewerClerkId, userId!)),
     });
-    if (existing) return void res.status(409).json({ error: "Already reviewed this app" });
-
-    // Basic AI sentiment (simple heuristic if no quota)
-    let sentimentLabel = "neutral";
-    let sentimentScore = 0;
-    if (rating >= 4) { sentimentLabel = "positive"; sentimentScore = 0.6; }
-    else if (rating <= 2) { sentimentLabel = "negative"; sentimentScore = -0.6; }
-
+    if (existing) return void res.status(409).json({ error: "You already reviewed this app" });
+    const sentimentLabel = rating >= 4 ? "positive" : rating <= 2 ? "negative" : "neutral";
+    const sentimentScore = rating >= 4 ? 0.7 : rating <= 2 ? -0.7 : 0;
     const [review] = await db.insert(storeAppReviewsTable).values({
       appId: app.id,
       reviewerClerkId: userId!,
-      reviewerName: "User",
+      reviewerName: reviewerName ?? "User",
       rating,
       comment: comment ?? null,
       sentimentLabel,
       sentimentScore,
     }).returning();
-
-    // Recalculate rating
-    const allReviews = await db.select({ rating: storeAppReviewsTable.rating })
-      .from(storeAppReviewsTable)
-      .where(eq(storeAppReviewsTable.appId, app.id));
-    const avg = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
-    await db.update(storeAppsTable)
-      .set({ rating: Math.round(avg * 10) / 10, ratingCount: allReviews.length })
-      .where(eq(storeAppsTable.id, app.id));
-
+    const allReviews = await db.select({ rating: storeAppReviewsTable.rating }).from(storeAppReviewsTable).where(eq(storeAppReviewsTable.appId, app.id));
+    const avg = allReviews.reduce((s, r) => s + r.rating, 0) / allReviews.length;
+    await db.update(storeAppsTable).set({ rating: Math.round(avg * 10) / 10, ratingCount: allReviews.length }).where(eq(storeAppsTable.id, app.id));
     res.status(201).json({ ...review, createdAt: review.createdAt.toISOString() });
   } catch (err) {
-    logger.error({ err }, "submitStoreAppReview error");
+    logger.error({ err }, "submitReview error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -320,22 +404,20 @@ router.post("/apps/:slug/reviews", requireAuth(), async (req, res) => {
 // GET /store/apps/:slug/versions
 router.get("/apps/:slug/versions", async (req, res) => {
   try {
-    const app = await db.query.storeAppsTable.findFirst({
-      where: eq(storeAppsTable.slug, req.params.slug),
-    });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const versions = await db.query.storeAppVersionsTable.findMany({
       where: eq(storeAppVersionsTable.appId, app.id),
       orderBy: desc(storeAppVersionsTable.createdAt),
     });
-    res.json(versions.map(v => ({ ...v, createdAt: v.createdAt.toISOString() })));
+    res.json(versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() })));
   } catch (err) {
-    logger.error({ err }, "listStoreAppVersions error");
+    logger.error({ err }, "listVersions error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// ─── DEVELOPER PORTAL ──────────────────────────────────────────────────────────
+// ─── DEVELOPER ROUTES ──────────────────────────────────────────────────────────
 
 // GET /store/developers/me
 router.get("/developers/me", requireAuth(), async (req, res) => {
@@ -344,20 +426,52 @@ router.get("/developers/me", requireAuth(), async (req, res) => {
     const dev = await db.query.storeDeveloperAccountsTable.findFirst({
       where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
     });
-    if (!dev) return void res.status(404).json({ error: "Not registered as a developer yet" });
-    const totalApps = await db.select({ count: sql<number>`count(*)::int` })
-      .from(storeAppsTable).where(eq(storeAppsTable.developerId, dev.id));
-    const totalDownloads = await db.select({ sum: sql<number>`coalesce(sum(total_downloads),0)::int` })
-      .from(storeAppsTable).where(eq(storeAppsTable.developerId, dev.id));
-    res.json({
-      ...dev,
-      totalApps: totalApps[0]?.count ?? 0,
-      totalDownloads: totalDownloads[0]?.sum ?? 0,
-      createdAt: dev.createdAt.toISOString(),
-      updatedAt: dev.updatedAt.toISOString(),
-    });
+    if (!dev) return void res.status(404).json({ error: "Not registered as a developer" });
+    const [{ totalApps }] = await db.select({ totalApps: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.developerId, dev.id));
+    const [{ totalDownloads }] = await db.select({ totalDownloads: sql<number>`coalesce(sum(total_downloads),0)::int` }).from(storeAppsTable).where(eq(storeAppsTable.developerId, dev.id));
+    res.json({ ...serializeDev(dev), totalApps, totalDownloads });
   } catch (err) {
-    logger.error({ err }, "getMyStoreDeveloper error");
+    logger.error({ err }, "getMe error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/developers/register — FREE registration + auto dedicated account
+router.post("/developers/register", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const { displayName, email, bio, website, company, country } = req.body;
+    if (!displayName || !email) return void res.status(400).json({ error: "displayName and email are required" });
+
+    const existing = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
+    });
+    if (existing) return void res.status(409).json({ error: "Already registered as a developer" });
+
+    // Create Paystack customer for dedicated NGN account
+    const customerCode = await createPaystackCustomer(email, displayName);
+    let dedicatedNgnAccount: any = null;
+    if (customerCode) {
+      dedicatedNgnAccount = await requestPaystackDedicatedAccount(customerCode);
+    }
+
+    const [dev] = await db.insert(storeDeveloperAccountsTable).values({
+      clerkUserId: userId!,
+      displayName,
+      email,
+      bio: bio ?? null,
+      website: website ?? null,
+      company: company ?? null,
+      country: country ?? "Nigeria",
+      status: "active",
+      registrationFeePaid: true,
+      paystackCustomerCode: customerCode ?? null,
+      dedicatedNgnAccount: dedicatedNgnAccount,
+    } as any).returning();
+
+    res.status(201).json({ ...serializeDev(dev), totalApps: 0, totalDownloads: 0 });
+  } catch (err) {
+    logger.error({ err }, "registerDeveloper error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -366,18 +480,15 @@ router.get("/developers/me", requireAuth(), async (req, res) => {
 router.patch("/developers/me", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { displayName, bio, website, company, avatarUrl } = req.body;
-    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
-      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
-    });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
     if (!dev) return void res.status(404).json({ error: "Not found" });
+    const { displayName, bio, website, company, avatarUrl, country } = req.body;
     const [updated] = await db.update(storeDeveloperAccountsTable)
-      .set({ displayName: displayName ?? dev.displayName, bio: bio ?? dev.bio, website: website ?? dev.website, company: company ?? dev.company, avatarUrl: avatarUrl ?? dev.avatarUrl, updatedAt: new Date() })
-      .where(eq(storeDeveloperAccountsTable.id, dev.id))
-      .returning();
-    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), totalApps: 0, totalDownloads: 0 });
+      .set({ displayName: displayName ?? dev.displayName, bio: bio ?? dev.bio, website: website ?? dev.website, company: company ?? dev.company, avatarUrl: avatarUrl ?? dev.avatarUrl, country: country ?? dev.country, updatedAt: new Date() })
+      .where(eq(storeDeveloperAccountsTable.id, dev.id)).returning();
+    res.json({ ...serializeDev(updated), totalApps: 0, totalDownloads: 0 });
   } catch (err) {
-    logger.error({ err }, "updateMyStoreDeveloper error");
+    logger.error({ err }, "updateMe error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -386,40 +497,25 @@ router.patch("/developers/me", requireAuth(), async (req, res) => {
 router.get("/developers/me/dashboard", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
-      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
-    });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
     if (!dev) return void res.status(404).json({ error: "Not found" });
-
-    const apps = await db.query.storeAppsTable.findMany({
-      where: eq(storeAppsTable.developerId, dev.id),
-    });
-
+    const apps = await db.query.storeAppsTable.findMany({ where: eq(storeAppsTable.developerId, dev.id) });
     const totalDownloads = apps.reduce((s, a) => s + a.totalDownloads, 0);
-    const reviewRows = await db.select({ count: sql<number>`count(*)::int`, avg: sql<number>`coalesce(avg(rating),0)` })
-      .from(storeAppReviewsTable)
-      .where(sql`app_id = ANY(${apps.map(a => a.id)})`);
-    const totalReviews = reviewRows[0]?.count ?? 0;
-    const averageRating = Math.round((reviewRows[0]?.avg ?? 0) * 10) / 10;
-
     res.json({
       totalApps: apps.length,
       totalDownloads,
-      totalReviews,
-      averageRating,
-      downloadsThisWeek: 0,
-      downloadsThisMonth: 0,
-      appBreakdown: apps.map(a => ({
-        appId: a.id,
-        appName: a.name,
-        downloads: a.totalDownloads,
-        rating: a.rating,
-        ratingCount: a.ratingCount,
-        status: a.status,
+      pendingPayment: apps.filter((a) => a.status === "pending_payment").length,
+      pendingReview: apps.filter((a) => a.status === "pending_review").length,
+      approved: apps.filter((a) => a.status === "approved").length,
+      rejected: apps.filter((a) => a.status === "rejected").length,
+      appBreakdown: apps.map((a) => ({
+        appId: a.id, appName: a.name, slug: a.slug,
+        downloads: a.totalDownloads, rating: a.rating, ratingCount: a.ratingCount,
+        status: a.status, publishingFeePaid: a.publishingFeePaid, isFeatured: a.isFeatured,
       })),
     });
   } catch (err) {
-    logger.error({ err }, "getStoreDeveloperDashboard error");
+    logger.error({ err }, "dashboard error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -428,33 +524,27 @@ router.get("/developers/me/dashboard", requireAuth(), async (req, res) => {
 router.get("/developers/me/apps", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
-      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
-    });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
     if (!dev) return void res.status(404).json({ error: "Not found" });
-    const apps = await db.query.storeAppsTable.findMany({
-      where: eq(storeAppsTable.developerId, dev.id),
-      orderBy: desc(storeAppsTable.createdAt),
-    });
-    res.json(apps.map(a => serializeApp(a, dev)));
+    const apps = await db.query.storeAppsTable.findMany({ where: eq(storeAppsTable.developerId, dev.id), orderBy: desc(storeAppsTable.createdAt) });
+    res.json(apps.map((a) => serializeApp(a, dev)));
   } catch (err) {
-    logger.error({ err }, "listMyStoreApps error");
+    logger.error({ err }, "myApps error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /store/developers/me/apps — submit new app
+// POST /store/developers/me/apps — submit new app (downloadUrl required)
 router.post("/developers/me/apps", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-
     const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
     if (!name || !tagline || !description || !category || !platform || !iconUrl) {
-      return void res.status(400).json({ error: "Missing required fields" });
+      return void res.status(400).json({ error: "name, tagline, description, category, platform, iconUrl are required" });
     }
+    if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl is required — every app must have a direct download or install link" });
 
-    // Generate unique slug
     let slug = slugify(name);
     const existing = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, slug) });
     if (existing) slug = `${slug}-${Date.now()}`;
@@ -463,15 +553,16 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       developerId: dev.id,
       name, slug, tagline, description, category, platform, iconUrl,
       screenshots: screenshots ?? [],
-      downloadUrl: downloadUrl ?? null,
+      downloadUrl,
       webUrl: webUrl ?? null,
       currentVersion: currentVersion ?? null,
-      status: "pending_review",
-    }).returning();
-
+      status: "pending_payment",
+      publishingFeePaid: false,
+      publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
+    } as any).returning();
     res.status(201).json(serializeApp(app, dev));
   } catch (err) {
-    logger.error({ err }, "submitStoreApp error");
+    logger.error({ err }, "submitApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -482,29 +573,24 @@ router.patch("/developers/me/apps/:id", requireAuth(), async (req, res) => {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
     const appId = parseInt(req.params.id);
-    const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)),
-    });
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
-    const { tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl } = req.body;
-    const [updated] = await db.update(storeAppsTable)
-      .set({
-        tagline: tagline ?? app.tagline,
-        description: description ?? app.description,
-        category: category ?? app.category,
-        platform: platform ?? app.platform,
-        iconUrl: iconUrl ?? app.iconUrl,
-        screenshots: screenshots ?? app.screenshots,
-        downloadUrl: downloadUrl ?? app.downloadUrl,
-        webUrl: webUrl ?? app.webUrl,
-        status: "pending_review", // re-submit for review on update
-        updatedAt: new Date(),
-      })
-      .where(eq(storeAppsTable.id, appId))
-      .returning();
+    const { tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
+    const [updated] = await db.update(storeAppsTable).set({
+      tagline: tagline ?? app.tagline,
+      description: description ?? app.description,
+      category: category ?? app.category,
+      platform: platform ?? app.platform,
+      iconUrl: iconUrl ?? app.iconUrl,
+      screenshots: screenshots ?? app.screenshots,
+      downloadUrl: downloadUrl ?? app.downloadUrl,
+      webUrl: webUrl ?? app.webUrl,
+      currentVersion: currentVersion ?? app.currentVersion,
+      updatedAt: new Date(),
+    }).where(eq(storeAppsTable.id, appId)).returning();
     res.json(serializeApp(updated, dev));
   } catch (err) {
-    logger.error({ err }, "updateMyStoreApp error");
+    logger.error({ err }, "updateApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -515,14 +601,12 @@ router.delete("/developers/me/apps/:id", requireAuth(), async (req, res) => {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
     const appId = parseInt(req.params.id);
-    const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)),
-    });
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
-    await db.update(storeAppsTable).set({ status: "removed", updatedAt: new Date() }).where(eq(storeAppsTable.id, appId));
-    res.status(204).end();
+    await db.delete(storeAppsTable).where(eq(storeAppsTable.id, appId));
+    res.status(204).send();
   } catch (err) {
-    logger.error({ err }, "removeMyStoreApp error");
+    logger.error({ err }, "deleteApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -533,157 +617,191 @@ router.post("/developers/me/apps/:id/versions", requireAuth(), async (req, res) 
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
     const appId = parseInt(req.params.id);
-    const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)),
-    });
+    const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
-    const { version, releaseNotes, fileUrl } = req.body;
-    if (!version) return void res.status(400).json({ error: "Version is required" });
+    const { version, releaseNotes, downloadUrl } = req.body;
+    if (!version) return void res.status(400).json({ error: "version is required" });
     const [v] = await db.insert(storeAppVersionsTable).values({
-      appId, version, releaseNotes: releaseNotes ?? null, fileUrl: fileUrl ?? null,
+      appId,
+      version,
+      releaseNotes: releaseNotes ?? null,
+      downloadUrl: downloadUrl ?? null,
     }).returning();
-    await db.update(storeAppsTable).set({ currentVersion: version, updatedAt: new Date() }).where(eq(storeAppsTable.id, appId));
+    if (downloadUrl) await db.update(storeAppsTable).set({ currentVersion: version, downloadUrl, updatedAt: new Date() }).where(eq(storeAppsTable.id, appId));
     res.status(201).json({ ...v, createdAt: v.createdAt.toISOString() });
   } catch (err) {
-    logger.error({ err }, "addStoreAppVersion error");
+    logger.error({ err }, "addVersion error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /store/payments/developer-signup
-router.post("/payments/developer-signup", requireAuth(), async (req, res) => {
+// ─── PAYMENT ROUTES ─────────────────────────────────────────────────────────────
+
+// POST /store/payments/initiate — NGN 25,000 app publishing fee
+router.post("/payments/initiate", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { gateway, successUrl, cancelUrl } = req.body;
-    if (!gateway) return void res.status(400).json({ error: "gateway required" });
+    const { appId, gateway } = req.body;
+    if (!appId || !gateway) return void res.status(400).json({ error: "appId and gateway are required" });
 
-    // Check not already registered
-    const existing = await db.query.storeDeveloperAccountsTable.findFirst({
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
       where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
     });
-    if (existing?.registrationFeePaid) {
-      return void res.status(409).json({ error: "Already registered and paid" });
-    }
+    if (!dev) return void res.status(404).json({ error: "Developer account not found" });
 
-    const amount = 15; // USD
-    const returnUrl = successUrl ?? `${process.env.REPLIT_DEV_DOMAIN}/app-store/developer`;
+    const app = await db.query.storeAppsTable.findFirst({
+      where: and(eq(storeAppsTable.id, parseInt(appId)), eq(storeAppsTable.developerId, dev.id)),
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+    if (app.publishingFeePaid) return void res.status(400).json({ error: "Publishing fee already paid for this app" });
 
-    if (gateway === "stripe") {
-      const stripeKey = process.env.STRIPE_SECRET_KEY;
-      if (!stripeKey) return void res.status(503).json({ error: "Stripe not configured" });
-      const stripe = new Stripe(stripeKey);
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: [{ price_data: { currency: "usd", product_data: { name: "Awajimaa App Store Developer Registration" }, unit_amount: amount * 100 }, quantity: 1 }],
-        success_url: returnUrl + "?payment_success=1",
-        cancel_url: cancelUrl ?? returnUrl,
-        metadata: { clerkUserId: userId!, purpose: "store_developer_signup" },
-      });
-      return void res.json({ gateway: "stripe", paymentRef: session.id, checkoutUrl: session.url, clientSecret: null, paystackAuthorizationUrl: null, paypalOrderId: null });
-    }
+    const baseUrl = getBaseUrl(req);
 
     if (gateway === "paystack") {
-      const paystackKey = process.env.PAYSTACK_SECRET_KEY;
-      if (!paystackKey) return void res.status(503).json({ error: "Paystack not configured" });
-      const resp = await fetch("https://api.paystack.co/transaction/initialize", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amount * 100 * 1550, // USD→NGN rough conversion (admin should configure)
-          currency: "NGN",
-          metadata: { clerkUserId: userId!, purpose: "store_developer_signup" },
-          callback_url: returnUrl + "?payment_success=1",
-        }),
-      });
-      const data = await resp.json() as any;
-      return void res.json({ gateway: "paystack", paymentRef: data.data?.reference, checkoutUrl: null, clientSecret: null, paystackAuthorizationUrl: data.data?.authorization_url, paypalOrderId: null });
-    }
+      const callbackUrl = `${baseUrl}/app-store/developer?payment=paystack&appId=${app.id}`;
+      const txn = await initPaystackTransaction(
+        dev.email || `dev${dev.id}@africaappstore.com`,
+        PUBLISHING_FEE_KOBO,
+        { purpose: "africa_store_publishing_fee", appId: app.id, developerId: dev.id, appName: app.name },
+        callbackUrl,
+      );
+      if (!txn) return void res.status(500).json({ error: "Could not initialize Paystack payment" });
+      await db.update(storeAppsTable)
+        .set({ publishingFeeRef: txn.reference, publishingFeeGateway: "paystack", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, app.id));
+      res.json({ gateway: "paystack", authorizationUrl: txn.authorization_url, reference: txn.reference });
 
-    if (gateway === "paypal") {
-      return void res.status(501).json({ error: "PayPal developer signup coming soon" });
-    }
+    } else if (gateway === "interswitch") {
+      const txnRef = `AFST-${app.id}-${Date.now()}`;
+      const redirectUrl = `${baseUrl}/api/store/payments/interswitch/callback`;
+      const { paymentUrl, formData } = buildInterswitchFormData(txnRef, redirectUrl);
+      await db.update(storeAppsTable)
+        .set({ publishingFeeRef: txnRef, publishingFeeGateway: "interswitch", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, app.id));
+      res.json({ gateway: "interswitch", paymentUrl, formData, appId: app.id });
 
-    res.status(400).json({ error: "Unknown gateway" });
+    } else {
+      res.status(400).json({ error: "gateway must be 'paystack' or 'interswitch'" });
+    }
   } catch (err) {
-    logger.error({ err }, "initiateStoreDeveloperPayment error");
+    logger.error({ err }, "initiatePayment error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /store/developers/register — complete registration after payment
-router.post("/developers/register", requireAuth(), async (req, res) => {
+// POST /store/payments/paystack/verify — called after Paystack redirect
+router.post("/payments/paystack/verify", requireAuth(), async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    const { displayName, bio, website, company, avatarUrl, paymentRef } = req.body;
-    if (!displayName) return void res.status(400).json({ error: "displayName required" });
-
-    const existing = await db.query.storeDeveloperAccountsTable.findFirst({
-      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
-    });
-    if (existing) return void res.status(409).json({ error: "Already registered" });
-
-    const [dev] = await db.insert(storeDeveloperAccountsTable).values({
-      clerkUserId: userId!,
-      displayName,
-      bio: bio ?? null,
-      website: website ?? null,
-      company: company ?? null,
-      avatarUrl: avatarUrl ?? null,
-      status: "active",
-      registrationFeePaid: true,
-      paymentRef: paymentRef ?? null,
-    }).returning();
-
-    res.status(201).json({
-      ...dev,
-      totalApps: 0,
-      totalDownloads: 0,
-      createdAt: dev.createdAt.toISOString(),
-      updatedAt: dev.updatedAt.toISOString(),
-    });
+    const { reference } = req.body;
+    if (!reference) return void res.status(400).json({ error: "reference required" });
+    const txn = await verifyPaystackTransaction(reference);
+    if (txn?.status !== "success") return void res.status(400).json({ error: "Payment not confirmed" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, reference) } as any);
+    if (app && !app.publishingFeePaid) {
+      await db.update(storeAppsTable)
+        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, app.id));
+    }
+    res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
   } catch (err) {
-    logger.error({ err }, "completeStoreDeveloperRegistration error");
+    logger.error({ err }, "verifyPaystack error");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/payments/interswitch/callback — Interswitch redirect after payment
+router.get("/payments/interswitch/callback", async (req, res) => {
+  try {
+    const { txnRef, responseCode, amount } = req.query as Record<string, string>;
+    const baseUrl = getBaseUrl(req);
+    if (responseCode === "00" && txnRef) {
+      const verification = await verifyInterswitchPayment(txnRef, parseInt(amount ?? "0") || PUBLISHING_FEE_KOBO);
+      if (verification?.ResponseCode === "00") {
+        const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, txnRef) } as any);
+        if (app && !app.publishingFeePaid) {
+          await db.update(storeAppsTable)
+            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .where(eq(storeAppsTable.id, app.id));
+          return void res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&status=success&appId=${app.id}`);
+        }
+      }
+    }
+    res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&status=failed`);
+  } catch (err) {
+    logger.error({ err }, "interswitchCallback error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── PAYSTACK WEBHOOK (public) ─────────────────────────────────────────────────
+
+router.post("/webhooks/paystack", async (req, res) => {
+  try {
+    const hash = crypto.createHmac("sha512", PAYSTACK_SECRET).update(JSON.stringify(req.body)).digest("hex");
+    if (hash !== req.headers["x-paystack-signature"]) return void res.status(401).send("Invalid signature");
+
+    const { event, data } = req.body;
+
+    if (event === "charge.success" && data?.metadata?.purpose === "africa_store_publishing_fee") {
+      const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, data.reference) } as any);
+      if (app && !app.publishingFeePaid) {
+        await db.update(storeAppsTable)
+          .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+          .where(eq(storeAppsTable.id, app.id));
+        logger.info({ appId: app.id, reference: data.reference }, "[store] App publishing fee confirmed via Paystack webhook");
+      }
+    }
+
+    if (event === "dedicatedaccount.assign.success" && data?.dedicated_account?.account_number) {
+      const customerCode = data.customer?.customer_code;
+      if (customerCode) {
+        await db.update(storeDeveloperAccountsTable)
+          .set({
+            dedicatedNgnAccount: {
+              accountNumber: data.dedicated_account.account_number,
+              bankName: data.dedicated_account.bank?.name ?? "Wema Bank",
+              bankSlug: data.dedicated_account.bank?.slug ?? "wema-bank",
+            },
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(storeDeveloperAccountsTable.paystackCustomerCode, customerCode));
+      }
+    }
+
+    res.status(200).send("OK");
+  } catch (err) {
+    logger.error({ err }, "paystackWebhook error");
+    res.status(500).send("Error");
   }
 });
 
 // ─── ADMIN ROUTES ──────────────────────────────────────────────────────────────
 
+// GET /store/admin/stats
 router.get("/admin/stats", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const [apps, devs, reviews, pending, approved, rejected] = await Promise.all([
-      db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable),
-      db.select({ count: sql<number>`count(*)::int` }).from(storeDeveloperAccountsTable),
-      db.select({ count: sql<number>`count(*)::int` }).from(storeAppReviewsTable),
-      db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "pending_review")),
-      db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "approved")),
-      db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "rejected")),
-    ]);
-    const downloads = await db.select({ sum: sql<number>`coalesce(sum(total_downloads),0)::int` }).from(storeAppsTable);
-    const topApps = await db.query.storeAppsTable.findMany({
-      where: eq(storeAppsTable.status, "approved"),
-      orderBy: desc(storeAppsTable.totalDownloads),
-      limit: 5,
-      with: { developer: true },
-    });
+    const [totalApps] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable);
+    const [pending] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "pending_review"));
+    const [approved] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "approved"));
+    const [developers] = await db.select({ count: sql<number>`count(*)::int` }).from(storeDeveloperAccountsTable);
+    const [downloads] = await db.select({ sum: sql<number>`coalesce(sum(total_downloads),0)::int` }).from(storeAppsTable);
+    const [pendingPayment] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "pending_payment"));
     res.json({
-      totalApps: apps[0]?.count ?? 0,
-      totalDevelopers: devs[0]?.count ?? 0,
-      totalDownloads: downloads[0]?.sum ?? 0,
-      totalReviews: reviews[0]?.count ?? 0,
-      pendingReview: pending[0]?.count ?? 0,
-      approvedApps: approved[0]?.count ?? 0,
-      rejectedApps: rejected[0]?.count ?? 0,
-      topApps: topApps.map(a => serializeAppSummary(a, (a as any).developer?.displayName)),
+      totalApps: totalApps.count,
+      pendingPayment: pendingPayment.count,
+      pendingReview: pending.count,
+      approvedApps: approved.count,
+      totalDevelopers: developers.count,
+      totalDownloads: downloads.sum,
     });
   } catch (err) {
-    logger.error({ err }, "getStoreAdminStats error");
+    logger.error({ err }, "adminStats error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// GET /store/admin/apps/pending
 router.get("/admin/apps/pending", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
@@ -692,190 +810,179 @@ router.get("/admin/apps/pending", requireAuth(), async (req, res) => {
       orderBy: asc(storeAppsTable.createdAt),
       with: { developer: true },
     });
-    res.json(apps.map(a => serializeApp(a, (a as any).developer)));
+    res.json(apps.map((a) => serializeApp(a, (a as any).developer)));
   } catch (err) {
-    logger.error({ err }, "listPendingStoreApps error");
+    logger.error({ err }, "pendingApps error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// GET /store/admin/apps
 router.get("/admin/apps", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const { status, search } = req.query as Record<string, string>;
-    const conditions: any[] = [];
-    if (status) conditions.push(eq(storeAppsTable.status, status));
-    if (search) conditions.push(or(ilike(storeAppsTable.name, `%${search}%`), ilike(storeAppsTable.tagline, `%${search}%`))!);
+    const { status } = req.query as Record<string, string>;
+    const where = status ? eq(storeAppsTable.status, status) : undefined;
     const apps = await db.query.storeAppsTable.findMany({
-      where: conditions.length ? and(...conditions) : undefined,
-      orderBy: desc(storeAppsTable.updatedAt),
+      where,
+      orderBy: desc(storeAppsTable.createdAt),
+      limit: 100,
       with: { developer: true },
     });
-    res.json(apps.map(a => serializeApp(a, (a as any).developer)));
+    res.json(apps.map((a) => serializeApp(a, (a as any).developer)));
   } catch (err) {
-    logger.error({ err }, "listAllStoreApps error");
+    logger.error({ err }, "adminApps error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// POST /store/admin/apps/:id/ai-review
 router.post("/admin/apps/:id/ai-review", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const appId = parseInt(req.params.id);
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, appId) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(req.params.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
 
-    // AI analysis via OpenAI
-    let summary = "", category = app.category, policyFlags: string[] = [], score = 85, recommendation: "approve" | "review" | "reject" = "approve", malwareHints: string[] = [];
-    try {
-      const { default: OpenAI } = await import("openai");
-      const openai = new OpenAI({ apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL });
-      const prompt = `Analyze this app submission for an app store:
-Name: ${app.name}
+    const prompt = `You are an AI reviewer for Africa App Store. Review this app and respond ONLY with a JSON object.
+App: ${app.name}
 Category: ${app.category}
 Platform: ${app.platform}
 Tagline: ${app.tagline}
 Description: ${app.description}
+Download URL: ${app.downloadUrl}
 
-Respond as JSON with:
+Respond with EXACTLY this JSON structure:
 {
-  "summary": "50-word compelling store summary",
-  "category": "best category from: Productivity, Finance, Education, Health & Fitness, Entertainment, Social, Business, Utilities, Lifestyle, Shopping, Travel, Food & Drink, Other",
-  "policyFlags": ["list any violations or empty array"],
-  "score": 0-100,
-  "recommendation": "approve|review|reject",
-  "malwareHints": ["any suspicious patterns or empty array"]
-}`;
-      const resp = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
+  "summary": "2-3 sentence app summary for African users",
+  "suggestedCategory": "one of the Africa App Store categories",
+  "policyFlags": ["array of any policy concerns, or empty array"],
+  "score": 85,
+  "recommendation": "approve",
+  "malwareHints": [],
+  "africanRelevance": "brief note on relevance to African markets"
+}
+recommendation must be: approve, review, or reject`;
+
+    let aiResult: any = null;
+    try {
+      const aiRes = await fetch(`${process.env.AI_INTEGRATIONS_OPENAI_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } }),
       });
-      const parsed = JSON.parse(resp.choices[0]?.message?.content ?? "{}");
-      summary = parsed.summary ?? "";
-      category = parsed.category ?? app.category;
-      policyFlags = parsed.policyFlags ?? [];
-      score = parsed.score ?? 85;
-      recommendation = parsed.recommendation ?? "approve";
-      malwareHints = parsed.malwareHints ?? [];
-    } catch (aiErr) {
-      logger.warn({ aiErr }, "AI review failed, using defaults");
-      summary = `${app.name} — ${app.tagline}`;
+      const aiData = await aiRes.json() as any;
+      aiResult = JSON.parse(aiData.choices?.[0]?.message?.content ?? "{}");
+    } catch (e) {
+      logger.warn({ e }, "AI review failed, using fallback");
+      aiResult = { summary: "Manual review required.", suggestedCategory: app.category, policyFlags: [], score: 50, recommendation: "review", malwareHints: [], africanRelevance: "N/A" };
     }
 
     await db.update(storeAppsTable).set({
-      aiSummary: summary,
-      aiCategory: category,
-      aiPolicyFlags: JSON.stringify(policyFlags),
-      aiReviewScore: score,
+      aiSummary: aiResult.summary ?? null,
+      aiCategory: aiResult.suggestedCategory ?? null,
+      aiPolicyFlags: JSON.stringify(aiResult.policyFlags ?? []),
+      aiReviewScore: aiResult.score ?? null,
       aiReviewedAt: new Date(),
       updatedAt: new Date(),
-    }).where(eq(storeAppsTable.id, appId));
+    } as any).where(eq(storeAppsTable.id, app.id));
 
-    res.json({ appId, summary, category, policyFlags, score, recommendation, malwareHints });
+    res.json({ ...aiResult, appId: app.id });
   } catch (err) {
-    logger.error({ err }, "triggerStoreAppAiReview error");
+    logger.error({ err }, "aiReview error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// POST /store/admin/apps/:id/approve
 router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
-    const appId = parseInt(req.params.id);
-    const [updated] = await db.update(storeAppsTable)
-      .set({ status: "approved", reviewedByClerkId: userId!, reviewedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
-      .where(eq(storeAppsTable.id, appId))
-      .returning();
-    if (!updated) return void res.status(404).json({ error: "Not found" });
-    res.json(serializeApp(updated, null));
+    await db.update(storeAppsTable).set({
+      status: "approved",
+      reviewedByClerkId: userId,
+      reviewedAt: new Date(),
+      rejectionReason: null,
+      updatedAt: new Date(),
+    } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    res.json({ ok: true });
   } catch (err) {
-    logger.error({ err }, "approveStoreApp error");
+    logger.error({ err }, "approveApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// POST /store/admin/apps/:id/reject
 router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const { reason } = req.body;
-    const appId = parseInt(req.params.id);
-    const [updated] = await db.update(storeAppsTable)
-      .set({ status: "rejected", reviewedByClerkId: userId!, reviewedAt: new Date(), rejectionReason: reason ?? null, updatedAt: new Date() })
-      .where(eq(storeAppsTable.id, appId))
-      .returning();
-    if (!updated) return void res.status(404).json({ error: "Not found" });
-    res.json(serializeApp(updated, null));
+    await db.update(storeAppsTable).set({
+      status: "rejected",
+      reviewedByClerkId: userId,
+      reviewedAt: new Date(),
+      rejectionReason: reason ?? "Did not meet store guidelines",
+      updatedAt: new Date(),
+    } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    res.json({ ok: true });
   } catch (err) {
-    logger.error({ err }, "rejectStoreApp error");
+    logger.error({ err }, "rejectApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// POST /store/admin/apps/:id/feature
 router.post("/admin/apps/:id/feature", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const { featured } = req.body;
-    const appId = parseInt(req.params.id);
-    const [updated] = await db.update(storeAppsTable)
-      .set({ isFeatured: !!featured, updatedAt: new Date() })
-      .where(eq(storeAppsTable.id, appId))
-      .returning();
-    if (!updated) return void res.status(404).json({ error: "Not found" });
-    res.json(serializeApp(updated, null));
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(req.params.id)) });
+    if (!app) return void res.status(404).json({ error: "Not found" });
+    await db.update(storeAppsTable).set({ isFeatured: !app.isFeatured, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, app.id));
+    res.json({ isFeatured: !app.isFeatured });
   } catch (err) {
-    logger.error({ err }, "featureStoreApp error");
+    logger.error({ err }, "featureApp error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// GET /store/admin/developers
 router.get("/admin/developers", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const { status } = req.query as Record<string, string>;
-    const devs = await db.query.storeDeveloperAccountsTable.findMany({
-      where: status ? eq(storeDeveloperAccountsTable.status, status) : undefined,
-      orderBy: desc(storeDeveloperAccountsTable.createdAt),
-    });
-    res.json(devs.map(d => ({ ...d, totalApps: 0, totalDownloads: 0, createdAt: d.createdAt.toISOString(), updatedAt: d.updatedAt.toISOString() })));
+    const devs = await db.query.storeDeveloperAccountsTable.findMany({ orderBy: desc(storeDeveloperAccountsTable.createdAt) });
+    res.json(devs.map(serializeDev));
   } catch (err) {
-    logger.error({ err }, "listStoreDevelopers error");
+    logger.error({ err }, "adminDevelopers error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// POST /store/admin/developers/:id/suspend
 router.post("/admin/developers/:id/suspend", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const { reason } = req.body;
-    const devId = parseInt(req.params.id);
-    const [updated] = await db.update(storeDeveloperAccountsTable)
-      .set({ status: "suspended", suspensionReason: reason ?? null, updatedAt: new Date() })
-      .where(eq(storeDeveloperAccountsTable.id, devId))
-      .returning();
-    if (!updated) return void res.status(404).json({ error: "Not found" });
-    res.json({ ...updated, totalApps: 0, totalDownloads: 0, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, parseInt(req.params.id)) });
+    if (!dev) return void res.status(404).json({ error: "Not found" });
+    const newStatus = dev.status === "active" ? "suspended" : "active";
+    await db.update(storeDeveloperAccountsTable).set({ status: newStatus, suspensionReason: req.body.reason ?? null, updatedAt: new Date() } as any).where(eq(storeDeveloperAccountsTable.id, dev.id));
+    res.json({ status: newStatus });
   } catch (err) {
-    logger.error({ err }, "suspendStoreDeveloper error");
+    logger.error({ err }, "suspendDeveloper error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.post("/admin/reviews/:id/flag", requireAuth(), async (req, res) => {
+// POST /store/admin/apps/:id/assign-download
+router.post("/admin/apps/:id/assign-download", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const { reason } = req.body;
-    const reviewId = parseInt(req.params.id);
-    const [updated] = await db.update(storeAppReviewsTable)
-      .set({ isFlagged: true, flagReason: reason ?? null })
-      .where(eq(storeAppReviewsTable.id, reviewId))
-      .returning();
-    if (!updated) return void res.status(404).json({ error: "Not found" });
-    res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
+    const { downloadUrl } = req.body;
+    if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl required" });
+    await db.update(storeAppsTable).set({ downloadUrl, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    res.json({ ok: true });
   } catch (err) {
-    logger.error({ err }, "flagStoreReview error");
+    logger.error({ err }, "assignDownload error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -1,50 +1,32 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { Nav } from '@/components/nav';
-import HomePage from '@/pages/home';
-import SearchPage from '@/pages/search';
-import AppDetailPage from '@/pages/app-detail';
-import DeveloperPortalPage from '@/pages/developer-portal';
-import DeveloperSignupPage from '@/pages/developer-signup';
-import AdminPage from '@/pages/admin';
-import NotFound from '@/pages/not-found';
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { ClerkProvider } from "@clerk/react";
+import Nav from "./components/nav";
+import Home from "./pages/home";
+import Search from "./pages/search";
+import AppDetail from "./pages/app-detail";
+import DeveloperPortal from "./pages/developer-portal";
+import DeveloperSignup from "./pages/developer-signup";
+import Admin from "./pages/admin";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
-  },
-});
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function Router() {
+export default function App() {
   return (
-    <div className="min-h-screen bg-[#07070f] text-white">
-      <Nav />
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/search" component={SearchPage} />
-        <Route path="/apps/:slug" component={AppDetailPage} />
-        <Route path="/developer" component={DeveloperPortalPage} />
-        <Route path="/developer/signup" component={DeveloperSignupPage} />
-        <Route path="/admin" component={AdminPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </div>
+    <ClerkProvider publishableKey={CLERK_KEY}>
+      <WouterRouter base={basePath}>
+        <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
+          <Nav />
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/search" component={Search} />
+            <Route path="/apps/:slug" component={AppDetail} />
+            <Route path="/developer/signup" component={DeveloperSignup} />
+            <Route path="/developer" component={DeveloperPortal} />
+            <Route path="/admin" component={Admin} />
+          </Switch>
+        </div>
+      </WouterRouter>
+    </ClerkProvider>
   );
 }
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
-export default App;

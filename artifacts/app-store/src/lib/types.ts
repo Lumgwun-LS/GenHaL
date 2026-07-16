@@ -1,4 +1,31 @@
-export interface StoreAppSummary {
+export interface DedicatedAccount {
+  accountNumber: string;
+  bankName: string;
+  bankSlug?: string;
+  routingNumber?: string;
+}
+
+export interface Developer {
+  id: number;
+  clerkUserId: string;
+  displayName: string;
+  email: string;
+  bio?: string | null;
+  website?: string | null;
+  company?: string | null;
+  country: string;
+  avatarUrl?: string | null;
+  status: "active" | "suspended";
+  paystackCustomerCode?: string | null;
+  dedicatedNgnAccount?: DedicatedAccount | null;
+  dedicatedUsdAccount?: DedicatedAccount | null;
+  totalApps?: number;
+  totalDownloads?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppSummary {
   id: number;
   name: string;
   slug: string;
@@ -10,84 +37,75 @@ export interface StoreAppSummary {
   ratingCount: number;
   totalDownloads: number;
   status: string;
-  isFeatured?: boolean;
-  developerName?: string;
+  isFeatured: boolean;
+  publishingFeePaid: boolean;
+  developerName: string;
   createdAt: string;
 }
 
-export interface StoreApp extends StoreAppSummary {
+export interface App extends AppSummary {
   description: string;
   screenshots: string[];
   downloadUrl: string | null;
   webUrl: string | null;
   currentVersion: string | null;
-  developerId: number;
   developerWebsite: string | null;
   aiSummary: string | null;
   aiCategory: string | null;
   aiPolicyFlags: string | null;
   aiReviewScore: number | null;
   rejectionReason: string | null;
+  publishingFeeGateway: string | null;
+  developerId: number;
   updatedAt: string;
 }
 
-export interface StoreCategory {
+export interface Category {
   name: string;
-  count: number;
   iconEmoji: string;
+  color: string;
+  count: number;
 }
 
-export interface StoreReview {
+export interface Review {
   id: number;
   appId: number;
   reviewerName: string;
   rating: number;
   comment: string | null;
-  sentimentLabel: string | null;
-  isFlagged: boolean;
-  helpfulCount: number;
+  sentimentLabel: string;
   createdAt: string;
 }
 
-export interface StoreAppVersion {
+export interface AppVersion {
   id: number;
   appId: number;
   version: string;
   releaseNotes: string | null;
-  fileUrl: string | null;
-  status: string;
+  downloadUrl: string | null;
   createdAt: string;
 }
 
-export interface StoreDeveloper {
-  id: number;
-  clerkUserId: string;
-  displayName: string;
-  bio: string | null;
-  website: string | null;
-  company: string | null;
-  avatarUrl: string | null;
-  status: string;
-  registrationFeePaid: boolean;
+export interface AdminStats {
   totalApps: number;
-  totalDownloads: number;
-  createdAt: string;
-}
-
-export interface StoreAdminStats {
-  totalApps: number;
-  totalDevelopers: number;
-  totalDownloads: number;
-  totalReviews: number;
+  pendingPayment: number;
   pendingReview: number;
   approvedApps: number;
-  rejectedApps: number;
-  topApps: StoreAppSummary[];
+  totalDevelopers: number;
+  totalDownloads: number;
 }
 
-export interface StoreAppPage {
-  apps: StoreAppSummary[];
-  total: number;
-  page: number;
-  limit: number;
+export interface PaystackInitResult {
+  gateway: "paystack";
+  authorizationUrl: string;
+  reference: string;
 }
+
+export interface InterswitchInitResult {
+  gateway: "interswitch";
+  paymentUrl: string;
+  formData: Record<string, string>;
+  appId: number;
+}
+
+export type PaymentInitResult = PaystackInitResult | InterswitchInitResult;

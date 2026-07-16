@@ -1,370 +1,266 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { AppCard } from "@/components/app-card";
-import {
-  Shield, CheckCircle, XCircle, Sparkles, Users, Download,
-  BarChart2, Star, Loader2, AlertCircle, UserX
-} from "lucide-react";
-import { useState } from "react";
-import type { StoreAdminStats, StoreApp, StoreDeveloper } from "@/lib/types";
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/react";
+import { apiFetch } from "../lib/api";
+import type { App, AdminStats, Developer } from "../lib/types";
 
-function StatCard({ icon: Icon, label, value, color = "violet" }: {
-  icon: React.ElementType; label: string; value: string | number; color?: "violet" | "coral" | "green" | "amber";
-}) {
-  const colors = {
-    violet: "text-[#7F50FF] bg-[#7F50FF]/10 border-[#7F50FF]/20",
-    coral: "text-[#FF7F50] bg-[#FF7F50]/10 border-[#FF7F50]/20",
-    green: "text-green-400 bg-green-500/10 border-green-500/20",
-    amber: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-  };
-  return (
-    <div className={`border rounded-2xl p-5 ${colors[color]}`}>
-      <div className="flex items-center gap-2 text-sm mb-3 opacity-80">
-        <Icon className="w-4 h-4" /> {label}
-      </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-    </div>
-  );
-}
+const STATUS_COLOR: Record<string, string> = {
+  pending_payment: "#ffb300", pending_review: "#a78bfa",
+  approved: "#00c853", rejected: "#ff5252", draft: "#8892a4",
+};
 
-interface AiReview {
-  appId: number;
-  policyFlags: string[];
-  category: string;
-  summary: string;
-  score: number;
-  recommendation: "approve" | "review" | "reject";
-  malwareHints: string[];
-}
+export default function Admin() {
+  const { isSignedIn } = useUser();
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [pending, setPending] = useState<App[]>([]);
+  const [allApps, setAllApps] = useState<App[]>([]);
+  const [devs, setDevs] = useState<Developer[]>([]);
+  const [tab, setTab] = useState<"overview"|"pending"|"all"|"developers">("overview");
+  const [loading, setLoading] = useState(true);
+  const [rejectId, setRejectId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [aiLoading, setAiLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [aiResults, setAiResults] = useState<Record<number, any>>({});
+  const [downloadAppId, setDownloadAppId] = useState<number | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState("");
 
-export default function AdminPage() {
-  const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "pending" | "all" | "developers">("overview");
-  const [aiResult, setAiResult] = useState<Record<number, AiReview>>({});
-  const [developerSearch, setDeveloperSearch] = useState("");
+  async function loadData() {
+    setLoading(true);
+    try {
+      const [s, p, a, d] = await Promise.all([
+        apiFetch<AdminStats>("/admin/stats"),
+        apiFetch<App[]>("/admin/apps/pending"),
+        apiFetch<App[]>("/admin/apps"),
+        apiFetch<Developer[]>("/admin/developers"),
+      ]);
+      setStats(s);
+      setPending(p ?? []);
+      setAllApps(a ?? []);
+      setDevs(d ?? []);
+    } catch {}
+    finally { setLoading(false); }
+  }
 
-  const { data: stats, isLoading: loadingStats } = useQuery<StoreAdminStats>({
-    queryKey: ["store", "admin", "stats"],
-    queryFn: () => apiFetch("/admin/stats"),
-  });
+  useEffect(() => { if (isSignedIn) loadData(); }, [isSignedIn]);
 
-  const { data: pending, isLoading: loadingPending } = useQuery<StoreApp[]>({
-    queryKey: ["store", "admin", "pending"],
-    queryFn: () => apiFetch("/admin/apps/pending"),
-    enabled: activeTab === "pending",
-  });
+  async function aiReview(id: number) {
+    setAiLoading(id);
+    try {
+      const r = await apiFetch<any>(`/admin/apps/${id}/ai-review`, { method: "POST" });
+      setAiResults(prev => ({ ...prev, [id]: r }));
+    } catch {}
+    finally { setAiLoading(null); }
+  }
 
-  const { data: allApps, isLoading: loadingAll } = useQuery<StoreApp[]>({
-    queryKey: ["store", "admin", "all-apps"],
-    queryFn: () => apiFetch("/admin/apps"),
-    enabled: activeTab === "all",
-  });
+  async function approve(id: number) {
+    setActionLoading(id);
+    try { await apiFetch(`/admin/apps/${id}/approve`, { method: "POST" }); await loadData(); }
+    catch {} finally { setActionLoading(null); }
+  }
 
-  const { data: developers } = useQuery<StoreDeveloper[]>({
-    queryKey: ["store", "admin", "developers"],
-    queryFn: () => apiFetch("/admin/developers"),
-    enabled: activeTab === "developers",
-  });
+  async function reject(id: number) {
+    if (!rejectReason) return;
+    setActionLoading(id);
+    try { await apiFetch(`/admin/apps/${id}/reject`, { method: "POST", body: JSON.stringify({ reason: rejectReason }) }); setRejectId(null); setRejectReason(""); await loadData(); }
+    catch {} finally { setActionLoading(null); }
+  }
 
-  const approveMutation = useMutation({
-    mutationFn: (id: number) => apiFetch(`/admin/apps/${id}/approve`, { method: "POST" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["store", "admin"] });
-    },
-  });
+  async function toggleFeature(id: number) {
+    setActionLoading(id);
+    try { await apiFetch(`/admin/apps/${id}/feature`, { method: "POST" }); await loadData(); }
+    catch {} finally { setActionLoading(null); }
+  }
 
-  const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
-      apiFetch(`/admin/apps/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["store", "admin"] });
-    },
-  });
+  async function toggleSuspend(devId: number) {
+    try { await apiFetch(`/admin/developers/${devId}/suspend`, { method: "POST", body: JSON.stringify({ reason: "Policy violation" }) }); await loadData(); }
+    catch {}
+  }
 
-  const featureMutation = useMutation({
-    mutationFn: ({ id, featured }: { id: number; featured: boolean }) =>
-      apiFetch(`/admin/apps/${id}/feature`, { method: "POST", body: JSON.stringify({ featured }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["store", "admin"] }),
-  });
+  async function assignDownload(id: number) {
+    if (!downloadUrl) return;
+    try { await apiFetch(`/admin/apps/${id}/assign-download`, { method: "POST", body: JSON.stringify({ downloadUrl }) }); setDownloadAppId(null); setDownloadUrl(""); await loadData(); }
+    catch {}
+  }
 
-  const aiReviewMutation = useMutation({
-    mutationFn: (id: number) => apiFetch<AiReview>(`/admin/apps/${id}/ai-review`, { method: "POST" }),
-    onSuccess: (data) => setAiResult(prev => ({ ...prev, [data.appId]: data })),
-  });
-
-  const suspendMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      apiFetch(`/admin/developers/${id}/suspend`, { method: "POST", body: JSON.stringify({ reason }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["store", "admin", "developers"] }),
-  });
-
-  const TABS = [
-    { id: "overview", label: "Overview" },
-    { id: "pending", label: `Pending${stats ? ` (${stats.pendingReview})` : ""}` },
-    { id: "all", label: "All Apps" },
-    { id: "developers", label: "Developers" },
-  ] as const;
+  if (!isSignedIn) return <div style={{ textAlign: "center", padding: 80, color: "#8892a4" }}>Sign in as admin to access this panel.</div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#7F50FF] to-[#FF7F50] flex items-center justify-center">
-          <Shield className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-white">App Store Admin</h1>
-          <p className="text-gray-500 text-sm">Review apps, manage developers, view store stats</p>
-        </div>
-      </div>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 20px 80px" }}>
+      <h1 style={{ fontWeight: 800, fontSize: 24, marginBottom: 4 }}>🌍 Africa App Store — Admin</h1>
+      <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 28 }}>Review and manage apps, developers, and platform settings.</p>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-8 border-b border-white/10">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px
-              ${activeTab === tab.id ? "border-[#7F50FF] text-[#7F50FF]" : "border-transparent text-gray-400 hover:text-white"}`}
-          >
-            {tab.label}
+      <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 28 }}>
+        {(["overview","pending","all","developers"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 18px", background: "none", border: "none", borderBottom: tab === t ? "2px solid #00c853" : "2px solid transparent", color: tab === t ? "#00c853" : "#8892a4", fontWeight: tab === t ? 700 : 400, fontSize: 13, cursor: "pointer", textTransform: "capitalize" }}>
+            {t === "pending" ? `🔍 Pending (${pending.length})` : t === "all" ? `📱 All Apps` : t === "developers" ? `👥 Developers (${devs.length})` : "📊 Overview"}
           </button>
         ))}
       </div>
 
-      {/* Overview */}
-      {activeTab === "overview" && (
-        <div className="space-y-8">
-          {loadingStats ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-[#7F50FF] animate-spin" /></div>
-          ) : stats ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard icon={BarChart2} label="Total Apps" value={stats.totalApps} color="violet" />
-                <StatCard icon={Users} label="Developers" value={stats.totalDevelopers} color="coral" />
-                <StatCard icon={Download} label="Total Downloads" value={stats.totalDownloads.toLocaleString()} color="green" />
-                <StatCard icon={AlertCircle} label="Pending Review" value={stats.pendingReview} color="amber" />
+      {loading && <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>}
+
+      {!loading && tab === "overview" && stats && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 32 }}>
+            {[
+              { label: "Total Apps", value: stats.totalApps, icon: "📱" },
+              { label: "Awaiting Payment", value: stats.pendingPayment, icon: "💳", color: "#ffb300" },
+              { label: "Pending Review", value: stats.pendingReview, icon: "🔍", color: "#a78bfa" },
+              { label: "Live Apps", value: stats.approvedApps, icon: "✅", color: "#00c853" },
+              { label: "Developers", value: stats.totalDevelopers, icon: "👥" },
+              { label: "Total Downloads", value: stats.totalDownloads.toLocaleString(), icon: "📥" },
+            ].map(s => (
+              <div key={s.label} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color ?? "#e8eaf0" }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: "#8892a4" }}>{s.label}</div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <StatCard icon={CheckCircle} label="Approved" value={stats.approvedApps} color="green" />
-                <StatCard icon={XCircle} label="Rejected" value={stats.rejectedApps} color="coral" />
-                <StatCard icon={Star} label="Total Reviews" value={stats.totalReviews} color="violet" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!loading && tab === "pending" && (
+        <div>
+          {pending.length === 0 ? <div style={{ color: "#8892a4", fontSize: 14, padding: "40px 0", textAlign: "center" }}>No apps pending review. 🎉</div> : pending.map(app => (
+            <div key={app.id} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+                <img src={app.iconUrl} alt={app.name} style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", background: "#131920", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{app.name}</div>
+                  <div style={{ fontSize: 13, color: "#8892a4" }}>{app.developerName} · {app.category} · {app.platform}</div>
+                  <div style={{ fontSize: 13, color: "#c0c8d8", marginTop: 6, lineHeight: 1.5 }}>{app.tagline}</div>
+                  {app.downloadUrl && <div style={{ fontSize: 12, color: "#00c853", marginTop: 4 }}>🔗 {app.downloadUrl}</div>}
+                </div>
               </div>
 
-              {stats.topApps.length > 0 && (
-                <div>
-                  <h2 className="text-white font-semibold mb-4">Top Apps</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {stats.topApps.map(app => <AppCard key={app.id} app={app} />)}
+              {aiResults[app.id] && (
+                <div style={{ background: "rgba(124,77,255,0.05)", border: "1px solid rgba(124,77,255,0.15)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#a78bfa", marginBottom: 8 }}>🤖 AI REVIEW RESULT</div>
+                  <p style={{ fontSize: 13, color: "#c0c8d8", marginBottom: 8 }}>{aiResults[app.id].summary}</p>
+                  {aiResults[app.id].africanRelevance && <p style={{ fontSize: 12, color: "#8892a4", marginBottom: 8 }}>🌍 Africa relevance: {aiResults[app.id].africanRelevance}</p>}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ background: aiResults[app.id].score >= 70 ? "rgba(0,200,83,0.1)" : "rgba(255,179,0,0.1)", color: aiResults[app.id].score >= 70 ? "#00c853" : "#ffb300", border: "1px solid", borderColor: aiResults[app.id].score >= 70 ? "rgba(0,200,83,0.3)" : "rgba(255,179,0,0.3)", borderRadius: 10, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>Score: {aiResults[app.id].score}/100</span>
+                    <span style={{ background: "rgba(124,77,255,0.1)", color: "#a78bfa", border: "1px solid rgba(124,77,255,0.3)", borderRadius: 10, padding: "2px 10px", fontSize: 12 }}>Recommendation: {aiResults[app.id].recommendation}</span>
+                    {aiResults[app.id].policyFlags?.length > 0 && <span style={{ background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 10, padding: "2px 10px", fontSize: 12 }}>⚠️ Flags: {aiResults[app.id].policyFlags.join(", ")}</span>}
                   </div>
                 </div>
               )}
-            </>
-          ) : null}
-        </div>
-      )}
 
-      {/* Pending Review */}
-      {activeTab === "pending" && (
-        <div>
-          {loadingPending ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-[#7F50FF] animate-spin" /></div>
-          ) : !pending || pending.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
-              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-              <p>No apps pending review. The queue is clear!</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {pending.map(app => {
-                const ai = aiResult[app.id];
-                return (
-                  <div key={app.id} className="bg-[#0d0d1a] border border-[#7F50FF]/15 rounded-2xl p-5">
-                    <div className="flex flex-col md:flex-row gap-5">
-                      {/* App info */}
-                      <div className="flex gap-4 flex-1">
-                        <img
-                          src={app.iconUrl}
-                          alt={app.name}
-                          className="w-16 h-16 rounded-2xl object-cover flex-shrink-0"
-                          onError={e => { (e.currentTarget as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.name)}&background=7F50FF&color=fff&size=64`; }}
-                        />
-                        <div>
-                          <h3 className="text-white font-bold">{app.name}</h3>
-                          <p className="text-gray-400 text-sm">{app.tagline}</p>
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            <span className="text-xs bg-[#7F50FF]/15 text-[#7F50FF] px-2 py-0.5 rounded-full">{app.platform}</span>
-                            <span className="text-xs bg-white/10 text-gray-300 px-2 py-0.5 rounded-full">{app.category}</span>
-                            <span className="text-xs text-gray-500">by {app.developerName}</span>
-                          </div>
-                          <p className="text-gray-500 text-xs mt-2 line-clamp-2">{app.description}</p>
-                        </div>
-                      </div>
-
-                      {/* AI Result */}
-                      {ai && (
-                        <div className="w-full md:w-64 bg-[#141428] border border-[#7F50FF]/20 rounded-xl p-3">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <Sparkles className="w-3.5 h-3.5 text-[#7F50FF]" />
-                            <span className="text-xs font-semibold text-[#7F50FF]">AI Review</span>
-                          </div>
-                          <p className="text-gray-300 text-xs leading-relaxed mb-2">{ai.summary}</p>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-400">Score</span>
-                            <span className={`text-xs font-bold ${ai.score >= 70 ? "text-green-400" : ai.score >= 40 ? "text-yellow-400" : "text-red-400"}`}>
-                              {ai.score}/100
-                            </span>
-                          </div>
-                          <div className={`text-xs font-semibold text-center py-1 rounded-lg mt-1
-                            ${ai.recommendation === "approve" ? "bg-green-500/20 text-green-400" :
-                              ai.recommendation === "reject" ? "bg-red-500/20 text-red-400" :
-                              "bg-yellow-500/20 text-yellow-400"}`}>
-                            AI: {ai.recommendation}
-                          </div>
-                          {ai.policyFlags.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-red-400 font-medium mb-1">⚠ Policy Flags:</p>
-                              {ai.policyFlags.map((f, i) => <p key={i} className="text-xs text-red-300">{f}</p>)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex gap-2 mt-4 flex-wrap">
-                      <button
-                        onClick={() => aiReviewMutation.mutate(app.id)}
-                        disabled={aiReviewMutation.isPending && aiReviewMutation.variables === app.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#7F50FF]/15 border border-[#7F50FF]/30 text-[#7F50FF] text-xs font-semibold hover:bg-[#7F50FF]/25 transition-colors disabled:opacity-60"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        {aiReviewMutation.isPending ? "Analyzing..." : "AI Review"}
-                      </button>
-                      <button
-                        onClick={() => approveMutation.mutate(app.id)}
-                        disabled={approveMutation.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 text-xs font-semibold hover:bg-green-500/25 transition-colors disabled:opacity-60"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" /> Approve
-                      </button>
-                      <button
-                        onClick={() => {
-                          const reason = prompt("Rejection reason (shown to developer):");
-                          if (reason !== null) rejectMutation.mutate({ id: app.id, reason });
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/25 transition-colors"
-                      >
-                        <XCircle className="w-3.5 h-3.5" /> Reject
-                      </button>
-                      <button
-                        onClick={() => featureMutation.mutate({ id: app.id, featured: !app.isFeatured })}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors
-                          ${app.isFeatured ? "bg-[#FF7F50]/25 border-[#FF7F50]/50 text-[#FF7F50]" : "bg-white/5 border-white/15 text-gray-400 hover:text-white"}`}
-                      >
-                        ⭐ {app.isFeatured ? "Unfeature" : "Feature"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* All apps */}
-      {activeTab === "all" && (
-        <div>
-          {loadingAll ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-[#7F50FF] animate-spin" /></div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(allApps ?? []).map(app => (
-                <div key={app.id} className="relative">
-                  <AppCard app={app as any} />
-                  <div className="flex gap-2 mt-2 justify-between px-1">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border
-                      ${app.status === "approved" ? "bg-green-500/15 text-green-400 border-green-500/25" :
-                        app.status === "rejected" ? "bg-red-500/15 text-red-400 border-red-500/25" :
-                        "bg-yellow-500/15 text-yellow-400 border-yellow-500/25"}`}>
-                      {app.status}
-                    </span>
-                    {app.status === "approved" && (
-                      <button
-                        onClick={() => featureMutation.mutate({ id: app.id, featured: !app.isFeatured })}
-                        className="text-xs text-gray-400 hover:text-[#FF7F50] transition-colors"
-                      >
-                        {app.isFeatured ? "⭐ Featured" : "☆ Feature"}
-                      </button>
-                    )}
+              {rejectId === app.id && (
+                <div style={{ background: "rgba(255,82,82,0.05)", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <label className="form-label">Rejection Reason</label>
+                  <textarea className="input" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Explain why this app is rejected..." style={{ minHeight: 72 }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button onClick={() => setRejectId(null)} className="btn-outline" style={{ fontSize: 13 }}>Cancel</button>
+                    <button onClick={() => reject(app.id)} disabled={!rejectReason || actionLoading === app.id} style={{ background: "#ff5252", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Confirm Reject</button>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {downloadAppId === app.id && (
+                <div style={{ background: "rgba(0,200,83,0.05)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <label className="form-label">Assign Download Link</label>
+                  <input className="input" value={downloadUrl} onChange={e => setDownloadUrl(e.target.value)} placeholder="https://..." />
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button onClick={() => setDownloadAppId(null)} className="btn-outline" style={{ fontSize: 13 }}>Cancel</button>
+                    <button onClick={() => assignDownload(app.id)} className="btn-green" style={{ fontSize: 13 }}>Save Link</button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => aiReview(app.id)} disabled={aiLoading === app.id} style={{ background: "rgba(124,77,255,0.15)", color: "#a78bfa", border: "1px solid rgba(124,77,255,0.3)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {aiLoading === app.id ? "Analyzing..." : "🤖 AI Review"}
+                </button>
+                <button onClick={() => setDownloadAppId(app.id)} style={{ background: "rgba(0,188,212,0.1)", color: "#00bcd4", border: "1px solid rgba(0,188,212,0.3)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🔗 Assign Download</button>
+                <button onClick={() => approve(app.id)} disabled={actionLoading === app.id} style={{ background: "rgba(0,200,83,0.15)", color: "#00c853", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✅ Approve</button>
+                <button onClick={() => { setRejectId(app.id); setRejectReason(""); }} style={{ background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>❌ Reject</button>
+                <button onClick={() => toggleFeature(app.id)} disabled={actionLoading === app.id} style={{ background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "1px solid rgba(255,179,0,0.3)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{app.isFeatured ? "★ Unfeature" : "☆ Feature"}</button>
+              </div>
             </div>
-          )}
+          ))}
         </div>
       )}
 
-      {/* Developers */}
-      {activeTab === "developers" && (
+      {!loading && tab === "all" && (
         <div>
-          <input
-            value={developerSearch}
-            onChange={e => setDeveloperSearch(e.target.value)}
-            placeholder="Search developers..."
-            className="w-full max-w-sm bg-[#0d0d1a] border border-white/15 text-white placeholder-gray-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#7F50FF]/50 mb-6"
-          />
-          <div className="bg-[#0d0d1a] border border-[#7F50FF]/15 rounded-2xl overflow-hidden">
-            <table className="w-full">
-              <thead className="border-b border-white/10">
-                <tr className="text-gray-400 text-sm">
-                  <th className="text-left px-5 py-3">Developer</th>
-                  <th className="text-right px-5 py-3 hidden sm:table-cell">Apps</th>
-                  <th className="text-right px-5 py-3 hidden md:table-cell">Downloads</th>
-                  <th className="text-right px-5 py-3">Status</th>
-                  <th className="text-right px-5 py-3">Action</th>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                  {["App","Developer","Category","Platform","Status","Downloads","Rating","Actions"].map(h => (
+                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#8892a4", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {(developers ?? [])
-                  .filter(d => d.displayName.toLowerCase().includes(developerSearch.toLowerCase()))
-                  .map(dev => (
-                  <tr key={dev.id} className="border-b border-white/5 hover:bg-white/2 transition-colors">
-                    <td className="px-5 py-3">
+                {allApps.map(app => (
+                  <tr key={app.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <td style={{ padding: "12px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <img src={app.iconUrl} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", background: "#131920" }} />
                       <div>
-                        <p className="text-white text-sm font-medium">{dev.displayName}</p>
-                        {dev.company && <p className="text-gray-500 text-xs">{dev.company}</p>}
+                        <div style={{ fontWeight: 600 }}>{app.name}</div>
+                        <div style={{ fontSize: 11, color: "#8892a4" }}>id:{app.id}</div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-gray-400 text-sm text-right hidden sm:table-cell">{dev.totalApps}</td>
-                    <td className="px-5 py-3 text-gray-400 text-sm text-right hidden md:table-cell">{dev.totalDownloads.toLocaleString()}</td>
-                    <td className="px-5 py-3 text-right">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border
-                        ${dev.status === "active" ? "bg-green-500/15 text-green-400 border-green-500/25" :
-                          dev.status === "suspended" ? "bg-red-500/15 text-red-400 border-red-500/25" :
-                          "bg-gray-500/15 text-gray-400 border-gray-500/25"}`}>
-                        {dev.status}
-                      </span>
+                    <td style={{ padding: "12px", color: "#c0c8d8" }}>{app.developerName}</td>
+                    <td style={{ padding: "12px", color: "#c0c8d8", fontSize: 12 }}>{app.category}</td>
+                    <td style={{ padding: "12px", color: "#c0c8d8" }}>{app.platform}</td>
+                    <td style={{ padding: "12px" }}>
+                      <span style={{ background: `rgba(${STATUS_COLOR[app.status] ? STATUS_COLOR[app.status].replace("#","") : "255,255,255"},0.1)`, color: STATUS_COLOR[app.status] ?? "#8892a4", borderRadius: 10, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{app.status}</span>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      {dev.status === "active" && (
-                        <button
-                          onClick={() => {
-                            const reason = prompt("Suspension reason:");
-                            if (reason) suspendMutation.mutate({ id: dev.id, reason });
-                          }}
-                          className="flex items-center gap-1 ml-auto text-xs text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          <UserX className="w-3.5 h-3.5" /> Suspend
-                        </button>
-                      )}
+                    <td style={{ padding: "12px", color: "#c0c8d8" }}>{app.totalDownloads.toLocaleString()}</td>
+                    <td style={{ padding: "12px", color: "#ffb300" }}>{app.rating > 0 ? `★ ${app.rating.toFixed(1)}` : "—"}</td>
+                    <td style={{ padding: "12px" }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {app.status === "pending_review" && <button onClick={() => approve(app.id)} style={{ background: "rgba(0,200,83,0.1)", color: "#00c853", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>Approve</button>}
+                        <button onClick={() => toggleFeature(app.id)} style={{ background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>{app.isFeatured ? "Unfeature" : "Feature"}</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {!loading && tab === "developers" && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                {["Developer","Email","Country","Status","NGN Account","Joined","Actions"].map(h => (
+                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#8892a4", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {devs.map(dev => (
+                <tr key={dev.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ padding: "12px" }}>
+                    <div style={{ fontWeight: 600 }}>{dev.displayName}</div>
+                    {dev.company && <div style={{ fontSize: 11, color: "#8892a4" }}>{dev.company}</div>}
+                  </td>
+                  <td style={{ padding: "12px", color: "#c0c8d8", fontSize: 12 }}>{dev.email}</td>
+                  <td style={{ padding: "12px", color: "#c0c8d8" }}>{dev.country}</td>
+                  <td style={{ padding: "12px" }}>
+                    <span style={{ background: dev.status === "active" ? "rgba(0,200,83,0.1)" : "rgba(255,82,82,0.1)", color: dev.status === "active" ? "#00c853" : "#ff5252", borderRadius: 10, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{dev.status}</span>
+                  </td>
+                  <td style={{ padding: "12px", color: "#8892a4", fontSize: 12, fontFamily: "monospace" }}>
+                    {dev.dedicatedNgnAccount ? `${dev.dedicatedNgnAccount.accountNumber} (${dev.dedicatedNgnAccount.bankName})` : "—"}
+                  </td>
+                  <td style={{ padding: "12px", color: "#8892a4", fontSize: 12 }}>{new Date(dev.createdAt).toLocaleDateString()}</td>
+                  <td style={{ padding: "12px" }}>
+                    <button onClick={() => toggleSuspend(dev.id)} style={{ background: dev.status === "active" ? "rgba(255,82,82,0.1)" : "rgba(0,200,83,0.1)", color: dev.status === "active" ? "#ff5252" : "#00c853", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>
+                      {dev.status === "active" ? "Suspend" : "Reactivate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

@@ -1,173 +1,164 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { StarRating } from "@/components/star-rating";
-import { useState } from "react";
-import { useParams } from "wouter";
-import {
-  Download, Globe, Star, ChevronLeft, Share2, Tag,
-  Smartphone, Layers, Loader2, Sparkles, AlertCircle
-} from "lucide-react";
-import type { StoreApp, StoreReview, StoreAppVersion } from "@/lib/types";
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { useParams, Link } from "wouter";
+import { useUser, SignInButton } from "@clerk/react";
+import { apiFetch } from "../lib/api";
+import type { App, Review, AppVersion } from "../lib/types";
 
-const PLATFORM_LABEL: Record<string, string> = {
-  android: "📱 Android",
-  ios: "🍎 iOS",
-  web: "🌐 Web App",
-  all: "📱🍎🌐 Universal",
-};
+function Stars({ rating, interactive = false, onRate }: { rating: number; interactive?: boolean; onRate?: (r: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div style={{ display: "flex", gap: 3 }}>
+      {[1,2,3,4,5].map(i => (
+        <span
+          key={i}
+          onClick={() => interactive && onRate?.(i)}
+          onMouseEnter={() => interactive && setHover(i)}
+          onMouseLeave={() => interactive && setHover(0)}
+          style={{ fontSize: interactive ? 22 : 14, color: i <= (hover || Math.round(rating)) ? "#ffb300" : "#2a3040", cursor: interactive ? "pointer" : "default" }}
+        >★</span>
+      ))}
+    </div>
+  );
+}
 
-export default function AppDetailPage() {
+const PLATFORM_LABEL: Record<string, string> = { android: "🤖 Android", ios: "🍎 iOS", web: "🌐 Web", all: "📱 All Platforms" };
+
+export default function AppDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const qc = useQueryClient();
-  const [activeScreen, setActiveScreen] = useState(0);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewSubmitted, setReviewSubmitted] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "reviews" | "versions">("about");
+  const { isSignedIn } = useUser();
+  const [app, setApp] = useState<App | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [versions, setVersions] = useState<AppVersion[]>([]);
+  const [tab, setTab] = useState<"about"|"reviews"|"versions">("about");
+  const [loading, setLoading] = useState(true);
+  const [selectedShot, setSelectedShot] = useState(0);
+  const [myRating, setMyRating] = useState(0);
+  const [myComment, setMyComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
 
-  const { data: app, isLoading, error } = useQuery<StoreApp>({
-    queryKey: ["store", "app", slug],
-    queryFn: () => apiFetch(`/apps/${slug}`),
-    enabled: !!slug,
-  });
+  useEffect(() => {
+    if (!slug) return;
+    setLoading(true);
+    Promise.all([
+      apiFetch<App>(`/apps/${slug}`),
+      apiFetch<Review[]>(`/apps/${slug}/reviews`),
+      apiFetch<AppVersion[]>(`/apps/${slug}/versions`),
+    ]).then(([a, r, v]) => {
+      setApp(a);
+      setReviews(r ?? []);
+      setVersions(v ?? []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [slug]);
 
-  const { data: reviews } = useQuery<StoreReview[]>({
-    queryKey: ["store", "reviews", slug],
-    queryFn: () => apiFetch(`/apps/${slug}/reviews`),
-    enabled: !!slug && activeTab === "reviews",
-  });
+  async function handleDownload() {
+    if (!app) return;
+    try {
+      const { downloadUrl, webUrl } = await apiFetch<{ downloadUrl: string; webUrl: string | null }>(`/apps/${slug}/download`, { method: "POST" });
+      const target = downloadUrl || webUrl;
+      if (target) window.open(target, "_blank");
+    } catch {}
+  }
 
-  const { data: versions } = useQuery<StoreAppVersion[]>({
-    queryKey: ["store", "versions", slug],
-    queryFn: () => apiFetch(`/apps/${slug}/versions`),
-    enabled: !!slug && activeTab === "versions",
-  });
+  async function submitReview() {
+    if (!myRating || !app) return;
+    setSubmitting(true);
+    try {
+      const review = await apiFetch<Review>(`/apps/${slug}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ rating: myRating, comment: myComment }),
+      });
+      setReviews(prev => [review, ...prev]);
+      setReviewSuccess(true);
+      setMyRating(0);
+      setMyComment("");
+    } catch {}
+    finally { setSubmitting(false); }
+  }
 
-  const downloadMutation = useMutation({
-    mutationFn: () => apiFetch<{ downloadUrl: string; webUrl: string | null }>(`/apps/${slug}/download`, { method: "POST" }),
-    onSuccess: (data) => {
-      if (data.downloadUrl) window.open(data.downloadUrl, "_blank");
-      else if (data.webUrl) window.open(data.webUrl, "_blank");
-      qc.invalidateQueries({ queryKey: ["store", "app", slug] });
-    },
-  });
-
-  const reviewMutation = useMutation({
-    mutationFn: () => apiFetch(`/apps/${slug}/reviews`, {
-      method: "POST",
-      body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
-    }),
-    onSuccess: () => {
-      setReviewSubmitted(true);
-      qc.invalidateQueries({ queryKey: ["store", "reviews", slug] });
-    },
-  });
-
-  if (isLoading) return (
-    <div className="flex justify-center items-center min-h-[60vh]">
-      <Loader2 className="w-8 h-8 text-[#7F50FF] animate-spin" />
+  if (loading) return (
+    <div style={{ maxWidth: 980, margin: "60px auto", padding: "0 20px", textAlign: "center" }}>
+      <div className="spinner" style={{ margin: "0 auto" }} />
     </div>
   );
 
-  if (error || !app) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
-      <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-      <p>App not found.</p>
-      <Link href="/" className="mt-4 text-[#7F50FF] hover:underline">← Back to Store</Link>
+  if (!app) return (
+    <div style={{ maxWidth: 980, margin: "60px auto", padding: "0 20px", textAlign: "center" }}>
+      <div style={{ fontSize: 48 }}>😕</div>
+      <h2 style={{ marginTop: 16 }}>App not found</h2>
+      <Link href="/" style={{ color: "#00c853", marginTop: 12, display: "inline-block" }}>← Back to store</Link>
     </div>
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
-      {/* Back */}
-      <Link href="/" className="flex items-center gap-1 text-gray-500 hover:text-white text-sm mb-8 transition-colors">
-        <ChevronLeft className="w-4 h-4" /> Back to Store
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: "32px 20px 80px" }}>
+      <Link href="/" style={{ color: "#8892a4", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 24, textDecoration: "none" }}>
+        ← Africa App Store
       </Link>
 
-      {/* Hero row */}
-      <div className="flex flex-col sm:flex-row gap-6 mb-8">
+      {/* App Header */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 32 }}>
         <img
           src={app.iconUrl}
           alt={app.name}
-          className="w-28 h-28 rounded-3xl object-cover ring-2 ring-[#7F50FF]/30 flex-shrink-0"
-          onError={e => { (e.currentTarget as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(app.name)}&background=7F50FF&color=fff&size=112`; }}
+          style={{ width: 100, height: 100, borderRadius: 22, objectFit: "cover", flexShrink: 0, background: "#0d1117" }}
+          onError={(e) => { (e.target as HTMLImageElement).src = `https://placehold.co/100x100/0d1117/00c853?text=${encodeURIComponent(app.name[0])}`; }}
         />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="text-2xl font-bold text-white">{app.name}</h1>
-              <p className="text-gray-400 mt-1">{app.developerName}</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => navigator.share?.({ title: app.name, url: window.location.href })}
-                className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-              {(app.downloadUrl || app.webUrl) && (
-                <button
-                  onClick={() => downloadMutation.mutate()}
-                  disabled={downloadMutation.isPending}
-                  className="flex items-center gap-2 bg-gradient-to-r from-[#7F50FF] to-[#9b6bff] text-white font-semibold px-5 py-2 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                  {app.platform === "web" ? <Globe className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                  {app.platform === "web" ? "Open App" : "Download"}
-                </button>
-              )}
-            </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          {app.isFeatured && <span style={{ background: "#ffb300", color: "#000", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase", display: "inline-block", marginBottom: 8 }}>⭐ Editor's Pick</span>}
+          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>{app.name}</h1>
+          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 8 }}>
+            {app.developerName} · {app.category} · {PLATFORM_LABEL[app.platform] ?? app.platform}
           </div>
-
-          {/* Stats row */}
-          <div className="flex flex-wrap gap-4 mt-4">
-            <div className="flex items-center gap-1.5">
-              <StarRating value={app.rating} size="sm" />
-              <span className="text-white font-semibold text-sm">{app.rating.toFixed(1)}</span>
-              <span className="text-gray-500 text-xs">({app.ratingCount} reviews)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Stars rating={app.rating} />
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{app.rating > 0 ? app.rating.toFixed(1) : "—"}</span>
+              <span style={{ color: "#8892a4", fontSize: 13 }}>({app.ratingCount} ratings)</span>
             </div>
-            <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-              <Download className="w-4 h-4" />
-              <span>{app.totalDownloads.toLocaleString()} downloads</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-              <Smartphone className="w-4 h-4" />
-              <span>{PLATFORM_LABEL[app.platform] ?? app.platform}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-              <Tag className="w-4 h-4" />
-              <span>{app.category}</span>
-            </div>
-            {app.currentVersion && (
-              <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-                <Layers className="w-4 h-4" />
-                <span>v{app.currentVersion}</span>
-              </div>
+            <span style={{ color: "#8892a4", fontSize: 13 }}>📥 {app.totalDownloads.toLocaleString()} downloads</span>
+            {app.currentVersion && <span style={{ color: "#8892a4", fontSize: 13 }}>v{app.currentVersion}</span>}
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn-green" style={{ fontSize: 15, padding: "10px 28px" }} onClick={handleDownload}>
+              {app.platform === "web" ? "🌐 Open App" : "⬇️ Download"}
+            </button>
+            {app.webUrl && app.platform !== "web" && (
+              <a href={app.webUrl} target="_blank" rel="noreferrer" className="btn-outline" style={{ fontSize: 14 }}>🌐 Open Web Version</a>
             )}
           </div>
-
-          {/* AI Summary */}
-          {app.aiSummary && (
-            <div className="mt-4 flex items-start gap-2 bg-[#7F50FF]/10 border border-[#7F50FF]/25 rounded-xl p-3">
-              <Sparkles className="w-4 h-4 text-[#7F50FF] flex-shrink-0 mt-0.5" />
-              <p className="text-gray-300 text-sm leading-relaxed">{app.aiSummary}</p>
-            </div>
-          )}
         </div>
       </div>
 
+      {/* AI Summary */}
+      {app.aiSummary && (
+        <div style={{ background: "rgba(124,77,255,0.08)", border: "1px solid rgba(124,77,255,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 28, display: "flex", gap: 10 }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>🤖</span>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", textTransform: "uppercase", marginBottom: 4 }}>AI Review Summary</div>
+            <div style={{ fontSize: 14, color: "#c0c8d8", lineHeight: 1.6 }}>{app.aiSummary}</div>
+            {app.aiReviewScore !== null && (
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontSize: 12, background: app.aiReviewScore >= 70 ? "rgba(0,200,83,0.1)" : "rgba(255,179,0,0.1)", color: app.aiReviewScore >= 70 ? "#00c853" : "#ffb300", border: `1px solid ${app.aiReviewScore >= 70 ? "rgba(0,200,83,0.3)" : "rgba(255,179,0,0.3)"}`, borderRadius: 12, padding: "2px 10px", fontWeight: 700 }}>
+                  Quality Score: {app.aiReviewScore}/100
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Screenshots */}
       {app.screenshots.length > 0 && (
-        <div className="mb-8">
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {app.screenshots.map((src, i) => (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ overflowX: "auto", display: "flex", gap: 10, paddingBottom: 8 }}>
+            {app.screenshots.map((shot, i) => (
               <img
                 key={i}
-                src={src}
+                src={shot}
                 alt={`Screenshot ${i + 1}`}
-                onClick={() => setActiveScreen(i)}
-                className={`h-48 w-auto rounded-2xl object-cover flex-shrink-0 cursor-pointer transition-all
-                  ${activeScreen === i ? "ring-2 ring-[#7F50FF]" : "opacity-70 hover:opacity-100"}`}
+                onClick={() => setSelectedShot(i)}
+                style={{ height: 220, borderRadius: 10, objectFit: "cover", cursor: "pointer", border: selectedShot === i ? "2px solid #00c853" : "2px solid transparent", flexShrink: 0 }}
               />
             ))}
           </div>
@@ -175,110 +166,90 @@ export default function AppDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-white/10">
-        {(["about", "reviews", "versions"] as const).map(tab => (
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 28 }}>
+        {(["about","reviews","versions"] as const).map(t => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-3 text-sm font-medium capitalize transition-colors border-b-2 -mb-px
-              ${activeTab === tab ? "border-[#7F50FF] text-[#7F50FF]" : "border-transparent text-gray-400 hover:text-white"}`}
+            key={t}
+            onClick={() => setTab(t)}
+            style={{ padding: "10px 20px", background: "none", border: "none", borderBottom: tab === t ? "2px solid #00c853" : "2px solid transparent", color: tab === t ? "#00c853" : "#8892a4", fontWeight: tab === t ? 700 : 400, fontSize: 14, cursor: "pointer", textTransform: "capitalize", transition: "color 0.15s" }}
           >
-            {tab}
+            {t === "about" ? "About" : t === "reviews" ? `Reviews (${reviews.length})` : `Versions (${versions.length})`}
           </button>
         ))}
       </div>
 
-      {/* About */}
-      {activeTab === "about" && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-white font-semibold mb-3">Description</h2>
-            <p className="text-gray-400 leading-relaxed whitespace-pre-line">{app.description}</p>
-          </div>
+      {/* Tab content */}
+      {tab === "about" && (
+        <div style={{ maxWidth: 640 }}>
+          <p style={{ fontSize: 15, color: "#c0c8d8", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{app.description}</p>
           {app.developerWebsite && (
-            <a href={app.developerWebsite} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2 text-[#7F50FF] hover:text-[#FF7F50] transition-colors text-sm">
-              <Globe className="w-4 h-4" /> Developer Website
+            <a href={app.developerWebsite} target="_blank" rel="noreferrer" style={{ color: "#00c853", fontSize: 13, display: "inline-block", marginTop: 16 }}>
+              🔗 Developer Website
             </a>
           )}
         </div>
       )}
 
-      {/* Reviews */}
-      {activeTab === "reviews" && (
-        <div className="space-y-6">
-          {/* Write a review */}
-          {!reviewSubmitted ? (
-            <div className="bg-[#0d0d1a] border border-[#7F50FF]/20 rounded-2xl p-5">
-              <h3 className="text-white font-semibold mb-4">Write a Review</h3>
-              <div className="mb-3">
-                <p className="text-sm text-gray-400 mb-2">Your rating</p>
-                <StarRating value={reviewRating} interactive onChange={setReviewRating} size="lg" />
-              </div>
+      {tab === "reviews" && (
+        <div style={{ maxWidth: 640 }}>
+          {/* Submit review */}
+          {isSignedIn && !reviewSuccess && (
+            <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>Write a Review</div>
+              <Stars rating={myRating} interactive onRate={setMyRating} />
               <textarea
-                value={reviewComment}
-                onChange={e => setReviewComment(e.target.value)}
+                className="input"
+                style={{ marginTop: 12, minHeight: 80 }}
                 placeholder="Share your experience with this app..."
-                rows={3}
-                className="w-full bg-[#141428] border border-white/15 text-white placeholder-gray-500 rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-[#7F50FF]/50 mb-3"
+                value={myComment}
+                onChange={(e) => setMyComment(e.target.value)}
               />
-              <button
-                onClick={() => reviewMutation.mutate()}
-                disabled={reviewRating === 0 || reviewMutation.isPending}
-                className="bg-gradient-to-r from-[#7F50FF] to-[#9b6bff] text-white font-semibold px-5 py-2 rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity text-sm"
-              >
-                {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
+              <button className="btn-green" style={{ marginTop: 12 }} onClick={submitReview} disabled={!myRating || submitting}>
+                {submitting ? "Submitting..." : "Submit Review"}
               </button>
-              {reviewMutation.isError && (
-                <p className="text-red-400 text-xs mt-2">Failed to submit. You may have already reviewed this app.</p>
-              )}
             </div>
-          ) : (
-            <div className="bg-green-500/10 border border-green-500/25 rounded-2xl p-4 text-green-400 text-sm">
-              ✓ Review submitted! Thank you.
-            </div>
+          )}
+          {reviewSuccess && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 10, padding: 14, marginBottom: 20, color: "#00c853", fontSize: 14 }}>✅ Review submitted! Thank you.</div>}
+          {!isSignedIn && (
+            <SignInButton mode="modal">
+              <button className="btn-outline" style={{ marginBottom: 20, fontSize: 13 }}>Sign in to write a review</button>
+            </SignInButton>
           )}
 
-          {/* Review list */}
-          {reviews && reviews.length > 0 ? reviews.map(r => (
-            <div key={r.id} className="bg-[#0d0d1a] border border-white/8 rounded-2xl p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="text-white text-sm font-medium">{r.reviewerName}</p>
-                  <StarRating value={r.rating} size="sm" />
+          {reviews.length === 0 ? (
+            <div style={{ color: "#8892a4", fontSize: 14 }}>No reviews yet. Be the first!</div>
+          ) : reviews.map(r => (
+            <div key={r.id} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(0,200,83,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#00c853", fontSize: 13 }}>{r.reviewerName[0]}</div>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{r.reviewerName}</span>
                 </div>
-                <span className="text-gray-600 text-xs">{new Date(r.createdAt).toLocaleDateString()}</span>
+                <Stars rating={r.rating} />
               </div>
-              {r.comment && <p className="text-gray-400 text-sm leading-relaxed mt-2">{r.comment}</p>}
-              {r.sentimentLabel && (
-                <span className={`inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full
-                  ${r.sentimentLabel === "positive" ? "bg-green-500/15 text-green-400" :
-                    r.sentimentLabel === "negative" ? "bg-red-500/15 text-red-400" :
-                    "bg-gray-500/15 text-gray-400"}`}>
-                  AI: {r.sentimentLabel}
-                </span>
-              )}
+              {r.comment && <p style={{ fontSize: 14, color: "#c0c8d8", lineHeight: 1.6 }}>{r.comment}</p>}
+              <div style={{ fontSize: 11, color: "#8892a4", marginTop: 8 }}>{new Date(r.createdAt).toLocaleDateString()}</div>
             </div>
-          )) : (
-            <p className="text-gray-500 text-sm">No reviews yet. Be the first!</p>
-          )}
+          ))}
         </div>
       )}
 
-      {/* Versions */}
-      {activeTab === "versions" && (
-        <div className="space-y-3">
-          {versions && versions.length > 0 ? versions.map(v => (
-            <div key={v.id} className="bg-[#0d0d1a] border border-white/8 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-white font-semibold text-sm">v{v.version}</span>
-                <span className="text-gray-600 text-xs">{new Date(v.createdAt).toLocaleDateString()}</span>
+      {tab === "versions" && (
+        <div style={{ maxWidth: 640 }}>
+          {versions.length === 0 ? (
+            <div style={{ color: "#8892a4", fontSize: 14 }}>No version history available.</div>
+          ) : versions.map(v => (
+            <div key={v.id} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 16, marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 15 }}>v{v.version}</span>
+                <span style={{ fontSize: 12, color: "#8892a4" }}>{new Date(v.createdAt).toLocaleDateString()}</span>
               </div>
-              {v.releaseNotes && <p className="text-gray-400 text-sm">{v.releaseNotes}</p>}
+              {v.releaseNotes && <p style={{ fontSize: 13, color: "#c0c8d8", lineHeight: 1.6 }}>{v.releaseNotes}</p>}
+              {v.downloadUrl && (
+                <a href={v.downloadUrl} target="_blank" rel="noreferrer" style={{ color: "#00c853", fontSize: 12, display: "inline-block", marginTop: 8 }}>⬇️ Download this version</a>
+              )}
             </div>
-          )) : (
-            <p className="text-gray-500 text-sm">No version history available.</p>
-          )}
+          ))}
         </div>
       )}
     </div>

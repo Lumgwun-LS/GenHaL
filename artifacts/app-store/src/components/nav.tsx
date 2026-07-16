@@ -1,80 +1,64 @@
-import { Link, useLocation } from "wouter";
-import { Search, Store, Code2, Shield, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useUser, SignInButton, UserButton } from "@clerk/react";
 
-export function Nav() {
-  const [loc] = useLocation();
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
+export default function Nav() {
+  const { isSignedIn } = useUser();
+  const [, navigate] = useLocation();
+  const [query, setQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const links = [
-    { href: "/", label: "Browse", icon: Store },
-    { href: "/developer", label: "Developer", icon: Code2 },
-    { href: "/admin", label: "Admin", icon: Shield },
-  ];
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+  }
 
   return (
-    <nav className="sticky top-0 z-50 bg-[#07070f]/95 backdrop-blur border-b border-[#7F50FF]/15">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4">
+    <nav style={{ background: "#070a12", borderBottom: "1px solid rgba(255,255,255,0.06)", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px", height: 60, display: "flex", alignItems: "center", gap: 20 }}>
+
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7F50FF] to-[#FF7F50] flex items-center justify-center text-sm font-bold text-white">
-            A
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, textDecoration: "none" }}>
+          <span style={{ fontSize: 26 }}>🌍</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#fff", lineHeight: 1 }}>Africa</div>
+            <div style={{ fontWeight: 700, fontSize: 11, color: "#00c853", lineHeight: 1 }}>APP STORE</div>
           </div>
-          <span className="font-bold text-white text-lg hidden sm:block">
-            Awajimaa <span className="text-[#7F50FF]">Store</span>
-          </span>
         </Link>
 
-        {/* Search bar */}
-        <form
-          className="flex-1 max-w-md mx-auto"
-          onSubmit={(e) => { e.preventDefault(); if (q.trim()) window.location.href = `/search?q=${encodeURIComponent(q)}`; }}
-        >
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        {/* Search */}
+        <form onSubmit={handleSearch} style={{ flex: 1, maxWidth: 500, display: "flex" }}>
+          <div style={{ position: "relative", width: "100%" }}>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, opacity: 0.4 }}>🔍</span>
             <input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Search apps..."
-              className="w-full bg-[#0d0d1a] border border-[#7F50FF]/25 text-white placeholder-gray-500 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-[#7F50FF]/60 transition-colors"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search apps, categories, developers..."
+              style={{
+                width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 24, padding: "8px 16px 8px 36px", fontSize: 14, color: "#e8eaf0", outline: "none",
+              }}
             />
           </div>
         </form>
 
         {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-1">
-          {links.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                ${loc === href ? "bg-[#7F50FF]/20 text-[#7F50FF]" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
-              <Icon className="w-4 h-4" />
-              {label}
-            </Link>
-          ))}
-        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Link href="/" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Browse</Link>
+          <Link href="/developer" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Publish</Link>
+          <Link href="/admin" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Admin</Link>
 
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden text-gray-400 hover:text-white"
-          onClick={() => setOpen(!open)}
-        >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)", margin: "0 8px" }} />
+
+          {isSignedIn ? (
+            <UserButton afterSignOutUrl="/app-store/" />
+          ) : (
+            <SignInButton mode="modal">
+              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }}>Sign in</button>
+            </SignInButton>
+          )}
+        </div>
       </div>
-
-      {/* Mobile menu */}
-      {open && (
-        <div className="md:hidden border-t border-[#7F50FF]/15 bg-[#07070f] px-4 py-3 flex flex-col gap-1">
-          {links.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
-              <Icon className="w-4 h-4" />
-              {label}
-            </Link>
-          ))}
-        </div>
-      )}
     </nav>
   );
 }

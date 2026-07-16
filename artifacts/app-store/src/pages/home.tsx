@@ -1,164 +1,198 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { AppCard } from "@/components/app-card";
-import { Link } from "wouter";
-import { Sparkles, TrendingUp, Grid3X3, ChevronRight, Loader2 } from "lucide-react";
-import type { StoreAppSummary, StoreAppPage, StoreCategory } from "@/lib/types";
+import { useState, useEffect } from "react";
+import { useLocation, Link } from "wouter";
+import AppCard from "../components/app-card";
+import { apiFetch } from "../lib/api";
+import type { AppSummary, Category } from "../lib/types";
 
-function Section({ title, icon: Icon, href, children }: {
-  title: string;
-  icon: React.ElementType;
-  href?: string;
-  children: React.ReactNode;
-}) {
+function SectionHeader({ title, icon, href }: { title: string; icon: string; href?: string }) {
   return (
-    <section className="mb-12">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <Icon className="w-5 h-5 text-[#7F50FF]" />
-          <h2 className="text-lg font-bold text-white">{title}</h2>
-        </div>
-        {href && (
-          <Link href={href} className="flex items-center gap-1 text-[#7F50FF] text-sm hover:text-[#FF7F50] transition-colors">
-            View all <ChevronRight className="w-4 h-4" />
-          </Link>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-export default function HomePage() {
-  const { data: featured, isLoading: loadingFeat } = useQuery<StoreAppSummary[]>({
-    queryKey: ["store", "featured"],
-    queryFn: () => apiFetch("/apps/featured"),
-  });
-  const { data: trending, isLoading: loadingTrend } = useQuery<StoreAppSummary[]>({
-    queryKey: ["store", "trending"],
-    queryFn: () => apiFetch("/apps/trending"),
-  });
-  const { data: browseData, isLoading: loadingBrowse } = useQuery<StoreAppPage>({
-    queryKey: ["store", "apps", "newest"],
-    queryFn: () => apiFetch("/apps?sort=newest&limit=12"),
-  });
-  const { data: categories } = useQuery<StoreCategory[]>({
-    queryKey: ["store", "categories"],
-    queryFn: () => apiFetch("/apps/categories"),
-  });
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-
-      {/* Hero */}
-      <div className="relative mb-14 rounded-3xl overflow-hidden bg-gradient-to-br from-[#12012f] via-[#0d0d1a] to-[#1a0d00] border border-[#7F50FF]/20 p-10 text-center">
-        {/* Stars decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(30)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 rounded-full bg-white/30 animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 bg-[#7F50FF]/15 border border-[#7F50FF]/30 text-[#7F50FF] px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-            <Sparkles className="w-4 h-4" />
-            AI-Powered App Discovery
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight">
-            Discover Apps Built<br />
-            <span className="bg-gradient-to-r from-[#7F50FF] to-[#FF7F50] bg-clip-text text-transparent">
-              for Your Community
-            </span>
-          </h1>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto mb-8">
-            The Awajimaa App Store — curated, AI-reviewed apps for Nigerian businesses and communities.
-          </p>
-          <div className="flex justify-center gap-3 flex-wrap">
-            <Link href="/developer/signup"
-              className="bg-gradient-to-r from-[#7F50FF] to-[#9b6bff] text-white font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity">
-              Publish Your App
-            </Link>
-            <Link href="/search"
-              className="bg-white/5 border border-white/15 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition-colors">
-              Browse All Apps
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Categories */}
-      {categories && categories.length > 0 && (
-        <Section title="Categories" icon={Grid3X3}>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-3">
-            {categories.filter(c => c.count > 0 || true).slice(0, 13).map(cat => (
-              <Link key={cat.name} href={`/search?category=${encodeURIComponent(cat.name)}`}>
-                <div className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-[#0d0d1a] border border-[#7F50FF]/15 hover:border-[#7F50FF]/50 hover:bg-[#7F50FF]/5 transition-all cursor-pointer group">
-                  <span className="text-2xl">{cat.iconEmoji}</span>
-                  <span className="text-xs text-gray-400 group-hover:text-white text-center leading-tight font-medium">{cat.name}</span>
-                  {cat.count > 0 && <span className="text-[10px] text-gray-600">{cat.count}</span>}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Featured */}
-      <Section title="Featured Apps" icon={Sparkles} href="/search?sort=rating">
-        {loadingFeat ? (
-          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#7F50FF] animate-spin" /></div>
-        ) : (featured?.length ?? 0) > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {featured!.map(app => <AppCard key={app.id} app={app} size="lg" />)}
-          </div>
-        ) : (
-          <EmptyState message="No featured apps yet. Check back soon!" />
-        )}
-      </Section>
-
-      {/* Trending */}
-      <Section title="Trending Now" icon={TrendingUp} href="/search?sort=downloads">
-        {loadingTrend ? (
-          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#7F50FF] animate-spin" /></div>
-        ) : (trending?.length ?? 0) > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {trending!.map(app => <AppCard key={app.id} app={app} />)}
-          </div>
-        ) : (
-          <EmptyState message="No apps yet." />
-        )}
-      </Section>
-
-      {/* Newest */}
-      <Section title="New Arrivals" icon={Grid3X3} href="/search?sort=newest">
-        {loadingBrowse ? (
-          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#7F50FF] animate-spin" /></div>
-        ) : (browseData?.apps?.length ?? 0) > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {browseData!.apps.map(app => <AppCard key={app.id} app={app} />)}
-          </div>
-        ) : (
-          <EmptyState message="Be the first to publish an app!" />
-        )}
-      </Section>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <h2 style={{ fontWeight: 800, fontSize: 18, color: "#e8eaf0", display: "flex", alignItems: "center", gap: 8 }}>
+        <span>{icon}</span> {title}
+      </h2>
+      {href && <Link href={href} style={{ fontSize: 13, color: "#00c853", fontWeight: 600, textDecoration: "none" }}>See all →</Link>}
     </div>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function HeroSection() {
+  const [, navigate] = useLocation();
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-gray-500 border border-dashed border-white/10 rounded-2xl">
-      <span className="text-4xl mb-3">🚀</span>
-      <p className="text-sm">{message}</p>
+    <div className="africa-hero" style={{ padding: "72px 20px 80px" }}>
+      <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
+        {/* Pan-African accent */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24 }}>
+          {["🇳🇬","🇰🇪","🇬🇭","🇿🇦","🇪🇹","🇹🇿","🇪🇬","🇸🇳"].map(f => (
+            <span key={f} style={{ fontSize: 18 }}>{f}</span>
+          ))}
+        </div>
+
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,200,83,0.1)", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 20, padding: "4px 14px", marginBottom: 24 }}>
+          <span style={{ fontSize: 12 }}>🤖</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#00c853" }}>AI-Reviewed & Vetted Apps</span>
+        </div>
+
+        <h1 style={{ fontSize: "clamp(32px, 5vw, 56px)", fontWeight: 900, lineHeight: 1.1, marginBottom: 20 }}>
+          The App Store{" "}
+          <span style={{ background: "linear-gradient(90deg, #00c853, #ffb300)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Built for Africa
+          </span>
+        </h1>
+
+        <p style={{ fontSize: 18, color: "#8892a4", lineHeight: 1.6, marginBottom: 36, maxWidth: 520, margin: "0 auto 36px" }}>
+          Discover, download, and publish apps built for African businesses and communities across the continent.
+        </p>
+
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <button className="btn-green" style={{ fontSize: 16, padding: "12px 32px" }} onClick={() => navigate("/developer")}>
+            🚀 Publish Your App
+          </button>
+          <button className="btn-outline" style={{ fontSize: 16, padding: "12px 32px" }} onClick={() => navigate("/search")}>
+            Browse All Apps
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 48 }}>
+          {[
+            { label: "Countries Served", value: "54" },
+            { label: "Publishing Fee", value: "₦25K" },
+            { label: "AI-Reviewed", value: "100%" },
+          ].map(s => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#00c853" }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: "#8892a4", marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryGrid({ categories }: { categories: Category[] }) {
+  const [, navigate] = useLocation();
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+      {categories.map(cat => (
+        <button
+          key={cat.name}
+          onClick={() => navigate(`/search?category=${encodeURIComponent(cat.name)}`)}
+          style={{
+            background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 12, padding: "14px 10px", cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            transition: "border-color 0.15s, background 0.15s",
+          }}
+        >
+          <span style={{ fontSize: 28 }}>{cat.iconEmoji}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#c0c8d8", textAlign: "center", lineHeight: 1.3 }}>{cat.name}</span>
+          {cat.count > 0 && <span style={{ fontSize: 10, color: "#8892a4" }}>{cat.count} apps</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function Home() {
+  const [featured, setFeatured] = useState<AppSummary[]>([]);
+  const [trending, setTrending] = useState<AppSummary[]>([]);
+  const [newArrivals, setNewArrivals] = useState<AppSummary[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch<AppSummary[]>("/apps/featured"),
+      apiFetch<AppSummary[]>("/apps/trending"),
+      apiFetch<AppSummary[]>("/apps/new-arrivals"),
+      apiFetch<Category[]>("/apps/categories"),
+    ]).then(([f, t, n, c]) => {
+      setFeatured(f ?? []);
+      setTrending(t ?? []);
+      setNewArrivals(n ?? []);
+      setCategories(c ?? []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <HeroSection />
+
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 20px 80px" }}>
+
+        {/* Featured Banner */}
+        {featured.length > 0 && (
+          <section style={{ marginBottom: 56 }}>
+            <SectionHeader title="Featured Apps" icon="⭐" href="/search?sort=featured" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+              {featured.slice(0, 6).map(app => <AppCard key={app.id} app={app} />)}
+            </div>
+          </section>
+        )}
+
+        {/* Categories */}
+        <section style={{ marginBottom: 56 }}>
+          <SectionHeader title="Browse by Category" icon="🗂️" />
+          {loading ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+              {Array.from({ length: 14 }).map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 88, borderRadius: 12 }} />
+              ))}
+            </div>
+          ) : (
+            <CategoryGrid categories={categories} />
+          )}
+        </section>
+
+        {/* Top Downloads */}
+        {trending.length > 0 && (
+          <section style={{ marginBottom: 56 }}>
+            <SectionHeader title="Top Downloads" icon="🔥" href="/search?sort=downloads" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {trending.slice(0, 8).map((app, i) => (
+                <div key={app.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: i < 3 ? "#ffb300" : "#8892a4", width: 20, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                  <div style={{ flex: 1 }}><AppCard app={app} layout="row" /></div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* New Arrivals */}
+        {newArrivals.length > 0 && (
+          <section style={{ marginBottom: 56 }}>
+            <SectionHeader title="New Arrivals" icon="🆕" href="/search?sort=newest" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+              {newArrivals.slice(0, 8).map(app => <AppCard key={app.id} app={app} />)}
+            </div>
+          </section>
+        )}
+
+        {/* Empty state */}
+        {!loading && featured.length === 0 && trending.length === 0 && newArrivals.length === 0 && (
+          <div style={{ textAlign: "center", padding: "80px 20px" }}>
+            <div style={{ fontSize: 64, marginBottom: 16 }}>🌍</div>
+            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Be the first to publish</h2>
+            <p style={{ color: "#8892a4", marginBottom: 24 }}>Africa App Store is open for developers. Publish your app for NGN 25,000.</p>
+            <Link href="/developer" className="btn-green" style={{ display: "inline-flex", textDecoration: "none" }}>Publish Your App</Link>
+          </div>
+        )}
+
+        {/* CTA Banner */}
+        <div style={{ background: "linear-gradient(135deg, #0a1628 0%, #0d2010 100%)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 20, padding: "40px 32px", display: "flex", gap: 24, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Ready to publish for Africa?</h3>
+            <p style={{ color: "#8892a4", fontSize: 14, maxWidth: 440 }}>
+              Reach 1.4 billion people across 54 African countries. Flat publishing fee of <strong style={{ color: "#00c853" }}>NGN 25,000</strong> per app — no hidden charges. AI-reviewed for quality and security.
+            </p>
+          </div>
+          <Link href="/developer/signup" className="btn-green" style={{ fontSize: 16, padding: "12px 28px", flexShrink: 0, textDecoration: "none" }}>
+            Create Developer Account →
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
