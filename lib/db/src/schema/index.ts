@@ -27,6 +27,7 @@ export * from "./pending-reminder-logs";
 export * from "./admin-export-logs";
 export * from "./admin-export-acknowledgments";
 export * from "./admin-export-acknowledgment-log";
+export * from "./admin-export-burst-sent-alerts";
 export * from "./voice-signature-failures";
 export * from "./voice-signature-failure-acknowledgments";
 export * from "./voice-signature-failure-acknowledgment-log";
