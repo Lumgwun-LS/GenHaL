@@ -20,13 +20,12 @@
  */
 
 import { Router } from "express";
-import Stripe from "stripe";
 import { db } from "@workspace/db";
 import { vendorsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
-import { resolveGatewayField } from "../lib/platform-gateways";
+import { resolveGatewayField, callWithPlatformStripe } from "../lib/platform-gateways";
 import { ensureStripeCatalog, ensurePortalConfiguration } from "../lib/stripe-catalog";
 import { ensurePaystackCatalog } from "../lib/paystack-catalog";
 import { ensurePayPalCatalog, createPayPalSubscription, cancelPayPalSubscription } from "../lib/paypal-catalog";
@@ -325,16 +324,7 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
 
           return { sessionId: subscriptionId, url: approvalUrl };
         })()
-      : (async () => {
-    const stripeKey = await resolveGatewayField("stripe", "secretKey");
-    if (!stripeKey) {
-      throw Object.assign(new Error("Stripe is not configured on this platform."), {
-        statusCode: 503,
-      });
-    }
-
-    const stripe = new Stripe(stripeKey);
-
+      : callWithPlatformStripe(async (stripe, stripeKey) => {
     // Reuse an existing Stripe Customer for this vendor so billing history and
     // the Customer Portal work across multiple checkouts. Create one lazily.
     let customerId = vendor.stripeCustomerId;
@@ -389,7 +379,7 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     });
 
     return { sessionId: session.id, url: session.url };
-  })();
+  });
 
   checkoutInFlight.set(id, checkoutPromise);
 
@@ -455,27 +445,19 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
     return;
   }
 
-  const stripeKey = await resolveGatewayField("stripe", "secretKey");
-  if (!stripeKey) {
-    res.status(503).json({ error: "Stripe is not configured on this platform." });
-    return;
-  }
-
-  const stripe = new Stripe(stripeKey);
-
-  // Ensure the portal is configured to allow switching between our tier
-  // Prices (not just cancel/payment-method/invoices).
   const plans = await getSubscriptionPlans();
-  const catalog = await ensureStripeCatalog(stripe, stripeKey, plans);
-  const configurationId = await ensurePortalConfiguration(stripe, stripeKey, catalog);
-
-  const portalSession = await stripe.billingPortal.sessions.create({
-    customer: vendor.stripeCustomerId,
-    return_url: returnUrl,
-    configuration: configurationId,
+  const { portalUrl } = await callWithPlatformStripe(async (stripe, stripeKey) => {
+    const catalog = await ensureStripeCatalog(stripe, stripeKey, plans);
+    const configurationId = await ensurePortalConfiguration(stripe, stripeKey, catalog);
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: vendor.stripeCustomerId,
+      return_url: returnUrl,
+      configuration: configurationId,
+    });
+    return { portalUrl: portalSession.url };
   });
 
-  res.json({ url: portalSession.url });
+  res.json({ url: portalUrl });
 });
 
 // ─── POST /vendors/:id/subscription/paystack/cancel ──────────────────────────
@@ -631,13 +613,7 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
     }
     syncPromise = reconcileVendorPaystackSubscription(vendor, paystackKey, "manual-sync");
   } else {
-    const stripeKey = await resolveGatewayField("stripe", "secretKey");
-    if (!stripeKey) {
-      res.status(503).json({ error: "Stripe is not configured on this platform." });
-      return;
-    }
-    const stripe = new Stripe(stripeKey);
-    syncPromise = reconcileVendorSubscription(vendor, stripe, "manual-sync");
+    syncPromise = callWithPlatformStripe((stripe) => reconcileVendorSubscription(vendor, stripe, "manual-sync"));
   }
 
   const fallbackResult = existing?.lastResult ?? { synced: false, currentTier: vendor.subscriptionTier };

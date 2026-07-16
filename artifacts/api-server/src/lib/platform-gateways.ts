@@ -19,6 +19,7 @@ export interface GatewayFieldDef {
   key: string;
   label: string;
   secret: boolean; // whether to mask this field when displaying status
+  optional?: boolean; // if true, the field may be omitted when saving credentials
 }
 
 export interface GatewayDef {
@@ -38,12 +39,18 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
     fields: [
       { key: "secretKey", label: "Secret key", secret: true },
       { key: "webhookSecret", label: "Webhook signing secret", secret: true },
+      { key: "fallbackSecretKey", label: "Fallback secret key (optional — used if primary key is restricted)", secret: true, optional: true },
     ],
     liveVerification: true,
     test: async (creds) => {
       const Stripe = (await import("stripe")).default;
       const stripe = new Stripe(creds.secretKey);
       await stripe.balance.retrieve();
+      // Also validate the fallback key if provided
+      if (creds.fallbackSecretKey?.trim()) {
+        const stripe2 = new Stripe(creds.fallbackSecretKey);
+        await stripe2.balance.retrieve();
+      }
     },
   },
   paystack: {
@@ -154,7 +161,11 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
 
 /** Env-var fallbacks per provider/field, for backward compatibility in dev. */
 const ENV_FALLBACK: Partial<Record<GatewayProvider, Record<string, string | undefined>>> = {
-  stripe: { secretKey: process.env.STRIPE_SECRET_KEY, webhookSecret: process.env.STRIPE_WEBHOOK_SECRET },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    fallbackSecretKey: process.env.STRIPE_SECRET_KEY_2,
+  },
   paystack: { secretKey: process.env.PAYSTACK_SECRET_KEY, webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET },
   paypal: { clientId: process.env.PAYPAL_CLIENT_ID, clientSecret: process.env.PAYPAL_CLIENT_SECRET },
 };
@@ -167,6 +178,80 @@ const ENV_FALLBACK: Partial<Record<GatewayProvider, Record<string, string | unde
 export async function resolveGatewayField(provider: GatewayProvider, field: string): Promise<string | undefined> {
   const dbCreds = await getPlatformCredentials(provider);
   return dbCreds?.[field] || ENV_FALLBACK[provider]?.[field];
+}
+
+/**
+ * Resolves the ordered list of Stripe secret keys to try (primary, then
+ * optional fallback). Returns an empty array if Stripe is not configured at all.
+ */
+async function resolvePlatformStripeKeys(): Promise<string[]> {
+  const dbCreds = await getPlatformCredentials("stripe");
+  const primaryKey =
+    dbCreds?.secretKey ||
+    ENV_FALLBACK.stripe?.secretKey;
+  const fallbackKey =
+    dbCreds?.fallbackSecretKey ||
+    ENV_FALLBACK.stripe?.fallbackSecretKey;
+
+  return [primaryKey, fallbackKey].filter(Boolean) as string[];
+}
+
+/** True for Stripe errors that indicate the key is invalid or restricted. */
+function isStripeKeyError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { statusCode?: number }).statusCode;
+  const type = (err as { type?: string }).type;
+  return (
+    code === 401 ||
+    type === "StripeAuthenticationError" ||
+    type === "StripePermissionError"
+  );
+}
+
+/**
+ * Runs `fn` with the primary platform Stripe client. If the primary key is
+ * restricted or invalid, automatically retries once with the configured
+ * fallback key (if one is set). Throws if Stripe is not configured at all.
+ *
+ * Use this for all platform-level Stripe API calls (subscriptions, portal,
+ * refunds, sync) so the fallback key is transparently available everywhere.
+ *
+ * The callback receives both the Stripe instance and the resolved key string
+ * (useful as a cache-key when the caller needs to pass it downstream, e.g. to
+ * `ensureStripeCatalog` or `ensurePortalConfiguration`).
+ *
+ * @example
+ *   const balance = await callWithPlatformStripe((stripe) => stripe.balance.retrieve());
+ */
+export async function callWithPlatformStripe<T>(
+  fn: (stripe: import("stripe").default, key: string) => Promise<T>,
+): Promise<T> {
+  const keys = await resolvePlatformStripeKeys();
+  if (keys.length === 0) {
+    throw Object.assign(
+      new Error("Stripe is not configured on this platform. Add a Stripe key in Admin → Payment Gateways."),
+      { statusCode: 503 },
+    );
+  }
+
+  const Stripe = (await import("stripe")).default;
+  let lastErr: unknown;
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]!;
+    try {
+      return await fn(new Stripe(key), key);
+    } catch (err) {
+      if (isStripeKeyError(err) && i < keys.length - 1) {
+        // Primary key is restricted — silently try the fallback
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastErr;
 }
 
 function assertProvider(provider: string): GatewayProvider {
@@ -209,7 +294,7 @@ export async function savePlatformCredentials(
   const provider = assertProvider(providerRaw);
   const def = GATEWAY_DEFS[provider];
 
-  const missing = def.fields.filter((f) => !creds[f.key]?.trim());
+  const missing = def.fields.filter((f) => !f.optional && !creds[f.key]?.trim());
   if (missing.length > 0) {
     throw new Error(`Missing required field(s): ${missing.map((f) => f.label).join(", ")}`);
   }

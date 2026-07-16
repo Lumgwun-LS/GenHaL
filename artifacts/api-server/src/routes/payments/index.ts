@@ -2,14 +2,13 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import Stripe from "stripe";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
 import flutterwaveRouter, { FLUTTERWAVE_BASE } from "./flutterwave";
 import nombaRouter, { NOMBA_BASE, getNombaCreds, issueNombaToken } from "./nomba";
 import remitaRouter from "./remita";
 import { retryWebhookEventById } from "./webhooks";
-import { resolveGatewayField } from "../../lib/platform-gateways";
+import { resolveGatewayField, callWithPlatformStripe } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -54,25 +53,19 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
   }
 
   if (payment.provider === "stripe") {
-    const stripeKey = await resolveGatewayField("stripe", "secretKey");
-    if (!stripeKey) {
-      res.status(503).json({ error: "Stripe is not configured. Add a platform Stripe key in Admin \u2192 Payment Gateways." });
-      return;
-    }
-    const stripe = new Stripe(stripeKey);
+    await callWithPlatformStripe(async (stripe) => {
+      // The providerReference is the Checkout Session ID — retrieve PaymentIntent from it
+      const session = await stripe.checkout.sessions.retrieve(payment.providerReference);
+      const paymentIntentId = typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id;
 
-    // The providerReference is the Checkout Session ID — retrieve PaymentIntent from it
-    const session = await stripe.checkout.sessions.retrieve(payment.providerReference);
-    const paymentIntentId = typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : session.payment_intent?.id;
+      if (!paymentIntentId) {
+        throw Object.assign(new Error("Could not resolve Stripe PaymentIntent from session"), { statusCode: 502 });
+      }
 
-    if (!paymentIntentId) {
-      res.status(502).json({ error: "Could not resolve Stripe PaymentIntent from session" });
-      return;
-    }
-
-    await stripe.refunds.create({ payment_intent: paymentIntentId });
+      await stripe.refunds.create({ payment_intent: paymentIntentId });
+    });
   } else if (payment.provider === "paystack") {
     const paystackKey = await resolveGatewayField("paystack", "secretKey");
     if (!paystackKey) {

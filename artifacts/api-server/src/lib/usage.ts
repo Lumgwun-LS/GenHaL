@@ -32,7 +32,7 @@ import {
   type Vendor,
 } from "@workspace/db/schema";
 import { getSubscriptionPlan, type SubscriptionPlanQuotas } from "./subscription-plans";
-import { resolveGatewayField } from "./platform-gateways";
+import { resolveGatewayField, callWithPlatformStripe } from "./platform-gateways";
 import { logger } from "./logger";
 
 export const RESOURCE_KEYS = ["aiImages", "aiVideos", "aiCaptions", "voiceMinutes", "sms", "email"] as const;
@@ -188,22 +188,20 @@ async function recordOverageCharge(
   let stripeInvoiceItemId: string | undefined;
   if (vendor.stripeCustomerId && vendor.stripeSubscriptionId) {
     try {
-      const stripeKey = await resolveGatewayField("stripe", "apiKey");
-      if (stripeKey) {
-        const Stripe = (await import("stripe")).default;
-        const stripe = new Stripe(stripeKey as string);
-        const invoiceItem = await stripe.invoiceItems.create({
+      const hasStripeKey = !!(await resolveGatewayField("stripe", "secretKey") || await resolveGatewayField("stripe", "fallbackSecretKey"));
+      if (hasStripeKey) {
+        const invoiceItem = await callWithPlatformStripe((stripe) => stripe.invoiceItems.create({
           customer: vendor.stripeCustomerId,
           amount: Math.round(totalUsd * 100), // cents
           currency: "usd",
-          description: `Pay-as-you-go overage: ${amount} × ${RESOURCE_LABEL[resource]} @ $${rate.toFixed(4)}/unit`,
+          description: `Pay-as-you-go overage: ${amount} × ${RESOURCE_LABEL[resource]} @ ${rate.toFixed(4)}/unit`,
           metadata: {
             vendorId: String(vendor.id),
             resource,
             periodStart: periodStart.toISOString(),
             units: String(amount),
           },
-        });
+        }));
         stripeInvoiceItemId = invoiceItem.id;
       }
     } catch (err) {

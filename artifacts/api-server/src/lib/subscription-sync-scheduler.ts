@@ -17,10 +17,9 @@
 import { db } from "@workspace/db";
 import { vendorsTable } from "@workspace/db/schema";
 import { isNotNull } from "drizzle-orm";
-import Stripe from "stripe";
 import { logger } from "./logger";
 import { recordJobRun } from "./job-run-status";
-import { resolveGatewayField } from "./platform-gateways";
+import { resolveGatewayField, callWithPlatformStripe } from "./platform-gateways";
 import { reconcileVendorSubscription } from "./subscription-sync";
 import { reconcileVendorPaystackSubscription } from "./paystack-sync";
 
@@ -34,10 +33,9 @@ export async function tick(): Promise<void> {
     let checkedCount = 0;
     let syncedCount = 0;
 
-    const stripeKey = await resolveGatewayField("stripe", "secretKey");
-    if (stripeKey) {
-      const stripe = new Stripe(stripeKey);
-
+    const primaryStripeKey = await resolveGatewayField("stripe", "secretKey");
+    const fallbackStripeKey = await resolveGatewayField("stripe", "fallbackSecretKey");
+    if (primaryStripeKey || fallbackStripeKey) {
       // Only vendors who have ever started checkout have a Stripe customer to
       // reconcile against; everyone else has nothing on Stripe's side.
       const candidates = await db
@@ -48,7 +46,7 @@ export async function tick(): Promise<void> {
       checkedCount += candidates.length;
       for (const vendor of candidates) {
         try {
-          const result = await reconcileVendorSubscription(vendor, stripe, "scheduled-sync");
+          const result = await callWithPlatformStripe((stripe) => reconcileVendorSubscription(vendor, stripe, "scheduled-sync"));
           if (result.synced) {
             syncedCount++;
             logger.info(
@@ -91,7 +89,7 @@ export async function tick(): Promise<void> {
       }
     }
 
-    if (!stripeKey && !paystackKey) {
+    if (!primaryStripeKey && !fallbackStripeKey && !paystackKey) {
       // Neither gateway is configured on this platform yet — nothing to
       // reconcile against. Still a "successful" run: nothing to check.
       await recordJobRun(SUBSCRIPTION_SYNC_JOB_NAME, { success: true, checkedCount: 0, affectedCount: 0 });
