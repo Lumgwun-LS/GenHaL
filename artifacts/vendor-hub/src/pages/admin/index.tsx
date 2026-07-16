@@ -1126,11 +1126,11 @@ function TargetByFilterPopover({
   onApply,
 }: {
   vendors: AdminVendor[];
-  onApply: (vendorIds: number[], mode: "add" | "replace") => void;
+  onApply: (vendorIds: number[], mode: "add" | "replace" | "remove") => void;
 }) {
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState<ExportFilters>(EMPTY_FILTERS);
-  const [mode, setMode] = useState<"add" | "replace">("add");
+  const [mode, setMode] = useState<"add" | "replace" | "remove">("add");
 
   function update<K extends keyof ExportFilters>(key: K, value: ExportFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -1232,6 +1232,16 @@ function TargetByFilterPopover({
             >
               Replace selection
             </Button>
+            <Button
+              type="button"
+              variant={mode === "remove" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 flex-1 text-xs"
+              onClick={() => setMode("remove")}
+              data-testid="button-target-filter-mode-remove"
+            >
+              Remove from selection
+            </Button>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 pt-1">
@@ -1254,7 +1264,7 @@ function TargetByFilterPopover({
             }}
             data-testid="button-apply-target-filter"
           >
-            {mode === "add" ? "Add" : "Select"} {matchCount} vendor{matchCount === 1 ? "" : "s"}
+            {mode === "add" ? "Add" : mode === "remove" ? "Remove" : "Select"} {matchCount} vendor{matchCount === 1 ? "" : "s"}
           </Button>
         </div>
       </PopoverContent>
@@ -2092,6 +2102,14 @@ export default function AdminPanel() {
                       toast.success(
                         vendorIds.length > 0
                           ? `Added ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter to your selection`
+                          : "No vendors matched that filter",
+                      );
+                    } else if (mode === "remove") {
+                      const removeSet = new Set(vendorIds);
+                      setSelectedVendorIds((prev) => prev.filter((id) => !removeSet.has(id)));
+                      toast.success(
+                        vendorIds.length > 0
+                          ? `Removed ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter from your selection`
                           : "No vendors matched that filter",
                       );
                     } else {
