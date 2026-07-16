@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { useUser, SignInButton, UserButton } from "@clerk/react";
 
 export default function Nav() {
   const { isSignedIn } = useUser();
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -14,54 +22,94 @@ export default function Nav() {
   }
 
   return (
-    <nav style={{ background: "#070a12", borderBottom: "1px solid rgba(255,255,255,0.06)", position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px", height: 60, display: "flex", alignItems: "center", gap: 20 }}>
+    <motion.nav
+      animate={{
+        backgroundColor: scrolled ? "rgba(6,8,17,0.88)" : "#070a12",
+        backdropFilter: scrolled ? "blur(22px) saturate(180%)" : "blur(0px)",
+        boxShadow: scrolled ? "0 1px 0 rgba(0,200,83,0.12), 0 4px 24px rgba(0,0,0,0.4)" : "none",
+      }}
+      transition={{ duration: 0.35 }}
+      style={{ position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+    >
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px", height: 62, display: "flex", alignItems: "center", gap: 20 }}>
 
         {/* Logo */}
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, textDecoration: "none" }}>
-          <div style={{ background: "#fff", borderRadius: 8, padding: "3px 8px", display: "flex", alignItems: "center" }}>
-            <img
-              src="/app-store/logo-color.jpg"
-              alt="Awajimaa"
-              style={{ height: 28, width: "auto", display: "block", objectFit: "contain" }}
-            />
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 10, color: "#00c853", letterSpacing: 1, textTransform: "uppercase" }}>APP STORE</div>
-        </Link>
+        <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, textDecoration: "none" }}>
+            <div style={{ background: "#fff", borderRadius: 8, padding: "3px 8px", display: "flex", alignItems: "center" }}>
+              <img
+                src="/app-store/logo-color.jpg"
+                alt="Awajimaa"
+                style={{ height: 28, width: "auto", display: "block", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 10, color: "#00c853", letterSpacing: 1, textTransform: "uppercase" }}>APP STORE</div>
+          </Link>
+        </motion.div>
 
         {/* Search */}
-        <form onSubmit={handleSearch} style={{ flex: 1, maxWidth: 500, display: "flex" }}>
-          <div style={{ position: "relative", width: "100%" }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, opacity: 0.4 }}>🔍</span>
-            <input
+        <form onSubmit={handleSearch} style={{ flex: 1, maxWidth: 500 }}>
+          <motion.div
+            animate={{ scale: searchFocused ? 1.02 : 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 28 }}
+            style={{ position: "relative" }}
+          >
+            <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 14, opacity: searchFocused ? 0.7 : 0.35, transition: "opacity 0.2s" }}>🔍</span>
+            <motion.input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               placeholder="Search apps, categories, developers..."
+              animate={{
+                borderColor: searchFocused ? "rgba(0,200,83,0.5)" : "rgba(255,255,255,0.08)",
+                boxShadow: searchFocused ? "0 0 0 3px rgba(0,200,83,0.08)" : "none",
+              }}
+              transition={{ duration: 0.2 }}
               style={{
-                width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 24, padding: "8px 16px 8px 36px", fontSize: 14, color: "#e8eaf0", outline: "none",
+                width: "100%", background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 24, padding: "8px 16px 8px 38px",
+                fontSize: 14, color: "#e8eaf0", outline: "none",
               }}
             />
-          </div>
+          </motion.div>
         </form>
 
         {/* Desktop links */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Link href="/" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Browse</Link>
-          <Link href="/developer" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Publish</Link>
-          <Link href="/admin" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none" }}>Admin</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {[
+            { href: "/", label: "Browse" },
+            { href: "/developer", label: "Publish" },
+            { href: "/admin", label: "Admin" },
+          ].map(({ href, label }) => (
+            <motion.div key={label} whileHover={{ y: -1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+              <Link
+                href={href}
+                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none", display: "block" }}
+              >{label}</Link>
+            </motion.div>
+          ))}
 
-          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)", margin: "0 8px" }} />
+          <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.1)", margin: "0 10px" }} />
 
           {isSignedIn ? (
-            <UserButton afterSignOutUrl="/app-store/" />
+            <motion.div whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+              <UserButton afterSignOutUrl="/app-store/" />
+            </motion.div>
           ) : (
             <SignInButton mode="modal">
-              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }}>Sign in</button>
+              <motion.button
+                className="btn-green"
+                style={{ fontSize: 13, padding: "6px 18px" }}
+                whileHover={{ scale: 1.07, y: -1 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 420, damping: 22 }}
+              >Sign in</motion.button>
             </SignInButton>
           )}
         </div>
       </div>
-    </nav>
+    </motion.nav>
   );
 }

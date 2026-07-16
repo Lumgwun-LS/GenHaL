@@ -105,16 +105,6 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   background: linear-gradient(135deg, #060c16 0%, #0a1628 50%, #060c16 100%);
 }
-.africa-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 20% 50%, rgba(0,200,83,0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(124,77,255,0.08) 0%, transparent 50%),
-    radial-gradient(circle at 60% 80%, rgba(255,179,0,0.05) 0%, transparent 40%);
-  pointer-events: none;
-}
 
 /* section heading */
 .section-title {
@@ -150,7 +140,6 @@ a { color: inherit; text-decoration: none; }
 }
 .input:focus { border-color: var(--color-green); }
 .input::placeholder { color: var(--color-muted); }
-
 textarea.input { resize: vertical; min-height: 100px; }
 select.input { cursor: pointer; }
 
@@ -184,4 +173,99 @@ select.input { cursor: pointer; }
   background: var(--color-surface-2);
   border-radius: 6px;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════
+   ANIMATION KEYFRAMES
+═══════════════════════════════════════════ */
+
+/* Drifting aurora blobs */
+@keyframes aurora-1 {
+  0%,100% { transform: translate(0,0) scale(1); opacity:.7; }
+  33%      { transform: translate(50px,-35px) scale(1.18); opacity:1; }
+  66%      { transform: translate(-30px,40px) scale(.88); opacity:.55; }
+}
+@keyframes aurora-2 {
+  0%,100% { transform: translate(0,0) scale(1); opacity:.5; }
+  40%     { transform: translate(-55px,30px) scale(.82); opacity:.8; }
+  70%     { transform: translate(35px,-40px) scale(1.22); opacity:.6; }
+}
+@keyframes aurora-3 {
+  0%,100% { transform: translate(0,0) scale(1); opacity:.6; }
+  50%     { transform: translate(30px,28px) scale(1.12); opacity:.9; }
+}
+
+/* Flags gentle float */
+@keyframes flag-float {
+  0%,100% { transform: translateY(0px) rotate(0deg); }
+  50%     { transform: translateY(-10px) rotate(2deg); }
+}
+
+/* Hero particle drift */
+@keyframes particle-drift {
+  0%   { transform: translateY(0px) translateX(0px); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-120px) translateX(40px); opacity: 0; }
+}
+
+/* Gradient text animation */
+@keyframes gradient-x {
+  0%,100% { background-position: 0% 50%; }
+  50%     { background-position: 100% 50%; }
+}
+
+/* Glow pulse (hero button) */
+@keyframes glow-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,200,83,0), 0 4px 15px rgba(0,200,83,0.2); }
+  50%     { box-shadow: 0 0 0 6px rgba(0,200,83,0.08), 0 4px 30px rgba(0,200,83,0.45); }
+}
+.btn-glow { animation: glow-pulse 2.6s ease-in-out infinite; }
+
+/* CTA border pulse */
+@keyframes cta-glow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,200,83,0); }
+  50%     { box-shadow: 0 0 40px rgba(0,200,83,0.18), 0 0 80px rgba(0,200,83,0.06); }
+}
+.cta-glow { animation: cta-glow 3.5s ease-in-out infinite; }
+
+/* Card shimmer on hover */
+@keyframes card-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.card-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.06) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: card-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Stat number pop */
+@keyframes stat-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* Badge robot wiggle */
+@keyframes robot-wiggle {
+  0%,100% { transform: rotate(0deg); }
+  25%     { transform: rotate(-12deg); }
+  75%     { transform: rotate(12deg); }
+}
+
+/* Orbital ring */
+@keyframes orbit {
+  to { transform: rotate(360deg); }
+}
+
+/* Slide-in underline */
+@keyframes underline-in {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
