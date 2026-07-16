@@ -428,6 +428,93 @@ function ExportAcknowledgmentHistoryButton({ adminUserId }: { adminUserId: strin
   );
 }
 
+function ExportReviewHistoryLookupCard() {
+  const [lookupId, setLookupId] = useState("");
+  const [submittedId, setSubmittedId] = useState("");
+
+  const { data: history, isLoading, isError } = useQuery({
+    queryKey: ["admin-export-acknowledgment-history", submittedId],
+    queryFn: () => fetchExportAcknowledgmentHistory(submittedId),
+    enabled: Boolean(submittedId),
+  });
+
+  function handleLookup() {
+    const trimmed = lookupId.trim();
+    if (!trimmed) return;
+    setSubmittedId(trimmed);
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardList className="w-4 h-4" /> Past Reviews Lookup
+        </CardTitle>
+        <CardDescription>
+          Look up the full export-review history for any admin, even when they are not currently flagged.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-2 mb-4">
+          <Input
+            className="h-8 text-xs"
+            placeholder="Admin user ID (e.g. user_abc123)"
+            value={lookupId}
+            onChange={(e) => setLookupId(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleLookup(); }}
+            data-testid="input-export-review-history-lookup"
+          />
+          <Button
+            size="sm"
+            onClick={handleLookup}
+            disabled={!lookupId.trim() || isLoading}
+            data-testid="button-export-review-history-lookup"
+          >
+            {isLoading ? "Loading…" : "Look up"}
+          </Button>
+        </div>
+        {submittedId && (
+          isLoading ? null : isError ? (
+            <div className="text-xs text-destructive">Failed to load review history.</div>
+          ) : !history?.length ? (
+            <div className="text-xs text-muted-foreground">
+              No past reviews found for <span className="font-mono">{submittedId}</span>.
+            </div>
+          ) : (
+            <div>
+              <div className="text-xs text-muted-foreground mb-2">
+                Review history for <span className="font-mono font-medium text-foreground">{submittedId}</span>:
+              </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cleared By</TableHead>
+                      <TableHead className="text-right">Cleared At</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map((h) => (
+                      <TableRow key={h.id} data-testid={`row-export-review-history-lookup-${h.id}`}>
+                        <TableCell className="text-xs">
+                          {h.acknowledgedByDisplayName ?? <span className="font-mono">{h.acknowledgedBy}</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {new Date(h.acknowledgedAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ExportAlertSettingsDialog({ threshold, windowMinutes }: { threshold: number; windowMinutes: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -2159,6 +2246,8 @@ export default function AdminPanel() {
               )}
             </CardContent>
           </Card>
+
+          <ExportReviewHistoryLookupCard />
 
           <Card className="mt-6">
             <CardHeader>
