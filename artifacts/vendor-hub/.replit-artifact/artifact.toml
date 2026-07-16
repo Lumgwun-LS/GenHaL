@@ -14,13 +14,8 @@ localPort = 22220
 run = "pnpm --filter @workspace/vendor-hub run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/vendor-hub", "run", "build" ]
-serve = "static"
-publicDir = "artifacts/vendor-hub/dist/public"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+build = [ "sh", "-c", "pnpm --filter @workspace/vendor-hub run build && pnpm --filter @workspace/app-store run build:standalone" ]
+run = [ "node", "artifacts/vendor-hub/host-router.mjs" ]
 
 [services.env]
 PORT = "22220"
