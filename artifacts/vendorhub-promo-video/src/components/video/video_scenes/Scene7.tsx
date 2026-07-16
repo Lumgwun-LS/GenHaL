@@ -41,7 +41,7 @@ export const Scene7 = () => {
             }
             transition={{ duration: 0.9, ease: [0.34, 1.56, 0.64, 1] }}
           >
-            Do <span className="text-gradient-mixed">More.</span>
+            Do More, <span className="text-gradient-mixed">And Be More.</span>
           </motion.h2>
         </div>
 
