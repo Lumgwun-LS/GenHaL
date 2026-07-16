@@ -30,31 +30,3 @@ AWAJIMAA_BACKEND_URL = "https://api.awajimaaapp.io"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 8081
-
-[[ports]]
-localPort = 19306
-externalPort = 80
-
-[[ports]]
-localPort = 19679
-externalPort = 3003
-
-[[ports]]
-localPort = 19851
-externalPort = 3002
-
-[[ports]]
-localPort = 22220
-externalPort = 3001
-
-[[ports]]
-localPort = 24410
-externalPort = 3000
