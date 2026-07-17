@@ -51,6 +51,10 @@ function fromDatetimeLocalValue(value: string): Date {
   return new Date(value);
 }
 
+const SCHEDULE_REOPEN_KEY = "schedule_reopen";
+
+type ScheduleReopenState = { postId: number; scheduledAt: string };
+
 /**
  * Warns a vendor, before they confirm a schedule, that one or more of the
  * post's selected platforms has no usable connected account right now —
@@ -58,26 +62,111 @@ function fromDatetimeLocalValue(value: string): Date {
  * scheduled auto-publisher picks the post up. Checked live (not just from
  * already-loaded account state) so a stale accounts list can't hide a
  * warning the backend would still catch.
+ *
+ * Each warning row includes a "Connect" action so the vendor can fix the
+ * problem without losing context:
+ *  - OAuth platforms (Facebook/Instagram, LinkedIn, X) save the current
+ *    post id and scheduled-at time to sessionStorage, then redirect to the
+ *    provider's auth flow. On return, Social reads that key and
+ *    automatically reopens the same schedule dialog so the vendor continues
+ *    where they left off and can confirm the (now-empty) warnings list.
+ *  - Manual-only platforms (TikTok) open a small inline add-account form;
+ *    after saving, the warnings query is immediately invalidated so the row
+ *    disappears without the vendor needing to reopen anything.
  */
-function ConnectionWarningsNotice({ postId }: { postId: number }) {
+function ConnectionWarningsNotice({
+  postId,
+  scheduledAtValue,
+}: {
+  postId: number;
+  /** The current datetime-local value from the parent ScheduleDialog — persisted
+   *  to sessionStorage before an OAuth redirect so the dialog can restore its state. */
+  scheduledAtValue: string;
+}) {
   const { data } = useGetPostConnectionWarnings(postId, {
     query: { enabled: true, queryKey: getGetPostConnectionWarningsQueryKey(postId) },
   });
+  const queryClient = useQueryClient();
+  const createAccount = useCreateSocialAccount();
+  const [tiktokDialogOpen, setTiktokDialogOpen] = useState(false);
+  const [tiktokAccountName, setTiktokAccountName] = useState("");
+
   const warnings = data?.warnings ?? [];
   if (warnings.length === 0) return null;
+
+  const handleConnectPlatform = (platform: string) => {
+    const normalized = platform.toLowerCase();
+    if (normalized === "facebook" || normalized === "instagram") {
+      sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
+      window.location.href = `${BASE_URL}/api/social/oauth/meta/start`;
+    } else if (normalized === "linkedin") {
+      sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
+      window.location.href = `${BASE_URL}/api/social/oauth/linkedin/start`;
+    } else if (normalized === "x" || normalized === "twitter") {
+      sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
+      window.location.href = `${BASE_URL}/api/social/oauth/twitter/start`;
+    } else if (normalized === "tiktok") {
+      setTiktokDialogOpen(true);
+    }
+  };
+
+  const handleAddTikTok = async () => {
+    if (!tiktokAccountName.trim()) { toast.error("Enter the account name"); return; }
+    try {
+      await createAccount.mutateAsync({ data: { vendorId: 1, platform: "TikTok", accountName: tiktokAccountName.trim() } });
+      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      queryClient.invalidateQueries({ queryKey: getGetPostConnectionWarningsQueryKey(postId) });
+      toast.success("TikTok account connected");
+      setTiktokAccountName("");
+      setTiktokDialogOpen(false);
+    } catch {
+      toast.error("Failed to connect account");
+    }
+  };
+
   return (
-    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
-        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This post may fail to auto-publish
+    <>
+      <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-1.5">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This post may fail to auto-publish
+        </div>
+        <div className="space-y-2">
+          {warnings.map((w, i) => (
+            <div key={i} className="flex items-start justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">{w.platform}:</span> {w.message}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px] shrink-0"
+                onClick={() => handleConnectPlatform(w.platform)}
+              >
+                {MANUAL_ONLY_PLATFORMS.includes(w.platform) ? "Add account" : "Connect"}
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="space-y-1">
-        {warnings.map((w, i) => (
-          <p key={i} className="text-xs text-muted-foreground">
-            <span className="font-medium">{w.platform}:</span> {w.message}
-          </p>
-        ))}
-      </div>
-    </div>
+      <Dialog open={tiktokDialogOpen} onOpenChange={setTiktokDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add TikTok Account</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              TikTok publishing is label-only — enter your account name so the post is tracked correctly.
+            </p>
+            <Input
+              placeholder="TikTok account or username"
+              value={tiktokAccountName}
+              onChange={(e) => setTiktokAccountName(e.target.value)}
+            />
+            <Button className="w-full" onClick={handleAddTikTok} disabled={createAccount.isPending}>
+              Add Account
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -88,6 +177,7 @@ function ScheduleDialog({
   initialValue,
   onConfirm,
   confirmLabel,
+  defaultOpen,
 }: {
   postId: number;
   trigger: ReactNode;
@@ -95,6 +185,8 @@ function ScheduleDialog({
   initialValue?: Date;
   onConfirm: (postId: number, date: Date, force?: boolean) => Promise<{ warnings?: { platform: string; message: string }[] } | void>;
   confirmLabel: string;
+  /** When true, the dialog opens immediately on (re-)mount — used to restore state after an OAuth redirect. */
+  defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const minValue = toDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
@@ -103,6 +195,11 @@ function ScheduleDialog({
   // Set once the backend has rejected a plain schedule attempt because of a
   // connection warning — surfaces a "confirm anyway" step instead of a dead end.
   const [blockedWarnings, setBlockedWarnings] = useState<{ platform: string; message: string }[] | null>(null);
+
+  // Auto-open when parent signals a restore after OAuth redirect.
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
 
   useEffect(() => {
     if (open) setBlockedWarnings(null);
@@ -135,7 +232,7 @@ function ScheduleDialog({
         <div className="space-y-3">
           <label className="text-sm text-muted-foreground">Publish at</label>
           <Input type="datetime-local" min={minValue} value={value} onChange={(e) => setValue(e.target.value)} />
-          <ConnectionWarningsNotice postId={postId} />
+          <ConnectionWarningsNotice postId={postId} scheduledAtValue={value} />
           {blockedWarnings && blockedWarnings.length > 0 ? (
             <div className="space-y-2">
               <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 space-y-1.5">
@@ -551,6 +648,27 @@ export default function Social() {
   const scrolledRef = useRef(false);
   const queryClient = useQueryClient();
 
+  // After an OAuth redirect from the schedule-dialog warning, restore the
+  // dialog open state so the vendor can finish scheduling without friction.
+  const [scheduleReopen, setScheduleReopen] = useState<ScheduleReopenState | null>(null);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SCHEDULE_REOPEN_KEY);
+      if (raw) {
+        sessionStorage.removeItem(SCHEDULE_REOPEN_KEY);
+        const state = JSON.parse(raw) as ScheduleReopenState;
+        setScheduleReopen(state);
+        // Ensure the warnings query refetches in the reopened dialog.
+        queryClient.invalidateQueries({ queryKey: getGetPostConnectionWarningsQueryKey(state.postId) });
+        // Also refresh the accounts list so the newly-connected account is visible.
+        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      }
+    } catch {
+      // Malformed sessionStorage entry — ignore.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const submitForReview = useSubmitPostForReview();
   const approvePost = useApprovePost();
   const requestChanges = useRequestPostChanges();
@@ -789,6 +907,8 @@ export default function Social() {
                         title="Schedule this post"
                         confirmLabel="Schedule"
                         onConfirm={handleSchedule}
+                        defaultOpen={scheduleReopen?.postId === post.id}
+                        initialValue={scheduleReopen?.postId === post.id && scheduleReopen.scheduledAt ? new Date(scheduleReopen.scheduledAt) : undefined}
                         trigger={
                           <Button size="sm" variant="outline" className="flex-1">
                             <CalendarClock className="w-3.5 h-3.5 mr-1.5" /> Schedule
@@ -809,8 +929,9 @@ export default function Social() {
                         postId={post.id}
                         title="Reschedule this post"
                         confirmLabel="Reschedule"
-                        initialValue={post.scheduledAt ? new Date(post.scheduledAt) : undefined}
+                        initialValue={scheduleReopen?.postId === post.id && scheduleReopen.scheduledAt ? new Date(scheduleReopen.scheduledAt) : (post.scheduledAt ? new Date(post.scheduledAt) : undefined)}
                         onConfirm={handleReschedule}
+                        defaultOpen={scheduleReopen?.postId === post.id}
                         trigger={
                           <Button size="sm" className="flex-1">
                             <CalendarClock className="w-3.5 h-3.5 mr-1.5" /> Reschedule
