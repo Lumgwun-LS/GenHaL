@@ -52,3 +52,4 @@ export * from "./store-relations";
 export * from "./store-app-events";
 export * from "./store-user-signups";
 export * from "./page-views";
+export * from "./vendor-addon-credits";

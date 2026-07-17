@@ -183,6 +183,7 @@ router.post("/voice/status-callback", async (req, res) => {
           purpose: voiceCallLogsTable.purpose,
           reservedMinutes: voiceCallLogsTable.reservedMinutes,
           reservedPeriodStart: voiceCallLogsTable.reservedPeriodStart,
+          reservedAddonAllocations: voiceCallLogsTable.reservedAddonAllocations,
         })
         .from(voiceCallLogsTable)
         .where(eq(voiceCallLogsTable.callSid, callSid))
@@ -199,6 +200,7 @@ router.post("/voice/status-callback", async (req, res) => {
       const vendorId = existingLog.vendorId;
       const reservedMinutes = Number(existingLog.reservedMinutes);
       const reservedPeriodStart = existingLog.reservedPeriodStart;
+      const addonAllocations = existingLog.reservedAddonAllocations ?? [];
 
       const [claimed] = await tx
         .update(voiceCallLogsTable)
@@ -226,7 +228,7 @@ router.post("/voice/status-callback", async (req, res) => {
         // callback (e.g. a tier change), and refunding against the wrong
         // period would leave the original reservation's period permanently
         // over-charged.
-        await releaseQuota(vendorId, "voiceMinutes", unusedReservation, reservedPeriodStart, tx);
+        await releaseQuota(vendorId, "voiceMinutes", unusedReservation, reservedPeriodStart, addonAllocations, tx);
       }
     });
   } catch (err) {

@@ -157,6 +157,21 @@ export const DEFAULT_SITE_CONTENT = {
     paystack: true,
     paypal: false,
   },
+  // Per-unit overage & add-on pricing (USD). Applied when a paid-tier vendor
+  // exhausts their included monthly quota and continues using a resource
+  // (pay-as-you-go overage), or when any vendor proactively buys a bundle of
+  // extra capacity for a resource (add-on purchase). Priced at roughly
+  // 2.5-3× the platform's real unit cost so overage is profitable but not
+  // punitive. Admins can tune per-resource rates here; changes take effect
+  // immediately for new usage events and new add-on purchases.
+  "billing.overageRates": {
+    aiImages:     0.50,   // platform cost ≈ $0.19
+    aiVideos:     1.00,   // platform cost ≈ $0.30
+    aiCaptions:   0.05,   // platform cost ≈ $0.01
+    voiceMinutes: 0.15,   // platform cost ≈ $0.06
+    sms:          0.05,   // platform cost ≈ $0.01
+    email:        0.01,   // platform cost ≈ $0.001
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -275,6 +290,16 @@ const paymentGatewaysSchema = z
     message: "At least one payment gateway must stay enabled.",
   });
 
+const overageRateValue = z.number().min(0).max(10000);
+const overageRatesSchema = z.object({
+  aiImages:     overageRateValue,
+  aiVideos:     overageRateValue,
+  aiCaptions:   overageRateValue,
+  voiceMinutes: overageRateValue,
+  sms:          overageRateValue,
+  email:        overageRateValue,
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -288,6 +313,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.voiceBackfillRecentFixes": voiceBackfillRecentFixesSchema,
   "billing.subscriptionPlans": subscriptionPlansSchema,
   "billing.paymentGateways": paymentGatewaysSchema,
+  "billing.overageRates": overageRatesSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

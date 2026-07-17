@@ -6,16 +6,31 @@
  * tracked in `resource_usage` and enforced atomically via advisory locks so
  * concurrent requests never jointly overshoot the limit.
  *
+ * ## Add-on credits (purchased capacity)
+ * Vendors can proactively buy extra capacity for a specific resource via
+ * POST /vendors/:id/addons/checkout. Purchased units are stored in
+ * `vendor_addon_credits` and consumed (in FIFO order) after the base quota is
+ * exhausted but before automatic pay-as-you-go overage kicks in. This gives
+ * vendors a predictable-cost buffer before open-ended per-unit billing starts.
+ *
  * ## Pay-as-you-go overage (paid plans only)
- * When a paid-tier vendor exhausts their included credits, usage continues but
- * is recorded in `vendor_overage_charges` at the published overage rate for
- * that resource. For vendors with a Stripe customer ID, a Stripe InvoiceItem
- * is created immediately and will be collected on their next invoice. For
+ * When a paid-tier vendor exhausts both included credits AND add-on credits,
+ * usage continues but is recorded in `vendor_overage_charges` at the published
+ * overage rate for that resource (admin-editable via billing.overageRates site-
+ * content block). For vendors with a Stripe customer ID, a Stripe InvoiceItem
+ * is created immediately and collected on the next invoice. For
  * Paystack/PayPal vendors the overage accumulates in the DB for manual or
  * end-of-period settlement by the admin.
  *
  * Free-tier vendors are hard-blocked when they hit their quota — they have no
- * payment method on file for overage collection.
+ * payment method on file for overage collection unless they have active add-on
+ * credits.
+ *
+ * ## Consumption order
+ *   1. Base plan quota (resource_usage table, per billing period)
+ *   2. Active add-on credits (vendor_addon_credits, FIFO by created_at)
+ *   3. Auto-overage billing (paid plans only)
+ *   4. Hard block (free plans with no add-on credits remaining)
  *
  * ## Billing period
  * Derived locally from `vendors.currentPeriodStart` — a rolling 30-day window
@@ -23,17 +38,19 @@
  * anchor resets only on real tier-change events (upgrade, downgrade,
  * cancellation) so it stays aligned with real subscription lifecycle events.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql, asc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   resourceUsageTable,
   vendorOverageChargesTable,
+  vendorAddonCreditsTable,
   vendorsTable,
   type Vendor,
 } from "@workspace/db/schema";
 import { getSubscriptionPlan, type SubscriptionPlanQuotas } from "./subscription-plans";
 import { resolveGatewayField, callWithPlatformStripe } from "./platform-gateways";
 import { logger } from "./logger";
+import { getSiteContentBlock } from "./site-content";
 
 export const RESOURCE_KEYS = ["aiImages", "aiVideos", "aiCaptions", "voiceMinutes", "sms", "email"] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
@@ -57,12 +74,11 @@ export const FREE_TIER_QUOTAS: SubscriptionPlanQuotas = {
 };
 
 /**
- * Pay-as-you-go rates (USD per unit) charged once a vendor's included monthly
- * credits are exhausted. Priced at roughly 2.5-3× the platform's real unit
- * cost so overage is profitable but not punitive. Admins can adjust plan
- * quotas in the Site Editor to shift where overage starts.
+ * Fallback pay-as-you-go rates (USD per unit) — used when the admin has not
+ * yet saved a billing.overageRates site-content block. The live rates are
+ * admin-editable via the Site Editor and read via `getOverageRates()`.
  */
-export const OVERAGE_RATES: Record<ResourceKey, number> = {
+export const DEFAULT_OVERAGE_RATES: Record<ResourceKey, number> = {
   aiImages:      0.50,   // platform cost ≈ $0.19
   aiVideos:      1.00,   // platform cost ≈ $0.30
   aiCaptions:    0.05,   // platform cost ≈ $0.01
@@ -70,6 +86,15 @@ export const OVERAGE_RATES: Record<ResourceKey, number> = {
   sms:           0.05,   // platform cost ≈ $0.01
   email:         0.01,   // platform cost ≈ $0.001
 };
+
+// Back-compat alias — callers that imported the hardcoded constant still work.
+export const OVERAGE_RATES = DEFAULT_OVERAGE_RATES;
+
+/** Returns admin-configured overage rates, falling back to defaults. */
+export async function getOverageRates(): Promise<Record<ResourceKey, number>> {
+  const block = (await getSiteContentBlock("billing.overageRates")) as Record<ResourceKey, number>;
+  return block ?? DEFAULT_OVERAGE_RATES;
+}
 
 const PERIOD_LENGTH_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -119,22 +144,104 @@ async function getUsedAmount(vendorId: number, resource: ResourceKey, periodStar
   return row ? Number(row.used) : 0;
 }
 
+/**
+ * Returns the total remaining add-on credits for a vendor+resource.
+ * Add-on credits are consumed in FIFO order within `consumeQuota`.
+ */
+export async function getAddonCreditsRemaining(vendorId: number, resource: ResourceKey): Promise<number> {
+  const rows = await db
+    .select({ unitsRemaining: vendorAddonCreditsTable.unitsRemaining })
+    .from(vendorAddonCreditsTable)
+    .where(and(
+      eq(vendorAddonCreditsTable.vendorId, vendorId),
+      eq(vendorAddonCreditsTable.resource, resource),
+      eq(vendorAddonCreditsTable.status, "active"),
+      gt(vendorAddonCreditsTable.unitsRemaining, "0"),
+    ));
+  return rows.reduce((sum, r) => sum + Number(r.unitsRemaining), 0);
+}
+
+/**
+ * Atomically deducts `amount` from a vendor's active add-on credits (FIFO).
+ * Returns an allocation array recording exactly which rows were decremented and
+ * by how much, so the caller can pass it back to releaseQuota for precise
+ * restoration on failure/cancellation.
+ * Must be called inside a transaction with an advisory lock held.
+ */
+async function consumeAddonCreditsTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  vendorId: number,
+  resource: ResourceKey,
+  amount: number,
+): Promise<AddonAllocation[]> {
+  if (amount <= 0) return [];
+
+  const rows = await tx
+    .select({
+      id: vendorAddonCreditsTable.id,
+      unitsRemaining: vendorAddonCreditsTable.unitsRemaining,
+    })
+    .from(vendorAddonCreditsTable)
+    .where(and(
+      eq(vendorAddonCreditsTable.vendorId, vendorId),
+      eq(vendorAddonCreditsTable.resource, resource),
+      eq(vendorAddonCreditsTable.status, "active"),
+      gt(vendorAddonCreditsTable.unitsRemaining, "0"),
+    ))
+    .orderBy(asc(vendorAddonCreditsTable.createdAt));
+
+  const allocations: AddonAllocation[] = [];
+  let remaining = amount;
+
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    const available = Number(row.unitsRemaining);
+    const toConsume = Math.min(available, remaining);
+    const newRemaining = available - toConsume;
+    await tx
+      .update(vendorAddonCreditsTable)
+      .set({
+        unitsRemaining: newRemaining.toString(),
+        status: newRemaining <= 0 ? "exhausted" : "active",
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorAddonCreditsTable.id, row.id));
+    allocations.push({ id: row.id, amount: toConsume });
+    remaining -= toConsume;
+  }
+
+  return allocations;
+}
+
+/** Per-credit-bundle deduction recorded during a single consumeQuota call. */
+export interface AddonAllocation {
+  /** Primary key of the vendor_addon_credits row that was decremented. */
+  id: number;
+  /** Units taken from this row in this call. */
+  amount: number;
+}
+
 export interface QuotaCheckResult {
   allowed: boolean;
-  isOverage: boolean;       // true = allowed via pay-as-you-go, not from included credits
+  isOverage: boolean;       // true = allowed via pay-as-you-go, not from included credits or addon credits
+  isAddon: boolean;         // true = consumed from purchased add-on credits
   resource: ResourceKey;
   used: number;
   quota: number;
-  remaining: number;        // remaining included credits (0 when in overage)
-  overageUnits: number;     // units charged as overage this request (0 for normal usage)
+  remaining: number;        // remaining included credits (0 when in overage or addon)
+  addonRemaining: number;   // remaining add-on credit units after this call
+  /** Exact per-row deductions made from vendor_addon_credits in this call.
+   *  Pass back to releaseQuota so refunds restore the right rows precisely. */
+  addonAllocations: ReadonlyArray<AddonAllocation>;
+  overageUnits: number;     // units charged as overage this request (0 for normal usage or addon)
   overageUsd: number;       // USD cost of overage this request
   periodStart: Date;
   periodEnd: Date;
 }
 
 /**
- * Read-only quota check — does NOT record any usage. Safe for pre-flight
- * checks like "can this vendor even start a campaign?" before committing.
+ * Read-only quota check — does NOT record any usage or consume addon credits.
+ * Safe for pre-flight checks like "can this vendor even start a campaign?"
  * For gates that must actually record usage use `consumeQuota` instead.
  */
 export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: number): Promise<QuotaCheckResult> {
@@ -143,31 +250,45 @@ export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: 
   const periodStart = getBillingPeriodStart(vendor);
   const used = await getUsedAmount(vendor.id, resource, periodStart);
   const remaining = Math.max(quota - used, 0);
-  const allowed = remaining >= amount || isPaidTier(vendor);
-  return {
-    allowed,
-    isOverage: allowed && remaining < amount,
-    resource,
-    used,
-    quota,
-    remaining,
-    overageUnits: allowed && remaining < amount ? amount : 0,
-    overageUsd: allowed && remaining < amount ? amount * OVERAGE_RATES[resource] : 0,
-    periodStart,
-    periodEnd: getBillingPeriodEnd(periodStart),
-  };
+  const addonRemaining = await getAddonCreditsRemaining(vendor.id, resource);
+
+  const rates = await getOverageRates();
+  const rate = rates[resource];
+
+  const periodEnd = getBillingPeriodEnd(periodStart);
+  // checkQuota never mutates — addonAllocations is always empty here
+  const noAllocations: ReadonlyArray<AddonAllocation> = [];
+
+  // Can be fulfilled from base quota
+  if (remaining >= amount) {
+    return { allowed: true, isOverage: false, isAddon: false, resource, used, quota, remaining, addonRemaining, addonAllocations: noAllocations, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+  }
+
+  // Partially or fully fulfillable from add-on credits
+  const neededFromAddon = amount - remaining;
+  if (addonRemaining >= neededFromAddon) {
+    return { allowed: true, isOverage: false, isAddon: true, resource, used, quota, remaining, addonRemaining, addonAllocations: noAllocations, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+  }
+
+  // Paid plan can go into overage — only the portion not covered by base or add-ons is overage
+  if (isPaidTier(vendor)) {
+    const overageUnits = amount - remaining - addonRemaining; // remaining + addonRemaining < amount here
+    return { allowed: true, isOverage: true, isAddon: addonRemaining > 0, resource, used, quota, remaining, addonRemaining, addonAllocations: noAllocations, overageUnits, overageUsd: overageUnits * rate, periodStart, periodEnd };
+  }
+
+  // Free plan, no addon credits left — blocked
+  return { allowed: false, isOverage: false, isAddon: false, resource, used, quota, remaining, addonRemaining, addonAllocations: noAllocations, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
 }
 
 /** Human-readable message for a hard block (free-tier vendors who hit quota). */
 export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier">, result: QuotaCheckResult): string {
   const tierLabel = vendor.subscriptionTier === "free" ? "Free" : vendor.subscriptionTier;
-  return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan to continue.`;
+  return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan or purchase add-on capacity to continue.`;
 }
 
 /** Human-readable message for overage (paid-tier vendors charged beyond quota). */
 export function quotaOverageMessage(result: QuotaCheckResult): string {
-  const rate = OVERAGE_RATES[result.resource];
-  return `You've used all included ${RESOURCE_LABEL[result.resource]} for this period. This usage will be billed at $${rate.toFixed(4)} per unit.`;
+  return `You've used all included ${RESOURCE_LABEL[result.resource]} for this period. This usage will be billed at the pay-as-you-go overage rate.`;
 }
 
 /**
@@ -182,7 +303,8 @@ async function recordOverageCharge(
   amount: number,
   periodStart: Date,
 ): Promise<void> {
-  const rate = OVERAGE_RATES[resource];
+  const rates = await getOverageRates();
+  const rate = rates[resource];
   const totalUsd = amount * rate;
 
   let stripeInvoiceItemId: string | undefined;
@@ -190,8 +312,9 @@ async function recordOverageCharge(
     try {
       const hasStripeKey = !!(await resolveGatewayField("stripe", "secretKey") || await resolveGatewayField("stripe", "fallbackSecretKey"));
       if (hasStripeKey) {
+        const stripeCustomerId = vendor.stripeCustomerId as string;
         const invoiceItem = await callWithPlatformStripe((stripe) => stripe.invoiceItems.create({
-          customer: vendor.stripeCustomerId,
+          customer: stripeCustomerId,
           amount: Math.round(totalUsd * 100), // cents
           currency: "usd",
           description: `Pay-as-you-go overage: ${amount} × ${RESOURCE_LABEL[resource]} @ ${rate.toFixed(4)}/unit`,
@@ -236,11 +359,12 @@ async function recordOverageCharge(
 
 /**
  * Atomically checks AND increments usage in one step. For paid-tier vendors
- * who have exhausted their included credits, usage is allowed as overage and
- * recorded for billing. Free-tier vendors are hard-blocked.
+ * who have exhausted their included credits, add-on credits are consumed first;
+ * only if add-on credits are also exhausted does usage continue as overage.
+ * Free-tier vendors without add-on credits are hard-blocked.
  *
- * Returns `allowed: true` in both the normal (quota available) and overage
- * (paid plan, quota exhausted) cases. Check `result.isOverage` to know which.
+ * Returns `allowed: true` in the normal (quota available), add-on credit, and
+ * overage cases. Check `result.isAddon` and `result.isOverage` to know which.
  */
 export async function consumeQuota(vendor: Vendor, resource: ResourceKey, amount: number): Promise<QuotaCheckResult> {
   return db.transaction((tx) => consumeQuotaTx(tx, vendor, resource, amount));
@@ -264,8 +388,16 @@ export async function consumeQuotaTx(
   const periodEnd = getBillingPeriodEnd(periodStart);
   const lockKey = `resource_usage:${vendor.id}:${resource}:${periodStart.toISOString()}`;
 
+  // Key for serializing add-on credit mutations, period-independent.
+  // Must be held by BOTH consume and release paths to prevent cross-period
+  // races corrupting vendor_addon_credits row balances.
+  const addonLockKey = `addon_credits:${vendor.id}:${resource}`;
+
   const result = await tx.transaction(async (inner) => {
+    // Acquire BOTH locks inside one transaction so they are released atomically.
+    // Period lock guards resource_usage; addon lock guards vendor_addon_credits.
     await inner.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+    await inner.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${addonLockKey}))`);
 
     const [row] = await inner
       .select({ used: resourceUsageTable.used })
@@ -279,11 +411,6 @@ export async function consumeQuotaTx(
     const used = row ? Number(row.used) : 0;
     const remaining = Math.max(quota - used, 0);
 
-    // Hard block for free-tier vendors
-    if (remaining < amount && !isPaidTier(vendor)) {
-      return { allowed: false, isOverage: false, resource, used, quota, remaining, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
-    }
-
     if (remaining >= amount) {
       // Normal credit consumption — stays within included quota
       await inner
@@ -293,69 +420,199 @@ export async function consumeQuotaTx(
           target: [resourceUsageTable.vendorId, resourceUsageTable.resource, resourceUsageTable.periodStart],
           set: { used: sql`${resourceUsageTable.used} + ${amount}`, updatedAt: new Date() },
         });
-      return { allowed: true, isOverage: false, resource, used: used + amount, quota, remaining: remaining - amount, overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+      // Read addon credits for display purposes only — no addon was consumed
+      const addonRemaining = await getAddonCreditsRemaining(vendor.id, resource);
+      return {
+        allowed: true, isOverage: false, isAddon: false,
+        resource, used: used + amount, quota, remaining: remaining - amount,
+        addonRemaining, addonAllocations: [] as AddonAllocation[],
+        overageUnits: 0, overageUsd: 0, periodStart, periodEnd,
+      };
     }
 
-    // Paid plan, quota exhausted — consume what's left from credits, rest is overage
-    if (remaining > 0) {
+    // Base quota exhausted — compute how much is still needed
+    const fromBase = remaining; // units that base quota can still cover (may be 0)
+    const stillNeeded = amount - fromBase;
+
+    // Read total available add-on credits BEFORE writing anything.
+    // We must decide allow/block before making any mutations so that no paid
+    // credits are lost when a request is going to be denied.
+    const addonRows = await inner
+      .select({
+        id: vendorAddonCreditsTable.id,
+        unitsRemaining: vendorAddonCreditsTable.unitsRemaining,
+      })
+      .from(vendorAddonCreditsTable)
+      .where(and(
+        eq(vendorAddonCreditsTable.vendorId, vendor.id),
+        eq(vendorAddonCreditsTable.resource, resource),
+        eq(vendorAddonCreditsTable.status, "active"),
+        gt(vendorAddonCreditsTable.unitsRemaining, "0"),
+      ))
+      .orderBy(asc(vendorAddonCreditsTable.createdAt));
+
+    const addonTotal = addonRows.reduce((s, r) => s + Number(r.unitsRemaining), 0);
+
+    // Decide allow/block BEFORE any writes
+    const addonCanCover = addonTotal >= stillNeeded;
+    const paidCanOverage = isPaidTier(vendor);
+
+    if (!addonCanCover && !paidCanOverage) {
+      // Free plan with insufficient credits — hard block, no mutations at all
+      return {
+        allowed: false, isOverage: false, isAddon: false,
+        resource, used, quota, remaining: 0,
+        addonRemaining: addonTotal, addonAllocations: [] as AddonAllocation[],
+        overageUnits: 0, overageUsd: 0, periodStart, periodEnd,
+      };
+    }
+
+    // From here we know the request WILL be allowed — safe to write.
+
+    // 1. Consume remaining base quota
+    if (fromBase > 0) {
       await inner
         .insert(resourceUsageTable)
-        .values({ vendorId: vendor.id, resource, periodStart, used: remaining.toString() })
+        .values({ vendorId: vendor.id, resource, periodStart, used: fromBase.toString() })
         .onConflictDoUpdate({
           target: [resourceUsageTable.vendorId, resourceUsageTable.resource, resourceUsageTable.periodStart],
-          set: { used: sql`${resourceUsageTable.used} + ${remaining}`, updatedAt: new Date() },
+          set: { used: sql`${resourceUsageTable.used} + ${fromBase}`, updatedAt: new Date() },
         });
     }
 
-    const overageUnits = amount - remaining;
+    // 2. Consume add-on credits (FIFO, up to stillNeeded).
+    //    consumeAddonCreditsTx returns the exact per-row deductions so releaseQuota
+    //    can restore precisely the same rows on failure/cancellation.
+    const toConsumeFromAddon = Math.min(addonTotal, stillNeeded);
+    let addonAllocations: AddonAllocation[] = [];
+    if (toConsumeFromAddon > 0) {
+      addonAllocations = await consumeAddonCreditsTx(
+        inner as Parameters<Parameters<typeof db.transaction>[0]>[0],
+        vendor.id,
+        resource,
+        toConsumeFromAddon,
+      );
+    }
+    const addonConsumed = addonAllocations.reduce((s, a) => s + a.amount, 0);
+
+    // Re-read remaining addon credits for the response
+    const addonRemaining = Math.max(addonTotal - addonConsumed, 0);
+
+    if (addonConsumed >= stillNeeded) {
+      // Fully satisfied by base + add-on credits — no overage
+      return {
+        allowed: true, isOverage: false, isAddon: true,
+        resource, used: used + fromBase, quota, remaining: 0,
+        addonRemaining, addonAllocations,
+        overageUnits: 0, overageUsd: 0, periodStart, periodEnd,
+      };
+    }
+
+    // 3. Paid plan — remainder goes to overage
+    const overageUnits = stillNeeded - addonConsumed;
     return {
-      allowed: true,
-      isOverage: true,
-      resource,
-      used: used + remaining,
-      quota,
-      remaining: 0,
-      overageUnits,
-      overageUsd: overageUnits * OVERAGE_RATES[resource],
-      periodStart,
-      periodEnd,
+      allowed: true, isOverage: true, isAddon: addonConsumed > 0,
+      resource, used: used + fromBase, quota, remaining: 0,
+      addonRemaining, addonAllocations,
+      overageUnits, overageUsd: 0, // filled in below after reading rates (outside TX)
+      periodStart, periodEnd,
     };
   });
 
   // Record overage outside the main TX (fire-and-forget; Stripe call can't be in a PG tx)
   if (result.isOverage && result.overageUnits > 0) {
+    const rates = await getOverageRates();
+    const overageUsd = result.overageUnits * rates[resource];
+    (result as QuotaCheckResult).overageUsd = overageUsd;
+
     recordOverageCharge(vendor, resource, result.overageUnits, result.periodStart).catch((err) => {
       logger.error({ err, vendorId: vendor.id, resource }, "[overage] Failed to record overage charge");
     });
   }
 
-  return result;
+  return result as QuotaCheckResult;
 }
 
 /**
  * Refunds `amount` of previously-consumed quota. Same advisory-lock pattern
  * as `consumeQuota` so a release racing a concurrent consume can't corrupt
  * the count.
+ *
+ * When the original consumption drew from add-on credits, pass the
+ * `addonAllocations` array from the QuotaCheckResult so that those exact
+ * credit rows are restored. For partial refunds (e.g. voice reservation
+ * partially settled), addon credits are restored first (up to the total
+ * originally allocated), then the remainder comes from base quota.
  */
 export async function releaseQuota(
   vendorId: number,
   resource: ResourceKey,
   amount: number,
   periodStart: Date,
-  executor: Pick<typeof db, "transaction"> = db,
+  executorOrAllocations?: Pick<typeof db, "transaction"> | ReadonlyArray<AddonAllocation>,
+  legacyExecutor?: Pick<typeof db, "transaction">,
 ): Promise<void> {
   if (amount <= 0) return;
+
+  // Overload resolution: accept the old 5-arg signature (executor only) and a
+  // new 6-arg signature (allocations + executor).  Detect by checking whether
+  // the 5th argument is an array.
+  let addonAllocations: ReadonlyArray<AddonAllocation> = [];
+  let executor: Pick<typeof db, "transaction"> = db;
+
+  if (Array.isArray(executorOrAllocations)) {
+    addonAllocations = executorOrAllocations as ReadonlyArray<AddonAllocation>;
+    executor = legacyExecutor ?? db;
+  } else if (executorOrAllocations != null) {
+    executor = executorOrAllocations as Pick<typeof db, "transaction">;
+  }
+
   const lockKey = `resource_usage:${vendorId}:${resource}:${periodStart.toISOString()}`;
+  // Same addon lock as in consumeQuotaTx — period-independent, so a
+  // cross-period voice refund cannot race a concurrent new consumption on the
+  // same vendor_addon_credits rows.
+  const addonLockKey = `addon_credits:${vendorId}:${resource}`;
   await executor.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
-    await tx
-      .update(resourceUsageTable)
-      .set({ used: sql`GREATEST(${resourceUsageTable.used} - ${amount}, 0)`, updatedAt: new Date() })
-      .where(and(
-        eq(resourceUsageTable.vendorId, vendorId),
-        eq(resourceUsageTable.resource, resource),
-        eq(resourceUsageTable.periodStart, periodStart),
-      ));
+    if (addonAllocations.length > 0) {
+      // Only acquire the addon lock when we actually need to touch addon rows.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${addonLockKey}))`);
+    }
+
+    // Restore add-on credits first — they were consumed last (after base quota),
+    // so a partial release should unwind the "top" of the stack first.
+    // For each allocation record, restore min(releaseLeft, allocated) units.
+    let releaseLeft = amount;
+    for (const alloc of addonAllocations) {
+      if (releaseLeft <= 0) break;
+      const toRestore = Math.min(releaseLeft, alloc.amount);
+      if (toRestore <= 0) continue;
+      await tx
+        .update(vendorAddonCreditsTable)
+        .set({
+          unitsRemaining: sql`${vendorAddonCreditsTable.unitsRemaining} + ${toRestore}`,
+          // Re-activate an exhausted row that is receiving units back
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(vendorAddonCreditsTable.id, alloc.id),
+          eq(vendorAddonCreditsTable.vendorId, vendorId),
+        ));
+      releaseLeft -= toRestore;
+    }
+
+    // Restore any remaining amount from base quota
+    if (releaseLeft > 0) {
+      await tx
+        .update(resourceUsageTable)
+        .set({ used: sql`GREATEST(${resourceUsageTable.used} - ${releaseLeft}, 0)`, updatedAt: new Date() })
+        .where(and(
+          eq(resourceUsageTable.vendorId, vendorId),
+          eq(resourceUsageTable.resource, resource),
+          eq(resourceUsageTable.periodStart, periodStart),
+        ));
+    }
   });
 }
 
@@ -397,6 +654,7 @@ export interface UsageSummaryEntry {
   used: number;
   quota: number;
   remaining: number;
+  addonCredits: number;      // total active add-on credits remaining
   overageUnits: number;
   overageUsd: number;
   overageRate: number;
@@ -415,6 +673,7 @@ export async function getUsageSummary(vendor: Vendor): Promise<{
   const periodStart = getBillingPeriodStart(vendor);
   const periodEnd = getBillingPeriodEnd(periodStart);
   const paid = isPaidTier(vendor);
+  const rates = await getOverageRates();
 
   const usage = await Promise.all(RESOURCE_KEYS.map(async (resource) => {
     const used = await getUsedAmount(vendor.id, resource, periodStart);
@@ -434,15 +693,19 @@ export async function getUsageSummary(vendor: Vendor): Promise<{
     const overageUnits = overageRow ? Number(overageRow.units) : 0;
     const overageUsd = overageRow ? Number(overageRow.totalUsd) : 0;
 
+    // Fetch total remaining add-on credits for this resource
+    const addonCredits = await getAddonCreditsRemaining(vendor.id, resource);
+
     return {
       resource,
       label: RESOURCE_LABEL[resource],
       used,
       quota,
       remaining: Math.max(quota - used, 0),
+      addonCredits,
       overageUnits,
       overageUsd,
-      overageRate: OVERAGE_RATES[resource],
+      overageRate: rates[resource],
     };
   }));
 

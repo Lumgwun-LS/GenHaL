@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2 } from "lucide-react";
+import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2, TrendingUp } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -41,6 +41,15 @@ interface PaymentGateways {
   paystack: boolean;
 }
 
+interface OverageRates {
+  aiImages: number;
+  aiVideos: number;
+  aiCaptions: number;
+  voiceMinutes: number;
+  sms: number;
+  email: number;
+}
+
 // Mirrors PLAN_RESOURCE_UNIT_COSTS in artifacts/api-server/src/lib/subscription-plans.ts —
 // shown here only as a reference so an admin can see roughly what a plan's
 // bundled quota costs the platform before repricing it. Not sent to the server.
@@ -60,17 +69,41 @@ function estimatedResourceCost(quotas: PlanQuotas): number {
   );
 }
 
-async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways }> {
+const DEFAULT_OVERAGE_RATES: OverageRates = {
+  aiImages: 0.50,
+  aiVideos: 1.00,
+  aiCaptions: 0.05,
+  voiceMinutes: 0.15,
+  sms: 0.05,
+  email: 0.01,
+};
+
+async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways; overageRates: OverageRates }> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plans");
   const content = (await res.json()) as {
     "billing.subscriptionPlans": { plans: Plan[] };
     "billing.paymentGateways"?: PaymentGateways;
+    "billing.overageRates"?: OverageRates;
   };
   return {
     plans: content["billing.subscriptionPlans"].plans,
     gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true },
+    overageRates: content["billing.overageRates"] ?? DEFAULT_OVERAGE_RATES,
   };
+}
+
+async function saveOverageRates(rates: OverageRates): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.overageRates`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value: rates }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save overage rates");
+  }
 }
 
 async function savePlans(plans: Plan[]): Promise<void> {
@@ -210,19 +243,31 @@ function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => vo
   );
 }
 
+const OVERAGE_RATE_FIELDS: { key: keyof OverageRates; label: string; hint: string }[] = [
+  { key: "aiImages",     label: "AI image",         hint: "per image generated" },
+  { key: "aiVideos",     label: "AI video",         hint: "per video generated" },
+  { key: "aiCaptions",   label: "AI caption",       hint: "per caption generated" },
+  { key: "voiceMinutes", label: "Voice minute",      hint: "per minute of voice calls" },
+  { key: "sms",          label: "SMS",              hint: "per SMS sent" },
+  { key: "email",        label: "Email",            hint: "per email sent" },
+];
+
 export default function PlansEditor() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["admin-subscription-plans"], queryFn: fetchPlans });
   const [draft, setDraft] = useState<Plan[]>([]);
   const [gateways, setGateways] = useState<PaymentGateways>({ stripe: true, paystack: true });
+  const [overageRates, setOverageRates] = useState<OverageRates>(DEFAULT_OVERAGE_RATES);
   const [seeded, setSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingGateways, setSavingGateways] = useState(false);
+  const [savingRates, setSavingRates] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
     if (data && !seeded) {
       setDraft(data.plans);
       setGateways(data.gateways);
+      setOverageRates(data.overageRates);
       setSeeded(true);
     }
   }, [data, seeded]);
@@ -239,6 +284,20 @@ export default function PlansEditor() {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveRates() {
+    setSavingRates(true);
+    try {
+      await saveOverageRates(overageRates);
+      toast.success("Overage rates saved. New rates apply to all future charges and add-on purchases.");
+      qc.invalidateQueries({ queryKey: ["admin-subscription-plans"] });
+      qc.invalidateQueries({ queryKey: ["admin-site-content"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingRates(false);
     }
   }
 
@@ -318,6 +377,44 @@ export default function PlansEditor() {
               disabled={savingGateways}
               onCheckedChange={(v) => toggleGateway("paystack", v)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Overage & add-on unit pricing */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-amber-400" />
+            Pay-as-you-go & Add-on Pricing
+          </CardTitle>
+          <CardDescription>
+            USD per unit charged when a paid-tier vendor exhausts their included credits (automatic overage) or when any vendor proactively buys extra capacity for a resource (add-on bundle). Priced at ~2.5–3× platform cost. Changes take effect immediately.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {OVERAGE_RATE_FIELDS.map(({ key, label, hint }) => (
+              <Field key={key} label={`${label} (USD)`}>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.001"
+                  value={overageRates[key]}
+                  onChange={(e) => setOverageRates({ ...overageRates, [key]: Number(e.target.value) })}
+                />
+                <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>
+              </Field>
+            ))}
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            These rates apply to: (1) automatic pay-as-you-go billing when a paid-tier vendor goes beyond their included monthly credits, and (2) the price shown to any vendor purchasing an add-on bundle from the usage view. Keep each rate at ≥ 2.5× the platform unit cost shown in the margin estimates above.
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={saveRates} disabled={savingRates}>
+              {savingRates ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Save overage rates
+            </Button>
           </div>
         </CardContent>
       </Card>

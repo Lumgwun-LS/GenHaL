@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, jsonb } from "drizzle-orm/pg-core";
 
 /**
  * Records every outbound voice call placed by the platform.
@@ -32,6 +32,11 @@ export const voiceCallLogsTable = pgTable("voice_call_logs", {
   // since rolled over (e.g. a tier change mid-call).
   reservedMinutes: numeric("reserved_minutes"),
   reservedPeriodStart: timestamp("reserved_period_start", { withTimezone: true }),
+  // JSON array of {id, amount} pairs recording which vendor_addon_credits rows
+  // were consumed during the reservation. Stored at call-placement time so the
+  // voice-status-callback can pass them to releaseQuota and restore the exact
+  // add-on credits when refunding unused reservation minutes.
+  reservedAddonAllocations: jsonb("reserved_addon_allocations").$type<Array<{id: number; amount: number}>>(),
 });
 
 export type VoiceCallLog = typeof voiceCallLogsTable.$inferSelect;

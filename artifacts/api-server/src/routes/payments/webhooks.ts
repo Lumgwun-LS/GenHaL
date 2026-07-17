@@ -17,7 +17,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { db, paymentsTable, ordersTable, vendorsTable, webhookEventsTable, vendorNotificationsTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, vendorsTable, webhookEventsTable, vendorNotificationsTable, vendorAddonCreditsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { sendSlackAlert } from "../../lib/slack";
 import {
@@ -444,6 +444,50 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
         );
         return { matched: false };
       }
+    } else if (session?.metadata?.addonCreditId) {
+      // ── Add-on credit purchase path ─────────────────────────────────
+      const addonCreditId = parseInt(session.metadata.addonCreditId);
+      const [addon] = await db
+        .select()
+        .from(vendorAddonCreditsTable)
+        .where(eq(vendorAddonCreditsTable.id, addonCreditId))
+        .limit(1);
+
+      if (!addon) {
+        console.warn(`[stripe webhook] addon checkout — no matching vendor_addon_credits row for id=${addonCreditId} session=${session.id}`);
+        return { matched: false };
+      }
+
+      if (addon.status !== "pending") {
+        // Already activated (duplicate webhook delivery) — safe no-op
+        console.info(`[stripe webhook] addon checkout — already activated addonCreditId=${addonCreditId} status=${addon.status}`);
+        return { matched: true };
+      }
+
+      await db
+        .update(vendorAddonCreditsTable)
+        .set({
+          status: "active",
+          unitsRemaining: addon.unitsGranted,
+          gatewayPaymentId: session.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(vendorAddonCreditsTable.id, addonCreditId));
+
+      console.info(
+        `[stripe webhook] addon credits activated — addonCreditId=${addonCreditId} vendor=${addon.vendorId} resource=${addon.resource} units=${addon.unitsGranted} session=${session.id}`,
+      );
+
+      // Send in-app notification to vendor
+      try {
+        await db.insert(vendorNotificationsTable).values({
+          vendorId: addon.vendorId,
+          type: "addon_credits_activated",
+          message: `Your add-on purchase of ${addon.unitsGranted} extra ${addon.resource} credits is now active and ready to use.`,
+        });
+      } catch (notifyErr) {
+        console.warn("[stripe webhook] Failed to insert addon notification:", notifyErr);
+      }
     } else {
       // ── Regular order checkout path ─────────────────────────────────
       const orderId = session.metadata?.orderId ? parseInt(session.metadata.orderId) : null;
@@ -776,7 +820,7 @@ interface PaystackWebhookEvent {
   data: {
     id?: number | string;
     reference?: string;
-    metadata?: { orderId?: string; upgradeVendorId?: string; upgradeTier?: string };
+    metadata?: { orderId?: string; upgradeVendorId?: string; upgradeTier?: string; addonCreditId?: string; addonVendorId?: string; addonResource?: string; addonQuantity?: string };
     plan?: { plan_code?: string } | null;
     plan_object?: { plan_code?: string } | null;
     subscription_code?: string;
@@ -813,6 +857,54 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
       } else {
         console.info(`[paystack webhook] subscription upgrade — vendor=${upgradeVendorId} tier=${upgradeTier} reference=${reference}`);
       }
+      return { matched: true };
+    }
+
+    // ── Add-on credit purchase path ──────────────────────────────────────
+    const addonCreditId = metadata?.addonCreditId ? parseInt(metadata.addonCreditId) : null;
+    if (addonCreditId) {
+      const [addon] = await db
+        .select()
+        .from(vendorAddonCreditsTable)
+        .where(eq(vendorAddonCreditsTable.id, addonCreditId))
+        .limit(1);
+
+      if (!addon) {
+        console.warn(`[paystack webhook] addon charge — no matching vendor_addon_credits row for id=${addonCreditId} reference=${reference}`);
+        return { matched: false };
+      }
+
+      if (addon.status !== "pending") {
+        // Already activated (duplicate webhook delivery) — safe no-op
+        console.info(`[paystack webhook] addon charge — already activated addonCreditId=${addonCreditId} status=${addon.status}`);
+        return { matched: true };
+      }
+
+      await db
+        .update(vendorAddonCreditsTable)
+        .set({
+          status: "active",
+          unitsRemaining: addon.unitsGranted,
+          gatewayPaymentId: reference,
+          updatedAt: new Date(),
+        })
+        .where(eq(vendorAddonCreditsTable.id, addonCreditId));
+
+      console.info(
+        `[paystack webhook] addon credits activated — addonCreditId=${addonCreditId} vendor=${addon.vendorId} resource=${addon.resource} units=${addon.unitsGranted} reference=${reference}`,
+      );
+
+      // Send in-app notification to vendor
+      try {
+        await db.insert(vendorNotificationsTable).values({
+          vendorId: addon.vendorId,
+          type: "addon_credits_activated",
+          message: `Your add-on purchase of ${addon.unitsGranted} extra ${addon.resource} credits is now active and ready to use.`,
+        });
+      } catch (notifyErr) {
+        console.warn("[paystack webhook] Failed to insert addon notification:", notifyErr);
+      }
+
       return { matched: true };
     }
 

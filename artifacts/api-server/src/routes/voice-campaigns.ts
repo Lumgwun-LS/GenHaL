@@ -81,11 +81,11 @@ export async function runCampaignCalls(
 
       const result = await placeCall({ to: lead.phone!, message: script, purpose: "campaign", vendorId, campaignId });
 
-      if (result.status !== "placed" && usageVendor && reservationPeriodStart) {
+      if (result.status !== "placed" && usageVendor && reservationPeriodStart && reservation) {
         // Call never actually happened — give back the full reservation.
         // No voice_call_logs row exists for this attempt (no callSid to
         // settle against later), so this is the only settlement it gets.
-        await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart);
+        await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart, reservation.addonAllocations);
       }
 
       await db.insert(voiceCallLogsTable).values({
@@ -99,10 +99,12 @@ export async function runCampaignCalls(
         // actually placed — this is what voice-status-callback.ts uses to
         // settle the reservation against the exact period it was made in,
         // regardless of what the vendor's period looks like by the time the
-        // callback arrives.
-        ...(result.status === "placed" && usageVendor && reservationPeriodStart ? {
+        // callback arrives. Also persist the add-on allocation breakdown so
+        // the status callback can restore the exact credit rows on partial refund.
+        ...(result.status === "placed" && usageVendor && reservationPeriodStart && reservation ? {
           reservedMinutes: VOICE_CALL_RESERVATION_MINUTES.toString(),
           reservedPeriodStart: reservationPeriodStart,
+          reservedAddonAllocations: reservation.addonAllocations.length > 0 ? [...reservation.addonAllocations] : null,
         } : {}),
       });
 
@@ -205,9 +207,9 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
       { logId, campaignId: log.campaignId, reason: result.error, twilioStatus: result.status },
       "[voice-campaign] Manual retry did not succeed",
     );
-    if (usageVendor && reservationPeriodStart) {
+    if (usageVendor && reservationPeriodStart && reservation) {
       // Call never actually happened — give back the full reservation.
-      await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart);
+      await releaseQuota(usageVendor.id, "voiceMinutes", VOICE_CALL_RESERVATION_MINUTES, reservationPeriodStart, reservation.addonAllocations);
     }
     await db
       .update(voiceCallLogsTable)
@@ -233,9 +235,10 @@ export async function retryCampaignCall(logId: number): Promise<{ ok: true } | {
       // new call needs its own reservation settled independently once it
       // ends.
       meteredAt: null,
-      ...(usageVendor && reservationPeriodStart ? {
+      ...(usageVendor && reservationPeriodStart && reservation ? {
         reservedMinutes: VOICE_CALL_RESERVATION_MINUTES.toString(),
         reservedPeriodStart: reservationPeriodStart,
+        reservedAddonAllocations: reservation.addonAllocations.length > 0 ? [...reservation.addonAllocations] : null,
       } : {}),
     })
     .where(eq(voiceCallLogsTable.id, logId));

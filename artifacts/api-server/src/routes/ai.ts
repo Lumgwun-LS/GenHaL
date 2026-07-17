@@ -115,7 +115,7 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
     result = `Image generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
-  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart);
+  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart, quotaCheck.addonAllocations);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -207,7 +207,7 @@ router.post("/ai/generate-video-scenes", async (req, res): Promise<void> => {
 
     res.json(GenerateAiVideoScenesResponse.parse({ scenes: generations.map(serializeGeneration) }));
   } catch (err) {
-    await releaseQuota(vendorId, "aiImages", resolvedSceneCount, quotaCheck.periodStart);
+    await releaseQuota(vendorId, "aiImages", resolvedSceneCount, quotaCheck.periodStart, quotaCheck.addonAllocations);
     res.status(502).json({ error: `Scene generation failed: ${err instanceof Error ? err.message : "unknown error"}` });
   }
 });
@@ -246,7 +246,7 @@ router.post("/ai/regenerate-video-scene", async (req, res): Promise<void> => {
     result = `Scene regeneration failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
-  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart);
+  if (status === "failed") await releaseQuota(vendorId, "aiImages", 1, quotaCheck.periodStart, quotaCheck.addonAllocations);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -387,7 +387,7 @@ router.post("/ai/render-video", async (req, res): Promise<void> => {
     result = `Video generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
-  if (status === "failed") await releaseQuota(vendorId, "aiVideos", 1, quotaCheck.periodStart);
+  if (status === "failed") await releaseQuota(vendorId, "aiVideos", 1, quotaCheck.periodStart, quotaCheck.addonAllocations);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -453,7 +453,7 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
     result = `Caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
-  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart);
+  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart, quotaCheck.addonAllocations);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
@@ -613,7 +613,7 @@ router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
     result = `Video caption generation failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
 
-  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart);
+  if (status === "failed") await releaseQuota(vendorId, "aiCaptions", 1, quotaCheck.periodStart, quotaCheck.addonAllocations);
 
   const [generation] = await db.insert(aiGenerationsTable).values({
     vendorId,
