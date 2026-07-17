@@ -4725,6 +4725,57 @@ export const DeleteAdEmailCampaignResponse = zod.void()
 
 
 /**
+ * @summary List vendor ad platform connections
+ */
+export const ListVendorAdAccountsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "platform": zod.string(),
+  "externalAccountId": zod.string(),
+  "accountName": zod.string().nullish(),
+  "status": zod.string(),
+  "lastError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListVendorAdAccountsResponse = zod.array(ListVendorAdAccountsResponseItem)
+
+
+/**
+ * @summary Connect an ad account
+ */
+export const CreateVendorAdAccountBody = zod.object({
+  "platform": zod.string(),
+  "externalAccountId": zod.string(),
+  "accountName": zod.string().optional()
+})
+
+export const CreateVendorAdAccountResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "platform": zod.string(),
+  "externalAccountId": zod.string(),
+  "accountName": zod.string().nullish(),
+  "status": zod.string(),
+  "lastError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Disconnect an ad account
+ */
+export const DeleteVendorAdAccountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteVendorAdAccountResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Send email campaign to matching contacts via SMTP
  */
 export const SendAdEmailCampaignParams = zod.object({

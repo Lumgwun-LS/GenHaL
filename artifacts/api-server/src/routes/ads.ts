@@ -24,9 +24,18 @@ import {
   adCreativesTable,
   adCampaignAnalyticsTable,
   adEmailCampaignsTable,
+  vendorAdAccountsTable,
+  socialAccountsTable,
 } from "@workspace/db";
 import { sendEmail } from "../lib/mailer";
-import { publishAdCampaign, fetchAdAnalytics } from "../lib/ads-platforms";
+import { decrypt } from "../lib/encryption";
+import {
+  publishAdCampaign,
+  fetchAdAnalytics,
+  toAdPlatform,
+  toSocialPlatform,
+  type MetaAdCreds,
+} from "../lib/ads-platforms";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -363,7 +372,55 @@ router.post("/ads/campaigns/:id/publish", async (req, res): Promise<void> => {
 
   const [creative] = await db.select().from(adCreativesTable).where(eq(adCreativesTable.campaignId, id));
 
-  const result = await publishAdCampaign(campaign.platform, {
+  // ── Resolve per-vendor ad credentials ────────────────────────────────────
+  const adPlatform = toAdPlatform(campaign.platform);
+  let metaCreds: MetaAdCreds | undefined;
+  let twitterAccountId: string | undefined;
+
+  if (authed.vendorId) {
+    const [adAccount] = await db
+      .select()
+      .from(vendorAdAccountsTable)
+      .where(
+        and(
+          eq(vendorAdAccountsTable.vendorId, authed.vendorId),
+          eq(vendorAdAccountsTable.platform, adPlatform),
+        ),
+      );
+
+    if (adAccount) {
+      if (adPlatform === "meta") {
+        // Prefer the long-lived user token (refreshTokenEncrypted for Meta)
+        // as it carries the ads_management scope.
+        const socialPlatform = toSocialPlatform(campaign.platform);
+        const [social] = await db
+          .select({
+            accessTokenEncrypted: socialAccountsTable.accessTokenEncrypted,
+            refreshTokenEncrypted: socialAccountsTable.refreshTokenEncrypted,
+          })
+          .from(socialAccountsTable)
+          .where(
+            and(
+              eq(socialAccountsTable.vendorId, authed.vendorId),
+              eq(socialAccountsTable.platform, socialPlatform),
+              eq(socialAccountsTable.status, "active"),
+            ),
+          );
+
+        const tokenEnc = social?.refreshTokenEncrypted ?? social?.accessTokenEncrypted;
+        if (tokenEnc) {
+          metaCreds = {
+            accessToken: decrypt(tokenEnc),
+            adAccountId: adAccount.externalAccountId,
+          };
+        }
+      } else if (adPlatform === "twitter") {
+        twitterAccountId = adAccount.externalAccountId;
+      }
+    }
+  }
+
+  const campaignInput = {
     name: campaign.name,
     objective: campaign.objective,
     budgetAmount: campaign.budgetAmount,
@@ -377,7 +434,9 @@ router.post("/ads/campaigns/:id/publish", async (req, res): Promise<void> => {
       cta: creative.cta,
       imageUrl: creative.imageUrl,
     } : undefined,
-  });
+  };
+
+  const result = await publishAdCampaign(campaign.platform, campaignInput, metaCreds, twitterAccountId);
 
   if (!result.connected) {
     // Update campaign status to reflect the error, but don't fail the request
@@ -527,7 +586,43 @@ router.get("/ads/campaigns/:id/analytics/sync", async (req, res): Promise<void> 
   const until = now.toISOString().slice(0, 10);
   const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const result = await fetchAdAnalytics(campaign.platform, campaign.platformCampaignId, since, until);
+  // Resolve ad credentials for analytics fetch
+  const syncAdPlatform = toAdPlatform(campaign.platform);
+  let syncMetaCreds: Pick<MetaAdCreds, "accessToken"> | undefined;
+  let syncTwitterAccountId: string | undefined;
+
+  if (authed.vendorId) {
+    const [adAcct] = await db
+      .select()
+      .from(vendorAdAccountsTable)
+      .where(
+        and(
+          eq(vendorAdAccountsTable.vendorId, authed.vendorId),
+          eq(vendorAdAccountsTable.platform, syncAdPlatform),
+        ),
+      );
+
+    if (adAcct) {
+      if (syncAdPlatform === "meta") {
+        const [social] = await db
+          .select({ refreshTokenEncrypted: socialAccountsTable.refreshTokenEncrypted, accessTokenEncrypted: socialAccountsTable.accessTokenEncrypted })
+          .from(socialAccountsTable)
+          .where(
+            and(
+              eq(socialAccountsTable.vendorId, authed.vendorId),
+              eq(socialAccountsTable.platform, toSocialPlatform(campaign.platform)),
+              eq(socialAccountsTable.status, "active"),
+            ),
+          );
+        const enc = social?.refreshTokenEncrypted ?? social?.accessTokenEncrypted;
+        if (enc) syncMetaCreds = { accessToken: decrypt(enc) };
+      } else if (syncAdPlatform === "twitter") {
+        syncTwitterAccountId = adAcct.externalAccountId;
+      }
+    }
+  }
+
+  const result = await fetchAdAnalytics(campaign.platform, campaign.platformCampaignId, since, until, syncMetaCreds, syncTwitterAccountId);
   if (!result.connected) {
     const cached = await db.select().from(adCampaignAnalyticsTable).where(eq(adCampaignAnalyticsTable.campaignId, id)).orderBy(adCampaignAnalyticsTable.date);
     res.json({ synced: false, reason: result.error, data: cached.map(serializeAnalytics) });
@@ -815,5 +910,103 @@ function serializeEmailCampaign(c: typeof adEmailCampaignsTable.$inferSelect) {
     updatedAt: c.updatedAt.toISOString(),
   };
 }
+
+// ── Vendor Ad Accounts ────────────────────────────────────────────────────────
+
+function serializeAdAccount(a: typeof vendorAdAccountsTable.$inferSelect) {
+  return {
+    id: a.id,
+    vendorId: a.vendorId,
+    platform: a.platform,
+    externalAccountId: a.externalAccountId,
+    accountName: a.accountName ?? null,
+    status: a.status,
+    lastError: a.lastError ?? null,
+    createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString(),
+  };
+}
+
+/** GET /ads/ad-accounts — list vendor's connected ad platform accounts */
+router.get("/ads/ad-accounts", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!authed.vendorId) { res.json([]); return; }
+
+  const rows = await db
+    .select()
+    .from(vendorAdAccountsTable)
+    .where(eq(vendorAdAccountsTable.vendorId, authed.vendorId))
+    .orderBy(vendorAdAccountsTable.platform);
+
+  res.json(rows.map(serializeAdAccount));
+});
+
+/** POST /ads/ad-accounts — connect an ad account */
+router.post("/ads/ad-accounts", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!authed.vendorId) { res.status(403).json({ error: "Vendor account required" }); return; }
+
+  const { platform, externalAccountId, accountName } = req.body as {
+    platform?: string;
+    externalAccountId?: string;
+    accountName?: string;
+  };
+  if (!platform || !externalAccountId) {
+    res.status(400).json({ error: "platform and externalAccountId are required" });
+    return;
+  }
+
+  // Upsert — one ad account per platform per vendor
+  const [existing] = await db
+    .select({ id: vendorAdAccountsTable.id })
+    .from(vendorAdAccountsTable)
+    .where(and(
+      eq(vendorAdAccountsTable.vendorId, authed.vendorId),
+      eq(vendorAdAccountsTable.platform, platform),
+    ));
+
+  if (existing) {
+    const [updated] = await db
+      .update(vendorAdAccountsTable)
+      .set({ externalAccountId, accountName: accountName ?? null, status: "active", lastError: null })
+      .where(eq(vendorAdAccountsTable.id, existing.id))
+      .returning();
+    res.json(serializeAdAccount(updated));
+    return;
+  }
+
+  const [created] = await db
+    .insert(vendorAdAccountsTable)
+    .values({
+      vendorId: authed.vendorId,
+      platform,
+      externalAccountId,
+      accountName: accountName ?? null,
+    })
+    .returning();
+  res.status(201).json(serializeAdAccount(created));
+});
+
+/** DELETE /ads/ad-accounts/:id — disconnect an ad account */
+router.delete("/ads/ad-accounts/:id", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const [adAccount] = await db
+    .select()
+    .from(vendorAdAccountsTable)
+    .where(eq(vendorAdAccountsTable.id, id));
+
+  if (!adAccount) { res.status(404).json({ error: "Ad account not found" }); return; }
+  if (!authed.isAdmin && adAccount.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  await db.delete(vendorAdAccountsTable).where(eq(vendorAdAccountsTable.id, id));
+  res.json({ ok: true });
+});
 
 export default router;

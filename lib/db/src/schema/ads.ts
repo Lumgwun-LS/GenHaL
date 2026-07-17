@@ -109,3 +109,37 @@ export const adEmailCampaignsTable = pgTable("ad_email_campaigns", {
 }, (t) => [index("idx_ad_email_campaigns_vendor").on(t.vendorId)]);
 
 export type AdEmailCampaign = typeof adEmailCampaignsTable.$inferSelect;
+
+// ── Vendor Ad Accounts ────────────────────────────────────────────────────────
+// Stores the per-vendor ad platform connection: which ad account ID the vendor
+// has authorised us to manage on each platform.
+
+export const vendorAdAccountsTable = pgTable("vendor_ad_accounts", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  /**
+   * Canonical platform key used internally.
+   * "meta"    — covers Facebook Ads and Instagram Ads
+   * "twitter" — X / Twitter Ads
+   * "linkedin" | "google" | "tiktok" — future platforms
+   */
+  platform: text("platform").notNull(),
+  /**
+   * Platform-assigned Ad Account ID supplied by the vendor.
+   * Meta:    "act_XXXXXXXXXX"  (Business Manager → Ad Accounts)
+   * Twitter: numeric account ID from ads.twitter.com/accounts
+   */
+  externalAccountId: text("external_account_id").notNull(),
+  /** Display label shown in the UI (optional, set by vendor). */
+  accountName: text("account_name"),
+  /** "active" | "error" | "disconnected" */
+  status: text("status").notNull().default("active"),
+  /** Human-readable error from the last operation, cleared on success. */
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  index("idx_vendor_ad_accounts_vendor").on(t.vendorId),
+]);
+
+export type VendorAdAccount = typeof vendorAdAccountsTable.$inferSelect;

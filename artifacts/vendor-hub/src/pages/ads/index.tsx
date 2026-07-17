@@ -21,15 +21,19 @@ import {
   useDeleteAdEmailCampaign,
   useSendAdEmailCampaign,
   getListAdEmailCampaignsQueryKey,
+  useListVendorAdAccounts,
+  useCreateVendorAdAccount,
+  useDeleteVendorAdAccount,
+  getListVendorAdAccountsQueryKey,
   useGenerateAiCaption,
   useGenerateAiImage,
   type AdCampaign,
   type AdContact,
   type AdEmailCampaign,
   type AdAnalyticsSnapshot,
+  type VendorAdAccount,
   type AdContactImportResult,
   type AdPublishResult,
-  type AdPublishResultStatus,
   type AdEmailSendResult,
   type AiGeneration,
 } from "@workspace/api-client-react";
@@ -692,6 +696,201 @@ function AdsCreatorTab() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PLATFORM CONNECTIONS PANEL
+// ════════════════════════════════════════════════════════════════════════════
+
+type PlatformDef = {
+  key: string;         // canonical ad-account platform key
+  label: string;
+  description: string;
+  readiness: "ready" | "pending_approval" | "needs_setup";
+  pendingNote?: string;
+};
+
+const PLATFORM_DEFS: PlatformDef[] = [
+  {
+    key: "meta",
+    label: "Meta — Facebook + Instagram",
+    description: "Facebook Ads and Instagram Ads via the Marketing API",
+    readiness: "ready",
+  },
+  {
+    key: "twitter",
+    label: "X (Twitter) Ads",
+    description: "Requires X_ADS_CONSUMER_KEY, X_ADS_CONSUMER_SECRET, X_ADS_ACCESS_TOKEN, X_ADS_ACCESS_TOKEN_SECRET in Replit secrets",
+    readiness: "ready",
+  },
+  {
+    key: "linkedin",
+    label: "LinkedIn Ads",
+    description: "Apply at linkedin.com/help/lms for Marketing Developer Platform access",
+    readiness: "pending_approval",
+    pendingNote: "Apply for LinkedIn Marketing Developer Platform access first.",
+  },
+  {
+    key: "google",
+    label: "Google Ads + YouTube",
+    description: "Requires a Google Ads Developer Token and OAuth setup",
+    readiness: "needs_setup",
+    pendingNote: "Set up a Google Cloud project with the Google Ads API enabled and obtain a Developer Token.",
+  },
+  {
+    key: "tiktok",
+    label: "TikTok for Business",
+    description: "Requires TikTok App with Ads API access",
+    readiness: "needs_setup",
+    pendingNote: "Create a TikTok for Business developer app and apply for Ads API access.",
+  },
+];
+
+function PlatformConnectionsPanel() {
+  const qc = useQueryClient();
+  const { data: adAccounts = [] } = useListVendorAdAccounts();
+  const createAdAccount = useCreateVendorAdAccount();
+  const deleteAdAccount = useDeleteVendorAdAccount();
+
+  const [connectOpen, setConnectOpen] = useState<string | null>(null); // platform key
+  const [accountIdInput, setAccountIdInput] = useState("");
+  const [accountNameInput, setAccountNameInput] = useState("");
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListVendorAdAccountsQueryKey() });
+
+  const getAccount = (platformKey: string): VendorAdAccount | undefined =>
+    adAccounts.find((a) => a.platform === platformKey);
+
+  const handleConnect = async () => {
+    if (!connectOpen || !accountIdInput.trim()) {
+      toast.error("Account ID is required");
+      return;
+    }
+    try {
+      await createAdAccount.mutateAsync({
+        data: {
+          platform: connectOpen,
+          externalAccountId: accountIdInput.trim(),
+          accountName: accountNameInput.trim() || undefined,
+        },
+      });
+      invalidate();
+      toast.success("Ad account connected");
+      setConnectOpen(null);
+      setAccountIdInput("");
+      setAccountNameInput("");
+    } catch {
+      toast.error("Failed to connect ad account");
+    }
+  };
+
+  const handleDisconnect = async (id: number) => {
+    try {
+      await deleteAdAccount.mutateAsync({ id });
+      invalidate();
+      toast.success("Ad account disconnected");
+    } catch {
+      toast.error("Failed to disconnect");
+    }
+  };
+
+  const connectingPlatform = PLATFORM_DEFS.find((p) => p.key === connectOpen);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold">Platform Connections</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Connect your ad accounts to publish campaigns directly from Awa Biz Suite.
+        </p>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-2">
+        {PLATFORM_DEFS.map((p) => {
+          const account = getAccount(p.key);
+          return (
+            <div key={p.key} className="flex items-center gap-3 py-2 border-b last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{p.label}</p>
+                <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                {account && (
+                  <p className="text-xs text-emerald-600 mt-0.5 font-mono">{account.externalAccountId}</p>
+                )}
+                {p.pendingNote && !account && (
+                  <p className="text-xs text-amber-600 mt-0.5">{p.pendingNote}</p>
+                )}
+              </div>
+              <div className="shrink-0">
+                {p.readiness === "ready" ? (
+                  account ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default" className="text-[10px]">Connected</Badge>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDisconnect(account.id)}>
+                        <X className="w-3 h-3 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => { setConnectOpen(p.key); setAccountIdInput(""); setAccountNameInput(""); }}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Connect
+                    </Button>
+                  )
+                ) : (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {p.readiness === "pending_approval" ? "Pending approval" : "Needs setup"}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+
+      <Dialog open={!!connectOpen} onOpenChange={(o) => { if (!o) setConnectOpen(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect {connectingPlatform?.label}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {connectOpen === "meta" && (
+              <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <p className="font-medium">Where to find your Meta Ad Account ID:</p>
+                <p>Go to <strong>Facebook Business Manager → Ad Accounts</strong>. Your account ID starts with <code>act_</code> (e.g. act_123456789).</p>
+              </div>
+            )}
+            {connectOpen === "twitter" && (
+              <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <p className="font-medium">Where to find your X Ads Account ID:</p>
+                <p>Go to <strong>ads.twitter.com/accounts</strong>. Your account ID is the alphanumeric code in the URL (e.g. abc12def).</p>
+                <p className="mt-1">Also add these to your Replit secrets: <code>X_ADS_CONSUMER_KEY</code>, <code>X_ADS_CONSUMER_SECRET</code>, <code>X_ADS_ACCESS_TOKEN</code>, <code>X_ADS_ACCESS_TOKEN_SECRET</code>.</p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label>Ad Account ID *</Label>
+              <Input
+                value={accountIdInput}
+                onChange={(e) => setAccountIdInput(e.target.value)}
+                placeholder={connectOpen === "meta" ? "act_123456789" : "abc12def3456"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Label <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input
+                value={accountNameInput}
+                onChange={(e) => setAccountNameInput(e.target.value)}
+                placeholder="My business ad account"
+              />
+            </div>
+            <Button className="w-full" onClick={handleConnect} disabled={createAdAccount.isPending}>
+              {createAdAccount.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Connect
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // ADS MANAGER TAB
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -848,7 +1047,7 @@ function AdsManagerTab() {
     try {
       const result: AdPublishResult = await publishCampaign.mutateAsync({ id });
       invalidate();
-      if (result.status === ("not_connected" as typeof AdPublishResultStatus[keyof typeof AdPublishResultStatus])) {
+      if (result.status === "not_connected") {
         toast.warning("Campaign queued — connect platform credentials in Social Hub to activate");
       } else {
         toast.success(result.message ?? "Campaign published");
@@ -878,6 +1077,8 @@ function AdsManagerTab() {
       {editTarget && (
         <EditCampaignDialog campaign={editTarget} onClose={() => setEditTarget(null)} />
       )}
+
+      <PlatformConnectionsPanel />
 
       {isLoading ? (
         <div className="flex items-center justify-center h-40 text-muted-foreground">Loading campaigns…</div>

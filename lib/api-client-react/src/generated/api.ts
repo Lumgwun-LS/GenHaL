@@ -59,6 +59,7 @@ import type {
   BulkVendorNotificationResult,
   CampaignSendResult,
   ConnectionWarningsResponse,
+  DeleteVendorAdAccount200,
   DeletionEligibility,
   DeletionRequestResult,
   DeletionVerifyInput,
@@ -183,6 +184,8 @@ import type {
   StoreReviewFlagInput,
   StoreReviewInput,
   Vendor,
+  VendorAdAccount,
+  VendorAdAccountInput,
   VendorInput,
   VendorNotification,
   VendorNotificationInput,
@@ -13278,6 +13281,223 @@ export const useDeleteAdEmailCampaign = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteAdEmailCampaignMutationOptions(options));
+    }
+
+export const getListVendorAdAccountsUrl = () => {
+
+
+
+
+  return `/api/ads/ad-accounts`
+}
+
+/**
+ * @summary List vendor ad platform connections
+ */
+export const listVendorAdAccounts = async ( options?: RequestInit): Promise<VendorAdAccount[]> => {
+
+  return customFetch<VendorAdAccount[]>(getListVendorAdAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVendorAdAccountsQueryKey = () => {
+    return [
+    `/api/ads/ad-accounts`
+    ] as const;
+    }
+
+
+export const getListVendorAdAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listVendorAdAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendorAdAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVendorAdAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVendorAdAccounts>>> = ({ signal }) => listVendorAdAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVendorAdAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVendorAdAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listVendorAdAccounts>>>
+export type ListVendorAdAccountsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List vendor ad platform connections
+ */
+
+export function useListVendorAdAccounts<TData = Awaited<ReturnType<typeof listVendorAdAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendorAdAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVendorAdAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVendorAdAccountUrl = () => {
+
+
+
+
+  return `/api/ads/ad-accounts`
+}
+
+/**
+ * @summary Connect an ad account
+ */
+export const createVendorAdAccount = async (vendorAdAccountInput: VendorAdAccountInput, options?: RequestInit): Promise<VendorAdAccount> => {
+
+  return customFetch<VendorAdAccount>(getCreateVendorAdAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorAdAccountInput)
+  }
+);}
+
+
+
+
+export const getCreateVendorAdAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVendorAdAccount>>, TError,{data: BodyType<VendorAdAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVendorAdAccount>>, TError,{data: BodyType<VendorAdAccountInput>}, TContext> => {
+
+const mutationKey = ['createVendorAdAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVendorAdAccount>>, {data: BodyType<VendorAdAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVendorAdAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVendorAdAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createVendorAdAccount>>>
+    export type CreateVendorAdAccountMutationBody = BodyType<VendorAdAccountInput>
+    export type CreateVendorAdAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Connect an ad account
+ */
+export const useCreateVendorAdAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVendorAdAccount>>, TError,{data: BodyType<VendorAdAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVendorAdAccount>>,
+        TError,
+        {data: BodyType<VendorAdAccountInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVendorAdAccountMutationOptions(options));
+    }
+
+export const getDeleteVendorAdAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/ads/ad-accounts/${id}`
+}
+
+/**
+ * @summary Disconnect an ad account
+ */
+export const deleteVendorAdAccount = async (id: number, options?: RequestInit): Promise<DeleteVendorAdAccount200> => {
+
+  return customFetch<DeleteVendorAdAccount200>(getDeleteVendorAdAccountUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteVendorAdAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVendorAdAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVendorAdAccount>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteVendorAdAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVendorAdAccount>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteVendorAdAccount(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVendorAdAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVendorAdAccount>>>
+
+    export type DeleteVendorAdAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Disconnect an ad account
+ */
+export const useDeleteVendorAdAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVendorAdAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVendorAdAccount>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteVendorAdAccountMutationOptions(options));
     }
 
 export const getSendAdEmailCampaignUrl = (id: number,) => {

@@ -1967,6 +1967,24 @@ export interface AdEmailSendResult {
   campaign?: AdEmailCampaign;
 }
 
+export interface VendorAdAccount {
+  id: number;
+  vendorId: number;
+  platform: string;
+  externalAccountId: string;
+  accountName?: string | null;
+  status: string;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VendorAdAccountInput {
+  platform: string;
+  externalAccountId: string;
+  accountName?: string;
+}
+
 export type ListVendorsParams = {
 search?: string;
 industry?: string;
@@ -2195,5 +2213,9 @@ search?: string;
 
 export type ListStoreDevelopersParams = {
 status?: string;
+};
+
+export type DeleteVendorAdAccount200 = {
+  ok: boolean;
 };
 

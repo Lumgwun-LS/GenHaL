@@ -3797,6 +3797,61 @@ paths:
         "204":
           description: Deleted
 
+  /ads/ad-accounts:
+    get:
+      operationId: listVendorAdAccounts
+      summary: List vendor ad platform connections
+      tags: [ads]
+      responses:
+        "200":
+          description: List of connected ad accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorAdAccount"
+    post:
+      operationId: createVendorAdAccount
+      summary: Connect an ad account
+      tags: [ads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorAdAccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorAdAccount"
+
+  /ads/ad-accounts/{id}:
+    delete:
+      operationId: deleteVendorAdAccount
+      summary: Disconnect an ad account
+      tags: [ads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+
   /ads/email-campaigns/{id}/send:
     post:
       operationId: sendAdEmailCampaign
@@ -7046,3 +7101,39 @@ components:
           type: integer
         campaign:
           $ref: "#/components/schemas/AdEmailCampaign"
+
+    VendorAdAccount:
+      type: object
+      required: [id, vendorId, platform, externalAccountId, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        platform:
+          type: string
+        externalAccountId:
+          type: string
+        accountName:
+          type: string
+          nullable: true
+        status:
+          type: string
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    VendorAdAccountInput:
+      type: object
+      required: [platform, externalAccountId]
+      properties:
+        platform:
+          type: string
+        externalAccountId:
+          type: string
+        accountName:
+          type: string
