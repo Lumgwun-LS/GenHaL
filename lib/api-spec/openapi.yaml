@@ -4604,6 +4604,12 @@ components:
             type: integer
         linkMode:
           type: string
+        force:
+          type: boolean
+          description: >
+            Reschedule anyway even though one or more selected platforms has no
+            usable connected account. Set this only after the vendor has seen
+            and acknowledged the connection warnings.
 
     # ─── AI ─────────────────────────────────────────────────────────────────
     AiGeneration:

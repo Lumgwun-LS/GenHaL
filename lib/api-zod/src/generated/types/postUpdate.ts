@@ -16,4 +16,6 @@ export interface PostUpdate {
   status?: string;
   productIds?: number[];
   linkMode?: string;
+  /** Reschedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings. */
+  force?: boolean;
 }

@@ -556,7 +556,8 @@ export const UpdatePostBody = zod.object({
   "hashtags": zod.string().optional(),
   "status": zod.string().optional(),
   "productIds": zod.array(zod.number()).optional(),
-  "linkMode": zod.string().optional()
+  "linkMode": zod.string().optional(),
+  "force": zod.boolean().optional().describe('Reschedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings.\n')
 })
 
 export const UpdatePostResponse = zod.object({
@@ -835,7 +836,9 @@ export const GenerateAiImageResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 
 
@@ -863,7 +866,9 @@ export const GenerateAiVideoScenesResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })).describe('One AiGeneration (type \"image\") per scene, in scene order. Each is swept by the same orphaned-media cleanup as any other AI image if never used in a render.')
 })
 
@@ -884,7 +889,9 @@ export const RegenerateAiVideoSceneResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 
 
@@ -912,7 +919,9 @@ export const RenderAiVideoResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 
 
@@ -935,7 +944,9 @@ export const GenerateAiCaptionResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 
 
@@ -984,7 +995,9 @@ export const AnalyzeVideoCaptionResponse = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 
 
@@ -1004,8 +1017,8 @@ export const ListAiGenerationsResponseItem = zod.object({
   "result": zod.string().nullish(),
   "status": zod.string(),
   "createdAt": zod.string(),
-  "mediaWarningSentAt": zod.string().nullish(),
-  "mediaDeletedAt": zod.string().nullish()
+  "mediaWarningSentAt": zod.string().nullish().describe('Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.'),
+  "mediaDeletedAt": zod.string().nullish().describe('Set when the media-cleanup job has deleted this generation\'s file from object storage. The result URL is kept for audit purposes but the file is gone.')
 })
 export const ListAiGenerationsResponse = zod.array(ListAiGenerationsResponseItem)
 

@@ -430,7 +430,7 @@ function UpcomingScheduleView({
   onCancelSchedule,
 }: {
   getPlatformIcon: (platform: string) => ReactNode;
-  onReschedule: (id: number, date: Date) => Promise<void>;
+  onReschedule: (id: number, date: Date, force?: boolean) => Promise<{ warnings?: { platform: string; message: string }[] } | void>;
   onCancelSchedule: (id: number) => void;
 }) {
   const { data: scheduled, isLoading } = useListScheduledPosts({
@@ -593,9 +593,21 @@ export default function Social() {
       return;
     }
   };
-  const handleReschedule = async (id: number, date: Date) => {
-    try { await updatePost.mutateAsync({ id, data: { scheduledAt: date.toISOString() } }); invalidatePosts(); toast.success(`Rescheduled for ${date.toLocaleString()}`); }
-    catch { toast.error("Failed to reschedule post"); }
+  const handleReschedule = async (id: number, date: Date, force?: boolean): Promise<{ warnings?: { platform: string; message: string }[] } | void> => {
+    try {
+      await updatePost.mutateAsync({ id, data: { scheduledAt: date.toISOString(), force } });
+      invalidatePosts();
+      toast.success(`Rescheduled for ${date.toLocaleString()}`);
+      return;
+    } catch (err: any) {
+      // A 409 carrying `warnings` means the only problem is a missing/broken
+      // platform connection — hand it back to the dialog so it can show the
+      // "confirm anyway" step, matching the initial-schedule flow exactly.
+      const warnings = err?.data?.warnings;
+      if (warnings && warnings.length > 0) return { warnings };
+      toast.error(err?.data?.error ?? "Failed to reschedule post");
+      return;
+    }
   };
   const handleCancelSchedule = async (id: number) => {
     try { await cancelSchedule.mutateAsync({ id }); invalidatePosts(); toast.success("Schedule cancelled — post moved back to draft"); }

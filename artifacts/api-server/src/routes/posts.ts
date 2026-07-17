@@ -132,7 +132,7 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdatePostBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { scheduledAt: saU, status: statusU, ...restUpdate } = parsed.data as typeof parsed.data & { status?: string };
+  const { scheduledAt: saU, status: statusU, force: forceReschedule, ...restUpdate } = parsed.data as typeof parsed.data & { status?: string; force?: boolean };
   if (statusU !== undefined) {
     // Status only ever moves through the dedicated /submit-for-review, /approve,
     // /request-changes, and /publish endpoints, which enforce the state machine and
@@ -154,7 +154,7 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
   // edits open to any authenticated caller regardless of ownership.
   {
     const [existing] = await db
-      .select({ vendorId: postsTable.vendorId, productIds: postsTable.productIds, linkMode: postsTable.linkMode, shareToken: postsTable.shareToken })
+      .select({ vendorId: postsTable.vendorId, productIds: postsTable.productIds, linkMode: postsTable.linkMode, shareToken: postsTable.shareToken, status: postsTable.status, platforms: postsTable.platforms, socialAccountIds: postsTable.socialAccountIds })
       .from(postsTable)
       .where(eq(postsTable.id, params.data.id));
     if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
@@ -163,6 +163,25 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
     if (!authed.isAdmin && authed.vendorId !== existing.vendorId) {
       res.status(403).json({ error: "You do not have permission to update this post." });
       return;
+    }
+
+    // When rescheduling an already-scheduled post (PATCH with a new scheduledAt
+    // on a post in "scheduled" status), apply the same connection check that the
+    // dedicated /schedule route enforces for the initial schedule transition.
+    // This prevents a vendor from silently confirming a reschedule into the same
+    // failure they'd hit at auto-publish time. `force: true` skips the block
+    // after the vendor has acknowledged the warning (matching /schedule behavior).
+    if (saU !== undefined && existing.status === "scheduled") {
+      const effectivePlatforms = restUpdate.platforms ?? existing.platforms ?? [];
+      const effectiveSocialAccountIds = restUpdate.socialAccountIds ?? existing.socialAccountIds ?? [];
+      const rescheduleWarnings = await getConnectionWarnings(existing.vendorId, effectivePlatforms, effectiveSocialAccountIds);
+      if (rescheduleWarnings.length > 0 && !forceReschedule) {
+        res.status(409).json({
+          error: "One or more selected platforms has no usable connected account. Reconnect it, or confirm to reschedule anyway.",
+          warnings: rescheduleWarnings,
+        });
+        return;
+      }
     }
 
     const effectiveProductIds = restUpdate.productIds ?? existing.productIds;

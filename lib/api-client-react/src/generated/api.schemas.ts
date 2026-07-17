@@ -397,6 +397,8 @@ export interface PostUpdate {
   status?: string;
   productIds?: number[];
   linkMode?: string;
+  /** Reschedule anyway even though one or more selected platforms has no usable connected account. Set this only after the vendor has seen and acknowledged the connection warnings. */
+  force?: boolean;
 }
 
 export interface AiGeneration {
@@ -409,14 +411,14 @@ export interface AiGeneration {
   status: string;
   createdAt: string;
   /**
-   * Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon.
-   * @nullable
-   */
+     * Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.
+     * @nullable
+     */
   mediaWarningSentAt?: string | null;
   /**
-   * Set when the media-cleanup job has deleted this generation's file from object storage.
-   * @nullable
-   */
+     * Set when the media-cleanup job has deleted this generation's file from object storage. The result URL is kept for audit purposes but the file is gone.
+     * @nullable
+     */
   mediaDeletedAt?: string | null;
 }
 

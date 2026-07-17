@@ -16,13 +16,13 @@ export interface AiGeneration {
   status: string;
   createdAt: string;
   /**
-   * Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.
-   * @nullable
-   */
+     * Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.
+     * @nullable
+     */
   mediaWarningSentAt?: string | null;
   /**
-   * Set when the media-cleanup job has deleted this generation's file from object storage. The result URL is kept for audit purposes but the file is gone.
-   * @nullable
-   */
+     * Set when the media-cleanup job has deleted this generation's file from object storage. The result URL is kept for audit purposes but the file is gone.
+     * @nullable
+     */
   mediaDeletedAt?: string | null;
 }
