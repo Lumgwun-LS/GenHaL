@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { Share2, Sparkles, TrendingUp, Wallet, Building2, Package, Mic, Users } from 'lucide-react';
+import { Share2, Sparkles, TrendingUp, Wallet, Building2, Package, Mic, Users, Megaphone } from 'lucide-react';
 
 const FEATURES = [
   { icon: Share2, title: 'Unified Social', desc: 'Publish to all networks' },
@@ -11,6 +11,7 @@ const FEATURES = [
   { icon: Package, title: 'Inventory', desc: 'Real-time stock alerts' },
   { icon: Mic, title: 'Voice AI', desc: 'Automated voice campaigns' },
   { icon: Users, title: 'Multi-Vendor', desc: 'Manage multiple brands' },
+  { icon: Megaphone, title: 'Ads Suite', desc: 'Meta & X ad campaigns' },
 ];
 
 export const Scene5 = () => {

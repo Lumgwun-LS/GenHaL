@@ -12,6 +12,7 @@ import { Scene5 } from './video_scenes/Scene5';
 import { Scene6 } from './video_scenes/Scene6';
 import { Scene7 } from './video_scenes/Scene7';
 import { Scene8 } from './video_scenes/Scene8';
+import { Scene9 } from './video_scenes/Scene9';
 
 export const SCENE_DURATIONS = {
   scene0: 4000,
@@ -22,6 +23,7 @@ export const SCENE_DURATIONS = {
   scene5: 7500,
   scene8: 8000,
   scene6: 11000,
+  scene9: 7000,  // Ads Suite
   scene7: 5000,
 };
 
@@ -34,6 +36,7 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene5: Scene5,
   scene8: Scene8,
   scene6: Scene6,
+  scene9: Scene9,
   scene7: Scene7,
 };
 
