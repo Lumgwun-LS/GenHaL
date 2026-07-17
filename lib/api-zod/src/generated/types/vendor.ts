@@ -44,6 +44,7 @@ export interface Vendor {
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
+  pushAiMediaExpiryEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   subscriptionTier?: string;
   verificationLevel?: string;

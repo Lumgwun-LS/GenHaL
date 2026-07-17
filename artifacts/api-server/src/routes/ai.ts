@@ -35,11 +35,27 @@ import {
 
 const objectStorageService = new ObjectStorageService();
 
-/** Drizzle returns `createdAt` as a Date object, but the generated response schemas
- *  (from openapi.yaml's `createdAt: {type: string, format: date-time}`) expect a
- *  plain string — .parse(generation) throws a ZodError without this conversion. */
-function serializeGeneration<T extends { createdAt: Date | string }>(generation: T): Omit<T, "createdAt"> & { createdAt: string } {
-  return { ...generation, createdAt: generation.createdAt instanceof Date ? generation.createdAt.toISOString() : generation.createdAt };
+/** Drizzle returns timestamp columns as Date objects, but the generated response
+ *  schemas expect plain strings (or null). Converts all known timestamp fields. */
+function serializeGeneration<T extends {
+  createdAt: Date | string;
+  mediaWarningSentAt?: Date | string | null;
+  mediaDeletedAt?: Date | string | null;
+}>(generation: T): Omit<T, "createdAt" | "mediaWarningSentAt" | "mediaDeletedAt"> & {
+  createdAt: string;
+  mediaWarningSentAt?: string | null;
+  mediaDeletedAt?: string | null;
+} {
+  return {
+    ...generation,
+    createdAt: generation.createdAt instanceof Date ? generation.createdAt.toISOString() : generation.createdAt,
+    mediaWarningSentAt: generation.mediaWarningSentAt instanceof Date
+      ? generation.mediaWarningSentAt.toISOString()
+      : (generation.mediaWarningSentAt ?? null),
+    mediaDeletedAt: generation.mediaDeletedAt instanceof Date
+      ? generation.mediaDeletedAt.toISOString()
+      : (generation.mediaDeletedAt ?? null),
+  };
 }
 
 /** Gemini's inline (non-Files-API) request payload is capped at 8MB — see the

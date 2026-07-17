@@ -3951,6 +3951,8 @@ components:
           type: boolean
         pushPostRemindersEnabled:
           type: boolean
+        pushAiMediaExpiryEnabled:
+          type: boolean
         announcementEmailOptOut:
           type: boolean
         subscriptionTier:
@@ -4046,6 +4048,8 @@ components:
         pushVoiceCampaignAlertsEnabled:
           type: boolean
         pushPostRemindersEnabled:
+          type: boolean
+        pushAiMediaExpiryEnabled:
           type: boolean
         announcementEmailOptOut:
           type: boolean
@@ -4620,6 +4624,12 @@ components:
           type: string
         createdAt:
           type: string
+        mediaWarningSentAt:
+          type: ["string", "null"]
+          description: Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon. Null if not yet warned or not applicable.
+        mediaDeletedAt:
+          type: ["string", "null"]
+          description: Set when the media-cleanup job has deleted this generation's file from object storage. The result URL is kept for audit purposes but the file is gone.
 
     AiImageRequest:
       type: object
@@ -5141,6 +5151,8 @@ components:
         pushVoiceCampaignAlertsEnabled:
           type: boolean
         pushPostRemindersEnabled:
+          type: boolean
+        pushAiMediaExpiryEnabled:
           type: boolean
 
     ExternalAnalyticsSummary:

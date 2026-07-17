@@ -22,6 +22,10 @@ export const vendorUploadsTable = pgTable("vendor_uploads", {
   // object storage because it aged out unattached to any post. `mediaUrl` is
   // left in place as an audit trail. Null means "not swept yet".
   mediaDeletedAt: timestamp("media_deleted_at", { withTimezone: true }),
+  // Set once the media-cleanup job has sent the vendor a "your upload will be
+  // deleted soon" warning. Only set for rows not currently in use. Null means
+  // "warning not yet sent".
+  mediaWarningSentAt: timestamp("media_warning_sent_at", { withTimezone: true }),
   // Bumped every time the media-cleanup job examines this row, whether or not
   // it deletes it. Sweep order is by this column (oldest/never-checked first),
   // matching the round-robin behaviour of the AI-generation cleanup path.

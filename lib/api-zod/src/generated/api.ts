@@ -54,6 +54,7 @@ export const ListVendorsResponseItem = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -111,6 +112,7 @@ export const CreateVendorResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -165,6 +167,7 @@ export const OnboardVendorResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -228,6 +231,7 @@ export const GetVendorResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -267,6 +271,7 @@ export const UpdateVendorBody = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional()
 })
 
@@ -298,6 +303,7 @@ export const UpdateVendorResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -997,7 +1003,9 @@ export const ListAiGenerationsResponseItem = zod.object({
   "prompt": zod.string(),
   "result": zod.string().nullish(),
   "status": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "mediaWarningSentAt": zod.string().nullish(),
+  "mediaDeletedAt": zod.string().nullish()
 })
 export const ListAiGenerationsResponse = zod.array(ListAiGenerationsResponseItem)
 
@@ -2988,6 +2996,7 @@ export const GetExternalProfileResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
@@ -3019,7 +3028,8 @@ export const UpdateExternalProfileBody = zod.object({
   "city": zod.string().optional(),
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
-  "pushPostRemindersEnabled": zod.boolean().optional()
+  "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional()
 })
 
 export const UpdateExternalProfileResponse = zod.object({
@@ -3050,6 +3060,7 @@ export const UpdateExternalProfileResponse = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),

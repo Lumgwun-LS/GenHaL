@@ -17,6 +17,12 @@ export const aiGenerationsTable = pgTable("ai_generations", {
   // still within the retention window, still referenced by a post, or not a
   // media generation to begin with).
   mediaDeletedAt: timestamp("media_deleted_at", { withTimezone: true }),
+  // Set once the media-cleanup job has sent the vendor a "your media will be
+  // deleted soon" warning notification (in-app + push). Only set for
+  // orphaned rows (not currently attached to any post). Null means "warning
+  // not yet sent" (either still in use, still within the warning window, or
+  // not a media generation to begin with).
+  mediaWarningSentAt: timestamp("media_warning_sent_at", { withTimezone: true }),
   // Bumped every time the media-cleanup job examines this row, whether or not
   // it deletes it. Sweep order is by this column (oldest/never-checked
   // first), so a large, permanently-in-use backlog can't starve the batch

@@ -16,12 +16,13 @@ const EXPO_PUSH_API = "https://exp.host/--/api/v2/push/send";
  * defaults to true, so adding a new category never silently changes
  * existing behavior for vendors who haven't touched the setting.
  */
-export type PushCategory = "payments" | "voice_campaigns" | "post_reminders";
+export type PushCategory = "payments" | "voice_campaigns" | "post_reminders" | "ai_media_expiry";
 
 const PUSH_CATEGORY_COLUMN = {
   payments: vendorsTable.pushPaymentAlertsEnabled,
   voice_campaigns: vendorsTable.pushVoiceCampaignAlertsEnabled,
   post_reminders: vendorsTable.pushPostRemindersEnabled,
+  ai_media_expiry: vendorsTable.pushAiMediaExpiryEnabled,
 } as const;
 
 interface PushMessage {

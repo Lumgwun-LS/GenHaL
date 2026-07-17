@@ -47,6 +47,7 @@ export interface Vendor {
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
+  pushAiMediaExpiryEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   subscriptionTier?: string;
   verificationLevel?: string;
@@ -104,6 +105,7 @@ export interface VendorUpdate {
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
+  pushAiMediaExpiryEnabled?: boolean;
   announcementEmailOptOut?: boolean;
 }
 
@@ -406,6 +408,16 @@ export interface AiGeneration {
   result?: string | null;
   status: string;
   createdAt: string;
+  /**
+   * Set when the media-cleanup job has sent the vendor a heads-up that this unused media will be deleted soon.
+   * @nullable
+   */
+  mediaWarningSentAt?: string | null;
+  /**
+   * Set when the media-cleanup job has deleted this generation's file from object storage.
+   * @nullable
+   */
+  mediaDeletedAt?: string | null;
 }
 
 export interface AiImageRequest {
@@ -740,6 +752,7 @@ export interface ExternalProfileUpdate {
   pushPaymentAlertsEnabled?: boolean;
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
+  pushAiMediaExpiryEnabled?: boolean;
 }
 
 export interface ExternalAnalyticsSummary {
