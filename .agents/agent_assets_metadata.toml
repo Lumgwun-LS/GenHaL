@@ -42,3 +42,9 @@ id = "NVTu3lHIaZWZ_-o3w4dWq"
 uri = "file://artifacts/awajimaa-ai-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "Epic AI business platform anthem"
+
+[[outputs]]
+id = "L8XP9vDT0sZrmkntaMKGp"
+uri = "file://awajimaa-app-store.zip"
+type = "unspecified"
+title = "Awajimaa App Store — Standalone Repo"
