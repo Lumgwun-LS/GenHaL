@@ -9,9 +9,13 @@ import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
+import {
+  getListVendorNotificationsQueryKey,
+  useListVendorNotifications,
+} from '@workspace/api-client-react';
 
 // iOS 26 uses NativeTabs for liquid glass — brand colours applied on ClassicTabLayout only.
-function NativeTabLayout({ features }: { features: string[] }) {
+function NativeTabLayout({ features, unreadCount }: { features: string[]; unreadCount: number }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -38,6 +42,10 @@ function NativeTabLayout({ features }: { features: string[] }) {
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Ads</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="notifications">
+        <Icon sf={{ default: 'bell', selected: 'bell.fill' }} />
+        <Label>Alerts</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: 'person.circle', selected: 'person.circle.fill' }} />
         <Label>Account</Label>
@@ -46,7 +54,7 @@ function NativeTabLayout({ features }: { features: string[] }) {
   );
 }
 
-function ClassicTabLayout({ features }: { features: string[] }) {
+function ClassicTabLayout({ features, unreadCount }: { features: string[]; unreadCount: number }) {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -185,6 +193,24 @@ function ClassicTabLayout({ features }: { features: string[] }) {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Alerts',
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          tabBarBadgeStyle: { fontSize: 10, minWidth: 16 },
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView
+                name={focused ? 'bell.fill' : 'bell'}
+                tintColor={color}
+                size={24}
+              />
+            ) : (
+              <Feather name="bell" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: 'Account',
@@ -201,7 +227,18 @@ function ClassicTabLayout({ features }: { features: string[] }) {
 }
 
 export default function TabLayout() {
-  const { isLoading, isAuthenticated, needsOnboarding, features } = useAuth();
+  const { isLoading, isAuthenticated, needsOnboarding, features, vendor } = useAuth();
+  const vendorId = vendor?.id;
+
+  const { data: notifications } = useListVendorNotifications(vendorId as number, {
+    query: {
+      queryKey: getListVendorNotificationsQueryKey(vendorId as number),
+      enabled: Boolean(vendorId) && isAuthenticated,
+      refetchInterval: 60_000,
+    },
+  });
+
+  const unreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
 
   if (isLoading) return null;
 
@@ -210,7 +247,7 @@ export default function TabLayout() {
   }
 
   if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout features={features} />;
+    return <NativeTabLayout features={features} unreadCount={unreadCount} />;
   }
-  return <ClassicTabLayout features={features} />;
+  return <ClassicTabLayout features={features} unreadCount={unreadCount} />;
 }
