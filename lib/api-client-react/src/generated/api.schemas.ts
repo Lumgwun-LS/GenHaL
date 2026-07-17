@@ -33,6 +33,7 @@ export interface Vendor {
   remitaEnabled?: boolean;
   flutterwaveEnabled?: boolean;
   nombaEnabled?: boolean;
+  paypalEnabled?: boolean;
   defaultCurrency?: string;
   brandTheme?: string;
   /** @nullable */
@@ -1775,6 +1776,195 @@ export interface StoreDeveloperSuspendInput {
 
 export interface StoreReviewFlagInput {
   reason: string;
+}
+
+export interface AdContact {
+  id: number;
+  vendorId: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  tags: string[];
+  source: string;
+  /** @nullable */
+  platform?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdContactInput {
+  name: string;
+  email?: string;
+  phone?: string;
+  tags?: string[];
+  source?: string;
+  platform?: string;
+}
+
+export interface AdContactImportResult {
+  imported: number;
+  skipped: number;
+}
+
+export interface AdCampaign {
+  id: number;
+  vendorId: number;
+  name: string;
+  platform: string;
+  objective: string;
+  status: string;
+  /** @nullable */
+  budgetAmount?: string | null;
+  budgetCurrency: string;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  audienceJson?: unknown | null;
+  /** @nullable */
+  platformCampaignId?: string | null;
+  /** @nullable */
+  platformAdsetId?: string | null;
+  /** @nullable */
+  platformAdId?: string | null;
+  /** @nullable */
+  lastPublishError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdCampaignInputAudienceJson = { [key: string]: unknown };
+
+export interface AdCampaignInput {
+  name: string;
+  platform: string;
+  objective?: string;
+  budgetAmount?: number;
+  budgetCurrency?: string;
+  startDate?: string;
+  endDate?: string;
+  audienceJson?: AdCampaignInputAudienceJson;
+  headline?: string;
+  body?: string;
+  cta?: string;
+  imageUrl?: string;
+}
+
+export type AdCampaignUpdateAudienceJson = { [key: string]: unknown };
+
+export interface AdCampaignUpdate {
+  name?: string;
+  platform?: string;
+  objective?: string;
+  status?: string;
+  budgetAmount?: number;
+  budgetCurrency?: string;
+  startDate?: string;
+  endDate?: string;
+  audienceJson?: AdCampaignUpdateAudienceJson;
+}
+
+export interface AdCreative {
+  id: number;
+  campaignId: number;
+  /** @nullable */
+  headline?: string | null;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  cta?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdCampaignWithCreative = AdCampaign & {
+  creative?: AdCreative;
+};
+
+export type AdCampaignWithCreatives = AdCampaign & {
+  creatives: AdCreative[];
+};
+
+export type AdPublishResultStatus = typeof AdPublishResultStatus[keyof typeof AdPublishResultStatus];
+
+
+export const AdPublishResultStatus = {
+  published: 'published',
+  not_connected: 'not_connected',
+} as const;
+
+export interface AdPublishResult {
+  status: AdPublishResultStatus;
+  /** @nullable */
+  error?: string | null;
+  /** @nullable */
+  message?: string | null;
+  campaign?: AdCampaign;
+}
+
+export interface AdCreativeInput {
+  headline?: string;
+  body?: string;
+  cta?: string;
+  imageUrl?: string;
+}
+
+export interface AdAnalyticsSnapshot {
+  id: number;
+  campaignId: number;
+  date: string;
+  impressions: number;
+  clicks: number;
+  spend: string;
+  reach: number;
+  conversions: number;
+  ctr: string;
+  updatedAt: string;
+}
+
+export interface AdAnalyticsSyncResult {
+  synced: boolean;
+  /** @nullable */
+  reason?: string | null;
+  data: AdAnalyticsSnapshot[];
+}
+
+export interface AdEmailCampaign {
+  id: number;
+  vendorId: number;
+  subject: string;
+  bodyHtml: string;
+  fromName: string;
+  status: string;
+  contactFilterJson?: unknown | null;
+  sentCount: number;
+  /** @nullable */
+  sentAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdEmailCampaignInputContactFilterJson = {
+  tags?: string[];
+  platform?: string;
+};
+
+export interface AdEmailCampaignInput {
+  subject: string;
+  bodyHtml: string;
+  fromName: string;
+  contactFilterJson?: AdEmailCampaignInputContactFilterJson;
+}
+
+export interface AdEmailSendResult {
+  status: string;
+  sent: number;
+  failed: number;
+  campaign?: AdEmailCampaign;
 }
 
 export type ListVendorsParams = {

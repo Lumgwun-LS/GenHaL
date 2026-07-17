@@ -54,6 +54,8 @@ tags:
     description: Awajimaa App Store — user reviews
   - name: store-admin
     description: Awajimaa App Store — admin review & moderation
+  - name: ads
+    description: Ads Suite — contacts, campaigns, creatives, analytics, email campaigns
 
 paths:
   /healthz:
@@ -3396,6 +3398,424 @@ paths:
               schema:
                 $ref: "#/components/schemas/StoreReview"
 
+  # ─── ADS SUITE ────────────────────────────────────────────────────────────
+  /ads/contacts:
+    get:
+      operationId: listAdContacts
+      tags: [ads]
+      summary: List contacts
+      responses:
+        "200":
+          description: List of contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdContact"
+    post:
+      operationId: createAdContact
+      tags: [ads]
+      summary: Create a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdContactInput"
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdContact"
+
+  /ads/contacts/import:
+    post:
+      operationId: importAdContacts
+      tags: [ads]
+      summary: Bulk-import contacts from a JSON array. The backend also accepts text/plain CSV for direct HTTP use (not via generated client).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdContactInput"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdContactImportResult"
+
+  /ads/contacts/{id}:
+    patch:
+      operationId: updateAdContact
+      tags: [ads]
+      summary: Update a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdContactInput"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdContact"
+    delete:
+      operationId: deleteAdContact
+      tags: [ads]
+      summary: Delete a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /ads/campaigns:
+    get:
+      operationId: listAdCampaigns
+      tags: [ads]
+      summary: List campaigns
+      responses:
+        "200":
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdCampaign"
+    post:
+      operationId: createAdCampaign
+      tags: [ads]
+      summary: Create a campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdCampaignInput"
+      responses:
+        "201":
+          description: Created campaign with optional creative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCampaignWithCreative"
+
+  /ads/campaigns/{id}:
+    get:
+      operationId: getAdCampaign
+      tags: [ads]
+      summary: Get campaign with creatives
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign with creatives
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCampaignWithCreatives"
+    patch:
+      operationId: updateAdCampaign
+      tags: [ads]
+      summary: Update a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdCampaignUpdate"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCampaign"
+    delete:
+      operationId: deleteAdCampaign
+      tags: [ads]
+      summary: Delete a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /ads/campaigns/{id}/publish:
+    post:
+      operationId: publishAdCampaign
+      tags: [ads]
+      summary: Publish campaign to its platform (returns not_connected when credentials absent)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Publish result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdPublishResult"
+
+  /ads/campaigns/{id}/creatives:
+    get:
+      operationId: listAdCreatives
+      tags: [ads]
+      summary: List creatives for a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of creatives
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdCreative"
+    post:
+      operationId: createAdCreative
+      tags: [ads]
+      summary: Create a creative for a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdCreativeInput"
+      responses:
+        "201":
+          description: Created creative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCreative"
+
+  /ads/campaigns/{campaignId}/creatives/{id}:
+    patch:
+      operationId: updateAdCreative
+      tags: [ads]
+      summary: Update a creative
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdCreativeInput"
+      responses:
+        "200":
+          description: Updated creative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCreative"
+
+  /ads/campaigns/{id}/analytics:
+    get:
+      operationId: listCampaignAnalyticsSnapshots
+      tags: [ads]
+      summary: Get stored analytics snapshots for a campaign (optional ?since=&until= query params accepted but not typed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Daily analytics snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdAnalyticsSnapshot"
+
+  /ads/campaigns/{id}/analytics/sync:
+    get:
+      operationId: syncCampaignAnalyticsFromPlatform
+      tags: [ads]
+      summary: Pull fresh metrics from platform and upsert snapshots
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sync result with updated snapshots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdAnalyticsSyncResult"
+
+  /ads/email-campaigns:
+    get:
+      operationId: listAdEmailCampaigns
+      tags: [ads]
+      summary: List email campaigns
+      responses:
+        "200":
+          description: List of email campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdEmailCampaign"
+    post:
+      operationId: createAdEmailCampaign
+      tags: [ads]
+      summary: Create an email campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdEmailCampaignInput"
+      responses:
+        "201":
+          description: Created email campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdEmailCampaign"
+
+  /ads/email-campaigns/{id}:
+    get:
+      operationId: getAdEmailCampaign
+      tags: [ads]
+      summary: Get an email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdEmailCampaign"
+    patch:
+      operationId: updateAdEmailCampaign
+      tags: [ads]
+      summary: Update a draft email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdEmailCampaignInput"
+      responses:
+        "200":
+          description: Updated email campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdEmailCampaign"
+    delete:
+      operationId: deleteAdEmailCampaign
+      tags: [ads]
+      summary: Delete an email campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /ads/email-campaigns/{id}/send:
+    post:
+      operationId: sendAdEmailCampaign
+      tags: [ads]
+      summary: Send email campaign to matching contacts via SMTP
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdEmailSendResult"
+
 components:
   securitySchemes:
     externalBearerAuth:
@@ -6315,3 +6735,314 @@ components:
       properties:
         reason:
           type: string
+
+    # ─── ADS SUITE ──────────────────────────────────────────────────────────
+
+    AdContact:
+      type: object
+      required: [id, vendorId, name, tags, source, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        platform:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AdContactInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        platform:
+          type: string
+
+    AdContactImportResult:
+      type: object
+      required: [imported, skipped]
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+
+    AdCampaign:
+      type: object
+      required: [id, vendorId, name, platform, objective, status, budgetCurrency, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        platform:
+          type: string
+        objective:
+          type: string
+        status:
+          type: string
+        budgetAmount:
+          type: ["string", "null"]
+        budgetCurrency:
+          type: string
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        audienceJson:
+          nullable: true
+        platformCampaignId:
+          type: ["string", "null"]
+        platformAdsetId:
+          type: ["string", "null"]
+        platformAdId:
+          type: ["string", "null"]
+        lastPublishError:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AdCampaignInput:
+      type: object
+      required: [name, platform]
+      properties:
+        name:
+          type: string
+        platform:
+          type: string
+        objective:
+          type: string
+        budgetAmount:
+          type: number
+        budgetCurrency:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        audienceJson:
+          type: object
+        headline:
+          type: string
+        body:
+          type: string
+        cta:
+          type: string
+        imageUrl:
+          type: string
+
+    AdCampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        platform:
+          type: string
+        objective:
+          type: string
+        status:
+          type: string
+        budgetAmount:
+          type: number
+        budgetCurrency:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        audienceJson:
+          type: object
+
+    AdCampaignWithCreative:
+      allOf:
+        - $ref: "#/components/schemas/AdCampaign"
+        - type: object
+          properties:
+            creative:
+              $ref: "#/components/schemas/AdCreative"
+
+    AdCampaignWithCreatives:
+      allOf:
+        - $ref: "#/components/schemas/AdCampaign"
+        - type: object
+          required: [creatives]
+          properties:
+            creatives:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdCreative"
+
+    AdPublishResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [published, not_connected]
+        error:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+        campaign:
+          $ref: "#/components/schemas/AdCampaign"
+
+    AdCreative:
+      type: object
+      required: [id, campaignId, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        campaignId:
+          type: integer
+        headline:
+          type: ["string", "null"]
+        body:
+          type: ["string", "null"]
+        cta:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AdCreativeInput:
+      type: object
+      properties:
+        headline:
+          type: string
+        body:
+          type: string
+        cta:
+          type: string
+        imageUrl:
+          type: string
+
+    AdAnalyticsSnapshot:
+      type: object
+      required: [id, campaignId, date, impressions, clicks, spend, reach, conversions, ctr, updatedAt]
+      properties:
+        id:
+          type: integer
+        campaignId:
+          type: integer
+        date:
+          type: string
+        impressions:
+          type: integer
+        clicks:
+          type: integer
+        spend:
+          type: string
+        reach:
+          type: integer
+        conversions:
+          type: integer
+        ctr:
+          type: string
+        updatedAt:
+          type: string
+
+    AdAnalyticsSyncResult:
+      type: object
+      required: [synced, data]
+      properties:
+        synced:
+          type: boolean
+        reason:
+          type: ["string", "null"]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdAnalyticsSnapshot"
+
+    AdEmailCampaign:
+      type: object
+      required: [id, vendorId, subject, bodyHtml, fromName, status, sentCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        subject:
+          type: string
+        bodyHtml:
+          type: string
+        fromName:
+          type: string
+        status:
+          type: string
+        contactFilterJson:
+          nullable: true
+        sentCount:
+          type: integer
+        sentAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AdEmailCampaignInput:
+      type: object
+      required: [subject, bodyHtml, fromName]
+      properties:
+        subject:
+          type: string
+        bodyHtml:
+          type: string
+        fromName:
+          type: string
+        contactFilterJson:
+          type: object
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+            platform:
+              type: string
+
+    AdEmailSendResult:
+      type: object
+      required: [status, sent, failed]
+      properties:
+        status:
+          type: string
+        sent:
+          type: integer
+        failed:
+          type: integer
+        campaign:
+          $ref: "#/components/schemas/AdEmailCampaign"

@@ -30,6 +30,7 @@ export interface Vendor {
   remitaEnabled?: boolean;
   flutterwaveEnabled?: boolean;
   nombaEnabled?: boolean;
+  paypalEnabled?: boolean;
   defaultCurrency?: string;
   brandTheme?: string;
   /** @nullable */

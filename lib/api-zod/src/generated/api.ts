@@ -44,6 +44,7 @@ export const ListVendorsResponseItem = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -100,6 +101,7 @@ export const CreateVendorResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -153,6 +155,7 @@ export const OnboardVendorResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -215,6 +218,7 @@ export const GetVendorResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -284,6 +288,7 @@ export const UpdateVendorResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -2973,6 +2978,7 @@ export const GetExternalProfileResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -3034,6 +3040,7 @@ export const UpdateExternalProfileResponse = zod.object({
   "remitaEnabled": zod.boolean().optional(),
   "flutterwaveEnabled": zod.boolean().optional(),
   "nombaEnabled": zod.boolean().optional(),
+  "paypalEnabled": zod.boolean().optional(),
   "defaultCurrency": zod.string().optional(),
   "brandTheme": zod.string().optional(),
   "gender": zod.string().nullish(),
@@ -4179,6 +4186,568 @@ export const FlagStoreReviewResponse = zod.object({
   "isFlagged": zod.boolean().optional(),
   "helpfulCount": zod.number().optional(),
   "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List contacts
+ */
+export const ListAdContactsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
+  "source": zod.string(),
+  "platform": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAdContactsResponse = zod.array(ListAdContactsResponseItem)
+
+
+/**
+ * @summary Create a contact
+ */
+export const CreateAdContactBody = zod.object({
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "source": zod.string().optional(),
+  "platform": zod.string().optional()
+})
+
+export const CreateAdContactResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
+  "source": zod.string(),
+  "platform": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Bulk-import contacts from a JSON array. The backend also accepts text/plain CSV for direct HTTP use (not via generated client).
+ */
+export const ImportAdContactsBodyItem = zod.object({
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "source": zod.string().optional(),
+  "platform": zod.string().optional()
+})
+export const ImportAdContactsBody = zod.array(ImportAdContactsBodyItem)
+
+export const ImportAdContactsResponse = zod.object({
+  "imported": zod.number(),
+  "skipped": zod.number()
+})
+
+
+/**
+ * @summary Update a contact
+ */
+export const UpdateAdContactParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAdContactBody = zod.object({
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "source": zod.string().optional(),
+  "platform": zod.string().optional()
+})
+
+export const UpdateAdContactResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
+  "source": zod.string(),
+  "platform": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a contact
+ */
+export const DeleteAdContactParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdContactResponse = zod.void()
+
+
+/**
+ * @summary List campaigns
+ */
+export const ListAdCampaignsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string(),
+  "status": zod.string(),
+  "budgetAmount": zod.string().nullish(),
+  "budgetCurrency": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "audienceJson": zod.unknown().nullish(),
+  "platformCampaignId": zod.string().nullish(),
+  "platformAdsetId": zod.string().nullish(),
+  "platformAdId": zod.string().nullish(),
+  "lastPublishError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAdCampaignsResponse = zod.array(ListAdCampaignsResponseItem)
+
+
+/**
+ * @summary Create a campaign
+ */
+export const CreateAdCampaignBody = zod.object({
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string().optional(),
+  "budgetAmount": zod.number().optional(),
+  "budgetCurrency": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "audienceJson": zod.object({
+
+}).passthrough().optional(),
+  "headline": zod.string().optional(),
+  "body": zod.string().optional(),
+  "cta": zod.string().optional(),
+  "imageUrl": zod.string().optional()
+})
+
+export const CreateAdCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string(),
+  "status": zod.string(),
+  "budgetAmount": zod.string().nullish(),
+  "budgetCurrency": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "audienceJson": zod.unknown().nullish(),
+  "platformCampaignId": zod.string().nullish(),
+  "platformAdsetId": zod.string().nullish(),
+  "platformAdId": zod.string().nullish(),
+  "lastPublishError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).and(zod.object({
+  "creative": zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "headline": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "cta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
+}))
+
+
+/**
+ * @summary Get campaign with creatives
+ */
+export const GetAdCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAdCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string(),
+  "status": zod.string(),
+  "budgetAmount": zod.string().nullish(),
+  "budgetCurrency": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "audienceJson": zod.unknown().nullish(),
+  "platformCampaignId": zod.string().nullish(),
+  "platformAdsetId": zod.string().nullish(),
+  "platformAdId": zod.string().nullish(),
+  "lastPublishError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).and(zod.object({
+  "creatives": zod.array(zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "headline": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "cta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+}))
+
+
+/**
+ * @summary Update a campaign
+ */
+export const UpdateAdCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAdCampaignBody = zod.object({
+  "name": zod.string().optional(),
+  "platform": zod.string().optional(),
+  "objective": zod.string().optional(),
+  "status": zod.string().optional(),
+  "budgetAmount": zod.number().optional(),
+  "budgetCurrency": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "audienceJson": zod.object({
+
+}).passthrough().optional()
+})
+
+export const UpdateAdCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string(),
+  "status": zod.string(),
+  "budgetAmount": zod.string().nullish(),
+  "budgetCurrency": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "audienceJson": zod.unknown().nullish(),
+  "platformCampaignId": zod.string().nullish(),
+  "platformAdsetId": zod.string().nullish(),
+  "platformAdId": zod.string().nullish(),
+  "lastPublishError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a campaign
+ */
+export const DeleteAdCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdCampaignResponse = zod.void()
+
+
+/**
+ * @summary Publish campaign to its platform (returns not_connected when credentials absent)
+ */
+export const PublishAdCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PublishAdCampaignResponse = zod.object({
+  "status": zod.enum(['published', 'not_connected']),
+  "error": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "campaign": zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "platform": zod.string(),
+  "objective": zod.string(),
+  "status": zod.string(),
+  "budgetAmount": zod.string().nullish(),
+  "budgetCurrency": zod.string(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "audienceJson": zod.unknown().nullish(),
+  "platformCampaignId": zod.string().nullish(),
+  "platformAdsetId": zod.string().nullish(),
+  "platformAdId": zod.string().nullish(),
+  "lastPublishError": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
+})
+
+
+/**
+ * @summary List creatives for a campaign
+ */
+export const ListAdCreativesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAdCreativesResponseItem = zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "headline": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "cta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAdCreativesResponse = zod.array(ListAdCreativesResponseItem)
+
+
+/**
+ * @summary Create a creative for a campaign
+ */
+export const CreateAdCreativeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateAdCreativeBody = zod.object({
+  "headline": zod.string().optional(),
+  "body": zod.string().optional(),
+  "cta": zod.string().optional(),
+  "imageUrl": zod.string().optional()
+})
+
+export const CreateAdCreativeResponse = zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "headline": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "cta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a creative
+ */
+export const UpdateAdCreativeParams = zod.object({
+  "campaignId": zod.coerce.number(),
+  "id": zod.coerce.number()
+})
+
+export const UpdateAdCreativeBody = zod.object({
+  "headline": zod.string().optional(),
+  "body": zod.string().optional(),
+  "cta": zod.string().optional(),
+  "imageUrl": zod.string().optional()
+})
+
+export const UpdateAdCreativeResponse = zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "headline": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "cta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get stored analytics snapshots for a campaign (optional ?since=&until= query params accepted but not typed)
+ */
+export const ListCampaignAnalyticsSnapshotsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCampaignAnalyticsSnapshotsResponseItem = zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "date": zod.string(),
+  "impressions": zod.number(),
+  "clicks": zod.number(),
+  "spend": zod.string(),
+  "reach": zod.number(),
+  "conversions": zod.number(),
+  "ctr": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListCampaignAnalyticsSnapshotsResponse = zod.array(ListCampaignAnalyticsSnapshotsResponseItem)
+
+
+/**
+ * @summary Pull fresh metrics from platform and upsert snapshots
+ */
+export const SyncCampaignAnalyticsFromPlatformParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SyncCampaignAnalyticsFromPlatformResponse = zod.object({
+  "synced": zod.boolean(),
+  "reason": zod.string().nullish(),
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "campaignId": zod.number(),
+  "date": zod.string(),
+  "impressions": zod.number(),
+  "clicks": zod.number(),
+  "spend": zod.string(),
+  "reach": zod.number(),
+  "conversions": zod.number(),
+  "ctr": zod.string(),
+  "updatedAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary List email campaigns
+ */
+export const ListAdEmailCampaignsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "status": zod.string(),
+  "contactFilterJson": zod.unknown().nullish(),
+  "sentCount": zod.number(),
+  "sentAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAdEmailCampaignsResponse = zod.array(ListAdEmailCampaignsResponseItem)
+
+
+/**
+ * @summary Create an email campaign
+ */
+export const CreateAdEmailCampaignBody = zod.object({
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "contactFilterJson": zod.object({
+  "tags": zod.array(zod.string()).optional(),
+  "platform": zod.string().optional()
+}).optional()
+})
+
+export const CreateAdEmailCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "status": zod.string(),
+  "contactFilterJson": zod.unknown().nullish(),
+  "sentCount": zod.number(),
+  "sentAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get an email campaign
+ */
+export const GetAdEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAdEmailCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "status": zod.string(),
+  "contactFilterJson": zod.unknown().nullish(),
+  "sentCount": zod.number(),
+  "sentAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a draft email campaign
+ */
+export const UpdateAdEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAdEmailCampaignBody = zod.object({
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "contactFilterJson": zod.object({
+  "tags": zod.array(zod.string()).optional(),
+  "platform": zod.string().optional()
+}).optional()
+})
+
+export const UpdateAdEmailCampaignResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "status": zod.string(),
+  "contactFilterJson": zod.unknown().nullish(),
+  "sentCount": zod.number(),
+  "sentAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an email campaign
+ */
+export const DeleteAdEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdEmailCampaignResponse = zod.void()
+
+
+/**
+ * @summary Send email campaign to matching contacts via SMTP
+ */
+export const SendAdEmailCampaignParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendAdEmailCampaignResponse = zod.object({
+  "status": zod.string(),
+  "sent": zod.number(),
+  "failed": zod.number(),
+  "campaign": zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "subject": zod.string(),
+  "bodyHtml": zod.string(),
+  "fromName": zod.string(),
+  "status": zod.string(),
+  "contactFilterJson": zod.unknown().nullish(),
+  "sentCount": zod.number(),
+  "sentAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
 })
 
 

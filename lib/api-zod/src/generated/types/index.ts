@@ -6,6 +6,24 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adAnalyticsSnapshot';
+export * from './adAnalyticsSyncResult';
+export * from './adCampaign';
+export * from './adCampaignInput';
+export * from './adCampaignInputAudienceJson';
+export * from './adCampaignUpdate';
+export * from './adCampaignUpdateAudienceJson';
+export * from './adCampaignWithCreative';
+export * from './adCampaignWithCreatives';
+export * from './adContact';
+export * from './adContactImportResult';
+export * from './adContactInput';
+export * from './adCreative';
+export * from './adCreativeInput';
+export * from './adEmailCampaign';
+export * from './adEmailCampaignInput';
+export * from './adEmailCampaignInputContactFilterJson';
+export * from './adEmailSendResult';
 export * from './adminDemographicsAnalytics';
 export * from './adminDemographicsAnalyticsRange';
 export * from './adminFinanceRollupAnalytics';
@@ -18,6 +36,8 @@ export * from './adminFinanceRollupAnalyticsProfitAndLossByPeriodItem';
 export * from './adminFinanceRollupAnalyticsRange';
 export * from './adminFinanceRollupAnalyticsRevenueTrendItem';
 export * from './adminMessageHistoryEntry';
+export * from './adPublishResult';
+export * from './adPublishResultStatus';
 export * from './aiCaptionRequest';
 export * from './aiGeneration';
 export * from './aiImageRequest';

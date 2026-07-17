@@ -42,6 +42,7 @@ import voiceStatusCallbackRouter from "./voice-status-callback";
 import voiceTtsAudioRouter from "./voice-tts-audio";
 import mediaRouter from "./media";
 import vendorAddonsRouter from "./vendor-addons";
+import adsRouter from "./ads";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -104,6 +105,7 @@ router.use(accountDeletionRouter);
 router.use(voiceCampaignsRouter);
 router.use(subscriptionUpgradeRouter);
 router.use(vendorAddonsRouter);
+router.use(adsRouter);
 router.use(adminRouter);
 router.use(adminAnalyticsRouter);
 router.use(adminPaymentGatewaysRouter);
