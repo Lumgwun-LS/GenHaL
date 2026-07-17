@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
 import { apiFetch } from "../lib/api";
-import type { App, AdminStats, Developer, UpdateRequest } from "../lib/types";
+import type { App, AdminStats, Developer, UpdateRequest, OfflinePayment } from "../lib/types";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -25,7 +25,7 @@ const PLATFORM_ICON: Record<string, string> = {
   heroku: "🚂", netlify: "🌐", vercel: "▲", render: "🎨",
 };
 
-type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics";
+type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "offline";
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 
@@ -321,6 +321,201 @@ function UpdateRequestsTab() {
   );
 }
 
+// ── OfflinePaymentsTab ────────────────────────────────────────────────────────
+
+const OP_STATUS: Record<string, { bg: string; color: string; label: string }> = {
+  submitted:      { bg: "rgba(255,179,0,0.1)",  color: "#ffb300", label: "⏳ Submitted" },
+  admin_approved: { bg: "rgba(124,77,255,0.1)", color: "#a78bfa", label: "🔍 Admin Approved" },
+  super_approved: { bg: "rgba(0,200,83,0.1)",   color: "#00c853", label: "✅ Final Approved" },
+  rejected:       { bg: "rgba(255,82,82,0.1)",  color: "#ff5252", label: "❌ Rejected" },
+  cancelled:      { bg: "rgba(255,255,255,0.05)", color: "#8892a4", label: "🚫 Cancelled" },
+};
+
+function OfflinePaymentsTab() {
+  const [payments, setPayments] = useState<OfflinePayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("submitted");
+  const [actingId, setActingId] = useState<number | null>(null);
+  const [rejectModal, setRejectModal] = useState<OfflinePayment | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [noteModal, setNoteModal] = useState<{ op: OfflinePayment; type: "admin" | "super" } | null>(null);
+  const [note, setNote] = useState("");
+
+  function load(s = statusFilter) {
+    setLoading(true);
+    apiFetch<OfflinePayment[]>(`/admin/offline-payments?status=${s}`)
+      .then(r => setPayments(r ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+  useEffect(() => { load(); }, [statusFilter]);
+
+  async function adminApprove(op: OfflinePayment, n = "") {
+    setActingId(op.id);
+    try {
+      await apiFetch(`/admin/offline-payments/${op.id}/admin-approve`, { method: "POST", body: JSON.stringify({ note: n }) });
+      setNoteModal(null); setNote(""); load();
+    } catch { alert("Failed to approve"); } finally { setActingId(null); }
+  }
+
+  async function superApprove(op: OfflinePayment, n = "") {
+    if (!confirm(`Grant FINAL approval for "${op.appName}"? This will mark the publishing fee as paid and move the app to review.`)) return;
+    setActingId(op.id);
+    try {
+      await apiFetch(`/admin/offline-payments/${op.id}/super-approve`, { method: "POST", body: JSON.stringify({ note: n }) });
+      setNoteModal(null); setNote(""); load();
+    } catch (err: any) { alert(err.message ?? "Failed — you may not have super admin access"); } finally { setActingId(null); }
+  }
+
+  async function doReject() {
+    if (!rejectModal) return;
+    setActingId(rejectModal.id);
+    try {
+      await apiFetch(`/admin/offline-payments/${rejectModal.id}/reject`, { method: "POST", body: JSON.stringify({ reason: rejectReason || "Proof of payment not accepted." }) });
+      setRejectModal(null); setRejectReason(""); load();
+    } catch { alert("Failed to reject"); } finally { setActingId(null); }
+  }
+
+  return (
+    <div>
+      {/* Info banner */}
+      <div style={{ background: "rgba(124,77,255,0.06)", border: "1px solid rgba(124,77,255,0.15)", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#c0c8d8" }}>
+        🏦 <strong>Two-step approval:</strong> Any admin can give first-level approval. <strong>Final approval (super admin only)</strong> marks the fee as paid and moves the app to review.
+      </div>
+
+      {/* Filter */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {["submitted", "admin_approved", "super_approved", "rejected", "all"].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${statusFilter === s ? "#00c853" : "rgba(255,255,255,0.1)"}`,
+              background: statusFilter === s ? "rgba(0,200,83,0.1)" : "transparent",
+              color: statusFilter === s ? "#00c853" : "#8892a4" }}>
+            {s === "admin_approved" ? "Admin Approved" : s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
+        ))}
+        <button onClick={() => load()} style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 20, fontSize: 12, background: "rgba(255,255,255,0.06)", border: "none", color: "#8892a4", cursor: "pointer" }}>↻ Refresh</button>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60 }}><div className="spinner" style={{ margin: "0 auto" }} /></div> : (
+        payments.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#8892a4" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+            <div>No {statusFilter === "all" ? "" : statusFilter.replace("_", " ")} offline payments</div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {payments.map(op => {
+              const sc = OP_STATUS[op.status] ?? OP_STATUS.submitted;
+              return (
+                <motion.div key={op.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, fontSize: 15 }}>{op.appName ?? `App #${op.appId}`}</span>
+                        <span style={{ fontSize: 11, background: sc.bg, color: sc.color, padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>{sc.label}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#8892a4" }}>by {op.developerName} ({op.developerEmail}) · {new Date(op.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {op.status === "submitted" && (
+                        <>
+                          <button onClick={() => setNoteModal({ op, type: "admin" })} disabled={actingId === op.id}
+                            className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }}>
+                            {actingId === op.id ? "..." : "✅ Admin Approve"}
+                          </button>
+                          <button onClick={() => { setRejectModal(op); setRejectReason(""); }}
+                            style={{ fontSize: 12, padding: "6px 12px", background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 8, cursor: "pointer" }}>
+                            ❌ Reject
+                          </button>
+                        </>
+                      )}
+                      {op.status === "admin_approved" && (
+                        <>
+                          <button onClick={() => setNoteModal({ op, type: "super" })} disabled={actingId === op.id}
+                            style={{ fontSize: 12, padding: "6px 14px", background: "rgba(124,77,255,0.15)", color: "#a78bfa", border: "1px solid rgba(124,77,255,0.3)", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>
+                            {actingId === op.id ? "..." : "🔑 Super Approve (Final)"}
+                          </button>
+                          <button onClick={() => { setRejectModal(op); setRejectReason(""); }}
+                            style={{ fontSize: 12, padding: "6px 12px", background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 8, cursor: "pointer" }}>
+                            ❌ Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Details grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10, marginBottom: 12 }}>
+                    {op.amountPaid && <div style={{ background: "rgba(0,200,83,0.06)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}><div style={{ color: "#8892a4", marginBottom: 2 }}>Amount</div><div style={{ fontWeight: 700, color: "#00c853" }}>{op.amountPaid}</div></div>}
+                    {op.bankReference && <div style={{ background: "rgba(255,179,0,0.06)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}><div style={{ color: "#8892a4", marginBottom: 2 }}>Bank Reference</div><div style={{ fontWeight: 700, color: "#ffb300", fontFamily: "monospace" }}>{op.bankReference}</div></div>}
+                    <div style={{ background: "rgba(124,77,255,0.06)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+                      <div style={{ color: "#8892a4", marginBottom: 2 }}>Proof</div>
+                      <a href={op.proofUrl} target="_blank" rel="noreferrer" style={{ color: "#a78bfa", wordBreak: "break-all" }}>View proof →</a>
+                    </div>
+                  </div>
+
+                  {op.proofNote && <div style={{ fontSize: 12, color: "#8892a4", marginBottom: 8 }}>📝 Note: {op.proofNote}</div>}
+                  {op.adminNote && <div style={{ fontSize: 12, color: "#a78bfa", marginBottom: 4 }}>Admin note: {op.adminNote} {op.adminApprovedAt ? `· ${new Date(op.adminApprovedAt).toLocaleDateString()}` : ""}</div>}
+                  {op.superNote && <div style={{ fontSize: 12, color: "#00c853", marginBottom: 4 }}>Super admin note: {op.superNote}</div>}
+                  {op.rejectionReason && <div style={{ fontSize: 12, color: "#ff5252" }}>Rejection: {op.rejectionReason}</div>}
+                </motion.div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {/* Note + approve modal */}
+      {noteModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 28, maxWidth: 420, width: "100%" }}>
+            <h3 style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>
+              {noteModal.type === "super" ? "🔑 Final Approval (Super Admin)" : "✅ Admin First-Level Approval"}
+            </h3>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 16 }}>
+              {noteModal.type === "super"
+                ? "This will mark the publishing fee as paid and move the app to the review queue."
+                : "Approves at admin level. A super admin must still give final approval."}
+            </p>
+            <label className="form-label">Note (optional)</label>
+            <textarea className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note..." style={{ minHeight: 72, marginBottom: 16 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setNoteModal(null); setNote(""); }} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
+              <button
+                onClick={() => noteModal.type === "super" ? superApprove(noteModal.op, note) : adminApprove(noteModal.op, note)}
+                disabled={actingId === noteModal.op.id}
+                className="btn-green" style={{ flex: 2 }}>
+                {actingId === noteModal.op.id ? "..." : noteModal.type === "super" ? "Final Approve" : "Admin Approve"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} style={{ background: "#0d1117", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 20, padding: 28, maxWidth: 420, width: "100%" }}>
+            <h3 style={{ fontWeight: 800, fontSize: 18, marginBottom: 8, color: "#ff5252" }}>❌ Reject Proof</h3>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 16 }}>Rejecting offline payment for <strong style={{ color: "#e8eaf0" }}>{rejectModal.appName}</strong>. The developer can resubmit.</p>
+            <label className="form-label">Rejection Reason</label>
+            <textarea className="input" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="e.g. Screenshot is unreadable, wrong amount, etc." style={{ minHeight: 72, marginBottom: 16 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setRejectModal(null)} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
+              <button onClick={doReject} disabled={actingId === rejectModal.id} style={{ flex: 2, background: "#ff5252", color: "#fff", border: "none", borderRadius: 20, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                {actingId === rejectModal.id ? "..." : "Reject"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Admin ────────────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -403,6 +598,7 @@ export default function Admin() {
     { id: "all",        label: "📱 All Apps" },
     { id: "developers", label: "👥 Developers" },
     { id: "updates",    label: "🔄 Updates" },
+    { id: "offline",    label: "🏦 Offline Payments" },
   ];
 
   return (
@@ -550,6 +746,9 @@ export default function Admin() {
 
       {/* Updates */}
       {tab === "updates" && <UpdateRequestsTab />}
+
+      {/* Offline payments */}
+      {tab === "offline" && <OfflinePaymentsTab />}
 
       {/* Reject modal */}
       {rejectModal && (

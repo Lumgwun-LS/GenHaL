@@ -10,6 +10,7 @@ import {
   storeAppUpdateRequestsTable,
   storeAppEventsTable,
   storeUserSignupsTable,
+  storeOfflinePaymentsTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
 
@@ -33,7 +34,7 @@ function logAppEvent(appId: number, eventType: string, req: import("express").Re
     userAgent: (req.headers["user-agent"] ?? "").slice(0, 512) || null,
   }).catch(() => {});
 }
-import { requireAuth, getAuth } from "@clerk/express";
+import { requireAuth, getAuth, clerkClient } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { notifyAdminSignup } from "../lib/signup-notify";
 import crypto from "crypto";
@@ -91,6 +92,7 @@ function serializeApp(app: any, developer?: any) {
     platform: app.platform,
     iconUrl: app.iconUrl,
     screenshots: (app.screenshots as string[]) ?? [],
+    packageName: app.packageName ?? null,
     downloadUrl: app.downloadUrl ?? null,
     webUrl: app.webUrl ?? null,
     currentVersion: app.currentVersion ?? null,
@@ -158,6 +160,25 @@ function isAdmin(req: any): boolean {
   const { userId } = getAuth(req);
   const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return !!userId && adminIds.includes(userId);
+}
+
+const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+async function isSuperAdmin(req: any): Promise<boolean> {
+  const { userId } = getAuth(req);
+  if (!userId) return false;
+  // Super admins are always admins too
+  if (!isAdmin(req) && SUPER_ADMIN_EMAILS.length > 0) {
+    // Allow super admins even if not in ADMIN_USER_IDS
+  }
+  if (SUPER_ADMIN_EMAILS.length === 0) return isAdmin(req);
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    const email = (user.primaryEmailAddress?.emailAddress ?? "").toLowerCase();
+    return SUPER_ADMIN_EMAILS.includes(email);
+  } catch {
+    return false;
+  }
 }
 
 async function requireDeveloper(req: any, res: any) {
@@ -716,11 +737,17 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
+    const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
     if (!name || !tagline || !description || !category || !platform || !iconUrl) {
       return void res.status(400).json({ error: "name, tagline, description, category, platform, iconUrl are required" });
     }
     if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl is required — every app must have a direct download or install link" });
+
+    // Package name uniqueness check (optional but must be unique if provided)
+    if (packageName) {
+      const pkgConflict = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.packageName, packageName) } as any);
+      if (pkgConflict) return void res.status(409).json({ error: `Package name "${packageName}" is already registered to another app.` });
+    }
 
     let slug = slugify(name);
     const existing = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, slug) });
@@ -733,6 +760,7 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       downloadUrl,
       webUrl: webUrl ?? null,
       currentVersion: currentVersion ?? null,
+      packageName: packageName ?? null,
       status: "pending_payment",
       publishingFeePaid: false,
       publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
@@ -1541,6 +1569,14 @@ router.post("/apps/:id/request-update", requireAuth(), async (req, res) => {
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
 
+    // Guard: if the app has a locked package name, reject mismatches
+    const { newPackageName } = req.body;
+    if (app.packageName && newPackageName && newPackageName !== app.packageName) {
+      return void res.status(400).json({
+        error: `Package name mismatch. This app is permanently registered as "${app.packageName}". You cannot change the package name on an update.`,
+      });
+    }
+
     const link = await db.query.storeAppRepoLinksTable.findFirst({ where: eq(storeAppRepoLinksTable.appId, appId) });
     if (!link) return void res.status(400).json({ error: "No repository linked to this app. Link a repository first." });
 
@@ -1689,6 +1725,191 @@ router.post("/admin/update-requests/:id/reject", requireAuth(), async (req, res)
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "rejectUpdate error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── OFFLINE PAYMENT ROUTES ───────────────────────────────────────────────────
+
+function serializeOfflinePayment(op: any, app?: any, dev?: any) {
+  return {
+    id: op.id,
+    appId: op.appId,
+    appName: app?.name ?? null,
+    appSlug: app?.slug ?? null,
+    developerId: op.developerId,
+    developerName: dev?.displayName ?? null,
+    developerEmail: dev?.email ?? null,
+    proofUrl: op.proofUrl,
+    proofNote: op.proofNote ?? null,
+    amountPaid: op.amountPaid ?? null,
+    bankReference: op.bankReference ?? null,
+    status: op.status,
+    adminNote: op.adminNote ?? null,
+    adminApprovedAt: op.adminApprovedAt?.toISOString() ?? null,
+    superNote: op.superNote ?? null,
+    superApprovedAt: op.superApprovedAt?.toISOString() ?? null,
+    rejectionReason: op.rejectionReason ?? null,
+    rejectedAt: op.rejectedAt?.toISOString() ?? null,
+    createdAt: op.createdAt.toISOString(),
+    updatedAt: op.updatedAt.toISOString(),
+  };
+}
+
+// POST /store/payments/offline/submit — developer submits proof of offline payment
+router.post("/payments/offline/submit", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const { appId, proofUrl, proofNote, amountPaid, bankReference } = req.body;
+    if (!appId || !proofUrl) return void res.status(400).json({ error: "appId and proofUrl are required" });
+
+    const app = await db.query.storeAppsTable.findFirst({
+      where: and(eq(storeAppsTable.id, parseInt(appId)), eq(storeAppsTable.developerId, dev.id)),
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+    if (app.publishingFeePaid) return void res.status(400).json({ error: "Publishing fee already paid for this app" });
+
+    // Cancel any existing submitted/rejected offline payment for this app
+    await db.update(storeOfflinePaymentsTable)
+      .set({ status: "cancelled", updatedAt: new Date() } as any)
+      .where(and(eq(storeOfflinePaymentsTable.appId, app.id), eq(storeOfflinePaymentsTable.status, "submitted")));
+
+    const [op] = await db.insert(storeOfflinePaymentsTable).values({
+      appId: app.id, developerId: dev.id,
+      proofUrl, proofNote: proofNote ?? null,
+      amountPaid: amountPaid ?? null, bankReference: bankReference ?? null,
+    }).returning();
+
+    res.status(201).json(serializeOfflinePayment(op, app, dev));
+  } catch (err) {
+    logger.error({ err }, "submitOfflinePayment error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/payments/offline/my — developer's offline payment requests
+router.get("/payments/offline/my", requireAuth(), async (req, res) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+    const ops = await db.query.storeOfflinePaymentsTable.findMany({
+      where: eq(storeOfflinePaymentsTable.developerId, dev.id),
+      orderBy: desc(storeOfflinePaymentsTable.createdAt),
+      limit: 50,
+    });
+    const appIds = [...new Set(ops.map((o) => o.appId))];
+    const apps = appIds.length
+      ? await db.query.storeAppsTable.findMany({ where: sql`id = ANY(ARRAY[${sql.raw(appIds.join(","))}]::int[])` })
+      : [];
+    const appMap = Object.fromEntries(apps.map((a) => [a.id, a]));
+    res.json(ops.map((o) => serializeOfflinePayment(o, appMap[o.appId], dev)));
+  } catch (err) {
+    logger.error({ err }, "myOfflinePayments error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /store/admin/offline-payments — admin list
+router.get("/admin/offline-payments", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { status = "submitted" } = req.query as Record<string, string>;
+    const where = status === "all" ? undefined : eq(storeOfflinePaymentsTable.status, status);
+    const ops = await db.query.storeOfflinePaymentsTable.findMany({
+      where, orderBy: desc(storeOfflinePaymentsTable.createdAt), limit: 200,
+    });
+    const appIds = [...new Set(ops.map((o) => o.appId))];
+    const devIds = [...new Set(ops.map((o) => o.developerId))];
+    const [apps, devs] = await Promise.all([
+      appIds.length ? db.query.storeAppsTable.findMany({ where: sql`id = ANY(ARRAY[${sql.raw(appIds.join(","))}]::int[])` }) : Promise.resolve([]),
+      devIds.length ? db.query.storeDeveloperAccountsTable.findMany({ where: sql`id = ANY(ARRAY[${sql.raw(devIds.join(","))}]::int[])` }) : Promise.resolve([]),
+    ]);
+    const appMap = Object.fromEntries(apps.map((a) => [a.id, a]));
+    const devMap = Object.fromEntries(devs.map((d) => [d.id, d]));
+    res.json(ops.map((o) => serializeOfflinePayment(o, appMap[o.appId], devMap[o.developerId])));
+  } catch (err) {
+    logger.error({ err }, "adminOfflinePayments error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/offline-payments/:id/admin-approve — first-level admin approval
+router.post("/admin/offline-payments/:id/admin-approve", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    if (!op) return void res.status(404).json({ error: "Not found" });
+    if (op.status !== "submitted") return void res.status(400).json({ error: "Payment is not in submitted state" });
+    await db.update(storeOfflinePaymentsTable).set({
+      status: "admin_approved",
+      adminApprovedByClerkId: userId,
+      adminApprovedAt: new Date(),
+      adminNote: req.body.note ?? null,
+      updatedAt: new Date(),
+    } as any).where(eq(storeOfflinePaymentsTable.id, op.id));
+    res.json({ ok: true, message: "First-level approval done. Awaiting super admin final approval." });
+  } catch (err) {
+    logger.error({ err }, "adminApproveOfflinePayment error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/offline-payments/:id/super-approve — super admin final approval
+router.post("/admin/offline-payments/:id/super-approve", requireAuth(), async (req, res) => {
+  try {
+    if (!(await isSuperAdmin(req))) return void res.status(403).json({ error: "Super admin only" });
+    const { userId } = getAuth(req);
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    if (!op) return void res.status(404).json({ error: "Not found" });
+    if (op.status !== "admin_approved") return void res.status(400).json({ error: "Payment must be admin-approved before super approval" });
+
+    // Mark offline payment as super approved
+    await db.update(storeOfflinePaymentsTable).set({
+      status: "super_approved",
+      superApprovedByClerkId: userId,
+      superApprovedAt: new Date(),
+      superNote: req.body.note ?? null,
+      updatedAt: new Date(),
+    } as any).where(eq(storeOfflinePaymentsTable.id, op.id));
+
+    // Mark the app's publishing fee as paid and move to review
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, op.appId) });
+    if (app && !app.publishingFeePaid) {
+      await db.update(storeAppsTable).set({
+        publishingFeePaid: true,
+        publishingFeeGateway: "offline",
+        status: "pending_review",
+        updatedAt: new Date(),
+      } as any).where(eq(storeAppsTable.id, op.appId));
+    }
+
+    res.json({ ok: true, message: "Final approval granted. App moved to pending review." });
+  } catch (err) {
+    logger.error({ err }, "superApproveOfflinePayment error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/offline-payments/:id/reject — reject offline payment proof
+router.post("/admin/offline-payments/:id/reject", requireAuth(), async (req, res) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    if (!op) return void res.status(404).json({ error: "Not found" });
+    if (!["submitted", "admin_approved"].includes(op.status)) return void res.status(400).json({ error: "Cannot reject in current state" });
+    await db.update(storeOfflinePaymentsTable).set({
+      status: "rejected",
+      rejectedByClerkId: userId,
+      rejectedAt: new Date(),
+      rejectionReason: req.body.reason ?? "Proof of payment not accepted.",
+      updatedAt: new Date(),
+    } as any).where(eq(storeOfflinePaymentsTable.id, op.id));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "rejectOfflinePayment error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

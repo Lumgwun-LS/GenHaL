@@ -30,6 +30,8 @@ export const storeAppsTable = pgTable("store_apps", {
   publishingFeeRef: text("publishing_fee_ref"),
   publishingFeeGateway: text("publishing_fee_gateway"),  // paystack | interswitch
   publishingFeeAmountKobo: integer("publishing_fee_amount_kobo"),
+  // Package identifier — immutable after first set (e.g. com.example.myapp)
+  packageName: text("package_name"),
   // Admin decision fields
   reviewedByClerkId: text("reviewed_by_clerk_id"),
   reviewedAt: timestamp("reviewed_at"),

@@ -46,6 +46,7 @@ export interface AppSummary {
 export interface App extends AppSummary {
   description: string;
   screenshots: string[];
+  packageName: string | null;
   downloadUrl: string | null;
   webUrl: string | null;
   currentVersion: string | null;
@@ -57,6 +58,29 @@ export interface App extends AppSummary {
   rejectionReason: string | null;
   publishingFeeGateway: string | null;
   developerId: number;
+  updatedAt: string;
+}
+
+export interface OfflinePayment {
+  id: number;
+  appId: number;
+  appName: string | null;
+  appSlug: string | null;
+  developerId: number;
+  developerName: string | null;
+  developerEmail: string | null;
+  proofUrl: string;
+  proofNote: string | null;
+  amountPaid: string | null;
+  bankReference: string | null;
+  status: "submitted" | "admin_approved" | "super_approved" | "rejected" | "cancelled";
+  adminNote: string | null;
+  adminApprovedAt: string | null;
+  superNote: string | null;
+  superApprovedAt: string | null;
+  rejectionReason: string | null;
+  rejectedAt: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 

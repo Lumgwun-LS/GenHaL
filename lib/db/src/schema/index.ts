@@ -49,6 +49,7 @@ export * from "./store-app-reviews";
 export * from "./store-linked-accounts";
 export * from "./store-app-repo-links";
 export * from "./store-app-update-requests";
+export * from "./store-offline-payments";
 export * from "./store-relations";
 export * from "./store-app-events";
 export * from "./store-user-signups";

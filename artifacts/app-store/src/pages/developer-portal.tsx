@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUser, SignInButton } from "@clerk/react";
 import { apiFetch } from "../lib/api";
 import type {
-  Developer, App, PaymentInitResult,
+  Developer, App, PaymentInitResult, OfflinePayment,
   LinkedAccount, PlatformRepo, AppRepoLink, UpdateRequest, PlatformId
 } from "../lib/types";
 import {
@@ -93,7 +93,7 @@ function WalletCard({ dev }: { dev: Developer }) {
 // ── AppSubmitForm ─────────────────────────────────────────────────────────────
 
 function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: App) => void }) {
-  const [form, setForm] = useState({ name: "", tagline: "", description: "", category: AFRICA_CATEGORIES[0], platform: "android", iconUrl: "", downloadUrl: "", webUrl: "", currentVersion: "", screenshots: "" });
+  const [form, setForm] = useState({ name: "", tagline: "", description: "", category: AFRICA_CATEGORIES[0], platform: "android", iconUrl: "", downloadUrl: "", webUrl: "", currentVersion: "", screenshots: "", packageName: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
@@ -101,9 +101,13 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setError("");
     if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) { setError("All fields marked * are required, including a download link."); return; }
+    // Package name format validation
+    if (form.packageName && !/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(form.packageName)) {
+      setError("Package name must follow reverse-domain format, e.g. com.example.myapp"); return;
+    }
     setLoading(true);
     try {
-      const app = await apiFetch<App>("/developers/me/apps", { method: "POST", body: JSON.stringify({ ...form, screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [] }) });
+      const app = await apiFetch<App>("/developers/me/apps", { method: "POST", body: JSON.stringify({ ...form, screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [], packageName: form.packageName || undefined }) });
       onCreated(app);
     } catch (err: any) { setError(err.message ?? "Failed to submit."); } finally { setLoading(false); }
   }
@@ -128,6 +132,13 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         <div><label className="form-label">Version</label><input className="input" value={form.currentVersion} onChange={e => set("currentVersion", e.target.value)} placeholder="1.0.0" /></div>
       </div>
       <div><label className="form-label">Description *</label><textarea className="input" value={form.description} onChange={e => set("description", e.target.value)} placeholder="Detailed description..." style={{ minHeight: 100 }} required /></div>
+      <div>
+        <label className="form-label">Package / Bundle ID <span style={{ color: "#a78bfa" }}>(strongly recommended)</span></label>
+        <input className="input" value={form.packageName} onChange={e => set("packageName", e.target.value)} placeholder="com.example.myapp" />
+        <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>
+          Your app's unique identifier (e.g. <code>com.yourcompany.appname</code>). Once registered, this locks your app — only you can publish updates for it.
+        </div>
+      </div>
       <div><label className="form-label">Icon URL *</label><input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://..." required /></div>
       <div>
         <label className="form-label">Download / Install Link *</label>
@@ -138,21 +149,114 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
       <div><label className="form-label">Screenshot URLs (optional, one per line)</label><textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="https://..." style={{ minHeight: 72 }} /></div>
       {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
       <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-        💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack or Interswitch.
+        💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
       </div>
       <button className="btn-green" type="submit" disabled={loading} style={{ fontSize: 15, padding: 12 }}>{loading ? "Submitting..." : "Submit App →"}</button>
     </form>
   );
 }
 
+// ── OfflinePaymentModal ───────────────────────────────────────────────────────
+
+function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
+  const [form, setForm] = useState({ proofUrl: "", proofNote: "", amountPaid: "NGN 25,000", bankReference: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setError("");
+    if (!form.proofUrl) { setError("Please provide a URL to your proof of payment screenshot."); return; }
+    setLoading(true);
+    try {
+      await apiFetch<OfflinePayment>("/payments/offline/submit", { method: "POST", body: JSON.stringify({ appId: app.id, ...form }) });
+      setSuccess(true);
+    } catch (err: any) { setError(err.message ?? "Could not submit proof."); } finally { setLoading(false); }
+  }
+
+  const ACCOUNT_DETAILS = [
+    { label: "Bank", value: "Zenith Bank" },
+    { label: "Account Name", value: "Awajimaa Ltd" },
+    { label: "Account Number", value: "1234567890" },
+    { label: "Amount", value: "NGN 25,000" },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        {success ? (
+          <>
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 56, marginBottom: 12 }}>📤</div>
+              <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Proof Submitted!</h3>
+              <p style={{ color: "#8892a4", fontSize: 14, lineHeight: 1.6 }}>
+                Your payment proof is under review. An admin will verify it, then a super admin will grant final approval. You'll be notified once approved.
+              </p>
+              <button onClick={onClose} className="btn-green" style={{ marginTop: 20, padding: "10px 28px" }}>Close</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>Pay via Bank Transfer</h3>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>Transfer <strong style={{ color: "#00c853" }}>NGN 25,000</strong> to the account below, then upload your proof of payment.</p>
+
+            {/* Account details */}
+            <div style={{ background: "rgba(0,200,83,0.06)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#00c853", marginBottom: 10, textTransform: "uppercase" }}>🏦 Transfer To</div>
+              {ACCOUNT_DETAILS.map(({ label, value }) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ color: "#8892a4" }}>{label}</span>
+                  <strong style={{ color: "#e8eaf0", fontFamily: label === "Account Number" ? "monospace" : undefined, letterSpacing: label === "Account Number" ? 1 : undefined }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+
+            {/* Proof upload form */}
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label className="form-label">Proof of Payment URL *</label>
+                <input className="input" type="url" value={form.proofUrl} onChange={e => set("proofUrl", e.target.value)} placeholder="https://drive.google.com/... or direct image URL" required />
+                <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>Upload your receipt/screenshot to Google Drive, Dropbox, or any image host and paste the link here.</div>
+              </div>
+              <div>
+                <label className="form-label">Bank Reference / Teller Number</label>
+                <input className="input" value={form.bankReference} onChange={e => set("bankReference", e.target.value)} placeholder="e.g. FBN202407120001" />
+              </div>
+              <div>
+                <label className="form-label">Amount Paid</label>
+                <input className="input" value={form.amountPaid} onChange={e => set("amountPaid", e.target.value)} placeholder="NGN 25,000" />
+              </div>
+              <div>
+                <label className="form-label">Additional Note (optional)</label>
+                <textarea className="input" value={form.proofNote} onChange={e => set("proofNote", e.target.value)} placeholder="Any additional information for the admin..." style={{ minHeight: 64 }} />
+              </div>
+
+              {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 13 }}>❌ {error}</div>}
+
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button type="button" onClick={onClose} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" disabled={loading} className="btn-green" style={{ flex: 2 }}>{loading ? "Submitting..." : "📤 Submit Proof"}</button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── PaymentModal ──────────────────────────────────────────────────────────────
 
 function PaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
-  const [gateway, setGateway] = useState<"paystack"|"interswitch">("paystack");
+  const [gateway, setGateway] = useState<"paystack"|"interswitch"|"offline">("paystack");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showOffline, setShowOffline] = useState(false);
 
   async function handlePay() {
+    if (gateway === "offline") { setShowOffline(true); return; }
     setLoading(true); setError("");
     try {
       const result = await apiFetch<PaymentInitResult>("/payments/initiate", { method: "POST", body: JSON.stringify({ appId: app.id, gateway }) });
@@ -165,26 +269,36 @@ function PaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
     } catch (err: any) { setError(err.message ?? "Could not initiate payment."); setLoading(false); }
   }
 
+  if (showOffline) return <OfflinePaymentModal app={app} onClose={onClose} />;
+
+  const GATEWAYS = [
+    { id: "paystack" as const, icon: "💚", name: "Paystack", desc: "Card, bank transfer, USSD" },
+    { id: "interswitch" as const, icon: "🔵", name: "Interswitch", desc: "Card, bank transfer (Verve, Mastercard, Visa)" },
+    { id: "offline" as const, icon: "🏦", name: "Bank Transfer (Offline)", desc: "Pay directly to our account and upload proof" },
+  ];
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
       <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%" }}>
         <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Pay Publishing Fee</h3>
         <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 24 }}>Publishing <strong style={{ color: "#e8eaf0" }}>"{app.name}"</strong> — one-time fee of <strong style={{ color: "#00c853" }}>NGN 25,000</strong>.</p>
         <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", marginBottom: 10, textTransform: "uppercase" }}>Choose Payment Method</div>
-        {(["paystack","interswitch"] as const).map(g => (
-          <button key={g} onClick={() => setGateway(g)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", background: gateway===g?"rgba(0,200,83,0.08)":"rgba(255,255,255,0.03)", border: `1.5px solid ${gateway===g?"#00c853":"rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", marginBottom: 10, textAlign: "left" }}>
-            <span style={{ fontSize: 24 }}>{g==="paystack"?"💚":"🔵"}</span>
+        {GATEWAYS.map(g => (
+          <button key={g.id} onClick={() => setGateway(g.id)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", background: gateway===g.id?"rgba(0,200,83,0.08)":"rgba(255,255,255,0.03)", border: `1.5px solid ${gateway===g.id?"#00c853":"rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", marginBottom: 10, textAlign: "left" }}>
+            <span style={{ fontSize: 24 }}>{g.icon}</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#e8eaf0" }}>{g==="paystack"?"Paystack":"Interswitch"}</div>
-              <div style={{ fontSize: 12, color: "#8892a4" }}>{g==="paystack"?"Card, bank transfer, USSD":"Card, bank transfer (Verve, Mastercard, Visa)"}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#e8eaf0" }}>{g.name}</div>
+              <div style={{ fontSize: 12, color: "#8892a4" }}>{g.desc}</div>
             </div>
-            <span style={{ marginLeft: "auto", fontSize: 16, color: gateway===g?"#00c853":"#2a3040" }}>{gateway===g?"●":"○"}</span>
+            <span style={{ marginLeft: "auto", fontSize: 16, color: gateway===g.id?"#00c853":"#2a3040" }}>{gateway===g.id?"●":"○"}</span>
           </button>
         ))}
         {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 13, marginBottom: 14 }}>❌ {error}</div>}
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={onClose} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
-          <button onClick={handlePay} disabled={loading} className="btn-green" style={{ flex: 2, fontSize: 14 }}>{loading?"Redirecting...":`Pay NGN 25,000 via ${gateway==="paystack"?"Paystack":"Interswitch"}`}</button>
+          <button onClick={handlePay} disabled={loading} className="btn-green" style={{ flex: 2, fontSize: 14 }}>
+            {loading ? "Redirecting..." : gateway === "offline" ? "Continue to Bank Transfer →" : `Pay NGN 25,000 via ${gateway === "paystack" ? "Paystack" : "Interswitch"}`}
+          </button>
         </div>
       </div>
     </div>
