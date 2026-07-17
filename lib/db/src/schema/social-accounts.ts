@@ -41,6 +41,11 @@ export const socialAccountsTable = pgTable("social_accounts", {
   lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
   lastHealthCheckError: text("last_health_check_error"),
   healthCheckFailingSince: timestamp("health_check_failing_since", { withTimezone: true }),
+  // Set when a "your token is expiring soon and can't be auto-renewed" warning
+  // is sent to the vendor (see token-refresh-scheduler.ts tickExpiryWarnings).
+  // Cleared whenever the token is successfully refreshed or the vendor reconnects
+  // (persistRefresh sets it to null), so the next expiry cycle can warn again.
+  expiryWarningSentAt: timestamp("expiry_warning_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

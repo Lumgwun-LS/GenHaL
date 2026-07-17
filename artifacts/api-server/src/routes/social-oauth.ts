@@ -148,6 +148,9 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
         // without the vendor redoing OAuth (see lib/token-refresh.ts).
         refreshTokenEncrypted: encrypt(longLivedUserToken),
         tokenExpiresAt,
+        // Reset expiry-warning sentinel so the vendor gets a fresh heads-up
+        // the next time this token approaches expiry after reconnecting.
+        expiryWarningSentAt: null,
       };
       if (existingFb) {
         await db.update(socialAccountsTable).set(fbValues).where(eq(socialAccountsTable.id, existingFb.id));
@@ -175,6 +178,8 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
           accessTokenEncrypted: encrypt(page.accessToken),
           refreshTokenEncrypted: encrypt(longLivedUserToken),
           tokenExpiresAt,
+          // Reset expiry-warning sentinel on reconnect.
+          expiryWarningSentAt: null,
         };
         if (existingIg) {
           await db.update(socialAccountsTable).set(igValues).where(eq(socialAccountsTable.id, existingIg.id));
@@ -258,6 +263,9 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
       // silently renewed; the vendor gets a reconnect notice once it expires.
       refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
       tokenExpiresAt,
+      // Reset expiry-warning sentinel so the vendor gets a fresh heads-up
+      // the next time this (new) token approaches expiry after reconnecting.
+      expiryWarningSentAt: null,
     };
     if (existing) {
       await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));
@@ -343,6 +351,9 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
       // instead of the vendor having to reconnect constantly.
       refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
       tokenExpiresAt,
+      // Reset expiry-warning sentinel so the vendor gets a fresh heads-up
+      // the next time this (new) token approaches expiry after reconnecting.
+      expiryWarningSentAt: null,
     };
     if (existing) {
       await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));

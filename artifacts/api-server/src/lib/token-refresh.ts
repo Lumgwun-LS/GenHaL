@@ -94,9 +94,64 @@ async function persistRefresh(
       lastHealthCheckAt: new Date(),
       lastHealthCheckError: null,
       healthCheckFailingSince: null,
+      // Clear any pending expiry warning so the vendor gets a fresh heads-up
+      // the next time this token approaches expiry (e.g. after reconnecting).
+      expiryWarningSentAt: null,
     })
     .where(eq(socialAccountsTable.id, account.id));
   return fresh.accessToken;
+}
+
+/**
+ * Sends a one-time "your token is expiring soon and can't be auto-renewed"
+ * in-app notification + email to the vendor. Called by tickExpiryWarnings in
+ * token-refresh-scheduler.ts for accounts whose token is within EXPIRY_WARNING_DAYS
+ * of expiry and have no refresh token stored.
+ */
+export async function notifyVendorExpiringSoon(account: SocialAccount): Promise<void> {
+  const [vendor] = await db
+    .select({ name: vendorsTable.name, email: vendorsTable.email })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, account.vendorId));
+  if (!vendor) return;
+
+  const daysLeft = account.tokenExpiresAt
+    ? Math.max(0, Math.ceil((account.tokenExpiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0;
+  const daysLabel = daysLeft <= 1 ? "1 day" : `${daysLeft} days`;
+
+  const message =
+    `Your ${account.platform} account "${account.accountName}" connection will expire in ${daysLabel} ` +
+    `and cannot be renewed automatically. Reconnect it from the Social Hub before it expires to avoid interrupted publishing.`;
+
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: account.vendorId,
+    type: "social_reconnect",
+    message,
+  });
+
+  const html = wrapVendorEmail({
+    bodyHtml: `
+      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your ${escapeHtml(account.platform)} connection is expiring soon</h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Hi ${escapeHtml(vendor.name)}, your ${escapeHtml(account.platform)} account "${escapeHtml(account.accountName)}" connection will expire in approximately <strong>${escapeHtml(daysLabel)}</strong>.
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        This connection cannot be renewed automatically. To avoid any interruption to your scheduled posts, please reconnect it from the <strong>Social Hub</strong> before it expires.
+      </p>`,
+  });
+
+  const result = await sendEmail({
+    to: vendor.email,
+    subject: `Action needed: reconnect your ${account.platform} account in ${daysLabel}`,
+    html,
+  });
+  if (result.status !== "sent") {
+    logger.warn(
+      { vendorId: account.vendorId, platform: account.platform, reason: result.error },
+      "[token-refresh] Expiry-warning email did not send",
+    );
+  }
 }
 
 /**
