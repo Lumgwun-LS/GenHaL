@@ -30,13 +30,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -520,6 +523,11 @@ function formatDayHeading(day: Date): string {
  * grouped by day, so a vendor can see the whole upcoming week/month at a
  * glance instead of scanning the general post grid. Reuses the same
  * reschedule/cancel handlers and ScheduleDialog as the grid view.
+ *
+ * Filtering supports:
+ *  - Multi-select platforms and/or accounts (any selected = OR logic; empty = all)
+ *  - Free-text caption search
+ *  - Date range (from / to) based on the post's scheduled date
  */
 function UpcomingScheduleView({
   getPlatformIcon,
@@ -534,62 +542,240 @@ function UpcomingScheduleView({
     query: { enabled: true, queryKey: getListScheduledPostsQueryKey() },
   });
   const { data: accounts } = useListSocialAccounts({ vendorId: 1 });
-  // "all" | "platform:<Platform>" | "account:<id>" — narrows the list without a refetch.
-  const [filter, setFilter] = useState("all");
+
+  // Multi-select: set of "platform:<Platform>" | "account:<id>" strings.
+  // Empty set = no filter applied (show all).
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const platforms = Array.from(new Set((scheduled ?? []).flatMap((p) => p.platforms))).sort();
+
+  const toggleFilter = (key: string) => {
+    setSelectedFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setSelectedFilters(new Set());
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+  };
+
+  const hasActiveFilters = selectedFilters.size > 0 || search.trim() !== "" || dateFrom !== "" || dateTo !== "";
 
   const filtered = (scheduled ?? []).filter((post: Post) => {
-    if (filter === "all") return true;
-    if (filter.startsWith("platform:")) {
-      return post.platforms.includes(filter.slice("platform:".length));
+    // Multi-select platform/account filter (OR logic across the selection).
+    if (selectedFilters.size > 0) {
+      const platformKeys = Array.from(selectedFilters).filter((f) => f.startsWith("platform:"));
+      const accountKeys = Array.from(selectedFilters).filter((f) => f.startsWith("account:"));
+      const matchesPlatform = platformKeys.some((f) => post.platforms.includes(f.slice("platform:".length)));
+      const matchesAccount = accountKeys.some((f) => (post.socialAccountIds ?? []).includes(Number(f.slice("account:".length))));
+      if (!matchesPlatform && !matchesAccount) return false;
     }
-    if (filter.startsWith("account:")) {
-      const accountId = Number(filter.slice("account:".length));
-      return (post.socialAccountIds ?? []).includes(accountId);
+    // Caption text search.
+    if (search.trim() !== "") {
+      if (!(post.caption ?? "").toLowerCase().includes(search.trim().toLowerCase())) return false;
+    }
+    // Date range — compare against the scheduled date (local date, YYYY-MM-DD).
+    if (post.scheduledAt) {
+      const postDate = new Date(post.scheduledAt);
+      const postDateStr = `${postDate.getFullYear()}-${String(postDate.getMonth() + 1).padStart(2, "0")}-${String(postDate.getDate()).padStart(2, "0")}`;
+      if (dateFrom !== "" && postDateStr < dateFrom) return false;
+      if (dateTo !== "" && postDateStr > dateTo) return false;
     }
     return true;
   });
+
   const groups = groupByDay(filtered);
-  const platforms = Array.from(new Set((scheduled ?? []).flatMap((p) => p.platforms))).sort();
+
+  // Active filter labels for the badge count on the popover trigger.
+  const activeFilterCount = selectedFilters.size + (search.trim() ? 1 : 0) + (dateFrom || dateTo ? 1 : 0);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <CalendarClock className="w-4 h-4" /> Upcoming Schedule
-        </CardTitle>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Filter" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All platforms &amp; accounts</SelectItem>
-            {platforms.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Platform</SelectLabel>
-                {platforms.map((p) => (
-                  <SelectItem key={p} value={`platform:${p}`}>{p}</SelectItem>
-                ))}
-              </SelectGroup>
+      <CardHeader className="flex flex-col gap-3">
+        <div className="flex flex-row items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarClock className="w-4 h-4" /> Upcoming Schedule
+          </CardTitle>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={clearAllFilters}>
+              <XIcon className="w-3 h-3 mr-1" /> Clear filters
+            </Button>
+          )}
+        </div>
+        {/* Filter row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Caption search */}
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-8 h-8 text-sm"
+              placeholder="Search captions…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearch("")}
+              >
+                <XIcon className="w-3 h-3" />
+              </button>
             )}
-            {accounts && accounts.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Account</SelectLabel>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={`account:${a.id}`}>{a.platform} — {a.accountName}</SelectItem>
-                ))}
-              </SelectGroup>
+          </div>
+
+          {/* Platform / Account multi-select popover */}
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <Filter className="w-3.5 h-3.5" />
+                Platforms &amp; Accounts
+                {selectedFilters.size > 0 && (
+                  <Badge className="ml-0.5 h-4 min-w-4 px-1 text-[10px] rounded-full">{selectedFilters.size}</Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              {platforms.length === 0 && (!accounts || accounts.length === 0) ? (
+                <p className="text-xs text-muted-foreground">No platforms or accounts yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {platforms.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Platform</p>
+                      <div className="space-y-1.5">
+                        {platforms.map((p) => {
+                          const key = `platform:${p}`;
+                          return (
+                            <label key={key} className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={selectedFilters.has(key)}
+                                onCheckedChange={() => toggleFilter(key)}
+                              />
+                              <span className="text-sm">{p}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {platforms.length > 0 && accounts && accounts.length > 0 && (
+                    <Separator />
+                  )}
+                  {accounts && accounts.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Account</p>
+                      <div className="space-y-1.5">
+                        {accounts.map((a) => {
+                          const key = `account:${a.id}`;
+                          return (
+                            <label key={key} className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={selectedFilters.has(key)}
+                                onCheckedChange={() => toggleFilter(key)}
+                              />
+                              <span className="text-sm truncate">{a.platform} — {a.accountName}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {selectedFilters.size > 0 && (
+                    <>
+                      <Separator />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full h-7 text-xs"
+                        onClick={() => setSelectedFilters(new Set())}
+                      >
+                        Clear platform/account selection
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              className="h-8 text-sm w-[140px]"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              title="From date"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <Input
+              type="date"
+              className="h-8 text-sm w-[140px]"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              title="To date"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                title="Clear date range"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
             )}
-          </SelectContent>
-        </Select>
+          </div>
+        </div>
+
+        {/* Active filter chips */}
+        {selectedFilters.size > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from(selectedFilters).map((f) => {
+              let label = f;
+              if (f.startsWith("platform:")) label = f.slice("platform:".length);
+              else if (f.startsWith("account:")) {
+                const id = Number(f.slice("account:".length));
+                const acct = accounts?.find((a) => a.id === id);
+                label = acct ? `${acct.platform} — ${acct.accountName}` : `Account ${id}`;
+              }
+              return (
+                <Badge key={f} variant="secondary" className="gap-1 pr-1 text-xs font-normal">
+                  {label}
+                  <button
+                    type="button"
+                    className="hover:text-foreground text-muted-foreground ml-0.5"
+                    onClick={() => toggleFilter(f)}
+                  >
+                    <XIcon className="w-2.5 h-2.5" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading schedule...</p>
         ) : groups.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {filter === "all"
+            {!hasActiveFilters
               ? "No posts are scheduled yet. Approve a post and set a publish time to see it here."
-              : "No scheduled posts match this filter."}
+              : `No scheduled posts match ${activeFilterCount > 1 ? "these filters" : "this filter"}.`}
           </p>
         ) : (
           <div className="space-y-6">
