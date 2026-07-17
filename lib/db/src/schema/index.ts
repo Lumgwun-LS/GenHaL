@@ -2,6 +2,7 @@ export * from "./vendors";
 export * from "./social-accounts";
 export * from "./posts";
 export * from "./ai-generations";
+export * from "./vendor-uploads";
 export * from "./products";
 export * from "./inventory-transactions";
 export * from "./orders";

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
-import { db, aiGenerationsTable, vendorsTable } from "@workspace/db";
+import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -492,6 +492,10 @@ router.post("/ai/upload-video-url", async (req, res): Promise<void> => {
   const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
   const videoUrl = `https://${base}/api/media/${objectId}`;
 
+  // Record the upload so the media-cleanup job can sweep it if the vendor
+  // never attaches it to a saved post (or if a post that used it is deleted).
+  await db.insert(vendorUploadsTable).values({ vendorId, mediaUrl: videoUrl, mediaType: "video" });
+
   res.json(GetAiVideoUploadUrlResponse.parse({ uploadUrl, videoUrl }));
 });
 
@@ -518,6 +522,10 @@ router.post("/ai/upload-image-url", async (req, res): Promise<void> => {
   const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
   const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
   const imageUrl = `https://${base}/api/media/${objectId}`;
+
+  // Record the upload so the media-cleanup job can sweep it if the vendor
+  // never attaches it to a saved post (or if a post that used it is deleted).
+  await db.insert(vendorUploadsTable).values({ vendorId, mediaUrl: imageUrl, mediaType: "image" });
 
   res.json(GetAiImageUploadUrlResponse.parse({ uploadUrl, imageUrl }));
 });
