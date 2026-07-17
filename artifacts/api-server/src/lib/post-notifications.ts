@@ -82,6 +82,72 @@ export async function notifyPostReminderDue(
   }
 }
 
+/**
+ * Notifies a vendor that their Facebook video post finished processing and is
+ * now live. Called by video-publish-finalizer.ts when a "processing" publication
+ * row resolves to "success".
+ */
+export async function notifyFacebookVideoLive(
+  vendorId: number,
+  postId: number,
+  caption: string,
+): Promise<void> {
+  const message = `Your Facebook video "${truncate(caption, 80)}" finished processing and is now live.`;
+
+  try {
+    await db.insert(vendorNotificationsTable).values({
+      vendorId,
+      type: "post_published",
+      message,
+    });
+  } catch (err) {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to insert facebook-video-live notification");
+  }
+
+  await sendPushToVendor(
+    vendorId,
+    "Your Facebook video is live!",
+    `"${truncate(caption, 60)}" finished processing and is now live.`,
+    { screen: "social", postId },
+  ).catch((err) => {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to send facebook-video-live push");
+  });
+}
+
+/**
+ * Notifies a vendor that their Facebook video failed to process after upload.
+ * Called by video-publish-finalizer.ts when a "processing" publication row
+ * resolves to "failed" — whether due to a Facebook processing error, a timeout,
+ * or a disconnected account.
+ */
+export async function notifyFacebookVideoFailed(
+  vendorId: number,
+  postId: number,
+  caption: string,
+  reason: string,
+): Promise<void> {
+  const message = `Your Facebook video "${truncate(caption, 80)}" failed to process: ${reason} Go to Social Hub to retry.`;
+
+  try {
+    await db.insert(vendorNotificationsTable).values({
+      vendorId,
+      type: "post_auto_publish_failed",
+      message,
+    });
+  } catch (err) {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to insert facebook-video-failed notification");
+  }
+
+  await sendPushToVendor(
+    vendorId,
+    "Facebook video failed to process",
+    `"${truncate(caption, 60)}" could not be published. Tap to retry.`,
+    { screen: "social", postId },
+  ).catch((err) => {
+    logger.error({ err, postId, vendorId }, "[post-notifications] Failed to send facebook-video-failed push");
+  });
+}
+
 export interface PlatformFailure {
   platform: string;
   errorMessage: string | null;

@@ -14,11 +14,12 @@
  * setInterval loop plus one immediate tick on boot.
  */
 import { and, eq } from "drizzle-orm";
-import { db, postPublicationsTable, socialAccountsTable } from "@workspace/db";
+import { db, postPublicationsTable, postsTable, socialAccountsTable } from "@workspace/db";
 import { checkFacebookVideoStatus, isMetaAuthError } from "./meta";
 import { ensureFreshAccessToken } from "./token-refresh";
 import { logger } from "./logger";
 import { recordJobRun } from "./job-run-status";
+import { notifyFacebookVideoLive, notifyFacebookVideoFailed } from "./post-notifications";
 
 const CHECK_INTERVAL_MS = 20 * 1000; // 20 seconds — video processing usually finishes well under a minute
 // If Facebook hasn't reported ready/error within this long, give up and mark
@@ -31,14 +32,23 @@ export const VIDEO_PUBLISH_FINALIZER_JOB_NAME = "video-publish-finalizer";
 async function resolveOne(
   pub: typeof postPublicationsTable.$inferSelect,
   account: typeof socialAccountsTable.$inferSelect | undefined,
+  vendorId: number,
+  caption: string,
 ): Promise<"resolved" | "still-processing"> {
   const elapsedMs = Date.now() - pub.publishedAt.getTime();
 
+  const notifyFailure = (reason: string) =>
+    notifyFacebookVideoFailed(vendorId, pub.postId, caption, reason).catch((err) =>
+      logger.error({ err, publicationId: pub.id, vendorId }, "[video-publish-finalizer] Failed to send video-failed notification"),
+    );
+
   if (!account || !account.accessTokenEncrypted) {
+    const errorMessage = "The connected Facebook account is no longer connected — could not confirm whether the video finished processing.";
     await db
       .update(postPublicationsTable)
-      .set({ status: "failed", errorMessage: "The connected Facebook account is no longer connected — could not confirm whether the video finished processing." })
+      .set({ status: "failed", errorMessage })
       .where(and(eq(postPublicationsTable.id, pub.id), eq(postPublicationsTable.status, "processing")));
+    await notifyFailure(errorMessage);
     return "resolved";
   }
 
@@ -63,24 +73,31 @@ async function resolveOne(
         .update(postPublicationsTable)
         .set({ status: "success" })
         .where(and(eq(postPublicationsTable.id, pub.id), eq(postPublicationsTable.status, "processing")));
+      await notifyFacebookVideoLive(vendorId, pub.postId, caption).catch((err) =>
+        logger.error({ err, publicationId: pub.id, vendorId }, "[video-publish-finalizer] Failed to send video-live notification"),
+      );
       return "resolved";
     }
 
     if (check.status === "error") {
+      const errorMessage = `Facebook accepted the video upload but processing failed: ${check.failureReason}`;
       await db
         .update(postPublicationsTable)
-        .set({ status: "failed", errorMessage: `Facebook accepted the video upload but processing failed: ${check.failureReason}` })
+        .set({ status: "failed", errorMessage })
         .where(and(eq(postPublicationsTable.id, pub.id), eq(postPublicationsTable.status, "processing")));
+      await notifyFailure(errorMessage);
       return "resolved";
     }
 
     // Still processing — give up only once we've waited long enough that
     // this is clearly stuck, not just slow.
     if (elapsedMs >= MAX_WAIT_MS) {
+      const errorMessage = "Timed out waiting for Facebook to finish processing the video.";
       await db
         .update(postPublicationsTable)
-        .set({ status: "failed", errorMessage: "Timed out waiting for Facebook to finish processing the video." })
+        .set({ status: "failed", errorMessage })
         .where(and(eq(postPublicationsTable.id, pub.id), eq(postPublicationsTable.status, "processing")));
+      await notifyFailure(errorMessage);
       return "resolved";
     }
     return "still-processing";
@@ -89,10 +106,12 @@ async function resolveOne(
     // A transient lookup failure shouldn't immediately fail the publication —
     // only once we've also blown past the max wait do we give up on it.
     if (elapsedMs >= MAX_WAIT_MS) {
+      const errorMessage = `Could not confirm Facebook video processing status: ${message}`;
       await db
         .update(postPublicationsTable)
-        .set({ status: "failed", errorMessage: `Could not confirm Facebook video processing status: ${message}` })
+        .set({ status: "failed", errorMessage })
         .where(and(eq(postPublicationsTable.id, pub.id), eq(postPublicationsTable.status, "processing")));
+      await notifyFailure(errorMessage);
       return "resolved";
     }
     logger.warn({ err, publicationId: pub.id }, "[video-publish-finalizer] Transient error checking Facebook video status — will retry next tick");
@@ -106,8 +125,13 @@ async function resolveOne(
  */
 export async function finalizePendingVideoPublications(): Promise<{ checked: number; resolved: number }> {
   const pending = await db
-    .select()
+    .select({
+      pub: postPublicationsTable,
+      vendorId: postsTable.vendorId,
+      caption: postsTable.caption,
+    })
     .from(postPublicationsTable)
+    .innerJoin(postsTable, eq(postPublicationsTable.postId, postsTable.id))
     .where(and(eq(postPublicationsTable.status, "processing"), eq(postPublicationsTable.platform, "facebook")));
 
   if (pending.length === 0) return { checked: 0, resolved: 0 };
@@ -117,9 +141,9 @@ export async function finalizePendingVideoPublications(): Promise<{ checked: num
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   let resolved = 0;
-  for (const pub of pending) {
+  for (const { pub, vendorId, caption } of pending) {
     const account = pub.socialAccountId != null ? accountById.get(pub.socialAccountId) : undefined;
-    const outcome = await resolveOne(pub, account);
+    const outcome = await resolveOne(pub, account, vendorId, caption ?? "");
     if (outcome === "resolved") resolved++;
   }
 
