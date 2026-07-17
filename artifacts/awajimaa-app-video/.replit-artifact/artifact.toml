@@ -1,0 +1,27 @@
+kind = "video"
+previewPath = "/awajimaa-app-video/"
+title = "Awajimaa App — Emergency Response Ad Video"
+version = "1.0.0"
+id = "artifacts/awajimaa-app-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-app-video/" ]
+localPort = 18571
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-app-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-app-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-app-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18571"
+BASE_PATH = "/awajimaa-app-video/"

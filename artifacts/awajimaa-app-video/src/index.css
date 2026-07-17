@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Colour tokens — makes bg-background, text-foreground, bg-primary etc. available */
+  --color-background: hsl(222 30% 6%);
+  --color-foreground: hsl(0 0% 100%);
+
+  --color-card: hsl(222 30% 8%);
+  --color-card-foreground: hsl(0 0% 100%);
+
+  --color-primary: hsl(16 100% 50%);         /* #FF4500 neon orange */
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(186 100% 50%);      /* #00E5FF cyan */
+  --color-secondary-foreground: hsl(222 47% 11%);
+
+  --color-muted: hsl(223 30% 15%);
+  --color-muted-foreground: hsl(215 20% 65%);
+
+  --color-accent: hsl(16 100% 50%);
+  --color-accent-foreground: hsl(0 0% 100%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(222 30% 15%);
+
+  --radius: 0.5rem;
+
+  /* Typography */
+  --font-display: 'Outfit', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  overflow: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Noise texture utility */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+.text-outline {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.2);
+  color: transparent;
+}
+
+.text-outline-active {
+  -webkit-text-stroke: 1px var(--color-primary);
+  color: transparent;
+}
