@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Receipt, Plus, Download, Pencil, Trash2, Repeat } from "lucide-react";
+import { Receipt, Plus, Download, Pencil, Trash2, Repeat, PauseCircle, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
@@ -155,6 +155,16 @@ export default function ExpensesPage() {
     }
   }
 
+  async function handleTogglePause(id: number, currentlyPaused: boolean) {
+    try {
+      await updateExpense.mutateAsync({ id, data: { recurringPaused: !currentlyPaused } });
+      toast.success(currentlyPaused ? "Recurring expense resumed" : "Recurring expense paused");
+      invalidate();
+    } catch {
+      toast.error(currentlyPaused ? "Failed to resume expense" : "Failed to pause expense");
+    }
+  }
+
   async function handleExport() {
     if (!vendorId) return;
     const params = new URLSearchParams({ vendorId: String(vendorId) });
@@ -266,8 +276,13 @@ export default function ExpensesPage() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="secondary">{expense.category}</Badge>
                       {expense.isRecurring && (
-                        <Badge variant="outline" className="gap-1 text-primary border-primary/40">
-                          <Repeat className="w-3 h-3" /> {frequencyLabel(expense.recurringFrequency)}
+                        <Badge
+                          variant="outline"
+                          className={`gap-1 ${expense.recurringPaused ? "text-amber-600 border-amber-400" : "text-primary border-primary/40"}`}
+                        >
+                          <Repeat className="w-3 h-3" />
+                          {frequencyLabel(expense.recurringFrequency)}
+                          {expense.recurringPaused && " · Paused"}
                         </Badge>
                       )}
                       {!expense.isRecurring && expense.recurringParentId != null && (
@@ -283,6 +298,18 @@ export default function ExpensesPage() {
                   <TableCell className="text-right font-medium">${expense.amount.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {expense.isRecurring && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title={expense.recurringPaused ? "Resume recurring" : "Pause recurring"}
+                          onClick={() => handleTogglePause(expense.id, expense.recurringPaused)}
+                        >
+                          {expense.recurringPaused
+                            ? <PlayCircle className="w-3.5 h-3.5 text-green-600" />
+                            : <PauseCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => setEditing({ id: expense.id, category: expense.category, description: expense.description ?? "", amount: expense.amount, expenseDate: expense.expenseDate.slice(0, 10), branchId: expense.branchId ? String(expense.branchId) : "none", workerId: expense.workerId ? String(expense.workerId) : "none", isRecurring: expense.isRecurring, recurringFrequency: (expense.recurringFrequency as RecurringFrequency) ?? "monthly" })}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>

@@ -1565,6 +1565,7 @@ export const ListExpensesResponseItem = zod.object({
   "currency": zod.string(),
   "expenseDate": zod.string(),
   "isRecurring": zod.boolean(),
+  "recurringPaused": zod.boolean(),
   "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
   "nextOccurrenceDate": zod.string().nullish(),
   "recurringParentId": zod.number().nullish(),
@@ -1600,6 +1601,7 @@ export const CreateExpenseResponse = zod.object({
   "currency": zod.string(),
   "expenseDate": zod.string(),
   "isRecurring": zod.boolean(),
+  "recurringPaused": zod.boolean(),
   "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
   "nextOccurrenceDate": zod.string().nullish(),
   "recurringParentId": zod.number().nullish(),
@@ -1637,6 +1639,7 @@ export const UpdateExpenseBody = zod.object({
   "currency": zod.string().optional(),
   "expenseDate": zod.string().optional(),
   "isRecurring": zod.boolean().optional(),
+  "recurringPaused": zod.boolean().optional(),
   "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish()
 })
 
@@ -1651,6 +1654,7 @@ export const UpdateExpenseResponse = zod.object({
   "currency": zod.string(),
   "expenseDate": zod.string(),
   "isRecurring": zod.boolean(),
+  "recurringPaused": zod.boolean(),
   "recurringFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal('yearly'),zod.literal(null)]).nullish(),
   "nextOccurrenceDate": zod.string().nullish(),
   "recurringParentId": zod.number().nullish(),

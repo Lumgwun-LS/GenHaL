@@ -165,7 +165,7 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
   const check = await resolveOwnedVendorId(req, existing.vendorId);
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
 
-  const { amount, expenseDate, isRecurring, recurringFrequency, ...rest } = parsed.data;
+  const { amount, expenseDate, isRecurring, recurringFrequency, recurringPaused, ...rest } = parsed.data;
   const willBeRecurring = isRecurring ?? existing.isRecurring;
   // Reflect exactly what will be written: an explicit `recurringFrequency:
   // null` must NOT fall back to the existing value here, or a request that
@@ -177,6 +177,10 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "recurringFrequency is required when isRecurring is true" });
     return;
   }
+  // Resuming a paused template: advance nextOccurrenceDate to "now" so the job
+  // picks it up on the next tick from the current date rather than trying to
+  // back-fill all the periods that elapsed while it was paused.
+  const isResuming = recurringPaused === false && existing.recurringPaused === true;
   const resolvedExpenseDate = expenseDate !== undefined ? new Date(expenseDate) : existing.expenseDate;
 
   const updateData = {
@@ -185,11 +189,12 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     ...(expenseDate !== undefined ? { expenseDate: resolvedExpenseDate } : {}),
     ...(isRecurring !== undefined ? { isRecurring } : {}),
     ...(recurringFrequency !== undefined ? { recurringFrequency } : {}),
+    ...(recurringPaused !== undefined ? { recurringPaused } : {}),
     ...(willBeRecurring
-      ? // Turning recurring on, or changing its frequency/date — (re)compute
-        // when the next occurrence is due from the current expense date.
-        (isRecurring === true || recurringFrequency !== undefined || expenseDate !== undefined) && effectiveFrequency
-        ? { nextOccurrenceDate: computeNextOccurrenceDate(resolvedExpenseDate, effectiveFrequency as "weekly" | "monthly" | "yearly") }
+      ? // Turning recurring on, or changing its frequency/date, or resuming from
+        // pause — (re)compute when the next occurrence is due.
+        (isRecurring === true || recurringFrequency !== undefined || expenseDate !== undefined || isResuming) && effectiveFrequency
+        ? { nextOccurrenceDate: computeNextOccurrenceDate(isResuming ? new Date() : resolvedExpenseDate, effectiveFrequency as "weekly" | "monthly" | "yearly") }
         : {}
       : // Turning recurring off — no more occurrences should be generated.
         { nextOccurrenceDate: null }),

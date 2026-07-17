@@ -34,6 +34,10 @@ export const expensesTable = pgTable("expenses", {
   // template it was generated from — lets the UI/exports distinguish
   // "generated from a recurring template" from a genuine one-off entry.
   recurringParentId: integer("recurring_parent_id"),
+  // When true the background job skips this recurring template; history and
+  // settings are preserved so the vendor can resume later without re-entering
+  // the frequency/category/amount. Only meaningful when isRecurring = true.
+  recurringPaused: boolean("recurring_paused").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

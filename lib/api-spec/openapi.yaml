@@ -5503,7 +5503,7 @@ components:
     # ─── EXPENSES ───────────────────────────────────────────────────────────
     Expense:
       type: object
-      required: [id, vendorId, category, amount, currency, expenseDate, createdAt, isRecurring]
+      required: [id, vendorId, category, amount, currency, expenseDate, createdAt, isRecurring, recurringPaused]
       properties:
         id:
           type: integer
@@ -5524,6 +5524,8 @@ components:
         expenseDate:
           type: string
         isRecurring:
+          type: boolean
+        recurringPaused:
           type: boolean
         recurringFrequency:
           type: ["string", "null"]
@@ -5579,6 +5581,8 @@ components:
         expenseDate:
           type: string
         isRecurring:
+          type: boolean
+        recurringPaused:
           type: boolean
         recurringFrequency:
           type: ["string", "null"]

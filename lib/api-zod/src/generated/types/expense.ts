@@ -21,6 +21,7 @@ export interface Expense {
   currency: string;
   expenseDate: string;
   isRecurring: boolean;
+  recurringPaused: boolean;
   /** @nullable */
   recurringFrequency?: ExpenseRecurringFrequency;
   /** @nullable */

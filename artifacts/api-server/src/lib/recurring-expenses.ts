@@ -61,7 +61,7 @@ export async function generateDueRecurringExpenses(): Promise<{ checked: number;
   const templates = await db
     .select()
     .from(expensesTable)
-    .where(and(eq(expensesTable.isRecurring, true), lte(expensesTable.nextOccurrenceDate, now)));
+    .where(and(eq(expensesTable.isRecurring, true), eq(expensesTable.recurringPaused, false), lte(expensesTable.nextOccurrenceDate, now)));
 
   let created = 0;
   for (const template of templates) {

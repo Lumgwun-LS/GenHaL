@@ -988,6 +988,7 @@ export interface Expense {
   currency: string;
   expenseDate: string;
   isRecurring: boolean;
+  recurringPaused: boolean;
   /** @nullable */
   recurringFrequency?: ExpenseRecurringFrequency;
   /** @nullable */
@@ -1042,6 +1043,7 @@ export interface ExpenseUpdate {
   currency?: string;
   expenseDate?: string;
   isRecurring?: boolean;
+  recurringPaused?: boolean;
   /** @nullable */
   recurringFrequency?: ExpenseUpdateRecurringFrequency;
 }

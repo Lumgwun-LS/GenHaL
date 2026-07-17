@@ -18,6 +18,7 @@ export interface ExpenseUpdate {
   currency?: string;
   expenseDate?: string;
   isRecurring?: boolean;
+  recurringPaused?: boolean;
   /** @nullable */
   recurringFrequency?: ExpenseUpdateRecurringFrequency;
 }
