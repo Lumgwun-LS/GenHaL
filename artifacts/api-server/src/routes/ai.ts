@@ -146,6 +146,54 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   res.json(GenerateAiImageResponse.parse(serialized));
 });
 
+const MUSIC_MOOD_DESCRIPTORS: Record<string, string> = {
+  upbeat:    "Upbeat, energetic, modern instrumental. Fast tempo, bright synths, punchy beat, no vocals.",
+  calm:      "Calm, soothing, laid-back instrumental. Gentle piano or acoustic guitar, soft pads, slow tempo, no vocals.",
+  corporate: "Clean, professional corporate instrumental. Light piano, subtle strings, steady mid-tempo beat, no vocals.",
+  festive:   "Festive, celebratory instrumental. Bright brass, hand percussion, joyful and lively, no vocals.",
+  dramatic:  "Cinematic and dramatic instrumental. Building tension, orchestral swells, powerful dynamics, no vocals.",
+  romantic:  "Warm, romantic instrumental. Smooth acoustic guitar or piano, gentle melody, no vocals.",
+};
+
+/**
+ * Derives a music-mood description from the video's content (prompt + caption)
+ * by asking the LLM to suggest the best-fitting musical mood and expand it into
+ * an ElevenLabs sound-generation prompt. Falls back to a safe generic prompt
+ * so music generation is never blocked by this step.
+ */
+async function buildMusicPrompt(
+  videoPrompt: string,
+  captionText?: string,
+  musicMood?: string,
+): Promise<string> {
+  // Vendor picked an explicit mood — no LLM call needed
+  if (musicMood && MUSIC_MOOD_DESCRIPTORS[musicMood]) {
+    return `${MUSIC_MOOD_DESCRIPTORS[musicMood]} Short social media background music bed, ~15 seconds.`;
+  }
+
+  // Derive the mood from video content via a short LLM call
+  try {
+    const contentSummary = [videoPrompt, captionText].filter(Boolean).join(" | ").slice(0, 600);
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 120,
+      messages: [
+        {
+          role: "system",
+          content: `You write brief ElevenLabs sound-generation prompts for short social-media video background music. Given a video's content description, produce a single music-prompt sentence (20-40 words) that captures the right mood, tempo, and instrumentation for the video. The prompt must end with ", no vocals, no lyrics." Return ONLY the prompt sentence.`,
+        },
+        { role: "user", content: `Video content: ${contentSummary}` },
+      ],
+    });
+    const raw = (response.choices[0]?.message?.content ?? "").trim();
+    if (raw && raw.length > 10) return raw;
+    throw new Error("empty or too-short music prompt from model");
+  } catch (err) {
+    logger.warn({ err }, "AI music prompt derivation failed; using generic fallback");
+    return "Upbeat, modern instrumental background music bed for a short small business social media product video. Soft synths and a subtle beat, no vocals, no lyrics.";
+  }
+}
+
 /**
  * Splits a base image prompt into N distinct-but-consistent scene prompts for
  * a multi-scene video (e.g. wide shot, close-up, in-use shot). Falls back to
@@ -341,7 +389,7 @@ async function resolveOwnedSceneImageUrls(vendorId: number, urls: string[]): Pro
 router.post("/ai/render-video", async (req, res): Promise<void> => {
   const parsed = RenderAiVideoBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { vendorId, prompt, sceneImageUrls, captionText, motionTemplate, includeMusic } = parsed.data;
+  const { vendorId, prompt, sceneImageUrls, captionText, motionTemplate, includeMusic, musicMood } = parsed.data;
 
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -382,10 +430,11 @@ router.post("/ai/render-video", async (req, res): Promise<void> => {
     if (includeMusic) {
       try {
         const approxDurationSeconds = scenes.length === 1 ? 6 : scenes.length * 5 - (scenes.length - 1) * 0.6;
-        musicBuffer = await generateMusicBuffer(
-          `Upbeat, modern instrumental background music bed for a short small business social media product video. Soft synths and a subtle beat, no vocals, no lyrics.`,
-          approxDurationSeconds,
-        );
+        // Derive a content-aware music prompt from the video's own prompt and
+        // caption (and optional vendor mood pick) instead of a fixed string.
+        const musicPrompt = await buildMusicPrompt(prompt, captionText, musicMood);
+        logger.info({ musicPrompt }, "AI video: using derived music prompt");
+        musicBuffer = await generateMusicBuffer(musicPrompt, approxDurationSeconds);
       } catch (err) {
         // Background music is a nice-to-have; failing to generate it should
         // never block the video itself.

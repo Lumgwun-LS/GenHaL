@@ -4719,6 +4719,10 @@ components:
         includeMusic:
           type: boolean
           description: Whether to generate and mix in a short instrumental background track. Defaults to false.
+        musicMood:
+          type: string
+          enum: [upbeat, calm, corporate, festive, dramatic, romantic]
+          description: Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.
 
     AiCaptionRequest:
       type: object

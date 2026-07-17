@@ -915,7 +915,8 @@ export const RenderAiVideoBody = zod.object({
   "sceneImageUrls": zod.array(zod.string()).min(1).max(renderAiVideoBodySceneImageUrlsMax).describe('Confirmed scene image URLs, in order, from \/ai\/generate-video-scenes and\/or \/ai\/regenerate-video-scene results.'),
   "captionText": zod.string().optional(),
   "motionTemplate": zod.enum(['auto', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'zoom-pan']).optional().describe('Camera motion style applied to each scene. \"auto\" cycles through templates across scenes. Defaults to \"auto\".'),
-  "includeMusic": zod.boolean().optional().describe('Whether to generate and mix in a short instrumental background track. Defaults to false.')
+  "includeMusic": zod.boolean().optional().describe('Whether to generate and mix in a short instrumental background track. Defaults to false.'),
+  "musicMood": zod.enum(['upbeat', 'calm', 'corporate', 'festive', 'dramatic', 'romantic']).optional().describe('Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.')
 })
 
 export const RenderAiVideoResponse = zod.object({

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AiVideoRenderRequestMotionTemplate } from './aiVideoRenderRequestMotionTemplate';
+import type { AiVideoRenderRequestMusicMood } from './aiVideoRenderRequestMusicMood';
 
 export interface AiVideoRenderRequest {
   vendorId: number;
@@ -22,4 +23,6 @@ export interface AiVideoRenderRequest {
   motionTemplate?: AiVideoRenderRequestMotionTemplate;
   /** Whether to generate and mix in a short instrumental background track. Defaults to false. */
   includeMusic?: boolean;
+  /** Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM. */
+  musicMood?: AiVideoRenderRequestMusicMood;
 }

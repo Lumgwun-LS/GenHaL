@@ -46,6 +46,7 @@ export * from './aiImageUploadUrlResponse';
 export * from './aiVideoCaptionRequest';
 export * from './aiVideoRenderRequest';
 export * from './aiVideoRenderRequestMotionTemplate';
+export * from './aiVideoRenderRequestMusicMood';
 export * from './aiVideoSceneRegenerateRequest';
 export * from './aiVideoScenesRequest';
 export * from './aiVideoScenesResponse';
