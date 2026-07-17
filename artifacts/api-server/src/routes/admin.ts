@@ -919,6 +919,29 @@ router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
+  const rawPage = parseInt(String(req.query.page ?? "1"), 10);
+  const rawPageSize = parseInt(String(req.query.pageSize ?? "50"), 10);
+  const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
+  const pageSize = isNaN(rawPageSize) || rawPageSize < 1 ? 50 : Math.min(rawPageSize, 200);
+  const offset = (page - 1) * pageSize;
+
+  const rawVendorId = req.query.vendorId ? parseInt(String(req.query.vendorId), 10) : null;
+  const vendorId = rawVendorId !== null && !isNaN(rawVendorId) ? rawVendorId : null;
+
+  const baseWhere = and(
+    eq(vendorNotificationsTable.type, "tier_change"),
+    sql`${vendorNotificationsTable.previousTier} IS NOT NULL`,
+    sql`${vendorNotificationsTable.newTier} IS NOT NULL`,
+    ...(vendorId !== null ? [eq(vendorNotificationsTable.vendorId, vendorId)] : []),
+  );
+
+  const [totalRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(vendorNotificationsTable)
+    .where(baseWhere);
+
+  const total = Number(totalRow?.count ?? 0);
+
   const changes = await db
     .select({
       id: vendorNotificationsTable.id,
@@ -931,17 +954,12 @@ router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
     })
     .from(vendorNotificationsTable)
     .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))
-    .where(
-      and(
-        eq(vendorNotificationsTable.type, "tier_change"),
-        sql`${vendorNotificationsTable.previousTier} IS NOT NULL`,
-        sql`${vendorNotificationsTable.newTier} IS NOT NULL`,
-      ),
-    )
+    .where(baseWhere)
     .orderBy(desc(vendorNotificationsTable.createdAt))
-    .limit(200);
+    .limit(pageSize)
+    .offset(offset);
 
-  res.json(changes);
+  res.json({ data: changes, page, pageSize, total });
 });
 
 // ─── GET /admin/site-content ─────────────────────────────────────────────────

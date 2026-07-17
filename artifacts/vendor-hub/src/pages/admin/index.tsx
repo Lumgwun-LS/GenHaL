@@ -1813,10 +1813,21 @@ type PlanChangeEntry = {
   createdAt: string;
 };
 
-async function fetchTierChangeHistory(): Promise<PlanChangeEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/tier-change-history`, { credentials: "include" });
+type PlanChangeHistoryPage = {
+  data: PlanChangeEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+const PLAN_CHANGE_PAGE_SIZE = 50;
+
+async function fetchTierChangeHistory(params: { page: number; vendorId?: number }): Promise<PlanChangeHistoryPage> {
+  const qs = new URLSearchParams({ page: String(params.page), pageSize: String(PLAN_CHANGE_PAGE_SIZE) });
+  if (params.vendorId !== undefined) qs.set("vendorId", String(params.vendorId));
+  const res = await fetch(`${BASE_URL}/api/admin/tier-change-history?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plan change history");
-  return res.json() as Promise<PlanChangeEntry[]>;
+  return res.json() as Promise<PlanChangeHistoryPage>;
 }
 
 export default function AdminPanel() {
@@ -1836,6 +1847,8 @@ export default function AdminPanel() {
   );
 
   const [planChangeVendorSearch, setPlanChangeVendorSearch] = useState("");
+  const [planChangePage, setPlanChangePage] = useState(1);
+  const [planChangeVendorId, setPlanChangeVendorId] = useState<number | undefined>(undefined);
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
   const [selectAllVendors, setSelectAllVendors] = useState(false);
@@ -1910,9 +1923,10 @@ export default function AdminPanel() {
   );
 
   const { data: planChangeHistory, isLoading: planChangeHistoryLoading } = useQuery({
-    queryKey: ["admin-tier-change-history"],
-    queryFn: fetchTierChangeHistory,
+    queryKey: ["admin-tier-change-history", planChangePage, planChangeVendorId],
+    queryFn: () => fetchTierChangeHistory({ page: planChangePage, vendorId: planChangeVendorId }),
     enabled: isAdmin,
+    placeholderData: (prev) => prev,
   });
 
   const { data: exportAlerts } = useQuery({
@@ -2004,8 +2018,8 @@ export default function AdminPanel() {
   const filteredPlanChangeHistory = useMemo(() => {
     if (!planChangeHistory) return planChangeHistory;
     const search = planChangeVendorSearch.trim().toLowerCase();
-    if (!search) return planChangeHistory;
-    return planChangeHistory.filter((entry) =>
+    if (!search) return planChangeHistory.data;
+    return planChangeHistory.data.filter((entry) =>
       (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase().includes(search),
     );
   }, [planChangeHistory, planChangeVendorSearch]);
@@ -2967,20 +2981,49 @@ export default function AdminPanel() {
               </CardDescription>
               <div className="flex flex-wrap items-end gap-3 pt-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Vendor name</Label>
-                  <Input
-                    placeholder="Search vendor…"
-                    className="h-8 w-44 text-xs"
-                    value={planChangeVendorSearch}
-                    onChange={(e) => setPlanChangeVendorSearch(e.target.value)}
-                  />
+                  <Label className="text-xs">Filter by vendor</Label>
+                  <Select
+                    value={planChangeVendorId !== undefined ? String(planChangeVendorId) : "__all__"}
+                    onValueChange={(v) => {
+                      setPlanChangeVendorId(v === "__all__" ? undefined : Number(v));
+                      setPlanChangePage(1);
+                      setPlanChangeVendorSearch("");
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-48 text-xs">
+                      <SelectValue placeholder="All vendors" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__" className="text-xs">All vendors</SelectItem>
+                      {(vendors ?? []).map((v) => (
+                        <SelectItem key={v.id} value={String(v.id)} className="text-xs">
+                          {v.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {planChangeVendorSearch.trim() !== "" && (
+                {planChangeVendorId === undefined && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Search name (current page)</Label>
+                    <Input
+                      placeholder="Search vendor…"
+                      className="h-8 w-44 text-xs"
+                      value={planChangeVendorSearch}
+                      onChange={(e) => setPlanChangeVendorSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+                {(planChangeVendorId !== undefined || planChangeVendorSearch.trim() !== "") && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-xs h-8"
-                    onClick={() => setPlanChangeVendorSearch("")}
+                    onClick={() => {
+                      setPlanChangeVendorId(undefined);
+                      setPlanChangeVendorSearch("");
+                      setPlanChangePage(1);
+                    }}
                   >
                     Clear filter
                   </Button>
@@ -2988,9 +3031,9 @@ export default function AdminPanel() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {planChangeHistoryLoading ? (
+              {planChangeHistoryLoading && !planChangeHistory ? (
                 <div className="p-8 text-center text-muted-foreground">Loading plan change history…</div>
-              ) : !planChangeHistory?.length ? (
+              ) : !planChangeHistory?.data.length ? (
                 <div className="p-8 text-center text-muted-foreground">
                   <ArrowRight className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium">No plan changes recorded yet.</p>
@@ -3003,35 +3046,70 @@ export default function AdminPanel() {
                   <p className="text-xs mt-1">Try a different vendor name.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Change</TableHead>
-                      <TableHead className="text-right">When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPlanChangeHistory.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell>
-                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
-                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5 text-sm">
-                            <Badge variant="secondary" className="text-xs capitalize">{entry.previousTier}</Badge>
-                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <Badge variant="default" className="text-xs capitalize">{entry.newTier}</Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {new Date(entry.createdAt).toLocaleString()}
-                        </TableCell>
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead>Change</TableHead>
+                        <TableHead className="text-right">When</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPlanChangeHistory.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>
+                            <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                            <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <Badge variant="secondary" className="text-xs capitalize">{entry.previousTier}</Badge>
+                              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <Badge variant="default" className="text-xs capitalize">{entry.newTier}</Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {new Date(entry.createdAt).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {planChangeHistory.total > PLAN_CHANGE_PAGE_SIZE && planChangeVendorSearch.trim() === "" && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+                      <span>
+                        Showing {(planChangePage - 1) * PLAN_CHANGE_PAGE_SIZE + 1}–
+                        {Math.min(planChangePage * PLAN_CHANGE_PAGE_SIZE, planChangeHistory.total)} of{" "}
+                        {planChangeHistory.total} entries
+                        {planChangeHistoryLoading && " (loading…)"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={planChangePage <= 1 || planChangeHistoryLoading}
+                          onClick={() => setPlanChangePage((p) => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-xs">
+                          Page {planChangePage} of {Math.ceil(planChangeHistory.total / PLAN_CHANGE_PAGE_SIZE)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={planChangePage * PLAN_CHANGE_PAGE_SIZE >= planChangeHistory.total || planChangeHistoryLoading}
+                          onClick={() => setPlanChangePage((p) => p + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
