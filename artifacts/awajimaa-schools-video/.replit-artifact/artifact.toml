@@ -1,0 +1,27 @@
+kind = "video"
+previewPath = "/awajimaa-schools-video/"
+title = "Awajimaa Schools — Education Platform Ad Video"
+version = "1.0.0"
+id = "artifacts/awajimaa-schools-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-schools-video/" ]
+localPort = 24599
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-schools-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-schools-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-schools-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24599"
+BASE_PATH = "/awajimaa-schools-video/"

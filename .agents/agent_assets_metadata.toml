@@ -30,3 +30,9 @@ id = "xnH_RMU75b1yUFm_c_NGA"
 uri = "file://artifacts/awahub-app-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "Afrobeat orchestral marketplace background music"
+
+[[outputs]]
+id = "kcstU3BhojQB9DDmwm4ui"
+uri = "file://artifacts/awajimaa-schools-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "Majestic orchestral education platform score"

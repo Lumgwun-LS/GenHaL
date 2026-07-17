@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Brand palette — deep institutional navy + teal + gold */
+  --color-background: hsl(218 64% 11%);       /* #0A192F */
+  --color-foreground: hsl(210 40% 98%);
+
+  --color-brand-navy: hsl(218 58% 16%);        /* #112240 */
+  --color-brand-navy-light: hsl(218 41% 23%);  /* #233554 */
+  --color-brand-teal: hsl(180 100% 25%);       /* #008080 */
+  --color-brand-gold: hsl(45 100% 51%);        /* #FFC107 */
+  --color-brand-gold-light: hsl(51 100% 50%);  /* #FFD700 */
+
+  --color-primary: hsl(45 100% 51%);
+  --color-primary-foreground: hsl(218 64% 11%);
+
+  --color-secondary: hsl(180 100% 25%);
+  --color-secondary-foreground: hsl(210 40% 98%);
+
+  --color-muted: hsl(218 41% 23%);
+  --color-muted-foreground: hsl(215 20% 65%);
+
+  --color-border: hsl(218 41% 23%);
+
+  --radius: 0.5rem;
+
+  /* Typography */
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, hsl(51 100% 50%), hsl(45 100% 51%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-glass {
+  background: rgba(17, 34, 64, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
