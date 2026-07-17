@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,6 +77,104 @@ export default function CreatePost() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Warn the vendor before they lose unsaved scene previews (which already
+  // spent aiImages quota). Three layered guards:
+  //   1. beforeunload  — browser refresh or tab close
+  //   2. pushState patch — every in-app SPA navigation (sidebar links,
+  //                        <Link> components, setLocation() calls)
+  //   3. popstate listener — browser back / forward button
+  const hasUnconfirmedScenes = videoScenes !== null && videoScenes.length > 0;
+
+  const SCENE_GUARD_MSG =
+    "You have scene previews that haven't been rendered yet.\n\n" +
+    "Leaving now will discard them — the AI image credits already spent cannot be recovered.\n\n" +
+    "Leave anyway?";
+
+  // Ref used by the popstate handler to skip the synthetic popstate that
+  // history.go(1) fires when we restore the URL after a declined back navigation.
+  const popstateRestoringRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasUnconfirmedScenes) return;
+
+    // Guard 1: browser hard unload (refresh / tab close).
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = SCENE_GUARD_MSG;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // Guard 2: in-app SPA navigation — patch history.pushState so all route
+    // changes (sidebar <Link>s, breadcrumbs, setLocation calls) are intercepted.
+    // Same-path navigations (hash changes, query-string updates) pass through
+    // unchanged because they don't navigate away from this page.
+    //
+    // Sequence tagging: tag every history entry pushed while the guard is
+    // active with a monotonically increasing _gs counter. The current (guard)
+    // entry gets sequence 1. Any entry pushed after that gets 2, 3, …
+    // The popstate handler uses these values to distinguish back vs. forward:
+    //   newSeq < GUARD_SEQ  → the user went back  → go(+1) to restore
+    //   newSeq > GUARD_SEQ  → the user went forward → go(-1) to restore
+    const GUARD_SEQ = 1;
+    let seq = GUARD_SEQ;
+    // Tag the current history entry so the popstate handler can detect direction.
+    history.replaceState(
+      { ...(history.state as object | null ?? {}), _gs: GUARD_SEQ },
+      "",
+    );
+
+    const originalPushState = history.pushState.bind(history);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (history as any).pushState = function (state: unknown, title: string, url?: string | URL | null) {
+      const targetPath = url
+        ? new URL(String(url), window.location.href).pathname
+        : window.location.pathname;
+      if (targetPath === window.location.pathname) {
+        return originalPushState(state, title, url);
+      }
+      if (!window.confirm(SCENE_GUARD_MSG)) return; // block — user stays
+      seq++;
+      return originalPushState({ ...(state as object | null ?? {}), _gs: seq }, title, url);
+    };
+
+    // Guard 3: browser back / forward button.
+    // popstate fires AFTER the URL has already changed, so we must reverse the
+    // navigation if the user declines. We determine direction from the _gs tag:
+    // a sequence lower than GUARD_SEQ means we went back (older entry);
+    // a sequence higher means we went forward (newer entry).
+    const handlePopState = () => {
+      if (popstateRestoringRef.current) {
+        popstateRestoringRef.current = false;
+        return;
+      }
+      const newSeq: number = (history.state as { _gs?: number } | null)?._gs ?? 0;
+      const wentBack = newSeq < GUARD_SEQ;
+
+      if (!window.confirm(SCENE_GUARD_MSG)) {
+        popstateRestoringRef.current = true;
+        // Reverse the navigation: back→go(+1), forward→go(-1).
+        history.go(wentBack ? 1 : -1);
+      }
+      // If confirmed: URL already changed; wouter re-renders the new route.
+    };
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (history as any).pushState = originalPushState;
+    };
+  // SCENE_GUARD_MSG is a stable string literal; excluding from deps is intentional.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnconfirmedScenes]);
+
+  // Simple back navigation — the pushState patch above handles the confirm
+  // dialog so this can just call setLocation unconditionally.
+  const handleNavBack = useCallback(() => {
+    setLocation("/social");
+  }, [setLocation]);
 
   const { data: products } = useListProducts({ vendorId: 1 });
   const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
@@ -362,8 +460,8 @@ export default function CreatePost() {
   return (
     <div className="p-8 max-w-7xl mx-auto w-full h-full flex flex-col gap-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/social"><ArrowLeft className="w-4 h-4" /></Link>
+        <Button variant="ghost" size="icon" onClick={handleNavBack}>
+          <ArrowLeft className="w-4 h-4" />
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">Compose Post</h1>
       </div>
