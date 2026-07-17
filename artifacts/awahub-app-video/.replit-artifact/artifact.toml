@@ -1,0 +1,27 @@
+kind = "video"
+previewPath = "/awahub-app-video/"
+title = "Awa Hub App — African Marketplace Ad Video"
+version = "1.0.0"
+id = "artifacts/awahub-app-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awahub-app-video/" ]
+localPort = 24916
+
+[services.development]
+run = "pnpm --filter @workspace/awahub-app-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awahub-app-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awahub-app-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24916"
+BASE_PATH = "/awahub-app-video/"

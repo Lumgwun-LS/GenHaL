@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Colour tokens — warm premium African commerce palette */
+  --color-background: hsl(24 20% 12%);       /* dark rich brown */
+  --color-foreground: hsl(40 20% 95%);        /* warm off-white */
+
+  --color-primary: hsl(38 92% 50%);           /* golden amber */
+  --color-primary-foreground: hsl(24 20% 12%);
+
+  --color-secondary: hsl(24 35% 25%);         /* deep warm brown */
+  --color-secondary-foreground: hsl(40 20% 95%);
+
+  --color-accent: hsl(12 76% 61%);            /* rich terracotta/rust */
+  --color-accent-foreground: hsl(40 20% 95%);
+
+  --color-muted: hsl(24 20% 20%);
+  --color-muted-foreground: hsl(40 10% 70%);
+
+  --color-border: hsl(24 20% 20%);
+  --color-input: hsl(24 20% 20%);
+  --color-ring: hsl(38 92% 50%);
+
+  --radius: 0.5rem;
+
+  /* Typography */
+  --font-display: 'Outfit', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-outfit {
+  font-family: var(--font-display);
+}
+
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, var(--color-primary), var(--color-accent));
+}
+
+.text-gradient-light {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, #ffffff, var(--color-primary));
+}
+
+.glass-panel {
+  background: rgba(36, 28, 25, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}

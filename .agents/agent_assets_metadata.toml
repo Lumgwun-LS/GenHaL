@@ -24,3 +24,9 @@ id = "xdWPDJeNlMl4_me7rf9-6"
 uri = "file://artifacts/awajimaa-app-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "cinematic emergency response background music"
+
+[[outputs]]
+id = "xnH_RMU75b1yUFm_c_NGA"
+uri = "file://artifacts/awahub-app-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "Afrobeat orchestral marketplace background music"
