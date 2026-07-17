@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
+import { Link } from "wouter";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -102,7 +103,11 @@ export default function SocialAccountHealthPanel() {
               <TableBody>
                 {list.map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.vendorName}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/vendors/${a.vendorId}`} className="text-primary hover:underline">
+                        {a.vendorName}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{a.platform}</Badge>
                     </TableCell>
