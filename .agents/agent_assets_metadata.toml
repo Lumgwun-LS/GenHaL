@@ -36,3 +36,9 @@ id = "kcstU3BhojQB9DDmwm4ui"
 uri = "file://artifacts/awajimaa-schools-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "Majestic orchestral education platform score"
+
+[[outputs]]
+id = "NVTu3lHIaZWZ_-o3w4dWq"
+uri = "file://artifacts/awajimaa-ai-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "Epic AI business platform anthem"

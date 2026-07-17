@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Deep space AI palette */
+  --color-background: hsl(240 33% 3%);   /* #05050A near-black */
+  --color-foreground: hsl(210 40% 98%);
+
+  --color-brand: hsl(258 90% 66%);       /* electric violet #8B5CF6 */
+  --color-accent: hsl(292 84% 61%);      /* fuchsia #D946EF */
+  --color-primary: hsl(217 91% 60%);     /* blue #3B82F6 */
+  --color-secondary: hsl(240 4% 16%);
+  --color-muted: hsl(240 5% 65%);
+
+  --radius: 0.5rem;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.glow-text {
+  text-shadow: 0 0 20px hsl(258 90% 66% / 0.5), 0 0 40px hsl(292 84% 61% / 0.3);
+}
+
+.glow-box {
+  box-shadow: 0 0 30px hsl(258 90% 66% / 0.2), inset 0 0 20px hsl(258 90% 66% / 0.1);
+  border: 1px solid hsl(258 90% 66% / 0.3);
+}
+
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, #a78bfa, #e879f9, #60a5fa);
+}

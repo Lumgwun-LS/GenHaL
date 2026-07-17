@@ -1,0 +1,27 @@
+kind = "video"
+previewPath = "/awajimaa-ai-video/"
+title = "Awajimaa AI — Business Platform Ad Video"
+version = "1.0.0"
+id = "artifacts/awajimaa-ai-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-ai-video/" ]
+localPort = 19821
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-ai-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-ai-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-ai-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19821"
+BASE_PATH = "/awajimaa-ai-video/"
