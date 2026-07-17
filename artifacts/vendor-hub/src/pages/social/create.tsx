@@ -148,6 +148,14 @@ export default function CreatePost() {
     }
   };
 
+  // Updates a single scene's prompt text in local state so the vendor can
+  // steer the next regeneration without touching the other scenes.
+  const handleScenePromptChange = (index: number, newPrompt: string) => {
+    setVideoScenes((prev) =>
+      prev ? prev.map((s, i) => (i === index ? { ...s, prompt: newPrompt } : s)) : prev,
+    );
+  };
+
   // Regenerates just one scene's image, leaving the others (and any quota
   // already spent on them) untouched.
   const handleRegenerateScene = async (index: number) => {
@@ -552,20 +560,30 @@ export default function CreatePost() {
                       <X className="w-3.5 h-3.5 mr-1" /> Discard
                     </Button>
                   </div>
-                  <div className={`grid gap-2 ${videoScenes.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  <div className={`grid gap-3 ${videoScenes.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                     {videoScenes.map((scene, i) => (
-                      <div key={scene.id} className="relative">
-                        <img src={scene.imageUrl} alt={`Scene ${i + 1}`} className="w-full rounded-md border aspect-video object-cover" />
-                        <Badge variant="secondary" className="absolute top-1.5 left-1.5 text-[10px]">Scene {i + 1}</Badge>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="absolute top-1.5 right-1.5 h-7 px-2"
-                          onClick={() => handleRegenerateScene(i)}
+                      <div key={scene.id} className="flex flex-col gap-1.5">
+                        <div className="relative">
+                          <img src={scene.imageUrl} alt={`Scene ${i + 1}`} className="w-full rounded-md border aspect-video object-cover" />
+                          <Badge variant="secondary" className="absolute top-1.5 left-1.5 text-[10px]">Scene {i + 1}</Badge>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="absolute top-1.5 right-1.5 h-7 px-2"
+                            onClick={() => handleRegenerateScene(i)}
+                            disabled={regeneratingSceneId !== null || renderVideo.isPending}
+                            title="Regenerate this scene using the prompt below"
+                          >
+                            {regeneratingSceneId === scene.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          </Button>
+                        </div>
+                        <Textarea
+                          className="text-xs resize-none min-h-[60px] leading-snug"
+                          placeholder="Edit the prompt to steer the next regeneration…"
+                          value={scene.prompt}
+                          onChange={(e) => handleScenePromptChange(i, e.target.value)}
                           disabled={regeneratingSceneId !== null || renderVideo.isPending}
-                        >
-                          {regeneratingSceneId === scene.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                        </Button>
+                        />
                       </div>
                     ))}
                   </div>
