@@ -164,6 +164,7 @@ export async function applyVendorTierDowngrade(vendor: Vendor, source: string): 
       subscriptionProvider: null,
       paystackSubscriptionCode: null,
       paystackEmailToken: null,
+      paypalSubscriptionId: null,
       currentPeriodStart: new Date(),
       updatedAt: new Date(),
     })

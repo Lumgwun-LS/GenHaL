@@ -39,6 +39,7 @@ interface Plan {
 interface PaymentGateways {
   stripe: boolean;
   paystack: boolean;
+  paypal: boolean;
 }
 
 interface TrialSettings {
@@ -96,7 +97,7 @@ async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways;
   };
   return {
     plans: content["billing.subscriptionPlans"].plans,
-    gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true },
+    gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true, paypal: false },
     overageRates: content["billing.overageRates"] ?? DEFAULT_OVERAGE_RATES,
     trialSettings: content["billing.trialSettings"] ?? DEFAULT_TRIAL_SETTINGS,
   };
@@ -277,7 +278,7 @@ const OVERAGE_RATE_FIELDS: { key: keyof OverageRates; label: string; hint: strin
 export default function PlansEditor() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["admin-subscription-plans"], queryFn: fetchPlans });
   const [draft, setDraft] = useState<Plan[]>([]);
-  const [gateways, setGateways] = useState<PaymentGateways>({ stripe: true, paystack: true });
+  const [gateways, setGateways] = useState<PaymentGateways>({ stripe: true, paystack: true, paypal: false });
   const [overageRates, setOverageRates] = useState<OverageRates>(DEFAULT_OVERAGE_RATES);
   const [trialSettings, setTrialSettings] = useState<TrialSettings>(DEFAULT_TRIAL_SETTINGS);
   const [seeded, setSeeded] = useState(false);
@@ -341,9 +342,14 @@ export default function PlansEditor() {
   }
 
   async function toggleGateway(key: keyof PaymentGateways, value: boolean) {
-    if (!value && !gateways[key === "stripe" ? "paystack" : "stripe"]) {
-      toast.error("At least one payment gateway must stay enabled for subscriptions.");
-      return;
+    // Ensure at least one gateway stays enabled when turning one off
+    if (!value) {
+      const next = { ...gateways, [key]: false };
+      const anyEnabled = Object.values(next).some(Boolean);
+      if (!anyEnabled) {
+        toast.error("At least one payment gateway must stay enabled for subscriptions.");
+        return;
+      }
     }
     const next = { ...gateways, [key]: value };
     setGateways(next);
@@ -415,6 +421,17 @@ export default function PlansEditor() {
               checked={gateways.paystack}
               disabled={savingGateways}
               onCheckedChange={(v) => toggleGateway("paystack", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 flex-1">
+            <div>
+              <p className="text-sm font-medium">PayPal (USD)</p>
+              <p className="text-xs text-muted-foreground">PayPal subscription billing in USD; cancel is immediate via the dashboard.</p>
+            </div>
+            <Switch
+              checked={gateways.paypal}
+              disabled={savingGateways}
+              onCheckedChange={(v) => toggleGateway("paypal", v)}
             />
           </div>
         </CardContent>
