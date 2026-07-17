@@ -5,8 +5,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank, Download } from "lucide-react";
+import { toast } from "sonner";
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 import {
   LineChart,
   Line,
@@ -37,6 +41,7 @@ export default function AdminFinanceRollupPanel() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const params = {
     period,
@@ -45,6 +50,41 @@ export default function AdminFinanceRollupPanel() {
     ...(showBreakdown ? { breakdown: "true" } : {}),
   };
   const { data, isLoading } = useGetAdminFinanceRollupAnalytics(params);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams({ period });
+      if (period === "custom" && from) qs.set("from", new Date(from).toISOString());
+      if (period === "custom" && to) qs.set("to", new Date(to).toISOString());
+      const url = `${BASE_URL}/api/admin/analytics/finance-rollup/export?${qs.toString()}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 429) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(body.error ?? "Exports are paused for this account. Ask another admin to review.");
+        return;
+      }
+      if (!res.ok) {
+        toast.error("Export failed.");
+        return;
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `finance-rollup-${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("CSV download started");
+    } catch {
+      toast.error("Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const netProfit = data?.profitAndLoss.netProfit ?? 0;
   const stats = [
@@ -91,6 +131,19 @@ export default function AdminFinanceRollupPanel() {
               data-testid="checkbox-finance-rollup-breakdown"
             />
             <Label htmlFor="finance-rollup-breakdown" className="text-xs cursor-pointer">Show per-vendor breakdown</Label>
+          </div>
+          <div className="pb-1.5 ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting}
+              data-testid="btn-finance-rollup-export"
+              className="gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
           </div>
         </CardContent>
       </Card>

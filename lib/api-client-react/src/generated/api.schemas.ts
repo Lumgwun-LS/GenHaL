@@ -472,6 +472,21 @@ export const AiVideoRenderRequestMotionTemplate = {
   'zoom-pan': 'zoom-pan',
 } as const;
 
+/**
+ * Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.
+ */
+export type AiVideoRenderRequestMusicMood = typeof AiVideoRenderRequestMusicMood[keyof typeof AiVideoRenderRequestMusicMood];
+
+
+export const AiVideoRenderRequestMusicMood = {
+  upbeat: 'upbeat',
+  calm: 'calm',
+  corporate: 'corporate',
+  festive: 'festive',
+  dramatic: 'dramatic',
+  romantic: 'romantic',
+} as const;
+
 export interface AiVideoRenderRequest {
   vendorId: number;
   /** Base prompt this video is for, stored on the resulting AiGeneration record. */
@@ -487,6 +502,8 @@ export interface AiVideoRenderRequest {
   motionTemplate?: AiVideoRenderRequestMotionTemplate;
   /** Whether to generate and mix in a short instrumental background track. Defaults to false. */
   includeMusic?: boolean;
+  /** Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM. */
+  musicMood?: AiVideoRenderRequestMusicMood;
 }
 
 export interface AiCaptionRequest {
@@ -2192,6 +2209,19 @@ to?: string;
  * Set to "true" to also include a per-vendor summary breakdown
  */
 breakdown?: string;
+};
+
+export type ExportAdminFinanceRollupParams = {
+period?: string;
+from?: string;
+to?: string;
+};
+
+export type ExportAdminFinanceRollup429 = {
+  error?: string;
+  count?: number;
+  threshold?: number;
+  windowMinutes?: number;
 };
 
 export type VerifyVendorDeletion200 = {

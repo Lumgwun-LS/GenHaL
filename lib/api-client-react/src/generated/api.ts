@@ -70,6 +70,8 @@ import type {
   Expense,
   ExpenseInput,
   ExpenseUpdate,
+  ExportAdminFinanceRollup429,
+  ExportAdminFinanceRollupParams,
   ExportExpensesParams,
   ExportInvestmentsParams,
   ExportSalesParams,
@@ -7526,6 +7528,90 @@ export function useGetAdminFinanceRollupAnalytics<TData = Awaited<ReturnType<typ
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminFinanceRollupAnalyticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportAdminFinanceRollupUrl = (params?: ExportAdminFinanceRollupParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/analytics/finance-rollup/export?${stringifiedParams}` : `/api/admin/analytics/finance-rollup/export`
+}
+
+/**
+ * @summary Download the company-wide finance rollup as a CSV (admin only)
+ */
+export const exportAdminFinanceRollup = async (params?: ExportAdminFinanceRollupParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportAdminFinanceRollupUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportAdminFinanceRollupQueryKey = (params?: ExportAdminFinanceRollupParams,) => {
+    return [
+    `/api/admin/analytics/finance-rollup/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportAdminFinanceRollupQueryOptions = <TData = Awaited<ReturnType<typeof exportAdminFinanceRollup>>, TError = ErrorType<ExportAdminFinanceRollup429>>(params?: ExportAdminFinanceRollupParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAdminFinanceRollup>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportAdminFinanceRollupQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAdminFinanceRollup>>> = ({ signal }) => exportAdminFinanceRollup(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportAdminFinanceRollup>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportAdminFinanceRollupQueryResult = NonNullable<Awaited<ReturnType<typeof exportAdminFinanceRollup>>>
+export type ExportAdminFinanceRollupQueryError = ErrorType<ExportAdminFinanceRollup429>
+
+
+/**
+ * @summary Download the company-wide finance rollup as a CSV (admin only)
+ */
+
+export function useExportAdminFinanceRollup<TData = Awaited<ReturnType<typeof exportAdminFinanceRollup>>, TError = ErrorType<ExportAdminFinanceRollup429>>(
+ params?: ExportAdminFinanceRollupParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportAdminFinanceRollup>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportAdminFinanceRollupQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -916,7 +916,7 @@ export const RenderAiVideoBody = zod.object({
   "captionText": zod.string().optional(),
   "motionTemplate": zod.enum(['auto', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'zoom-pan']).optional().describe('Camera motion style applied to each scene. \"auto\" cycles through templates across scenes. Defaults to \"auto\".'),
   "includeMusic": zod.boolean().optional().describe('Whether to generate and mix in a short instrumental background track. Defaults to false.'),
-  "musicMood": zod.enum(['upbeat', 'calm', 'corporate', 'festive', 'dramatic', 'romantic']).optional().describe('Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.')
+  "musicMood": zod.enum(['upbeat', 'calm', 'corporate', 'festive', 'dramatic', 'romantic']).optional().describe('Optional vendor-chosen mood\/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.')
 })
 
 export const RenderAiVideoResponse = zod.object({
@@ -2751,6 +2751,18 @@ export const GetAdminFinanceRollupAnalyticsResponse = zod.object({
   "overallRoiPercent": zod.number()
 })).optional()
 })
+
+
+/**
+ * @summary Download the company-wide finance rollup as a CSV (admin only)
+ */
+export const ExportAdminFinanceRollupQueryParams = zod.object({
+  "period": zod.coerce.string().optional(),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const ExportAdminFinanceRollupResponse = zod.unknown()
 
 
 /**

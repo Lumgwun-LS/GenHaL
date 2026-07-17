@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Optional vendor-chosen mood/style for the background music. When omitted the server derives a mood from the video prompt and caption via LLM.
+ */
 export type AiVideoRenderRequestMusicMood = typeof AiVideoRenderRequestMusicMood[keyof typeof AiVideoRenderRequestMusicMood];
 
 
-// eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AiVideoRenderRequestMusicMood = {
   upbeat: 'upbeat',
   calm: 'calm',

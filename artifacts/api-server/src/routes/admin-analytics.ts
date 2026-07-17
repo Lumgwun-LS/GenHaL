@@ -7,10 +7,11 @@
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable } from "@workspace/db";
+import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable } from "@workspace/db";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { resolveDateRange } from "../lib/date-range";
 import { computeFinanceOverview } from "../lib/finance-overview";
+import { getExportBurstStatus, checkExportBurst } from "../lib/admin-export-burst";
 
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS ?? "")
@@ -211,6 +212,136 @@ router.get("/admin/analytics/finance-rollup", async (req, res): Promise<void> =>
     ...overview,
     ...(byVendor ? { byVendor } : {}),
   });
+});
+
+/**
+ * GET /admin/analytics/finance-rollup/export?period=week|month|year|custom&from=&to=
+ *
+ * Downloads the finance rollup as a CSV. Always includes aggregate totals
+ * (one header row + one summary row) plus a per-vendor breakdown section.
+ * Reuses the same export-logging and burst-alert infrastructure as the
+ * vendor-list export so all admin data downloads count toward the same
+ * rate-limit window.
+ */
+router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const burstStatus = await getExportBurstStatus(userId);
+  if (burstStatus.blocked) {
+    res.status(429).json({
+      error:
+        "Exports from this account are paused after unusually frequent downloads. Ask another admin to review and clear the flag in the Admin Panel's Export History before exporting again.",
+      count: burstStatus.count,
+      threshold: burstStatus.threshold,
+      windowMinutes: burstStatus.windowMinutes,
+    });
+    return;
+  }
+
+  const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+
+  const [allSales, allExpenses, allInvestments, allVendors] = await Promise.all([
+    db.select().from(salesTable).where(and(gte(salesTable.saleDate, from), lte(salesTable.saleDate, to))),
+    db.select().from(expensesTable).where(and(gte(expensesTable.expenseDate, from), lte(expensesTable.expenseDate, to))),
+    db.select().from(investmentsTable),
+    db.select().from(vendorsTable),
+  ]);
+
+  const overview = computeFinanceOverview(allSales, allExpenses, allInvestments, from, to);
+  const vendorNameById = new Map(allVendors.map((v) => [v.id, v.name]));
+  const vendorIds = Array.from(new Set<number>([...allSales.map((s) => s.vendorId), ...allExpenses.map((e) => e.vendorId), ...allInvestments.map((i) => i.vendorId)]));
+
+  const byVendor = vendorIds.map((vendorId) => {
+    const vendorOverview = computeFinanceOverview(
+      allSales.filter((s) => s.vendorId === vendorId),
+      allExpenses.filter((e) => e.vendorId === vendorId),
+      allInvestments.filter((i) => i.vendorId === vendorId),
+      from,
+      to,
+    );
+    return {
+      vendorId,
+      vendorName: vendorNameById.get(vendorId) ?? "Unknown vendor",
+      totalRevenue: vendorOverview.profitAndLoss.totalRevenue,
+      totalExpenses: vendorOverview.profitAndLoss.totalExpenses,
+      netProfit: vendorOverview.profitAndLoss.netProfit,
+      totalInvested: vendorOverview.investmentRoi.totalInvested,
+      totalCurrentValue: vendorOverview.investmentRoi.totalCurrentValue,
+      overallRoiPercent: vendorOverview.investmentRoi.overallRoiPercent,
+    };
+  }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+  function csvCell(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    const s = v instanceof Date ? v.toISOString() : String(v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  const rangeLabel = `${from.toISOString().slice(0, 10)}_to_${to.toISOString().slice(0, 10)}`;
+  const filename = `finance-rollup-${rangeLabel}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  // ── Section 1: Platform aggregate totals ────────────────────────────────
+  res.write("# Platform Aggregate Totals\r\n");
+  res.write("Period From,Period To,Total Revenue,Total Expenses,Net Profit,Total Invested,Total Current Value,Overall ROI %\r\n");
+  res.write([
+    from.toISOString().slice(0, 10),
+    to.toISOString().slice(0, 10),
+    overview.profitAndLoss.totalRevenue.toFixed(2),
+    overview.profitAndLoss.totalExpenses.toFixed(2),
+    overview.profitAndLoss.netProfit.toFixed(2),
+    overview.investmentRoi.totalInvested.toFixed(2),
+    overview.investmentRoi.totalCurrentValue.toFixed(2),
+    overview.investmentRoi.overallRoiPercent.toFixed(2),
+  ].map(csvCell).join(",") + "\r\n");
+
+  // ── Section 2: Per-vendor breakdown ─────────────────────────────────────
+  res.write("\r\n# Per-Vendor Breakdown\r\n");
+  res.write("Vendor ID,Vendor Name,Total Revenue,Total Expenses,Net Profit,Total Invested,Total Current Value,Overall ROI %\r\n");
+
+  for (const v of byVendor) {
+    res.write([
+      v.vendorId,
+      v.vendorName,
+      v.totalRevenue.toFixed(2),
+      v.totalExpenses.toFixed(2),
+      v.netProfit.toFixed(2),
+      v.totalInvested.toFixed(2),
+      v.totalCurrentValue.toFixed(2),
+      v.overallRoiPercent.toFixed(2),
+    ].map(csvCell).join(",") + "\r\n");
+  }
+
+  // ── Section 3: Revenue trend ─────────────────────────────────────────────
+  res.write("\r\n# Daily Revenue Trend\r\n");
+  res.write("Date,Revenue\r\n");
+  for (const row of overview.revenueTrend) {
+    res.write([row.date, row.revenue.toFixed(2)].map(csvCell).join(",") + "\r\n");
+  }
+
+  // ── Section 4: Expense breakdown by category ─────────────────────────────
+  res.write("\r\n# Expense Breakdown by Category\r\n");
+  res.write("Category,Total\r\n");
+  for (const row of overview.expenseByCategory) {
+    res.write([row.category, row.total.toFixed(2)].map(csvCell).join(",") + "\r\n");
+  }
+
+  res.end();
+
+  const totalRows = 1 + byVendor.length + overview.revenueTrend.length + overview.expenseByCategory.length;
+  await db.insert(adminExportLogsTable).values({
+    adminUserId: userId,
+    filters: JSON.stringify({ type: "finance-rollup", period: req.query.period, from: from.toISOString(), to: to.toISOString() }),
+    rowCount: totalRows,
+  });
+
+  await checkExportBurst(userId);
 });
 
 export default router;
