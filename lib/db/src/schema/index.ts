@@ -56,3 +56,4 @@ export * from "./store-user-signups";
 export * from "./page-views";
 export * from "./vendor-addon-credits";
 export * from "./ads";
+export * from "./social-account-reconnect-log";

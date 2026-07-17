@@ -6,12 +6,14 @@
  *                                             and whether it's currently stuck failing
  * POST /admin/social-account-health-status/run — trigger a tick on demand
  * GET  /admin/social-account-health/needs-reconnect — the actual list of
- *                                             accounts currently broken
+ *                                             accounts currently broken, with
+ *                                             30-day reconnect-break counts so
+ *                                             admins can spot repeat offenders
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { eq } from "drizzle-orm";
-import { db, socialAccountsTable, vendorsTable } from "@workspace/db";
+import { eq, gte, sql } from "drizzle-orm";
+import { db, socialAccountsTable, vendorsTable, socialAccountReconnectLogTable } from "@workspace/db";
 import { getJobRunStatus } from "../lib/job-run-status";
 import { SOCIAL_ACCOUNT_HEALTH_JOB_NAME, tick } from "../lib/social-account-health-scheduler";
 
@@ -57,6 +59,20 @@ router.post("/admin/social-account-health-status/run", async (req, res): Promise
 
 router.get("/admin/social-account-health/needs-reconnect", async (req, res): Promise<void> => {
   if (!requireAdmin(req, res)) return;
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Subquery: count reconnect-log entries per social_account_id in the last 30 days.
+  const reconnectCounts = db
+    .select({
+      socialAccountId: socialAccountReconnectLogTable.socialAccountId,
+      count: sql<number>`cast(count(*) as int)`.as("count"),
+    })
+    .from(socialAccountReconnectLogTable)
+    .where(gte(socialAccountReconnectLogTable.occurredAt, thirtyDaysAgo))
+    .groupBy(socialAccountReconnectLogTable.socialAccountId)
+    .as("reconnect_counts");
+
   const rows = await db
     .select({
       id: socialAccountsTable.id,
@@ -67,11 +83,14 @@ router.get("/admin/social-account-health/needs-reconnect", async (req, res): Pro
       lastHealthCheckError: socialAccountsTable.lastHealthCheckError,
       healthCheckFailingSince: socialAccountsTable.healthCheckFailingSince,
       lastHealthCheckAt: socialAccountsTable.lastHealthCheckAt,
+      reconnectCount30d: sql<number>`coalesce(${reconnectCounts.count}, 0)`.as("reconnect_count_30d"),
     })
     .from(socialAccountsTable)
     .innerJoin(vendorsTable, eq(socialAccountsTable.vendorId, vendorsTable.id))
+    .leftJoin(reconnectCounts, eq(socialAccountsTable.id, reconnectCounts.socialAccountId))
     .where(eq(socialAccountsTable.status, "needs_reconnect"))
     .orderBy(socialAccountsTable.healthCheckFailingSince);
+
   res.json(rows);
 });
 

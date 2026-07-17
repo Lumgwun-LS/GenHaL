@@ -16,6 +16,8 @@ type NeedsReconnectAccount = {
   lastHealthCheckError: string | null;
   healthCheckFailingSince: string | null;
   lastHealthCheckAt: string | null;
+  /** Number of times this account transitioned active → needs_reconnect in the last 30 days. */
+  reconnectCount30d: number;
 };
 
 async function fetchNeedsReconnect(): Promise<NeedsReconnectAccount[]> {
@@ -42,6 +44,24 @@ function formatDuration(iso: string | null): string {
   return `${days}d`;
 }
 
+/** Badge shown when an account has broken more than once in 30 days. */
+function ReconnectCountBadge({ count }: { count: number }) {
+  if (count <= 1) return null;
+  const isHighFrequency = count >= 3;
+  return (
+    <Badge
+      className={
+        isHighFrequency
+          ? "ml-1.5 gap-1 bg-orange-500/15 text-orange-700 hover:bg-orange-500/15 border-orange-400/30"
+          : "ml-1.5 gap-1 bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/10 border-yellow-400/30"
+      }
+      title={`This account has broken and been reconnected ${count} time${count > 1 ? "s" : ""} in the last 30 days — it may have a deeper issue worth investigating.`}
+    >
+      ↻ {count}× in 30d
+    </Badge>
+  );
+}
+
 export default function SocialAccountHealthPanel() {
   const { data: accounts, isLoading, error } = useQuery({
     queryKey: ["admin-social-account-needs-reconnect"],
@@ -57,6 +77,7 @@ export default function SocialAccountHealthPanel() {
   }
 
   const list = accounts ?? [];
+  const repeatOffenders = list.filter((a) => a.reconnectCount30d >= 3);
 
   return (
     <div className="space-y-4">
@@ -71,6 +92,11 @@ export default function SocialAccountHealthPanel() {
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             {list.length} account{list.length > 1 ? "s" : ""} currently need{list.length > 1 ? "" : "s"} reconnecting.
+            {repeatOffenders.length > 0 && (
+              <span className="ml-1 font-medium text-orange-700">
+                {repeatOffenders.length} {repeatOffenders.length > 1 ? "are" : "is"} repeat offender{repeatOffenders.length > 1 ? "s" : ""} (3+ breaks in 30 days).
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -80,7 +106,9 @@ export default function SocialAccountHealthPanel() {
           <CardTitle className="text-base">Accounts Needing Reconnect</CardTitle>
           <CardDescription>
             Vendors have been notified in-app and by email; posts to these accounts won't publish
-            until they're reconnected from the Social Hub.
+            until they're reconnected from the Social Hub.{" "}
+            <span className="text-yellow-700">↻ N× in 30d</span> badges highlight accounts that
+            keep breaking — these may need direct follow-up.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -111,7 +139,10 @@ export default function SocialAccountHealthPanel() {
                     <TableCell>
                       <Badge variant="outline">{a.platform}</Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{a.accountName}</TableCell>
+                    <TableCell className="text-sm">
+                      {a.accountName}
+                      <ReconnectCountBadge count={a.reconnectCount30d} />
+                    </TableCell>
                     <TableCell className="text-sm">
                       <Badge className="gap-1 bg-red-500/15 text-red-600 hover:bg-red-500/15">
                         {formatDuration(a.healthCheckFailingSince)}

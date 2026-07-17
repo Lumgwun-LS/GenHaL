@@ -26,7 +26,7 @@
  * retry, but would spam Slack/email every hour here.
  */
 import { eq, inArray } from "drizzle-orm";
-import { db, socialAccountsTable, vendorsTable, vendorNotificationsTable } from "@workspace/db";
+import { db, socialAccountsTable, vendorsTable, vendorNotificationsTable, socialAccountReconnectLogTable } from "@workspace/db";
 import { decrypt, encrypt } from "./encryption";
 import { validateMetaAccessToken } from "./meta";
 import { fetchLinkedInProfile, refreshLinkedInAccessToken, isLinkedInAuthError } from "./linkedin";
@@ -137,6 +137,10 @@ async function markInvalid(account: SocialAccountRow, wasActive: boolean, messag
     .where(eq(socialAccountsTable.id, account.id));
 
   if (wasActive) {
+    // Record each active → needs_reconnect transition so the admin health tab
+    // can surface accounts that keep flapping (broken, reconnected, broken again).
+    await db.insert(socialAccountReconnectLogTable).values({ socialAccountId: account.id });
+
     await sendSlackAlert(
       `:rotating_light: *${account.platform}* account "${account.accountName}" (vendor ${account.vendorId}) stopped validating: ${message}\n` +
         `The vendor has been notified to reconnect it from the Social Hub.`,
