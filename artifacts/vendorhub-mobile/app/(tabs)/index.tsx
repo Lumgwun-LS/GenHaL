@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { Card } from '@/components/Card';
@@ -216,6 +217,30 @@ export default function DashboardScreen() {
         />
       </View>
 
+      {/* ── Quick actions ── */}
+      <Animated.View
+        style={styles.quickActions}
+        entering={FadeInDown.delay(300).springify().damping(18)}
+      >
+        <Pressable
+          onPress={() => router.push('/social/new' as any)}
+          style={({ pressed }) => [
+            styles.quickActionBtn,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.primary + '30',
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <View style={[styles.quickActionIcon, { backgroundColor: colors.primary + '18' }]}>
+            <Feather name="edit-3" size={18} color={colors.primary} />
+          </View>
+          <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>New Post</Text>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </Pressable>
+      </Animated.View>
+
       {/* ── Revenue trend (last 7 days) ── */}
       {revenueTrend.some((d) => d.value > 0) && (
         <Animated.View
@@ -423,5 +448,35 @@ const styles = StyleSheet.create({
   chartCard: {
     padding: 16,
     marginBottom: 0,
+  },
+  quickActions: {
+    marginHorizontal: 20,
+    marginTop: 16,
+  },
+  quickActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 12,
+    shadowColor: '#7F50FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
   },
 });
