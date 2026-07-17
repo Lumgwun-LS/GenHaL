@@ -38,7 +38,7 @@ router.patch("/profile", async (req, res) => {
   const {
     name, phone, address, description, logoUrl, gender, country, state, city,
     pushPaymentAlertsEnabled, pushVoiceCampaignAlertsEnabled, pushPostRemindersEnabled,
-    pushAiMediaExpiryEnabled,
+    pushAiMediaExpiryEnabled, postReminderLeadMinutes,
   } = req.body as {
     name?: string;
     phone?: string;
@@ -53,7 +53,14 @@ router.patch("/profile", async (req, res) => {
     pushVoiceCampaignAlertsEnabled?: boolean;
     pushPostRemindersEnabled?: boolean;
     pushAiMediaExpiryEnabled?: boolean;
+    postReminderLeadMinutes?: number;
   };
+
+  // Validate lead-time preference against the supported options.
+  const VALID_LEAD_MINUTES = [15, 30, 60, 240, 1440] as const;
+  if (postReminderLeadMinutes !== undefined && !VALID_LEAD_MINUTES.includes(postReminderLeadMinutes as any)) {
+    return res.status(400).json({ error: `postReminderLeadMinutes must be one of: ${VALID_LEAD_MINUTES.join(", ")}` });
+  }
 
   const [updated] = await db
     .update(vendorsTable)
@@ -71,6 +78,7 @@ router.patch("/profile", async (req, res) => {
       ...(pushVoiceCampaignAlertsEnabled !== undefined && { pushVoiceCampaignAlertsEnabled }),
       ...(pushPostRemindersEnabled !== undefined && { pushPostRemindersEnabled }),
       ...(pushAiMediaExpiryEnabled !== undefined && { pushAiMediaExpiryEnabled }),
+      ...(postReminderLeadMinutes !== undefined && { postReminderLeadMinutes }),
       updatedAt: new Date(),
     })
     .where(eq(vendorsTable.id, vendorId))

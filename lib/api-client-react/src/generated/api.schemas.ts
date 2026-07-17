@@ -49,6 +49,8 @@ export interface Vendor {
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
   announcementEmailOptOut?: boolean;
+  /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
+  postReminderLeadMinutes?: number;
   subscriptionTier?: string;
   verificationLevel?: string;
   /** @nullable */
@@ -107,6 +109,8 @@ export interface VendorUpdate {
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
   announcementEmailOptOut?: boolean;
+  /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
+  postReminderLeadMinutes?: number;
 }
 
 export interface DeletionEligibility {
@@ -755,6 +759,8 @@ export interface ExternalProfileUpdate {
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
+  /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
+  postReminderLeadMinutes?: number;
 }
 
 export interface ExternalAnalyticsSummary {

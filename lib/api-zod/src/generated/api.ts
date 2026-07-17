@@ -56,6 +56,7 @@ export const ListVendorsResponseItem = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -114,6 +115,7 @@ export const CreateVendorResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -169,6 +171,7 @@ export const OnboardVendorResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -233,6 +236,7 @@ export const GetVendorResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -272,7 +276,8 @@ export const UpdateVendorBody = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
-  "announcementEmailOptOut": zod.boolean().optional()
+  "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.')
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -305,6 +310,7 @@ export const UpdateVendorResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -3011,6 +3017,7 @@ export const GetExternalProfileResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),
@@ -3042,7 +3049,8 @@ export const UpdateExternalProfileBody = zod.object({
   "pushPaymentAlertsEnabled": zod.boolean().optional(),
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
-  "pushAiMediaExpiryEnabled": zod.boolean().optional()
+  "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.')
 })
 
 export const UpdateExternalProfileResponse = zod.object({
@@ -3075,6 +3083,7 @@ export const UpdateExternalProfileResponse = zod.object({
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
   "verificationLevel": zod.string().optional(),
   "stripeCustomerId": zod.string().nullish(),

@@ -3955,6 +3955,9 @@ components:
           type: boolean
         announcementEmailOptOut:
           type: boolean
+        postReminderLeadMinutes:
+          type: integer
+          description: "Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440."
         subscriptionTier:
           type: string
         verificationLevel:
@@ -4053,6 +4056,9 @@ components:
           type: boolean
         announcementEmailOptOut:
           type: boolean
+        postReminderLeadMinutes:
+          type: integer
+          description: "Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440."
 
     DeletionEligibility:
       type: object
@@ -5160,6 +5166,9 @@ components:
           type: boolean
         pushAiMediaExpiryEnabled:
           type: boolean
+        postReminderLeadMinutes:
+          type: integer
+          description: "Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440."
 
     ExternalAnalyticsSummary:
       type: object

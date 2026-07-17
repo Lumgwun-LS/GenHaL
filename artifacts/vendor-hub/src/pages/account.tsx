@@ -36,6 +36,61 @@ const GENDERS = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
+const REMINDER_LEAD_OPTIONS = [
+  { value: 15, label: "15 minutes before" },
+  { value: 30, label: "30 minutes before" },
+  { value: 60, label: "1 hour before" },
+  { value: 240, label: "4 hours before" },
+  { value: 1440, label: "1 day before" },
+];
+
+function PostReminderLeadSection({ vendorId, currentLeadMinutes }: { vendorId: number; currentLeadMinutes: number }) {
+  const [leadMinutes, setLeadMinutes] = useState(currentLeadMinutes);
+  const updateVendor = useUpdateVendor();
+
+  function save() {
+    updateVendor.mutate(
+      { id: vendorId, data: { postReminderLeadMinutes: leadMinutes } as any },
+      {
+        onSuccess: () => toast.success("Reminder timing saved"),
+        onError: () => toast.error("Could not update reminder timing"),
+      },
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Pre-publish reminder timing</CardTitle>
+        <CardDescription>
+          Choose how far ahead you want a heads-up before a scheduled post goes live. You'll get a push notification and email at that time.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Remind me</Label>
+          <Select value={String(leadMinutes)} onValueChange={(v) => setLeadMinutes(Number(v))}>
+            <SelectTrigger className="w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REMINDER_LEAD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={String(opt.value)}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={save} disabled={updateVendor.isPending || leadMinutes === currentLeadMinutes}>
+          {updateVendor.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+          Save
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProfileSection({ vendorId, gender, country, state, city }: { vendorId: number; gender: string | null; country: string | null; state: string | null; city: string | null }) {
   const [form, setForm] = useState({
     gender: gender ?? "",
@@ -239,6 +294,11 @@ export default function Account() {
         <h1 className="text-3xl font-bold tracking-tight">Account</h1>
         <p className="text-muted-foreground">Manage your profile details and account data.</p>
       </div>
+
+      <PostReminderLeadSection
+        vendorId={myVendor.id}
+        currentLeadMinutes={(myVendor as any).postReminderLeadMinutes ?? 30}
+      />
 
       <ProfileSection
         vendorId={myVendor.id}

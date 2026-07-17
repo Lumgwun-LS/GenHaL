@@ -55,6 +55,9 @@ export const vendorsTable = pgTable("vendors", {
   // Bulk admin announcement emails — vendor-controlled, default on (opt-out, not opt-in),
   // so existing behavior (everyone gets emailed) doesn't silently change for anyone.
   announcementEmailOptOut: boolean("announcement_email_opt_out").notNull().default(false),
+  // How many minutes before a scheduled post the vendor wants their pre-publish reminder.
+  // Supported values: 15, 30, 60, 240, 1440. Defaults to 30 (legacy fixed lead time).
+  postReminderLeadMinutes: integer("post_reminder_lead_minutes").notNull().default(30),
   // Demographics — self-reported by the vendor, used for admin analytics
   gender: text("gender"), // male|female|other|prefer_not_to_say
   country: text("country"),
