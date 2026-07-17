@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank, Download } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank, Download, ArrowLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { VendorFinanceOverview } from "@/components/VendorFinanceOverview";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 import {
@@ -36,12 +37,18 @@ const PERIODS = [
 
 const PIE_COLORS = ["hsl(217 91% 60%)", "hsl(24 95% 62%)", "hsl(142 71% 45%)", "hsl(0 84% 60%)", "hsl(271 81% 56%)", "hsl(48 96% 53%)", "hsl(199 89% 48%)", "hsl(340 82% 52%)", "hsl(160 84% 39%)", "hsl(280 65% 60%)"];
 
+interface DrilldownVendor {
+  vendorId: number;
+  vendorName: string;
+}
+
 export default function AdminFinanceRollupPanel() {
   const [period, setPeriod] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [drilldown, setDrilldown] = useState<DrilldownVendor | null>(null);
 
   const params = {
     period,
@@ -84,6 +91,40 @@ export default function AdminFinanceRollupPanel() {
     } finally {
       setExporting(false);
     }
+  }
+
+  // Drill-down view: show a single vendor's full finance overview
+  if (drilldown) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDrilldown(null)}
+            className="gap-1.5"
+            data-testid="btn-finance-drilldown-back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to rollup
+          </Button>
+          <div className="text-sm text-muted-foreground">
+            Finance Rollup
+            <ChevronRight className="inline h-3.5 w-3.5 mx-1" />
+            <span className="font-medium text-foreground">{drilldown.vendorName}</span>
+          </div>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{drilldown.vendorName} — Finance Overview</CardTitle>
+            <CardDescription>Full revenue, P&amp;L, expenses, and investment performance for this vendor.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <VendorFinanceOverview vendorId={drilldown.vendorId} vendorName={drilldown.vendorName} />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const netProfit = data?.profitAndLoss.netProfit ?? 0;
@@ -278,7 +319,10 @@ export default function AdminFinanceRollupPanel() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Per-vendor breakdown</CardTitle>
-                <CardDescription>Revenue, expenses, and investment performance for each vendor over the selected period.</CardDescription>
+                <CardDescription>
+                  Revenue, expenses, and investment performance for each vendor over the selected period.{" "}
+                  <span className="text-muted-foreground">Click a row to see that vendor's full finance charts.</span>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {!data.byVendor?.length ? (
@@ -295,11 +339,17 @@ export default function AdminFinanceRollupPanel() {
                           <TableHead className="text-right">Invested</TableHead>
                           <TableHead className="text-right">Current Value</TableHead>
                           <TableHead className="text-right">ROI</TableHead>
+                          <TableHead className="w-8" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {data.byVendor.map((v) => (
-                          <TableRow key={v.vendorId} data-testid={`row-finance-rollup-vendor-${v.vendorId}`}>
+                          <TableRow
+                            key={v.vendorId}
+                            data-testid={`row-finance-rollup-vendor-${v.vendorId}`}
+                            className="cursor-pointer hover:bg-muted/60 transition-colors"
+                            onClick={() => setDrilldown({ vendorId: v.vendorId, vendorName: v.vendorName })}
+                          >
                             <TableCell className="font-medium">{v.vendorName}</TableCell>
                             <TableCell className="text-right">${v.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                             <TableCell className="text-right">${v.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
@@ -310,6 +360,9 @@ export default function AdminFinanceRollupPanel() {
                             <TableCell className="text-right">${v.totalCurrentValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                             <TableCell className={`text-right ${v.overallRoiPercent >= 0 ? "text-emerald-500" : "text-destructive"}`}>
                               {v.overallRoiPercent.toFixed(1)}%
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <ChevronRight className="h-4 w-4 text-muted-foreground inline" />
                             </TableCell>
                           </TableRow>
                         ))}
