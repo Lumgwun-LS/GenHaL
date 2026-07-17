@@ -23,6 +23,7 @@ import {
   LineChart,
   DollarSign,
   Building2,
+  Megaphone,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/vendors", label: "Vendors", icon: Users },
   { href: "/social", label: "Social Hub", icon: Share2 },
+  { href: "/ads", label: "Ads Suite", icon: Megaphone },
   { href: "/ai-studio", label: "AI Studio", icon: Sparkles },
   { href: "/products", label: "Products", icon: Package },
   { href: "/inventory", label: "Inventory", icon: Archive },
