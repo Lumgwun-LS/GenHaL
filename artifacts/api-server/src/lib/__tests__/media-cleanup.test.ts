@@ -1,0 +1,389 @@
+/**
+ * Guards the AI media cleanup job (task #193): confirms the sweep pass never
+ * deletes a media object that is still attached to a post, always deletes
+ * objects that are genuinely orphaned and past the retention window, and
+ * leaves fresh generations alone regardless of attachment status.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ─── Shared mutable state ─────────────────────────────────────────────────────
+
+/** Rows returned by the ai_generations SELECT candidate query. */
+let aiCandidateRows: Array<{ id: number; result: string }> = [];
+/** Rows returned by the vendor_uploads SELECT candidate query. */
+let uploadCandidateRows: Array<{ id: number; mediaUrl: string }> = [];
+
+/**
+ * URL → boolean: controls whether isMediaStillInUse() returns true for that URL.
+ * A missing / undefined entry means "not in use" (false).
+ */
+const inUseByUrl: Record<string, boolean> = {};
+
+/** All db.update().set() calls captured for assertions. */
+const updateSets: Array<{ table: string; set: Record<string, unknown>; whereVal: unknown }> = [];
+/** objectStorageService.deleteObject() path arguments captured. */
+const deletedObjectPaths: string[] = [];
+
+// ─── Mock @workspace/db ───────────────────────────────────────────────────────
+
+const aiGenerationsTableRef = {
+  id: "ag.id",
+  type: "ag.type",
+  status: "ag.status",
+  result: "ag.result",
+  mediaDeletedAt: "ag.media_deleted_at",
+  mediaWarningSentAt: "ag.media_warning_sent_at",
+  mediaLastCheckedAt: "ag.media_last_checked_at",
+  createdAt: "ag.created_at",
+  vendorId: "ag.vendor_id",
+};
+const postsTableRef = { id: "posts.id", mediaUrls: "posts.media_urls" };
+const vendorUploadsTableRef = {
+  id: "vu.id",
+  vendorId: "vu.vendor_id",
+  mediaUrl: "vu.media_url",
+  mediaType: "vu.media_type",
+  mediaDeletedAt: "vu.media_deleted_at",
+  mediaWarningSentAt: "vu.media_warning_sent_at",
+  mediaLastCheckedAt: "vu.media_last_checked_at",
+  createdAt: "vu.created_at",
+};
+const vendorNotificationsTableRef = {};
+
+vi.mock("@workspace/db", () => {
+  /**
+   * Build a chainable query object. We track which `table` was passed to
+   * `.from()` so the `.limit()` terminal knows what rows to return.
+   *
+   * For the posts lookup (isMediaStillInUse) the real query uses
+   *   WHERE url = ANY(posts.media_urls)
+   * We simulate this by inspecting the last `sql` condition's `values` array
+   * to extract the URL, then consulting `inUseByUrl`.
+   */
+  const makeSelect = () => {
+    let _fromTable: unknown = null;
+    // The SQL condition passed to .where() carries the candidate URL in its
+    // `values` array when it's the posts lookup.
+    let _lastSqlValues: unknown[] = [];
+
+    const chain = {
+      from: (table: unknown) => {
+        _fromTable = table;
+        return chain;
+      },
+      where: (...args: unknown[]) => {
+        // Flatten nested args to extract any sql() node with a values array.
+        function extractSqlValues(node: unknown): unknown[] {
+          if (!node || typeof node !== "object") return [];
+          const obj = node as Record<string, unknown>;
+          if (Array.isArray(obj["values"])) return obj["values"] as unknown[];
+          return Object.values(obj).flatMap(extractSqlValues);
+        }
+        _lastSqlValues = args.flatMap(extractSqlValues);
+        return chain;
+      },
+      orderBy: (..._args: unknown[]) => chain,
+      limit: async (_n: number) => {
+        if (_fromTable === postsTableRef) {
+          // isMediaStillInUse — the URL is the first value in the sql node.
+          const url = _lastSqlValues[0] as string | undefined;
+          if (url && inUseByUrl[url]) return [{ id: 9999 }];
+          return [];
+        }
+        if (_fromTable === aiGenerationsTableRef) return aiCandidateRows;
+        if (_fromTable === vendorUploadsTableRef) return uploadCandidateRows;
+        return [];
+      },
+    };
+    return chain;
+  };
+
+  const makeUpdate = (tableTag: string) => ({
+    set: (vals: Record<string, unknown>) => ({
+      where: (cond: unknown) => {
+        // Extract numeric id from the eq() mock: { val: number }
+        const whereVal = (cond as Record<string, unknown>)?.val;
+        updateSets.push({ table: tableTag, set: vals, whereVal });
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  return {
+    db: {
+      select: () => makeSelect(),
+      update: (table: unknown) => {
+        if (table === aiGenerationsTableRef) return makeUpdate("ai_generations");
+        if (table === vendorUploadsTableRef) return makeUpdate("vendor_uploads");
+        if (table === vendorNotificationsTableRef) return makeUpdate("vendor_notifications");
+        return makeUpdate("unknown");
+      },
+      insert: () => ({ values: async () => {} }),
+    },
+    aiGenerationsTable: aiGenerationsTableRef,
+    postsTable: postsTableRef,
+    vendorUploadsTable: vendorUploadsTableRef,
+    vendorNotificationsTable: vendorNotificationsTableRef,
+  };
+});
+
+// ─── Mock drizzle-orm ─────────────────────────────────────────────────────────
+
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => ({ and: args }),
+  asc: (col: unknown) => ({ asc: col }),
+  eq: (_col: unknown, val: unknown) => ({ val }),
+  inArray: (col: unknown, vals: unknown) => ({ inArray: { col, vals } }),
+  isNull: (col: unknown) => ({ isNull: col }),
+  lt: (col: unknown, val: unknown) => ({ lt: { col, val } }),
+  gte: (col: unknown, val: unknown) => ({ gte: { col, val } }),
+  // sql tagged template: store the first interpolated value in `values` so our
+  // mock can extract the media URL from the isMediaStillInUse ANY() check.
+  sql: Object.assign(
+    (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join(""), values }),
+    { raw: (s: string) => s },
+  ),
+}));
+
+// ─── Mock ObjectStorageService ────────────────────────────────────────────────
+// Must use `class` (not an arrow function) because media-cleanup.ts does
+// `new ObjectStorageService()` at module scope.
+
+vi.mock("../objectStorage", () => ({
+  ObjectStorageService: class {
+    async deleteObject(path: string) {
+      deletedObjectPaths.push(path);
+    }
+  },
+}));
+
+// ─── Mock generated-media-storage ─────────────────────────────────────────────
+
+vi.mock("../generated-media-storage", () => ({
+  extractMediaObjectId: (url: string) => {
+    const match = url.match(/\/api\/media\/([^/]+)/);
+    return match ? match[1] : null;
+  },
+}));
+
+// ─── Mock push / job-run-status / logger ──────────────────────────────────────
+
+vi.mock("../push", () => ({
+  sendPushToVendor: vi.fn(async () => {}),
+}));
+
+vi.mock("../job-run-status", () => ({
+  recordJobRun: vi.fn(async () => {}),
+}));
+
+vi.mock("../logger", () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MEDIA_URL_A = "/api/media/abc123";
+const MEDIA_URL_B = "/api/media/def456";
+
+function resetState() {
+  aiCandidateRows = [];
+  uploadCandidateRows = [];
+  Object.keys(inUseByUrl).forEach((k) => delete inUseByUrl[k]);
+  updateSets.length = 0;
+  deletedObjectPaths.length = 0;
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe("sweepOrphanedAiMedia — core sweep scenarios", () => {
+  beforeEach(resetState);
+
+  it("deletes an old unreferenced generation and stamps mediaDeletedAt", async () => {
+    aiCandidateRows = [{ id: 1, result: MEDIA_URL_A }];
+    // No post references this URL
+    inUseByUrl[MEDIA_URL_A] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { checked, deleted } = await sweepOrphanedMedia();
+
+    expect(checked).toBeGreaterThanOrEqual(1);
+    expect(deleted).toBeGreaterThanOrEqual(1);
+
+    // Object must have been passed to deleteObject
+    expect(deletedObjectPaths.some((p) => p.includes("abc123"))).toBe(true);
+
+    // Row must have mediaDeletedAt stamped
+    const update = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 1);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
+  });
+
+  it("leaves an old generation alone when it is still referenced by a post", async () => {
+    aiCandidateRows = [{ id: 2, result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = true; // URL is in use
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    expect(deleted).toBe(0);
+    // Storage must NOT have been touched
+    expect(deletedObjectPaths).toHaveLength(0);
+    // The row gets mediaLastCheckedAt bumped for rotation, but not mediaDeletedAt
+    const update = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 2);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeUndefined();
+    expect(update!.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+  });
+
+  it("does nothing when there are no candidate rows", async () => {
+    aiCandidateRows = [];
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { checked, deleted } = await sweepOrphanedMedia();
+
+    expect(checked).toBe(0);
+    expect(deleted).toBe(0);
+    expect(deletedObjectPaths).toHaveLength(0);
+    // No updates should have been made for ai_generations
+    expect(updateSets.filter((u) => u.table === "ai_generations")).toHaveLength(0);
+  });
+
+  it("sweeps a generation whose referencing post was later deleted", async () => {
+    // The post that used to reference this URL was deleted; inUseByUrl = false
+    aiCandidateRows = [{ id: 3, result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(deletedObjectPaths.some((p) => p.includes("abc123"))).toBe(true);
+
+    const update = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 3);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
+  });
+
+  it("handles multiple orphaned candidates in one tick: deletes all unreferenced rows", async () => {
+    aiCandidateRows = [
+      { id: 10, result: MEDIA_URL_A },
+      { id: 11, result: MEDIA_URL_B },
+    ];
+    // Both URLs are orphaned
+    inUseByUrl[MEDIA_URL_A] = false;
+    inUseByUrl[MEDIA_URL_B] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { checked, deleted } = await sweepOrphanedMedia();
+
+    expect(checked).toBeGreaterThanOrEqual(2);
+    expect(deleted).toBeGreaterThanOrEqual(2);
+    expect(deletedObjectPaths.some((p) => p.includes("abc123"))).toBe(true);
+    expect(deletedObjectPaths.some((p) => p.includes("def456"))).toBe(true);
+  });
+
+  it("skips deletion for an in-use row and deletes the orphaned sibling", async () => {
+    aiCandidateRows = [
+      { id: 20, result: MEDIA_URL_A }, // in use — must be skipped
+      { id: 21, result: MEDIA_URL_B }, // orphaned — must be deleted
+    ];
+    inUseByUrl[MEDIA_URL_A] = true;
+    inUseByUrl[MEDIA_URL_B] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    // Only the orphaned row should be deleted
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(deletedObjectPaths.some((p) => p.includes("def456"))).toBe(true);
+    expect(deletedObjectPaths.some((p) => p.includes("abc123"))).toBe(false);
+
+    // In-use row gets only mediaLastCheckedAt (rotation), not mediaDeletedAt
+    const inUseUpdate = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 20);
+    expect(inUseUpdate?.set.mediaDeletedAt).toBeUndefined();
+    expect(inUseUpdate?.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+
+    // Orphaned row gets mediaDeletedAt
+    const deletedUpdate = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 21);
+    expect(deletedUpdate?.set.mediaDeletedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("sweepOrphanedMedia — vendor uploads sweep", () => {
+  beforeEach(resetState);
+
+  it("deletes an old unreferenced vendor upload and stamps mediaDeletedAt", async () => {
+    uploadCandidateRows = [{ id: 50, mediaUrl: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(deletedObjectPaths.some((p) => p.includes("abc123"))).toBe(true);
+
+    const update = updateSets.find((u) => u.table === "vendor_uploads" && u.whereVal === 50);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
+  });
+
+  it("leaves an old vendor upload alone when it is still referenced by a post", async () => {
+    uploadCandidateRows = [{ id: 51, mediaUrl: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = true;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    expect(deleted).toBe(0);
+    expect(deletedObjectPaths).toHaveLength(0);
+
+    const update = updateSets.find((u) => u.table === "vendor_uploads" && u.whereVal === 51);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeUndefined();
+    expect(update!.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+  });
+
+  it("sweeps a vendor upload whose referencing post was later deleted", async () => {
+    uploadCandidateRows = [{ id: 52, mediaUrl: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false; // post was deleted
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    const { deleted } = await sweepOrphanedMedia();
+
+    expect(deleted).toBeGreaterThanOrEqual(1);
+
+    const update = updateSets.find((u) => u.table === "vendor_uploads" && u.whereVal === 52);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("sweepOrphanedMedia — mediaLastCheckedAt rotation", () => {
+  beforeEach(resetState);
+
+  it("bumps mediaLastCheckedAt (but NOT mediaDeletedAt) for an in-use generation", async () => {
+    aiCandidateRows = [{ id: 60, result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = true;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    await sweepOrphanedMedia();
+
+    const update = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 60);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+    expect(update!.set.mediaDeletedAt).toBeUndefined();
+  });
+
+  it("stamps both mediaDeletedAt AND mediaLastCheckedAt when sweeping an orphaned generation", async () => {
+    aiCandidateRows = [{ id: 61, result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false;
+
+    const { sweepOrphanedMedia } = await import("../media-cleanup");
+    await sweepOrphanedMedia();
+
+    const update = updateSets.find((u) => u.table === "ai_generations" && u.whereVal === 61);
+    expect(update).toBeDefined();
+    expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
+    expect(update!.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+  });
+});
