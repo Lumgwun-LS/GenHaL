@@ -157,6 +157,15 @@ export const DEFAULT_SITE_CONTENT = {
     paystack: true,
     paypal: false,
   },
+  // Free-trial settings — admin-editable. When enabled, new vendors may start
+  // a Stripe-backed trial: card is captured up front but not charged until the
+  // trial ends. Stripe auto-converts to a paid subscription at trial end unless
+  // the vendor cancels first. durationDays is passed directly to Stripe's
+  // trial_period_days and to the UI so vendors know how long the trial runs.
+  "billing.trialSettings": {
+    enabled: true,
+    durationDays: 14,
+  },
   // Per-unit overage & add-on pricing (USD). Applied when a paid-tier vendor
   // exhausts their included monthly quota and continues using a resource
   // (pay-as-you-go overage), or when any vendor proactively buys a bundle of
@@ -290,6 +299,11 @@ const paymentGatewaysSchema = z
     message: "At least one payment gateway must stay enabled.",
   });
 
+const trialSettingsSchema = z.object({
+  enabled: z.boolean(),
+  durationDays: z.number().int().min(1).max(365),
+});
+
 const overageRateValue = z.number().min(0).max(10000);
 const overageRatesSchema = z.object({
   aiImages:     overageRateValue,
@@ -313,6 +327,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.voiceBackfillRecentFixes": voiceBackfillRecentFixesSchema,
   "billing.subscriptionPlans": subscriptionPlansSchema,
   "billing.paymentGateways": paymentGatewaysSchema,
+  "billing.trialSettings": trialSettingsSchema,
   "billing.overageRates": overageRatesSchema,
 };
 

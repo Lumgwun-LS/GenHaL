@@ -33,6 +33,7 @@ import { reconcileVendorSubscription, applyVendorTierDowngrade } from "../lib/su
 import { reconcileVendorPaystackSubscription } from "../lib/paystack-sync";
 import { getSubscriptionPlans, getEnabledSubscriptionGateways, type SubscriptionGateway } from "../lib/subscription-plans";
 import { getUsageSummary } from "../lib/usage";
+import { getSiteContentBlock } from "../lib/site-content";
 
 const router = Router();
 
@@ -81,8 +82,14 @@ const checkoutInFlight = new Map<
 type PlanTier = "starter" | "pro" | "enterprise";
 const VALID_UPGRADE_TIERS: PlanTier[] = ["starter", "pro", "enterprise"];
 
-/** Number of days in the free trial period. Vendors enter their card at checkout but are not charged until the trial ends. */
-const TRIAL_PERIOD_DAYS = 14;
+/** Reads the admin-editable trial settings from site-content. Falls back to safe defaults if not configured. */
+async function getTrialSettings(): Promise<{ enabled: boolean; durationDays: number }> {
+  const block = (await getSiteContentBlock("billing.trialSettings")) as { enabled?: boolean; durationDays?: number } | null;
+  return {
+    enabled: block?.enabled ?? true,
+    durationDays: typeof block?.durationDays === "number" && block.durationDays >= 1 ? block.durationDays : 14,
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,14 +138,25 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
     return;
   }
 
+  const [trialSettings, plans, enabledGateways] = await Promise.all([
+    getTrialSettings(),
+    getSubscriptionPlans(),
+    getEnabledSubscriptionGateways(),
+  ]);
+
   res.json({
     currentTier: vendor.subscriptionTier,
     trialEndsAt: vendor.trialEndsAt?.toISOString() ?? null,
+    // trialAvailable: only true when the admin has trials enabled AND the vendor
+    // has never subscribed or trialled before.
     trialAvailable:
-      vendor.subscriptionTier === "free" && !vendor.stripeSubscriptionId && !vendor.trialEndsAt,
-    trialPeriodDays: TRIAL_PERIOD_DAYS,
-    plans: await getSubscriptionPlans(),
-    enabledGateways: await getEnabledSubscriptionGateways(),
+      trialSettings.enabled &&
+      vendor.subscriptionTier === "free" &&
+      !vendor.stripeSubscriptionId &&
+      !vendor.trialEndsAt,
+    trialPeriodDays: trialSettings.durationDays,
+    plans,
+    enabledGateways,
   });
 });
 
@@ -228,7 +246,14 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
   }
 
   // Trial guard — validate trial eligibility before creating any checkout session.
+  let trialDurationDays = 14;
   if (withTrial) {
+    const trialSettings = await getTrialSettings();
+    if (!trialSettings.enabled) {
+      res.status(400).json({ error: "Free trials are not currently available." });
+      return;
+    }
+    trialDurationDays = trialSettings.durationDays;
     if (gatewayProvider !== "stripe") {
       res.status(400).json({ error: "Free trials are only available via Stripe (card payment)." });
       return;
@@ -236,6 +261,12 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     if (vendor.stripeSubscriptionId) {
       res.status(409).json({
         error: "You already have an active Stripe subscription. Free trials are only available for new subscribers.",
+      });
+      return;
+    }
+    if (vendor.trialEndsAt) {
+      res.status(409).json({
+        error: "You have already used your free trial. Subscribe directly to continue.",
       });
       return;
     }
@@ -370,7 +401,7 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
       subscription_data: {
         // When withTrial is true, Stripe captures the card but does not charge
         // it until the trial ends. The vendor gets full plan access immediately.
-        ...(withTrial ? { trial_period_days: TRIAL_PERIOD_DAYS } : {}),
+        ...(withTrial ? { trial_period_days: trialDurationDays } : {}),
         metadata: {
           upgradeVendorId: id.toString(),
           upgradeTier: tier,

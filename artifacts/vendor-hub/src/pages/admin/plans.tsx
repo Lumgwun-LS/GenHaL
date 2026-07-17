@@ -41,6 +41,11 @@ interface PaymentGateways {
   paystack: boolean;
 }
 
+interface TrialSettings {
+  enabled: boolean;
+  durationDays: number;
+}
+
 interface OverageRates {
   aiImages: number;
   aiVideos: number;
@@ -78,19 +83,36 @@ const DEFAULT_OVERAGE_RATES: OverageRates = {
   email: 0.01,
 };
 
-async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways; overageRates: OverageRates }> {
+const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: true, durationDays: 14 };
+
+async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways; overageRates: OverageRates; trialSettings: TrialSettings }> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plans");
   const content = (await res.json()) as {
     "billing.subscriptionPlans": { plans: Plan[] };
     "billing.paymentGateways"?: PaymentGateways;
     "billing.overageRates"?: OverageRates;
+    "billing.trialSettings"?: TrialSettings;
   };
   return {
     plans: content["billing.subscriptionPlans"].plans,
     gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true },
     overageRates: content["billing.overageRates"] ?? DEFAULT_OVERAGE_RATES,
+    trialSettings: content["billing.trialSettings"] ?? DEFAULT_TRIAL_SETTINGS,
   };
+}
+
+async function saveTrialSettings(settings: TrialSettings): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.trialSettings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value: settings }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save trial settings");
+  }
 }
 
 async function saveOverageRates(rates: OverageRates): Promise<void> {
@@ -257,10 +279,12 @@ export default function PlansEditor() {
   const [draft, setDraft] = useState<Plan[]>([]);
   const [gateways, setGateways] = useState<PaymentGateways>({ stripe: true, paystack: true });
   const [overageRates, setOverageRates] = useState<OverageRates>(DEFAULT_OVERAGE_RATES);
+  const [trialSettings, setTrialSettings] = useState<TrialSettings>(DEFAULT_TRIAL_SETTINGS);
   const [seeded, setSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingGateways, setSavingGateways] = useState(false);
   const [savingRates, setSavingRates] = useState(false);
+  const [savingTrial, setSavingTrial] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -268,9 +292,24 @@ export default function PlansEditor() {
       setDraft(data.plans);
       setGateways(data.gateways);
       setOverageRates(data.overageRates);
+      setTrialSettings(data.trialSettings);
       setSeeded(true);
     }
   }, [data, seeded]);
+
+  async function saveTrial() {
+    setSavingTrial(true);
+    try {
+      await saveTrialSettings(trialSettings);
+      toast.success("Trial settings saved.");
+      qc.invalidateQueries({ queryKey: ["admin-subscription-plans"] });
+      qc.invalidateQueries({ queryKey: ["admin-site-content"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingTrial(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -377,6 +416,52 @@ export default function PlansEditor() {
               disabled={savingGateways}
               onCheckedChange={(v) => toggleGateway("paystack", v)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Free trial settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Free trial</CardTitle>
+          <CardDescription>
+            When enabled, new vendors can start a free trial by entering their card details upfront (via Stripe). The card is
+            captured but not charged until the trial ends — it then converts automatically to a paid subscription unless the
+            vendor cancels first. Vendors who have already trialled or subscribed will not see the trial option.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Enable free trials for new vendors</p>
+              <p className="text-xs text-muted-foreground">
+                When off, the "Start free trial" button is hidden from all upgrade flows.
+              </p>
+            </div>
+            <Switch
+              checked={trialSettings.enabled}
+              onCheckedChange={(v) => setTrialSettings({ ...trialSettings, enabled: v })}
+            />
+          </div>
+          <Field label="Trial duration (days)">
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={trialSettings.durationDays}
+              disabled={!trialSettings.enabled}
+              onChange={(e) => setTrialSettings({ ...trialSettings, durationDays: Math.max(1, Number(e.target.value)) })}
+              className="w-32"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Stripe passes this as <code>trial_period_days</code> on the subscription. Change takes effect for the next new trial started; existing trials are not affected.
+            </p>
+          </Field>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={saveTrial} disabled={savingTrial}>
+              {savingTrial ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Save trial settings
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -626,7 +626,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
 
     const [updated] = await db
       .update(vendorsTable)
-      .set({ subscriptionTier: "free", stripeSubscriptionId: null, updatedAt: new Date() })
+      .set({ subscriptionTier: "free", stripeSubscriptionId: null, trialEndsAt: null, updatedAt: new Date() })
       .where(eq(vendorsTable.stripeCustomerId, customerId))
       .returning({ id: vendorsTable.id });
 
