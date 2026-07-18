@@ -20,6 +20,7 @@ import {
   getListScheduledPostsQueryKey,
   getGetPostConnectionWarningsQueryKey,
   type Post,
+  type PostPublication,
 } from "@workspace/api-client-react";
 import {
   Select,
@@ -39,7 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -291,6 +292,47 @@ function AutoPublishFailureNotice({ postId }: { postId: number }) {
         <p className="text-xs text-muted-foreground">An unexpected error occurred before it could publish.</p>
       )}
       <p className="text-xs text-muted-foreground">Fix the issue below, then publish again or reschedule.</p>
+    </div>
+  );
+}
+
+/**
+ * Polls GET /posts/:id/publications for any "processing" entries on a published
+ * Facebook video post and renders a yellow "Processing…" badge per row until
+ * they resolve to "success" or "failed". Polling stops automatically once all
+ * entries have left the processing state, so no timer leaks on resolved posts.
+ */
+function PostProcessingPublications({ postId }: { postId: number }) {
+  const { data: publications } = useListPostPublications(postId, {
+    query: {
+      queryKey: getListPostPublicationsQueryKey(postId),
+      // Poll every 15 s while any row is still processing; stop once all resolve.
+      refetchInterval: (query) => {
+        const rows = query.state.data as PostPublication[] | undefined;
+        const hasProcessing = (rows ?? []).some((p: PostPublication) => p.status === "processing");
+        return hasProcessing ? 15_000 : false;
+      },
+    },
+  });
+
+  const processing = (publications ?? []).filter((p: PostPublication) => p.status === "processing");
+  if (processing.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5 mb-3">
+      {processing.map((p) => (
+        <div key={p.id} className="flex items-center gap-1.5 text-xs">
+          <Loader2 className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-spin" />
+          <span className="font-medium">{p.platform}:</span>
+          <Badge
+            variant="outline"
+            className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs py-0"
+          >
+            Processing…
+          </Badge>
+          <span className="text-muted-foreground">Video is being processed by Facebook and will be live shortly.</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -923,9 +965,12 @@ export default function Social() {
       setPublishResults((prev) => ({ ...prev, [id]: result.publications }));
       invalidatePosts();
       const succeeded = result.publications.filter((p) => p.status === "success").length;
-      const failed = result.publications.filter((p) => p.status !== "success").length;
-      if (failed === 0) toast.success("Published to all selected platforms");
-      else if (succeeded > 0) toast.warning(`Published to ${succeeded} platform${succeeded === 1 ? "" : "s"}, ${failed} failed — see details on the post`);
+      const processing = result.publications.filter((p) => p.status === "processing").length;
+      const failed = result.publications.filter((p) => p.status === "failed").length;
+      if (failed === 0 && processing === 0) toast.success("Published to all selected platforms");
+      else if (processing > 0 && failed === 0) toast.success(`Published${succeeded > 0 ? ` to ${succeeded} platform${succeeded === 1 ? "" : "s"}` : ""} — Facebook video is processing and will be live shortly`);
+      else if (failed === 0) toast.success("Published to all selected platforms");
+      else if (succeeded + processing > 0) toast.warning(`Published to ${succeeded + processing} platform${succeeded + processing === 1 ? "" : "s"}, ${failed} failed — see details on the post`);
       else toast.error("Publish failed on every platform");
     } catch (err: any) {
       const publications = err?.data?.publications;
@@ -1054,6 +1099,8 @@ export default function Social() {
                       <div key={i} className="flex items-center gap-1.5 text-xs">
                         {r.status === "success" ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : r.status === "processing" ? (
+                          <Loader2 className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-spin" />
                         ) : (
                           <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                         )}
@@ -1062,6 +1109,8 @@ export default function Social() {
                           <a href={r.externalUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-0.5 truncate">
                             View live post <ExternalLink className="w-3 h-3" />
                           </a>
+                        ) : r.status === "processing" ? (
+                          <span className="text-amber-600 truncate">Processing… video will be live shortly</span>
                         ) : (
                           <span className="text-muted-foreground truncate">{r.errorMessage}</span>
                         )}
@@ -1069,6 +1118,7 @@ export default function Social() {
                     ))}
                   </div>
                 )}
+                {post.status === "published" && <PostProcessingPublications postId={post.id} />}
 
                 <div className="flex gap-2 mt-auto">
                   {post.status === "draft" && (
