@@ -5,27 +5,12 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const rawPort = process.env.PORT;
+// PORT is only needed for the dev/preview server — default to 3000 during
+// production `vite build` so the build step doesn't throw.
+const port = Number(process.env.PORT ?? '3000');
 
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
+// BASE_PATH defaults to /app-store/ — Replit injects the real value at runtime.
+const basePath = process.env.BASE_PATH ?? '/app-store/';
 
 export default defineConfig({
   base: basePath,
