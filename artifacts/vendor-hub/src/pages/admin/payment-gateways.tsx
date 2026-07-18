@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertTriangle, CreditCard, Trash2, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, CreditCard, Trash2, Loader2, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -65,6 +66,38 @@ async function removeGateway(provider: string): Promise<void> {
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to remove credentials");
+  }
+}
+
+// ── Gateway-toggle change history ─────────────────────────────────────────────
+
+type SiteContentHistoryEntry = {
+  id: number;
+  contentKey: string;
+  adminUserId: string;
+  adminDisplayName: string | null;
+  oldValue: string;
+  newValue: string;
+  changedAt: string;
+};
+
+async function fetchGatewayToggleHistory(): Promise<SiteContentHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.paymentGateways/history`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load gateway toggle history");
+  return res.json() as Promise<SiteContentHistoryEntry[]>;
+}
+
+function formatGatewayTogglesValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as Record<string, boolean>;
+    const enabled = Object.entries(v)
+      .filter(([, on]) => on)
+      .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1));
+    return enabled.length ? enabled.join(", ") + " enabled" : "All disabled";
+  } catch {
+    return raw;
   }
 }
 
@@ -266,6 +299,62 @@ export default function PaymentGatewaysPanel() {
           <GatewayCard key={g.provider} gateway={g} onSaved={refresh} />
         ))}
       </div>
+
+      <GatewayToggleHistoryCard />
     </div>
+  );
+}
+
+function GatewayToggleHistoryCard() {
+  const { data: history, isLoading } = useQuery({
+    queryKey: ["admin-billing-gateways-history"],
+    queryFn: fetchGatewayToggleHistory,
+  });
+
+  return (
+    <Card className="mt-2">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardList className="w-4 h-4" /> Gateway Toggle Change History
+        </CardTitle>
+        <CardDescription>
+          Every change to which subscription gateways (Stripe / Paystack / PayPal) are enabled — who changed it, from what, and when. Read-only.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground">Loading history…</div>
+        ) : !history?.length ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">No changes recorded yet.</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Changed By</TableHead>
+                <TableHead>Previous</TableHead>
+                <TableHead>New</TableHead>
+                <TableHead className="text-right">Changed</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="text-xs">
+                    {entry.adminDisplayName ?? <span className="font-mono">{entry.adminUserId}</span>}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatGatewayTogglesValue(entry.oldValue)}
+                  </TableCell>
+                  <TableCell className="text-xs">{formatGatewayTogglesValue(entry.newValue)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {new Date(entry.changedAt).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

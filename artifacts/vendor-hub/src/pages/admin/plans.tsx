@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2, TrendingUp } from "lucide-react";
+import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2, TrendingUp, ClipboardList } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -153,6 +154,133 @@ async function saveGateways(gateways: PaymentGateways): Promise<void> {
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to save");
   }
+}
+
+// ── Site-content change history ──────────────────────────────────────────────
+
+type SiteContentHistoryEntry = {
+  id: number;
+  contentKey: string;
+  adminUserId: string;
+  adminDisplayName: string | null;
+  oldValue: string;
+  newValue: string;
+  changedAt: string;
+};
+
+async function fetchSiteContentHistory(key: string): Promise<SiteContentHistoryEntry[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/${encodeURIComponent(key)}/history`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load change history");
+  return res.json() as Promise<SiteContentHistoryEntry[]>;
+}
+
+function formatPlansValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as { plans?: Plan[] };
+    if (!v.plans?.length) return raw;
+    return v.plans
+      .map((p) => `${p.name}: ${p.pricing.usd}/₦${p.pricing.ngn}`)
+      .join(", ");
+  } catch {
+    return raw;
+  }
+}
+
+function formatGatewaysValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as Partial<PaymentGateways>;
+    const enabled = Object.entries(v)
+      .filter(([, on]) => on)
+      .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1));
+    return enabled.length ? enabled.join(", ") + " enabled" : "All disabled";
+  } catch {
+    return raw;
+  }
+}
+
+function formatOverageRatesValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as Partial<OverageRates>;
+    return Object.entries(v)
+      .map(([k, val]) => `${k}: ${val}`)
+      .join(", ");
+  } catch {
+    return raw;
+  }
+}
+
+function formatTrialSettingsValue(raw: string): string {
+  try {
+    const v = JSON.parse(raw) as Partial<TrialSettings>;
+    if (v.enabled === false) return "Disabled";
+    return `${v.durationDays ?? "?"} days`;
+  } catch {
+    return raw;
+  }
+}
+
+function SiteContentHistoryCard({
+  title,
+  description,
+  queryKey,
+  contentKey,
+  formatValue,
+}: {
+  title: string;
+  description: string;
+  queryKey: string[];
+  contentKey: string;
+  formatValue: (raw: string) => string;
+}) {
+  const { data: history, isLoading } = useQuery({
+    queryKey,
+    queryFn: () => fetchSiteContentHistory(contentKey),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardList className="w-4 h-4" /> {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground">Loading history…</div>
+        ) : !history?.length ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">No changes recorded yet.</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Changed By</TableHead>
+                <TableHead>Previous</TableHead>
+                <TableHead>New</TableHead>
+                <TableHead className="text-right">Changed</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="text-xs">
+                    {entry.adminDisplayName ?? <span className="font-mono">{entry.adminUserId}</span>}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatValue(entry.oldValue)}</TableCell>
+                  <TableCell className="text-xs">{formatValue(entry.newValue)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {new Date(entry.changedAt).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -437,6 +565,14 @@ export default function PlansEditor() {
         </CardContent>
       </Card>
 
+      <SiteContentHistoryCard
+        title="Payment Gateway Toggle History"
+        description="Every change to which subscription gateways are enabled — who changed it, from what, and when. Read-only."
+        queryKey={["admin-billing-gateways-history"]}
+        contentKey="billing.paymentGateways"
+        formatValue={formatGatewaysValue}
+      />
+
       {/* Free trial settings */}
       <Card>
         <CardHeader>
@@ -483,6 +619,14 @@ export default function PlansEditor() {
         </CardContent>
       </Card>
 
+      <SiteContentHistoryCard
+        title="Free Trial Settings History"
+        description="Every change to the free trial toggle and duration — who changed it, from what, and when. Read-only."
+        queryKey={["admin-billing-trial-history"]}
+        contentKey="billing.trialSettings"
+        formatValue={formatTrialSettingsValue}
+      />
+
       {/* Overage & add-on unit pricing */}
       <Card>
         <CardHeader>
@@ -521,6 +665,14 @@ export default function PlansEditor() {
         </CardContent>
       </Card>
 
+      <SiteContentHistoryCard
+        title="Overage & Add-on Rates History"
+        description="Every change to pay-as-you-go and add-on unit pricing — who changed it, from what, and when. Read-only."
+        queryKey={["admin-billing-overage-history"]}
+        contentKey="billing.overageRates"
+        formatValue={formatOverageRatesValue}
+      />
+
       {draft.map((plan) => (
         <PlanCard
           key={plan.tier}
@@ -535,6 +687,14 @@ export default function PlansEditor() {
           Save all plans
         </Button>
       </div>
+
+      <SiteContentHistoryCard
+        title="Subscription Plan Pricing History"
+        description="Every change to plan names, pricing, features, and bundled resource quotas — who changed it, from what, and when. Read-only."
+        queryKey={["admin-billing-plans-history"]}
+        contentKey="billing.subscriptionPlans"
+        formatValue={formatPlansValue}
+      />
     </div>
   );
 }
