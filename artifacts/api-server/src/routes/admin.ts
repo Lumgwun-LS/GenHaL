@@ -131,7 +131,7 @@ async function getVoiceSignatureFailureBurstStatus(): Promise<{
  *     Only the one request that wins the INSERT race proceeds to alert;
  *     all others silently skip because of the unique-constraint conflict.
  */
-async function checkExportBurst(adminUserId: string): Promise<void> {
+export async function checkExportBurst(adminUserId: string): Promise<void> {
   const { threshold, windowMinutes } = await getExportAlertSettings();
   const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
 
