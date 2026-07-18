@@ -18,7 +18,9 @@ import { retryCampaignCall, retryAllFailedCampaignCalls } from "./voice-campaign
 import { sendSlackAlert } from "../lib/slack";
 import { runVoiceBackfill, getVoiceBackfillLastRun, getVoiceBackfillRecentFixes } from "../lib/voice-backfill";
 import { syncSaleFromPayment } from "../lib/sales-sync";
-import { notifyVendorPaymentStatus } from "../lib/push";
+import { notifyVendorPaymentStatus, sendPushToVendor } from "../lib/push";
+import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
 /**
  * Export-burst detection: if the same admin downloads the vendor CSV export
@@ -508,6 +510,68 @@ router.post("/admin/export-alerts/:adminUserId/acknowledge", async (req, res): P
     acknowledgedBy: userId,
     acknowledgedByDisplayName,
   });
+
+  // Notify the flagged admin so they know their block has been lifted,
+  // who reviewed it, and when — rather than silently discovering they can
+  // export again on their next attempt.
+  try {
+    const [flaggedVendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.clerkUserId, targetAdminUserId))
+      .limit(1);
+
+    if (flaggedVendor) {
+      const reviewerName = escapeHtml(acknowledgedByDisplayName ?? userId);
+      const clearedAt = acknowledgedAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+      const notificationMessage =
+        `Your export-burst flag was reviewed and cleared by ${acknowledgedByDisplayName ?? userId} on ${clearedAt}. You can export vendor data again.`;
+
+      // In-app notification
+      await db.insert(vendorNotificationsTable).values({
+        vendorId: flaggedVendor.id,
+        type: "general",
+        message: notificationMessage,
+        adminUserId: userId,
+        adminDisplayName: acknowledgedByDisplayName,
+      });
+
+      // Push notification (no category filter — admin account-level notice)
+      await sendPushToVendor(
+        flaggedVendor.id,
+        "Export block lifted",
+        `Your export flag was cleared by ${acknowledgedByDisplayName ?? userId}.`,
+        { screen: "notifications" },
+      );
+
+      // Email notification
+      if (flaggedVendor.email) {
+        const html = wrapVendorEmail({
+          bodyHtml: `
+            <h2 style="margin: 0 0 16px; font-size: 20px; color: #1a1a1a;">Your export block has been lifted</h2>
+            <p style="margin: 0 0 12px; color: #444; line-height: 1.6;">
+              Your vendor-data export access was temporarily paused after an unusually high number of
+              downloads were detected from your account.
+            </p>
+            <p style="margin: 0 0 12px; color: #444; line-height: 1.6;">
+              Another admin — <strong>${reviewerName}</strong> — has reviewed your activity and cleared
+              the flag at <strong>${escapeHtml(clearedAt)}</strong>. You can now download vendor exports again.
+            </p>
+            <p style="margin: 0; color: #888; font-size: 13px;">
+              If you have any questions about this review, please reach out to the admin team directly.
+            </p>`,
+        });
+        await sendEmail({
+          to: flaggedVendor.email,
+          subject: "Your export block has been lifted",
+          html,
+        });
+      }
+    }
+  } catch (err) {
+    // Non-fatal: the acknowledgment itself succeeded; notifications are best-effort.
+    console.error("[admin] Failed to send export-unblock notification:", err);
+  }
 
   res.json({ success: true });
 });
