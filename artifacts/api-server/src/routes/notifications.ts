@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { vendorNotificationsTable, vendorsTable } from "@workspace/db/schema";
-import { eq, and, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull, ne } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
@@ -39,7 +39,14 @@ router.get("/vendors/:id/notifications", async (req, res): Promise<void> => {
   const notifications = await db
     .select()
     .from(vendorNotificationsTable)
-    .where(eq(vendorNotificationsTable.vendorId, id))
+    .where(
+      and(
+        eq(vendorNotificationsTable.vendorId, id),
+        // email_retry_audit rows are admin-only audit entries and must
+        // never appear in the vendor's own notification bell.
+        ne(vendorNotificationsTable.type, "email_retry_audit"),
+      ),
+    )
     .orderBy(desc(vendorNotificationsTable.createdAt))
     .limit(50);
 
@@ -358,6 +365,40 @@ router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promis
       }
     }),
   );
+
+  // Insert one admin-only audit row per vendor whose email was successfully
+  // re-delivered, so the admin message history reflects the retry and admins
+  // have a persistent record instead of only the ephemeral toast.
+  if (succeeded > 0) {
+    let retryAdminDisplayName: string | null = null;
+    try {
+      const adminUser = await clerkClient.users.getUser(userId);
+      const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+      retryAdminDisplayName =
+        fullName ||
+        adminUser.username ||
+        adminUser.primaryEmailAddress?.emailAddress ||
+        adminUser.emailAddresses[0]?.emailAddress ||
+        null;
+    } catch {
+      retryAdminDisplayName = null;
+    }
+
+    const recoveredVendors = eligible.filter(
+      (v) => !newFailures.some((f) => f.vendorId === v.id),
+    );
+    if (recoveredVendors.length > 0) {
+      await db.insert(vendorNotificationsTable).values(
+        recoveredVendors.map((v) => ({
+          vendorId: v.id,
+          type: "email_retry_audit" as const,
+          message,
+          adminUserId: userId,
+          adminDisplayName: retryAdminDisplayName,
+        })),
+      );
+    }
+  }
 
   res.json({
     retried: eligible.length,

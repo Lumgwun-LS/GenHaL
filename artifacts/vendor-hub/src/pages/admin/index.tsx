@@ -1422,6 +1422,11 @@ function BulkMessageDialog({
           ? `Email delivered to ${recovered} vendor${recovered === 1 ? "" : "s"}.`
           : "Retry completed — emails still couldn't be delivered.",
       );
+      if (recovered > 0) {
+        // Refresh message history so the new email_retry_audit rows
+        // are visible immediately as a persistent audit trail.
+        qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
+      }
       // Replace the old send_failed entries with the new failure set from the retry.
       const nonRetryable = lastResult.failures.filter((f) => f.reason !== "send_failed");
       const remaining = [...nonRetryable, ...result.failures.filter((f) => f.reason === "send_failed")];
@@ -3302,8 +3307,10 @@ export default function AdminPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredMessageHistory.map((entry) => (
-                      <TableRow key={entry.id}>
+                    {filteredMessageHistory.map((entry) => {
+                      const isRetryAudit = entry.type === "email_retry_audit";
+                      return (
+                      <TableRow key={entry.id} data-testid={`row-message-history-${entry.id}`}>
                         <TableCell>
                           <Link href={`/vendors/${entry.vendorId}`} className="group">
                             <div className="font-medium group-hover:underline">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
@@ -3311,6 +3318,11 @@ export default function AdminPanel() {
                           </Link>
                         </TableCell>
                         <TableCell className="max-w-md">
+                          {isRetryAudit && (
+                            <Badge variant="secondary" className="mb-1 text-xs gap-1">
+                              <RefreshCw className="w-3 h-3" /> Email recovered via retry
+                            </Badge>
+                          )}
                           <p className="text-sm whitespace-pre-wrap break-words">{entry.message}</p>
                         </TableCell>
                         <TableCell>
@@ -3326,7 +3338,8 @@ export default function AdminPanel() {
                           {new Date(entry.createdAt).toLocaleString()}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

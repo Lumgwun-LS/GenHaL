@@ -17,4 +17,6 @@ export interface AdminMessageHistoryEntry {
   /** @nullable */
   adminDisplayName: string | null;
   createdAt: string;
+  /** "general" for messages sent via the compose or bulk-message tool; "email_retry_audit" for vendors whose announcement email was successfully re-delivered after a retry — these rows are admin-only audit entries and do not appear in the vendor's own notification bell. */
+  type: string;
 }

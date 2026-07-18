@@ -4251,7 +4251,7 @@ components:
 
     AdminMessageHistoryEntry:
       type: object
-      required: [id, vendorId, vendorName, message, adminUserId, adminDisplayName, createdAt]
+      required: [id, vendorId, vendorName, message, adminUserId, adminDisplayName, createdAt, type]
       properties:
         id:
           type: integer
@@ -4267,6 +4267,13 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        type:
+          type: string
+          description: >
+            "general" for messages sent via the compose or bulk-message tool;
+            "email_retry_audit" for vendors whose announcement email was successfully
+            re-delivered after a retry — these rows are admin-only audit entries and
+            do not appear in the vendor's own notification bell.
 
     DemographicBucket:
       type: object

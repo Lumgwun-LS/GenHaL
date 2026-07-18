@@ -955,7 +955,13 @@ router.get("/admin/message-history", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
-  const conditions: SQL[] = [eq(vendorNotificationsTable.type, "general")];
+  // Include both regular messages ("general") and email-retry audit entries
+  // ("email_retry_audit"). The latter are admin-only rows that are never shown
+  // in a vendor's notification bell but do appear in admin message history so
+  // there is a persistent audit trail of recovered emails after a retry.
+  const conditions: SQL[] = [
+    sql`${vendorNotificationsTable.type} IN ('general', 'email_retry_audit')`,
+  ];
 
   if (req.query.vendorId !== undefined) {
     const vendorId = Number(req.query.vendorId);
@@ -975,6 +981,7 @@ router.get("/admin/message-history", async (req, res): Promise<void> => {
       adminUserId: vendorNotificationsTable.adminUserId,
       adminDisplayName: vendorNotificationsTable.adminDisplayName,
       createdAt: vendorNotificationsTable.createdAt,
+      type: vendorNotificationsTable.type,
     })
     .from(vendorNotificationsTable)
     .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))

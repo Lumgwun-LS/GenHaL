@@ -2943,7 +2943,8 @@ export const GetAdminMessageHistoryResponseItem = zod.object({
   "message": zod.string(),
   "adminUserId": zod.string().nullable(),
   "adminDisplayName": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "type": zod.string().describe('\"general\" for messages sent via the compose or bulk-message tool; \"email_retry_audit\" for vendors whose announcement email was successfully re-delivered after a retry — these rows are admin-only audit entries and do not appear in the vendor\'s own notification bell.\n')
 })
 export const GetAdminMessageHistoryResponse = zod.array(GetAdminMessageHistoryResponseItem)
 
