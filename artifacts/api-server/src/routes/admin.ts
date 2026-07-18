@@ -982,6 +982,7 @@ router.get("/admin/message-history", async (req, res): Promise<void> => {
       adminDisplayName: vendorNotificationsTable.adminDisplayName,
       createdAt: vendorNotificationsTable.createdAt,
       type: vendorNotificationsTable.type,
+      emailFailed: vendorNotificationsTable.emailFailed,
     })
     .from(vendorNotificationsTable)
     .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))

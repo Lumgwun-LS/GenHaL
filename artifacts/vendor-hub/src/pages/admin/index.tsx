@@ -1344,6 +1344,58 @@ async function retryBulkAnnouncementEmails(
   return res.json() as Promise<{ retried: number; succeeded: number; failures: BulkEmailFailure[] }>;
 }
 
+/**
+ * "Retry failed email" button shown per-row in the message history for any
+ * "general" notification whose announcement email failed to deliver.
+ * Calls the same bulk/retry-emails endpoint used by BulkMessageDialog,
+ * passing a single-vendor failure list so only this vendor is re-tried.
+ */
+function RetryEmailButton({ entry }: { entry: { id: number; vendorId: number; vendorName: string | null; message: string } }) {
+  const qc = useQueryClient();
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      const failures: BulkEmailFailure[] = [
+        {
+          vendorId: entry.vendorId,
+          vendorName: entry.vendorName ?? `Vendor #${entry.vendorId}`,
+          reason: "send_failed",
+        },
+      ];
+      const result = await retryBulkAnnouncementEmails(entry.message, failures);
+      if (result.succeeded > 0) {
+        toast.success(`Email re-delivered to ${entry.vendorName ?? `Vendor #${entry.vendorId}`}.`);
+        qc.invalidateQueries({ queryKey: getGetAdminMessageHistoryQueryKey() });
+        qc.invalidateQueries({
+          queryKey: getGetAdminMessageHistoryQueryKey({ vendorId: entry.vendorId }),
+        });
+      } else {
+        toast.error("Email still couldn't be delivered. Check SMTP settings and try again.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to retry email");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-xs gap-1.5 whitespace-nowrap"
+      onClick={handleRetry}
+      disabled={retrying}
+      data-testid={`button-retry-email-${entry.id}`}
+    >
+      <RefreshCw className={`w-3 h-3 ${retrying ? "animate-spin" : ""}`} />
+      {retrying ? "Retrying…" : "Retry email"}
+    </Button>
+  );
+}
+
 function BulkMessageDialog({
   selectedIds,
   allSelected,
@@ -3304,11 +3356,13 @@ export default function AdminPanel() {
                       <TableHead>Message</TableHead>
                       <TableHead>Sent by</TableHead>
                       <TableHead className="text-right">When</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredMessageHistory.map((entry) => {
                       const isRetryAudit = entry.type === "email_retry_audit";
+                      const emailFailed = entry.emailFailed === true;
                       return (
                       <TableRow key={entry.id} data-testid={`row-message-history-${entry.id}`}>
                         <TableCell>
@@ -3321,6 +3375,11 @@ export default function AdminPanel() {
                           {isRetryAudit && (
                             <Badge variant="secondary" className="mb-1 text-xs gap-1">
                               <RefreshCw className="w-3 h-3" /> Email recovered via retry
+                            </Badge>
+                          )}
+                          {emailFailed && (
+                            <Badge variant="destructive" className="mb-1 text-xs gap-1">
+                              <Mail className="w-3 h-3" /> Email failed
                             </Badge>
                           )}
                           <p className="text-sm whitespace-pre-wrap break-words">{entry.message}</p>
@@ -3336,6 +3395,18 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
                           {new Date(entry.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {emailFailed && (
+                            <RetryEmailButton
+                              entry={{
+                                id: entry.id,
+                                vendorId: entry.vendorId,
+                                vendorName: entry.vendorName ?? null,
+                                message: entry.message,
+                              }}
+                            />
+                          )}
                         </TableCell>
                       </TableRow>
                       );

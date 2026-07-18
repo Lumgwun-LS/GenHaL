@@ -4274,6 +4274,12 @@ components:
             "email_retry_audit" for vendors whose announcement email was successfully
             re-delivered after a retry — these rows are admin-only audit entries and
             do not appear in the vendor's own notification bell.
+        emailFailed:
+          type: ["boolean", "null"]
+          description: >
+            True when a bulk-announcement email failed to deliver to this vendor
+            (reason = "send_failed"). Cleared to false once a retry succeeds.
+            Null for non-bulk or non-email notifications.
 
     DemographicBucket:
       type: object

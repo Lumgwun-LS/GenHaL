@@ -239,6 +239,7 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
 
   const emailEligibleVendors = targetVendors.filter((v) => !v.announcementEmailOptOut);
   let emailsSent = 0;
+  const sendFailedVendorIds: number[] = [];
   await Promise.all(
     emailEligibleVendors.map(async (v) => {
       if (!v.email) {
@@ -261,9 +262,24 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
         emailsSent += 1;
       } else {
         failures.push({ vendorId: v.id, vendorName: v.name, reason: "send_failed" });
+        sendFailedVendorIds.push(v.id);
       }
     }),
   );
+
+  // Mark emailFailed=true on the notification rows for vendors whose email
+  // failed to deliver so admins can retry from the message history tab later.
+  if (sendFailedVendorIds.length > 0) {
+    const notificationIdsToMark = notifications
+      .filter((n) => sendFailedVendorIds.includes(n.vendorId))
+      .map((n) => n.id);
+    if (notificationIdsToMark.length > 0) {
+      await db
+        .update(vendorNotificationsTable)
+        .set({ emailFailed: true })
+        .where(inArray(vendorNotificationsTable.id, notificationIdsToMark));
+    }
+  }
 
   res.status(201).json({
     sent: notifications.length,
@@ -397,6 +413,20 @@ router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promis
           adminDisplayName: retryAdminDisplayName,
         })),
       );
+
+      // Clear the emailFailed flag on the original "general" notification rows
+      // for recovered vendors so the retry button disappears from the history.
+      const recoveredIds = recoveredVendors.map((v) => v.id);
+      await db
+        .update(vendorNotificationsTable)
+        .set({ emailFailed: false })
+        .where(
+          and(
+            inArray(vendorNotificationsTable.vendorId, recoveredIds),
+            eq(vendorNotificationsTable.type, "general"),
+            eq(vendorNotificationsTable.message, message),
+          ),
+        );
     }
   }
 

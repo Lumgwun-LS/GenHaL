@@ -2944,7 +2944,8 @@ export const GetAdminMessageHistoryResponseItem = zod.object({
   "adminUserId": zod.string().nullable(),
   "adminDisplayName": zod.string().nullable(),
   "createdAt": zod.string(),
-  "type": zod.string().describe('\"general\" for messages sent via the compose or bulk-message tool; \"email_retry_audit\" for vendors whose announcement email was successfully re-delivered after a retry — these rows are admin-only audit entries and do not appear in the vendor\'s own notification bell.\n')
+  "type": zod.string().describe('\"general\" for messages sent via the compose or bulk-message tool; \"email_retry_audit\" for vendors whose announcement email was successfully re-delivered after a retry — these rows are admin-only audit entries and do not appear in the vendor\'s own notification bell.\n'),
+  "emailFailed": zod.boolean().nullish().describe('True when a bulk-announcement email failed to deliver to this vendor (reason = \"send_failed\"). Cleared to false once a retry succeeds. Null for non-bulk or non-email notifications.\n')
 })
 export const GetAdminMessageHistoryResponse = zod.array(GetAdminMessageHistoryResponseItem)
 

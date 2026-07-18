@@ -206,6 +206,11 @@ export interface AdminMessageHistoryEntry {
   createdAt: string;
   /** "general" for messages sent via the compose or bulk-message tool; "email_retry_audit" for vendors whose announcement email was successfully re-delivered after a retry — these rows are admin-only audit entries and do not appear in the vendor's own notification bell. */
   type: string;
+  /**
+     * True when a bulk-announcement email failed to deliver to this vendor (reason = "send_failed"). Cleared to false once a retry succeeds. Null for non-bulk or non-email notifications.
+     * @nullable
+     */
+  emailFailed?: boolean | null;
 }
 
 export interface DemographicBucket {

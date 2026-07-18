@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { vendorsTable } from "./vendors";
 
 /**
@@ -24,6 +24,12 @@ export const vendorNotificationsTable = pgTable("vendor_notifications", {
   newTier: text("new_tier"),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * Set to true when a bulk-announcement email failed to deliver for this vendor
+   * (reason = "send_failed"). Cleared to false once a retry succeeds. Null for
+   * non-bulk or non-email notifications (birthday, tier_change, etc.).
+   */
+  emailFailed: boolean("email_failed"),
 });
 
 export type VendorNotification = typeof vendorNotificationsTable.$inferSelect;
