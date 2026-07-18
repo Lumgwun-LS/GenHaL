@@ -8,6 +8,7 @@ router = "path"
 [[services]]
 name = "web"
 paths = [ "/app-store/" ]
+hosts = [ "awajimaaappstore.com" ]
 localPort = 19851
 
 [services.development]
