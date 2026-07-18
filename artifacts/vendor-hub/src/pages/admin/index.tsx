@@ -1371,11 +1371,13 @@ function BulkMessageDialog({
   const recipientCount = allSelected ? totalVendors : selectedIds.length;
   const disabled = recipientCount === 0;
 
-  // Count how many targeted vendors have opted out of announcement emails.
+  // Collect vendors that have opted out of announcement emails.
   // When "all" is selected we use the full vendor list; otherwise filter by selectedIds.
-  const optOutCount = allSelected
-    ? vendors.filter((v) => v.announcementEmailOptOut).length
-    : vendors.filter((v) => selectedIds.includes(v.id) && v.announcementEmailOptOut).length;
+  const optedOutVendors = allSelected
+    ? vendors.filter((v) => v.announcementEmailOptOut)
+    : vendors.filter((v) => selectedIds.includes(v.id) && v.announcementEmailOptOut);
+  const optOutCount = optedOutVendors.length;
+  const [optOutPopoverOpen, setOptOutPopoverOpen] = useState(false);
 
   async function handleSend() {
     const trimmed = message.trim();
@@ -1533,8 +1535,38 @@ function BulkMessageDialog({
               >
                 <span className="mt-0.5 shrink-0">⚠</span>
                 <span>
-                  <strong>{optOutCount}</strong> of {recipientCount} vendor{recipientCount === 1 ? "" : "s"} ha{optOutCount === 1 ? "s" : "ve"} opted out of announcement
-                  emails — {optOutCount === 1 ? "they" : "they"} will still receive the in-app notification, but no email will be sent to {optOutCount === 1 ? "them" : "them"}.
+                  <Popover open={optOutPopoverOpen} onOpenChange={setOptOutPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="font-bold underline decoration-dotted underline-offset-2 cursor-pointer hover:text-amber-900 focus:outline-none"
+                        data-testid="button-bulk-message-opt-out-count"
+                        aria-label={`View ${optOutCount} opted-out vendor${optOutCount === 1 ? "" : "s"}`}
+                      >
+                        {optOutCount}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start" data-testid="popover-bulk-message-opt-out-vendors">
+                      <div className="text-sm font-medium mb-2 text-foreground">
+                        Opted out of announcement emails
+                      </div>
+                      <ul
+                        className="space-y-1 max-h-48 overflow-y-auto"
+                        data-testid="list-bulk-message-opt-out-vendors"
+                      >
+                        {optedOutVendors.map((v) => (
+                          <li key={v.id} className="text-xs text-foreground truncate" data-testid={`row-bulk-message-opt-out-vendor-${v.id}`}>
+                            {v.name}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {optOutCount === 1 ? "This vendor" : "These vendors"} will still receive the in-app notification.
+                      </p>
+                    </PopoverContent>
+                  </Popover>
+                  {" "}of {recipientCount} vendor{recipientCount === 1 ? "" : "s"} ha{optOutCount === 1 ? "s" : "ve"} opted out of announcement
+                  emails — {optOutCount === 1 ? "they" : "they"} will still receive the in-app notification, but no email will be sent. <span className="underline decoration-dotted cursor-pointer hover:text-amber-900" onClick={() => setOptOutPopoverOpen(true)}>View list</span>
                 </span>
               </div>
             )}
