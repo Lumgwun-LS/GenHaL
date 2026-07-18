@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { computeOptedOutVendors, formatOptOutBannerText, formatOptOutPopoverDescription } from "@/lib/bulk-message-opt-out";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1373,9 +1374,7 @@ function BulkMessageDialog({
 
   // Collect vendors that have opted out of announcement emails.
   // When "all" is selected we use the full vendor list; otherwise filter by selectedIds.
-  const optedOutVendors = allSelected
-    ? vendors.filter((v) => v.announcementEmailOptOut)
-    : vendors.filter((v) => selectedIds.includes(v.id) && v.announcementEmailOptOut);
+  const optedOutVendors = computeOptedOutVendors(vendors, allSelected, selectedIds);
   const optOutCount = optedOutVendors.length;
   const [optOutPopoverOpen, setOptOutPopoverOpen] = useState(false);
 
