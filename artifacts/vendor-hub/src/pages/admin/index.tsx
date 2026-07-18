@@ -1327,13 +1327,15 @@ function emailFailureReasonLabel(reason: BulkEmailFailure["reason"]): string {
 
 async function retryBulkAnnouncementEmails(
   message: string,
-  vendorIds: number[],
+  failures: BulkEmailFailure[],
 ): Promise<{ retried: number; succeeded: number; failures: BulkEmailFailure[] }> {
+  // Pass the full failures array so the server can enforce that only
+  // send_failed vendors are retried — it extracts send_failed IDs itself.
   const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk/retry-emails`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ message, vendorIds }),
+    body: JSON.stringify({ message, failures }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
@@ -1407,13 +1409,13 @@ function BulkMessageDialog({
 
   async function handleRetryEmails() {
     if (!lastResult) return;
-    const retryIds = lastResult.failures
-      .filter((f) => f.reason === "send_failed")
-      .map((f) => f.vendorId);
-    if (retryIds.length === 0) return;
+    const sendFailedFailures = lastResult.failures.filter((f) => f.reason === "send_failed");
+    if (sendFailedFailures.length === 0) return;
     setRetrying(true);
     try {
-      const result = await retryBulkAnnouncementEmails(lastResult.sentMessage, retryIds);
+      // Pass the full failures list — the server extracts send_failed IDs itself,
+      // ensuring previously-successful vendors can never be double-sent.
+      const result = await retryBulkAnnouncementEmails(lastResult.sentMessage, lastResult.failures);
       const recovered = result.succeeded;
       toast.success(
         recovered > 0

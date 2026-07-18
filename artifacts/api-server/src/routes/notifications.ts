@@ -268,9 +268,12 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
 
 // ─── POST /vendors/notifications/bulk/retry-emails ────────────────────────────
 // Re-sends the announcement email to a specific set of vendors (no new in-app
-// notification). Only intended for vendors whose email delivery previously failed
-// with a transient error (reason="send_failed"). opted_out and no_email vendors
-// are silently skipped so the caller can pass the full failure list without filtering.
+// notification). The caller must supply the `failures` array from the original
+// bulk-send response. The server extracts only the vendor IDs with
+// reason="send_failed" and retries those — vendors who succeeded on the first
+// send are not present in the failures array and therefore can never be
+// double-sent by this endpoint. opted_out and no_email vendors are silently
+// skipped even if the caller accidentally includes them.
 
 router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
@@ -281,11 +284,28 @@ router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promis
   if (!message) { res.status(400).json({ error: "Message is required" }); return; }
   if (message.length > 1000) { res.status(400).json({ error: "Message is too long" }); return; }
 
-  const rawIds = Array.isArray(req.body?.vendorIds) ? req.body.vendorIds : [];
-  const vendorIds: number[] = Array.from(
-    new Set(rawIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isInteger(n) && n > 0)),
+  // Accept the structured failures list from the original bulk send so the
+  // server can enforce — without any external state — that only send_failed
+  // vendors are ever retried. Vendors who received the email successfully are
+  // not present in the failures array and are therefore structurally excluded.
+  const rawFailures: unknown[] = Array.isArray(req.body?.failures) ? req.body.failures : [];
+  const sendFailedIds: number[] = Array.from(
+    new Set(
+      rawFailures
+        .filter(
+          (f): f is { vendorId: unknown; reason: unknown } =>
+            typeof f === "object" && f !== null && "vendorId" in f && "reason" in f,
+        )
+        .filter((f) => f.reason === "send_failed")
+        .map((f) => Number(f.vendorId))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    ),
   );
-  if (vendorIds.length === 0) { res.status(400).json({ error: "Select at least one vendor" }); return; }
+
+  if (sendFailedIds.length === 0) {
+    res.status(400).json({ error: "No send_failed vendors to retry" });
+    return;
+  }
 
   const targetVendors = await db
     .select({
@@ -295,7 +315,7 @@ router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promis
       announcementEmailOptOut: vendorsTable.announcementEmailOptOut,
     })
     .from(vendorsTable)
-    .where(inArray(vendorsTable.id, vendorIds));
+    .where(inArray(vendorsTable.id, sendFailedIds));
 
   if (targetVendors.length === 0) { res.status(404).json({ error: "No matching vendors found" }); return; }
 
