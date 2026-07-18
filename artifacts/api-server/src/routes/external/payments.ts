@@ -215,7 +215,7 @@ async function initializeCheckout(vendorId: number, input: InitializeInput): Pro
  *     moment we mark the local payment as cancelled and stop accepting its
  *     webhook; no further provider-side action is possible.
  */
-async function voidProviderSession(
+export async function voidProviderSession(
   vendorId: number,
   payment: { id: number; provider: string; providerReference: string; metadata: unknown },
 ): Promise<void> {

@@ -193,7 +193,7 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
   return { retriedCount, recoveredCount };
 }
 
-async function tick(): Promise<void> {
+export async function tick(): Promise<void> {
   const alert = await alertPass();
   const retry = await retryPass();
 
