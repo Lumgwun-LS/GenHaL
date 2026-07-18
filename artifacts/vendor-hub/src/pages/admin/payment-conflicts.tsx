@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Search, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -30,12 +32,17 @@ type PaymentConflict = {
   attemptedStatus: string | null;
   webhookProvider: string | null;
   detectedAt: string | null;
+  // Resolved-only fields
+  resolution: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
 };
 
 type Resolution = "dismiss" | "paid" | "failed" | "refunded";
 
-async function fetchConflicts(): Promise<PaymentConflict[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/payment-conflicts`, { credentials: "include" });
+async function fetchConflicts(resolved: boolean): Promise<PaymentConflict[]> {
+  const url = `${BASE_URL}/api/admin/payment-conflicts${resolved ? "?resolved=true" : ""}`;
+  const res = await fetch(url, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load payment conflicts");
   return (await res.json()) as PaymentConflict[];
 }
@@ -58,15 +65,26 @@ function formatCurrency(amount: string, currency: string): string {
   return Number.isFinite(n) ? `${currency} ${n.toFixed(2)}` : `${currency} ${amount}`;
 }
 
-export default function PaymentConflictsPanel() {
+function resolutionBadge(resolution: string | null) {
+  if (!resolution) return null;
+  if (resolution === "dismiss") return <Badge variant="secondary">Dismissed</Badge>;
+  if (resolution === "paid") return <Badge className="bg-green-600 text-white">Paid</Badge>;
+  if (resolution === "failed") return <Badge variant="destructive">Failed</Badge>;
+  if (resolution === "refunded") return <Badge variant="outline">Refunded</Badge>;
+  return <Badge variant="secondary">{resolution}</Badge>;
+}
+
+// ─── Open Conflicts Tab ────────────────────────────────────────────────────────
+
+function OpenConflictsTab() {
   const qc = useQueryClient();
   const [active, setActive] = useState<PaymentConflict | null>(null);
   const [resolution, setResolution] = useState<Resolution | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { data: conflicts, isLoading, error } = useQuery({
-    queryKey: ["admin-payment-conflicts"],
-    queryFn: fetchConflicts,
+    queryKey: ["admin-payment-conflicts", "open"],
+    queryFn: () => fetchConflicts(false),
     refetchInterval: 30_000,
   });
 
@@ -105,15 +123,7 @@ export default function PaymentConflictsPanel() {
   const hasConflicts = (conflicts?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        A payment lands here when a vendor already cancelled it locally, but the payment provider
-        later reported a different status on the same reference (e.g. a customer completed
-        checkout on a stale link). The status was left untouched and a Slack alert fired at the
-        time — review the details below and either dismiss it (keep things as-is) or manually
-        apply the status the provider reported.
-      </p>
-
+    <>
       {hasConflicts && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -219,6 +229,134 @@ export default function PaymentConflictsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+// ─── Resolved History Tab ──────────────────────────────────────────────────────
+
+function ResolvedHistoryTab() {
+  const [search, setSearch] = useState("");
+
+  const { data: conflicts, isLoading, error } = useQuery({
+    queryKey: ["admin-payment-conflicts", "resolved"],
+    queryFn: () => fetchConflicts(true),
+    refetchInterval: 60_000,
+  });
+
+  const filtered = (conflicts ?? []).filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      String(c.id).includes(q) ||
+      (c.vendorName ?? "").toLowerCase().includes(q) ||
+      (c.providerReference ?? "").toLowerCase().includes(q) ||
+      (c.resolution ?? "").toLowerCase().includes(q) ||
+      (c.resolvedBy ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading resolved conflicts…</div>;
+  }
+  if (error) {
+    return <div className="p-8 text-center text-destructive">Failed to load resolved conflicts.</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CheckCircle2 className="w-4 h-4 text-green-600" /> Resolution History
+        </CardTitle>
+        <CardDescription>
+          All conflicts that have been reviewed and closed. Search by payment ID, vendor, reference, resolution, or admin.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by ID, vendor, reference, resolution, or admin…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {search ? "No resolved conflicts match your search." : "No resolved conflicts yet."}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Payment</TableHead>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Final status</TableHead>
+                <TableHead>Provider reported</TableHead>
+                <TableHead>Resolution</TableHead>
+                <TableHead>Resolved by</TableHead>
+                <TableHead>Resolved at</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((c) => (
+                <TableRow key={c.id} data-testid={`row-resolved-conflict-${c.id}`}>
+                  <TableCell className="font-medium">
+                    #{c.id}
+                    <div className="text-xs text-muted-foreground">{c.providerReference}</div>
+                  </TableCell>
+                  <TableCell>{c.vendorName ?? `Vendor ${c.vendorId}`}</TableCell>
+                  <TableCell>{formatCurrency(c.amount, c.currency)}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{c.currentStatus}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.attemptedStatus ?? "—"} ({c.webhookProvider ?? c.provider})
+                  </TableCell>
+                  <TableCell>{resolutionBadge(c.resolution)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{c.resolvedBy ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {c.resolvedAt ? new Date(c.resolvedAt).toLocaleString() : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Main Export ───────────────────────────────────────────────────────────────
+
+export default function PaymentConflictsPanel() {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        A payment lands here when a vendor already cancelled it locally, but the payment provider
+        later reported a different status on the same reference (e.g. a customer completed
+        checkout on a stale link). The status was left untouched and a Slack alert fired at the
+        time — review the details below and either dismiss it (keep things as-is) or manually
+        apply the status the provider reported.
+      </p>
+
+      <Tabs defaultValue="open">
+        <TabsList>
+          <TabsTrigger value="open">Open Conflicts</TabsTrigger>
+          <TabsTrigger value="resolved">Resolved History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="open" className="space-y-4 mt-4">
+          <OpenConflictsTab />
+        </TabsContent>
+        <TabsContent value="resolved" className="mt-4">
+          <ResolvedHistoryTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

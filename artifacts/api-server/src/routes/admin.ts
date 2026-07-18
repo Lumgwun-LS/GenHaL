@@ -1138,12 +1138,27 @@ router.get("/admin/voice-status", (req, res): void => {
 // paid/failed. The conflict is recorded on metadata.reconciliationConflict and
 // a Slack alert already fired at the time — this is the durable, admin-visible
 // counterpart so someone doesn't have to know to go dig through Slack + the DB.
-// Resolved conflicts (resolvedAt set) are excluded so this stays a to-do list.
+//
+// Pass ?resolved=true to retrieve the history of already-resolved conflicts
+// (includes resolution, resolvedBy, resolvedAt). Omit it (or pass false) to
+// get only unresolved conflicts — the default to-do list view.
 
 router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const showResolved = req.query.resolved === "true";
+
+  const whereClause = showResolved
+    ? sql`
+        ${paymentsTable.metadata} -> 'reconciliationConflict' IS NOT NULL
+        AND (${paymentsTable.metadata} -> 'reconciliationConflict' ->> 'resolvedAt') IS NOT NULL
+      `
+    : sql`
+        ${paymentsTable.metadata} -> 'reconciliationConflict' IS NOT NULL
+        AND (${paymentsTable.metadata} -> 'reconciliationConflict' ->> 'resolvedAt') IS NULL
+      `;
 
   const rows = await db
     .select({
@@ -1161,19 +1176,14 @@ router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
     })
     .from(paymentsTable)
     .leftJoin(vendorsTable, eq(paymentsTable.vendorId, vendorsTable.id))
-    .where(
-      sql`
-        ${paymentsTable.metadata} -> 'reconciliationConflict' IS NOT NULL
-        AND (${paymentsTable.metadata} -> 'reconciliationConflict' ->> 'resolvedAt') IS NULL
-      `,
-    )
+    .where(whereClause)
     .orderBy(desc(paymentsTable.updatedAt))
     .limit(200);
 
   const conflicts = rows.map((r) => {
     const meta = (r.metadata ?? {}) as Record<string, unknown>;
     const conflict = meta.reconciliationConflict as
-      | { attemptedStatus: string; provider: string; detectedAt: string }
+      | { attemptedStatus: string; provider: string; detectedAt: string; resolution?: string; resolvedAt?: string; resolvedBy?: string }
       | undefined;
     return {
       id: r.id,
@@ -1188,6 +1198,10 @@ router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
       attemptedStatus: conflict?.attemptedStatus ?? null,
       webhookProvider: conflict?.provider ?? null,
       detectedAt: conflict?.detectedAt ?? null,
+      // Resolved-only fields — null on open conflicts
+      resolution: conflict?.resolution ?? null,
+      resolvedAt: conflict?.resolvedAt ?? null,
+      resolvedBy: conflict?.resolvedBy ?? null,
     };
   });
 
