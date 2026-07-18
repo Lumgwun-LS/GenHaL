@@ -162,6 +162,7 @@ export * from './listStoreAppsSort';
 export * from './listStoreDevelopersParams';
 export * from './listVendorsParams';
 export * from './listWorkersParams';
+export * from './markAllVendorNotificationsRead200';
 export * from './order';
 export * from './orderInput';
 export * from './orderInputItemsItem';

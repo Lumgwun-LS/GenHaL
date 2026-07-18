@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { vendorNotificationsTable, vendorsTable } from "@workspace/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
@@ -44,6 +44,35 @@ router.get("/vendors/:id/notifications", async (req, res): Promise<void> => {
     .limit(50);
 
   res.json(notifications);
+});
+
+// ─── PATCH /vendors/:id/notifications/read-all ───────────────────────────────
+
+router.patch("/vendors/:id/notifications/read-all", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id));
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (vendor.clerkUserId !== userId && !isAdmin(userId)) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  const updated = await db
+    .update(vendorNotificationsTable)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(vendorNotificationsTable.vendorId, id),
+        isNull(vendorNotificationsTable.readAt),
+      ),
+    )
+    .returning();
+
+  res.json({ updated: updated.length });
 });
 
 // ─── PATCH /vendors/:id/notifications/:nid/read ───────────────────────────────

@@ -2867,6 +2867,19 @@ export const CreateVendorNotificationResponse = zod.object({
 
 
 /**
+ * Sets readAt to the current timestamp on every unread notification for the vendor. Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+ * @summary Mark all unread notifications as read
+ */
+export const MarkAllVendorNotificationsReadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkAllVendorNotificationsReadResponse = zod.object({
+  "updated": zod.number()
+})
+
+
+/**
  * Sets readAt to the current timestamp on the given notification. Callable by the vendor owner (Clerk session matches the vendor) or an admin.
  * @summary Mark a notification as read
  */

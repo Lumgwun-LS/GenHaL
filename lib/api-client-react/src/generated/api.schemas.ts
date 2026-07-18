@@ -2230,6 +2230,10 @@ export type VerifyVendorDeletion200 = {
   success: boolean;
 };
 
+export type MarkAllVendorNotificationsRead200 = {
+  updated: number;
+};
+
 export type GetAdminMessageHistoryParams = {
 vendorId?: number;
 };

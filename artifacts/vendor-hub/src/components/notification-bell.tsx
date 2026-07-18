@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import { Bell, Cake, TrendingUp, Info, PhoneCall, Link2Off, ShieldCheck, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useListVendors, useMarkVendorNotificationRead } from "@workspace/api-client-react";
+import { useListVendors, useMarkVendorNotificationRead, useMarkAllVendorNotificationsRead } from "@workspace/api-client-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -56,9 +56,22 @@ export function NotificationBell() {
     },
   });
 
+  const { mutate: markAllRead, isPending: isMarkingAllRead } = useMarkAllVendorNotificationsRead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ["vendor-notifications", vendorId] });
+      },
+    },
+  });
+
   function markAsRead(notificationId: number) {
     if (!vendorId) return;
     markRead({ id: vendorId, nid: notificationId });
+  }
+
+  function markAllAsRead() {
+    if (!vendorId) return;
+    markAllRead({ id: vendorId });
   }
 
   if (!vendorId) return null;
@@ -98,8 +111,20 @@ export function NotificationBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <div className="p-3 border-b">
+        <div className="p-3 border-b flex items-center justify-between gap-2">
           <p className="text-sm font-semibold">Notifications</p>
+          {unreadCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-auto px-2 py-1 shrink-0"
+              onClick={markAllAsRead}
+              disabled={isMarkingAllRead}
+              data-testid="button-mark-all-read"
+            >
+              Mark all as read
+            </Button>
+          )}
         </div>
         <ScrollArea className="max-h-80">
           {!notifications || notifications.length === 0 ? (

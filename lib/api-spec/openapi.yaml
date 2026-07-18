@@ -2327,6 +2327,36 @@ paths:
         "404":
           description: Vendor not found
 
+  /vendors/{id}/notifications/read-all:
+    patch:
+      operationId: markAllVendorNotificationsRead
+      tags: [vendors]
+      summary: Mark all unread notifications as read
+      description: >
+        Sets readAt to the current timestamp on every unread notification for the vendor.
+        Callable by the vendor owner (Clerk session matches the vendor) or an admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Number of notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: integer
+        "403":
+          description: Forbidden — not this vendor's owner and not an admin
+        "404":
+          description: Vendor not found
+
   /vendors/{id}/notifications/{nid}/read:
     patch:
       operationId: markVendorNotificationRead
