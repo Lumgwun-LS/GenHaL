@@ -1292,13 +1292,23 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
     `[admin] payment reconciliation conflict resolved — payment=${paymentId} admin=${userId} resolution=${resolution}`,
   );
 
+  // Look up vendor name for the Slack message (vendorsTable not joined in the
+  // payment select above, so fetch it now — cheap single-row lookup).
+  let vendorName: string | null = null;
+  if (existing.vendorId) {
+    const [vendor] = await db.select({ name: vendorsTable.name }).from(vendorsTable).where(eq(vendorsTable.id, existing.vendorId));
+    vendorName = vendor?.name ?? null;
+  }
+
   const adminLabel = adminDisplayName ? `*${adminDisplayName}* (${userId})` : `*${userId}*`;
+  const vendorLabel = vendorName ? ` for vendor *${vendorName}*` : "";
   const resolutionLabel =
     resolution === "dismiss"
-      ? "dismissed (kept local status)"
+      ? "dismissed (kept local cancelled status)"
       : `manually set to *${resolution}*`;
+  const attemptedLabel = attemptedStatus ? ` (provider had reported: *${attemptedStatus}*)` : "";
   await sendSlackAlert(
-    `:white_check_mark: Payment conflict resolved — payment #${paymentId} was ${resolutionLabel} by ${adminLabel}.`,
+    `:white_check_mark: Payment conflict resolved — payment #${paymentId}${vendorLabel} was ${resolutionLabel}${attemptedLabel} by ${adminLabel}.`,
   );
 
   res.json({ success: true, payment: updated });
