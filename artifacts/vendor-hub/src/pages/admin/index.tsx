@@ -2430,6 +2430,7 @@ export default function AdminPanel() {
                       <TableHead>Filters Used</TableHead>
                       <TableHead className="text-right">Rows</TableHead>
                       <TableHead className="text-right">Downloaded</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2440,6 +2441,9 @@ export default function AdminPanel() {
                         <TableCell className="text-right text-sm">{log.rowCount}</TableCell>
                         <TableCell className="text-right text-muted-foreground text-sm">
                           {new Date(log.exportedAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ExportAcknowledgmentHistoryButton adminUserId={log.adminUserId} />
                         </TableCell>
                       </TableRow>
                     ))}
