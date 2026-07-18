@@ -36,19 +36,6 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene9: Scene9,
 };
 
-// Cumulative start time in seconds for each scene key
-const SCENE_START_SEC: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  let ms = 0;
-  for (const [key, dur] of Object.entries(SCENE_DURATIONS)) {
-    out[key] = ms / 1000;
-    ms += dur;
-  }
-  return out;
-})();
-
-const AUDIO_SEEK_EPSILON_SEC = 0.18;
-
 // Persistent overlay colours keyed to scene index
 const SCENE_OVERLAYS = [
   'radial-gradient(circle at 50% 50%, hsl(258 90% 66% / 0.4), transparent 70%)',
@@ -84,40 +71,52 @@ export default function VideoTemplate({
   }, [currentSceneKey, onSceneChange]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.42;
-    const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
-    if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
-      audio.currentTime = targetTime;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+  }, [currentSceneKey, muted]);
 
   return (
     <>
       <div className="w-full h-screen overflow-hidden relative" style={{ backgroundColor: 'hsl(240 33% 3%)' }}>
-        {/* Persistent cinematic video background */}
+
+        {/* Cinematic letterbox bars */}
+        <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+
+        {/* Persistent cinematic video background with slow Ken-Burns zoom */}
         <div className="absolute inset-0 z-0">
-          <video
-            src={`${import.meta.env.BASE_URL}videos/energy-bg.mp4`}
-            className="w-full h-full object-cover"
-            style={{ opacity: 0.55 }}
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
+          <motion.div
+            className="absolute inset-0"
+            animate={{ scale: [1, 1.06, 1] }}
+            transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <video
+              src={`${import.meta.env.BASE_URL}videos/energy-bg.mp4`}
+              className="w-full h-full object-cover"
+              style={{ opacity: 0.55 }}
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          </motion.div>
           <div className="absolute inset-0" style={{ backgroundColor: 'hsl(240 33% 3% / 0.45)', backdropFilter: 'blur(2px)' }} />
 
-          {/* Dynamic colour overlay — transitions with each scene */}
+          {/* Dynamic colour overlay — slow transition with each scene */}
           <motion.div
             className="absolute inset-0 mix-blend-overlay"
             style={{ opacity: 0.4 }}
             animate={{ background: SCENE_OVERLAYS[sceneIndex] ?? SCENE_OVERLAYS[0] }}
-            transition={{ duration: 2, ease: 'easeInOut' }}
+            transition={{ duration: 3, ease: 'easeInOut' }}
           />
 
           {/* Subtle grid texture */}
@@ -129,7 +128,31 @@ export default function VideoTemplate({
               backgroundSize: '60px 60px',
             }}
           />
+
+          {/* Slow pulsing vignette */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.7) 100%)' }}
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          />
         </div>
+
+        {/* Persistent logo — top-left, slow fade in */}
+        <motion.div
+          className="absolute top-[4vh] left-[3vw] z-40"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
+          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.img
+            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+            alt="Awajimaa"
+            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 10px rgba(180,140,255,0.6)) brightness(1.1)' }}
+            animate={{ opacity: [0.85, 1, 0.85] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
 
         {/* Scene foreground */}
         <div className="absolute inset-0 z-10">

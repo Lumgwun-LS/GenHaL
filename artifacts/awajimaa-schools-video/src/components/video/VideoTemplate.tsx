@@ -25,18 +25,6 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene8: Scene8,
 };
 
-const SCENE_START_SEC: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  let ms = 0;
-  for (const [key, dur] of Object.entries(SCENE_DURATIONS)) {
-    out[key] = ms / 1000;
-    ms += dur;
-  }
-  return out;
-})();
-
-const AUDIO_SEEK_EPSILON_SEC = 0.18;
-
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
@@ -59,30 +47,37 @@ export default function VideoTemplate({
   }, [currentSceneKey, onSceneChange]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.4;
-    const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
-    if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
-      audio.currentTime = targetTime;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+  }, [currentSceneKey, muted]);
 
   return (
     <>
       <div className="relative w-full h-screen overflow-hidden" style={{ backgroundColor: '#0A192F' }}>
-        {/* Animated background gradient */}
+
+        {/* Cinematic letterbox */}
+        <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+
+        {/* Slow-breathing background gradient */}
         <motion.div
           className="absolute inset-0 z-0 pointer-events-none"
           animate={{
             background: sceneIndex % 2 === 0
-              ? 'radial-gradient(circle at 70% 30%, rgba(0, 128, 128, 0.15) 0%, rgba(10, 25, 47, 1) 60%)'
-              : 'radial-gradient(circle at 30% 70%, rgba(0, 128, 128, 0.15) 0%, rgba(10, 25, 47, 1) 60%)',
+              ? 'radial-gradient(circle at 70% 30%, rgba(0, 128, 128, 0.18) 0%, rgba(10, 25, 47, 1) 60%)'
+              : 'radial-gradient(circle at 30% 70%, rgba(0, 128, 128, 0.18) 0%, rgba(10, 25, 47, 1) 60%)',
+            scale: [1, 1.04, 1],
           }}
-          transition={{ duration: 4, ease: 'easeInOut' }}
+          transition={{ background: { duration: 4, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         />
 
         {/* Mesh grid */}
@@ -95,22 +90,35 @@ export default function VideoTemplate({
           }}
         />
 
-        {/* Noise overlay */}
+        {/* Vignette */}
         <div
-          className="absolute inset-0 z-[50] pointer-events-none"
-          style={{
-            opacity: 0.02,
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          }}
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }}
         />
 
         {/* Gold progress line at top */}
         <motion.div
-          className="absolute top-0 left-0 h-1 z-50"
+          className="absolute top-[3vh] left-0 h-[2px] z-50"
           style={{ backgroundColor: '#FFC107' }}
           animate={{ width: `${((sceneIndex + 1) / 8) * 100}%` }}
-          transition={{ duration: 1.2, ease: 'circOut' }}
+          transition={{ duration: 1.8, ease: 'circOut' }}
         />
+
+        {/* Persistent logo */}
+        <motion.div
+          className="absolute top-[4.5vh] left-[3vw] z-40"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
+          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.img
+            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+            alt="Awajimaa"
+            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 8px rgba(255,193,7,0.5)) brightness(1.1)' }}
+            animate={{ opacity: [0.85, 1, 0.85] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
 
         <AnimatePresence mode="popLayout">
           {SceneComponent && <SceneComponent key={currentSceneKey} />}

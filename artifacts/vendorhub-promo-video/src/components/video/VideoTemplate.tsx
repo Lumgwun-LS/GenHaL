@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useVideoPlayer } from '@/lib/video';
 import { AnimatePresence, motion } from 'framer-motion';
-import bgMusic from '@assets/awajimaa_song_drive.mp3';
 
 import { Scene0 } from './video_scenes/Scene0';
 import { Scene1 } from './video_scenes/Scene1';
@@ -40,18 +39,6 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene7: Scene7,
 };
 
-const SCENE_START_SEC: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  let cumulativeMs = 0;
-  for (const [key, ms] of Object.entries(SCENE_DURATIONS)) {
-    out[key] = cumulativeMs / 1000;
-    cumulativeMs += ms;
-  }
-  return out;
-})();
-
-const AUDIO_SEEK_EPSILON_SEC = 0.18;
-
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
@@ -77,41 +64,46 @@ export default function VideoTemplate({
   const SceneComponent = SCENE_COMPONENTS[baseSceneKey];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.45;
-    const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
-    if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
-      audio.currentTime = targetTime;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+  }, [currentSceneKey, muted]);
 
   return (
     <div
       className="w-full h-screen overflow-hidden relative"
       style={{ backgroundColor: 'var(--color-bg-dark)' }}
     >
-      {/* Background layer - persists across all scenes */}
+      {/* Cinematic letterbox */}
+      <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+
+      {/* Slow pulse background radial */}
       <motion.div 
         className="absolute inset-0 opacity-40"
         style={{
           background: 'radial-gradient(circle at 50% 50%, rgba(127, 80, 255, 0.15) 0%, rgba(11, 10, 16, 0) 70%)',
         }}
         animate={{
-          scale: [1, 1.2, 1],
+          scale: [1, 1.25, 1],
           opacity: [0.3, 0.5, 0.3],
         }}
         transition={{
-          duration: 10,
+          duration: 14,
           repeat: Infinity,
-          ease: "linear"
+          ease: "easeInOut"
         }}
       />
       
-      {/* Dynamic ambient background elements */}
+      {/* Slow drifting ambient orbs */}
       <motion.div
         className="absolute w-[40vw] h-[40vw] rounded-full blur-[6vw] pointer-events-none"
         animate={{
@@ -120,7 +112,7 @@ export default function VideoTemplate({
           backgroundColor: currentScene % 2 === 0 ? 'rgba(127, 80, 255, 0.4)' : 'rgba(255, 127, 80, 0.3)',
           scale: currentScene === 7 ? 2 : 1,
         }}
-        transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 3, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
       />
       
@@ -132,11 +124,11 @@ export default function VideoTemplate({
           backgroundColor: currentScene % 2 !== 0 ? 'rgba(127, 80, 255, 0.3)' : 'rgba(255, 127, 80, 0.2)',
           scale: currentScene === 7 ? 0 : 1,
         }}
-        transition={{ duration: 2.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 3.5, ease: [0.22, 1, 0.36, 1] }}
         style={{ transform: 'translate(-50%, -50%)' }}
       />
 
-      {/* Grid overlay for texture */}
+      {/* Grid overlay */}
       <div 
         className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
@@ -145,23 +137,36 @@ export default function VideoTemplate({
         }}
       />
 
-      {/* Persistent Logo Mark */}
+      {/* Vignette */}
+      <div
+        className="absolute inset-0 z-[2] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%)' }}
+      />
+
+      {/* Persistent Logo */}
       <motion.div
-        className="absolute z-50 font-display font-bold flex items-center gap-[0.5vw]"
+        className="absolute z-50"
         animate={{
           top: currentScene === 0 ? '50vh' : currentScene === 7 ? '50vh' : '4vh',
           left: currentScene === 0 ? '50vw' : currentScene === 7 ? '50vw' : '4vw',
           x: currentScene === 0 ? '-50%' : currentScene === 7 ? '-50%' : '0%',
           y: currentScene === 0 ? '-50%' : currentScene === 7 ? '-50%' : '0%',
           scale: currentScene === 0 ? 2 : currentScene === 7 ? 2.5 : 1,
-          opacity: currentScene === 0 ? 0 : currentScene === 7 ? 0 : 1, // Hidden in 0 and 7 as it's part of the scene
+          opacity: currentScene === 7 ? 0 : 1,
         }}
-        transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="w-[2vw] h-[2vw] rounded-[0.5vw] overflow-hidden shadow-[0_0_1vw_rgba(127,80,255,0.5)]">
-          <img src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`} alt="Awajimaa" className="w-full h-full object-cover" />
-        </div>
-        <span className="text-white text-[1.5vw] tracking-tight">Awajimaa</span>
+        <motion.img
+          src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+          alt="Awajimaa"
+          style={{
+            height: currentScene === 0 ? '3vh' : '3.5vh',
+            width: 'auto',
+            filter: 'drop-shadow(0 0 12px rgba(127,80,255,0.7)) brightness(1.1)',
+          }}
+          animate={{ opacity: [0.85, 1, 0.85] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        />
       </motion.div>
 
       {/* Foreground Scenes */}
@@ -171,7 +176,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={bgMusic}
+        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}

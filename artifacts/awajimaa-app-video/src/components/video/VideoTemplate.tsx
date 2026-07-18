@@ -30,18 +30,6 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene6: Scene6,
 };
 
-const SCENE_START_SEC: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  let cumulativeMs = 0;
-  for (const [key, ms] of Object.entries(SCENE_DURATIONS)) {
-    out[key] = cumulativeMs / 1000;
-    cumulativeMs += ms;
-  }
-  return out;
-})();
-
-const AUDIO_SEEK_EPSILON_SEC = 0.18;
-
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
@@ -53,7 +41,7 @@ export default function VideoTemplate({
   muted?: boolean;
   onSceneChange?: (sceneKey: string) => void;
 } = {}) {
-  const { currentScene, currentSceneKey } = useVideoPlayer({ durations, loop });
+  const { currentSceneKey } = useVideoPlayer({ durations, loop });
 
   useEffect(() => {
     onSceneChange?.(currentSceneKey);
@@ -64,32 +52,35 @@ export default function VideoTemplate({
   const SceneComponent = SCENE_COMPONENTS[baseSceneKey];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.45;
-    const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
-    if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
-      audio.currentTime = targetTime;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+  }, [currentSceneKey, muted]);
 
   return (
     <>
       <div className="w-full h-screen overflow-hidden relative bg-background text-foreground">
 
-        {/* PERSISTENT BACKGROUNDS OUTSIDE ANIMATEPRESENCE */}
+        {/* Cinematic letterbox */}
+        <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
 
-        {/* Base Gradient / Map background */}
+        {/* Map grid background — slow Ken-Burns zoom */}
         <motion.div
-          className="absolute inset-0 z-0 opacity-20"
+          className="absolute inset-0 z-0"
           animate={{
-            scale: sceneIndex === 0 ? 1 : sceneIndex === 6 ? 1.2 : 1.1,
-            opacity: (sceneIndex === 0 || sceneIndex === 6) ? 0.3 : 0.1,
+            scale: sceneIndex === 0 ? 1 : sceneIndex === 6 ? 1.15 : [1.05, 1.1, 1.05],
+            opacity: (sceneIndex === 0 || sceneIndex === 6) ? 0.3 : 0.12,
           }}
-          transition={{ duration: 4, ease: "linear" }}
+          transition={{ scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 2 } }}
         >
           <img
             src={`${import.meta.env.BASE_URL}images/map-grid.png`}
@@ -103,15 +94,11 @@ export default function VideoTemplate({
           className="absolute inset-0 z-0"
           animate={{
             opacity: (sceneIndex === 1 || sceneIndex === 3) ? 0.4 : 0,
-            scale: sceneIndex === 1 ? 1 : 1.1,
+            scale: sceneIndex === 1 ? [1, 1.04, 1] : 1.1,
           }}
-          transition={{ duration: 1.5, ease: "easeInOut" }}
+          transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video
-            src={`${import.meta.env.BASE_URL}videos/emergency-drone.mp4`}
-            className="w-full h-full object-cover"
-            autoPlay muted loop playsInline
-          />
+          <video src={`${import.meta.env.BASE_URL}videos/emergency-drone.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-background/60" />
         </motion.div>
 
@@ -120,15 +107,11 @@ export default function VideoTemplate({
           className="absolute inset-0 z-0"
           animate={{
             opacity: (sceneIndex === 2 || sceneIndex === 4) ? 0.5 : 0,
-            scale: sceneIndex === 2 ? 1 : 1.1,
+            scale: sceneIndex === 2 ? [1, 1.04, 1] : 1.1,
           }}
-          transition={{ duration: 1.5, ease: "easeInOut" }}
+          transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video
-            src={`${import.meta.env.BASE_URL}videos/health-network.mp4`}
-            className="w-full h-full object-cover"
-            autoPlay muted loop playsInline
-          />
+          <video src={`${import.meta.env.BASE_URL}videos/health-network.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-background/60 mix-blend-multiply" />
         </motion.div>
 
@@ -137,37 +120,41 @@ export default function VideoTemplate({
           className="absolute inset-0 z-0"
           animate={{
             opacity: sceneIndex === 5 ? 0.6 : 0,
-            scale: sceneIndex === 5 ? 1 : 1.05,
+            scale: sceneIndex === 5 ? [1, 1.04, 1] : 1.05,
           }}
-          transition={{ duration: 1.5, ease: "easeInOut" }}
+          transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video
-            src={`${import.meta.env.BASE_URL}videos/oil-spill.mp4`}
-            className="w-full h-full object-cover"
-            autoPlay muted loop playsInline
-          />
+          <video src={`${import.meta.env.BASE_URL}videos/oil-spill.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
         </motion.div>
 
-        {/* Persistent UI elements across scenes */}
+        {/* Vignette */}
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%)' }}
+        />
+
+        {/* Persistent logo */}
         <motion.div
-          className="absolute top-8 left-8 md:top-12 md:left-12 z-50 flex items-center gap-4"
+          className="absolute top-[4.5vh] left-[3vw] z-50"
           animate={{
             opacity: sceneIndex > 0 && sceneIndex < 6 ? 1 : 0,
             y: sceneIndex > 0 && sceneIndex < 6 ? 0 : -20,
           }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 1.2 }}
         >
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <span className="font-display font-bold text-xl text-white">A</span>
-          </div>
-          <span className="font-display font-bold tracking-widest text-white/50 text-sm">AWAJIMAA</span>
+          <motion.img
+            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+            alt="Awajimaa"
+            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 10px rgba(100,180,255,0.6)) brightness(1.1)' }}
+            animate={{ opacity: [0.85, 1, 0.85] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
         </motion.div>
 
         {/* Noise Texture Overlay */}
         <div className="absolute inset-0 z-40 opacity-[0.03] pointer-events-none bg-noise" />
 
-        {/* SCENES */}
         <AnimatePresence mode="sync">
           {SceneComponent && <SceneComponent key={currentSceneKey} />}
         </AnimatePresence>

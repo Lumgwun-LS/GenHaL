@@ -30,18 +30,6 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   outro: Scene6Outro,
 };
 
-const SCENE_START_SEC: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  let cumulativeMs = 0;
-  for (const [key, ms] of Object.entries(SCENE_DURATIONS)) {
-    out[key] = cumulativeMs / 1000;
-    cumulativeMs += ms;
-  }
-  return out;
-})();
-
-const AUDIO_SEEK_EPSILON_SEC = 0.18;
-
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
@@ -53,7 +41,7 @@ export default function VideoTemplate({
   muted?: boolean;
   onSceneChange?: (sceneKey: string) => void;
 } = {}) {
-  const { currentScene, currentSceneKey } = useVideoPlayer({ durations, loop });
+  const { currentSceneKey } = useVideoPlayer({ durations, loop });
 
   useEffect(() => {
     onSceneChange?.(currentSceneKey);
@@ -64,22 +52,28 @@ export default function VideoTemplate({
   const SceneComponent = SCENE_COMPONENTS[baseSceneKey];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.45;
-    const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
-    if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
-      audio.currentTime = targetTime;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+  }, [currentSceneKey, muted]);
 
   return (
     <>
       <div className="w-full h-screen overflow-hidden relative bg-background text-foreground">
-        {/* Persistent Background Layer */}
+
+        {/* Cinematic letterbox */}
+        <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+
+        {/* Slow Ken-Burns background texture */}
         <motion.div
           className="absolute inset-0 z-0 pointer-events-none opacity-20"
           style={{
@@ -89,15 +83,16 @@ export default function VideoTemplate({
             mixBlendMode: 'overlay',
           }}
           animate={{
-            scale: [1, 1.1, 1],
+            scale: [1, 1.08, 1],
             opacity: sceneIndex === 0 || sceneIndex === 6 ? 0.3 : 0.15,
           }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          transition={{ scale: { duration: 30, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 1.5 } }}
         />
 
-        {/* Persistent ambient gradient drifting */}
+        {/* Persistent slow ambient gradient drift */}
         <motion.div
           className="absolute w-[150vw] h-[150vh] rounded-full blur-[120px] pointer-events-none z-0 opacity-40 mix-blend-screen"
+          style={{ left: '-25vw', top: '-25vh' }}
           animate={{
             background: [
               'radial-gradient(circle, hsl(38 92% 50% / 0.4) 0%, transparent 60%)',
@@ -107,38 +102,44 @@ export default function VideoTemplate({
             x: sceneIndex % 2 === 0 ? '-20%' : '10%',
             y: sceneIndex % 3 === 0 ? '-10%' : '20%',
           }}
-          transition={{ duration: 15, ease: 'linear', repeat: Infinity }}
+          transition={{ background: { duration: 15, ease: 'linear', repeat: Infinity }, x: { duration: 3 }, y: { duration: 3 } }}
         />
 
-        <AnimatePresence mode="popLayout">
-          {SceneComponent && <SceneComponent key={currentSceneKey} />}
-        </AnimatePresence>
+        {/* Vignette */}
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%)' }}
+        />
 
-        {/* Persistent Logo / Brand Mark Overlay */}
+        {/* Persistent Logo */}
         <motion.div
-          className="absolute top-8 left-12 z-50 flex items-center gap-3"
+          className="absolute top-[4.5vh] left-[3vw] z-50"
           initial={{ opacity: 0, y: -20 }}
           animate={{
             opacity: sceneIndex > 0 && sceneIndex < 6 ? 1 : 0,
             y: sceneIndex > 0 && sceneIndex < 6 ? 0 : -20,
           }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 22H22L12 2Z" fill="hsl(24 20% 12%)" />
-              <circle cx="12" cy="15" r="3" fill="hsl(38 92% 50%)" />
-            </svg>
-          </div>
-          <span className="font-outfit font-bold text-xl tracking-wide text-foreground">AWA HUB</span>
+          <motion.img
+            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+            alt="Awajimaa"
+            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 8px rgba(255,160,50,0.5)) brightness(1.1)' }}
+            animate={{ opacity: [0.85, 1, 0.85] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
         </motion.div>
+
+        <AnimatePresence mode="popLayout">
+          {SceneComponent && <SceneComponent key={currentSceneKey} />}
+        </AnimatePresence>
 
         {/* Persistent Progress Line */}
         <motion.div
-          className="absolute bottom-0 left-0 h-1 bg-primary z-50"
+          className="absolute bottom-[3vh] left-0 h-[2px] bg-primary z-50"
           initial={{ width: '0%' }}
           animate={{ width: `${((sceneIndex + 1) / 7) * 100}%` }}
-          transition={{ duration: 1.2, ease: 'circOut' }}
+          transition={{ duration: 1.8, ease: 'circOut' }}
         />
       </div>
 

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVideoPlayer } from '@/lib/video';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -30,13 +30,15 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
+  muted = false,
   onSceneChange,
 }: {
   durations?: Record<string, number>;
   loop?: boolean;
+  muted?: boolean;
   onSceneChange?: (sceneKey: string) => void;
 } = {}) {
-  const { currentScene, currentSceneKey } = useVideoPlayer({
+  const { currentSceneKey } = useVideoPlayer({
     durations,
     loop,
   });
@@ -49,68 +51,103 @@ export default function VideoTemplate({
   const sceneIndex = Object.keys(SCENE_DURATIONS).indexOf(baseSceneKey);
   const SceneComponent = SCENE_COMPONENTS[baseSceneKey];
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioStarted = useRef(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = 0.52;
+    if (!audioStarted.current) {
+      audioStarted.current = true;
+      audio.currentTime = 0;
+    }
+    audio.play().catch(() => {});
+  }, [currentSceneKey, muted]);
+
   return (
-    <div className="w-full h-screen overflow-hidden relative bg-[#05050A] text-white">
-      {/* Persistent Background Video */}
-      <video
-        src={`${import.meta.env.BASE_URL}videos/bg_particles.mp4`}
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-screen"
-      />
+    <>
+      <div className="w-full h-screen overflow-hidden relative bg-[#05050A] text-white">
 
-      {/* Persistent Animated Orbs for Depth */}
-      <motion.div
-        className="absolute w-[50vw] h-[50vw] rounded-full pointer-events-none mix-blend-screen"
-        style={{
-          background: 'radial-gradient(circle, rgba(138,43,226,0.15) 0%, transparent 70%)',
-          filter: 'blur(60px)'
-        }}
-        animate={{
-          x: sceneIndex === 0 ? '-10vw' : sceneIndex === 1 ? '40vw' : sceneIndex === 2 ? '10vw' : sceneIndex === 3 ? '60vw' : '20vw',
-          y: sceneIndex === 0 ? '-10vh' : sceneIndex === 1 ? '30vh' : sceneIndex === 2 ? '50vh' : sceneIndex === 3 ? '-10vh' : '20vh',
-          scale: sceneIndex === 2 || sceneIndex === 4 ? 1.5 : 1
-        }}
-        transition={{ duration: 3, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute w-[40vw] h-[40vw] rounded-full pointer-events-none mix-blend-screen"
-        style={{
-          background: 'radial-gradient(circle, rgba(0,229,255,0.12) 0%, transparent 70%)',
-          filter: 'blur(50px)'
-        }}
-        animate={{
-          x: sceneIndex === 0 ? '60vw' : sceneIndex === 1 ? '10vw' : sceneIndex === 2 ? '50vw' : sceneIndex === 3 ? '-10vw' : '50vw',
-          y: sceneIndex === 0 ? '50vh' : sceneIndex === 1 ? '-10vh' : sceneIndex === 2 ? '10vh' : sceneIndex === 3 ? '60vh' : '10vh',
-          scale: sceneIndex === 1 || sceneIndex === 3 ? 1.5 : 1
-        }}
-        transition={{ duration: 4, ease: 'easeInOut' }}
-      />
+        {/* Cinematic letterbox */}
+        <div className="absolute top-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3vh] bg-black z-50 pointer-events-none" />
 
-      {/* Persistent brand mark -- stays in the corner across every scene */}
-      <motion.div
-        className="absolute top-[4vh] left-[4vw] z-40 flex items-center gap-[0.8vw]"
-        initial={{ opacity: 0, y: '-2vh' }}
-        animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="w-[2.4vw] h-[2.4vw] rounded-[0.6vw] overflow-hidden border border-white/15 shadow-[0_0_20px_rgba(138,43,226,0.35)]">
-          <img
-            src={`${import.meta.env.BASE_URL}images/awajimaa-logo.jpg`}
-            alt="Awajimaa"
-            className="w-full h-full object-cover"
+        {/* Persistent Background Video — slow zoom */}
+        <motion.div
+          className="absolute inset-0"
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <video
+            src={`${import.meta.env.BASE_URL}videos/bg_particles.mp4`}
+            autoPlay loop muted playsInline
+            className="w-full h-full object-cover opacity-40 mix-blend-screen"
           />
-        </div>
-        <span className="text-[1vw] font-display font-semibold tracking-wide text-white/80">
-          Awajimaa
-        </span>
-      </motion.div>
+        </motion.div>
 
-      <AnimatePresence mode="popLayout">
-        {SceneComponent && <SceneComponent key={currentSceneKey} />}
-      </AnimatePresence>
-    </div>
+        {/* Slow drifting orbs */}
+        <motion.div
+          className="absolute w-[50vw] h-[50vw] rounded-full pointer-events-none mix-blend-screen"
+          style={{
+            background: 'radial-gradient(circle, rgba(138,43,226,0.15) 0%, transparent 70%)',
+            filter: 'blur(60px)'
+          }}
+          animate={{
+            x: sceneIndex === 0 ? '-10vw' : sceneIndex === 1 ? '40vw' : sceneIndex === 2 ? '10vw' : sceneIndex === 3 ? '60vw' : '20vw',
+            y: sceneIndex === 0 ? '-10vh' : sceneIndex === 1 ? '30vh' : sceneIndex === 2 ? '50vh' : sceneIndex === 3 ? '-10vh' : '20vh',
+            scale: sceneIndex === 2 || sceneIndex === 4 ? 1.5 : 1
+          }}
+          transition={{ duration: 4, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="absolute w-[40vw] h-[40vw] rounded-full pointer-events-none mix-blend-screen"
+          style={{
+            background: 'radial-gradient(circle, rgba(0,229,255,0.12) 0%, transparent 70%)',
+            filter: 'blur(50px)'
+          }}
+          animate={{
+            x: sceneIndex === 0 ? '60vw' : sceneIndex === 1 ? '10vw' : sceneIndex === 2 ? '50vw' : sceneIndex === 3 ? '-10vw' : '50vw',
+            y: sceneIndex === 0 ? '50vh' : sceneIndex === 1 ? '-10vh' : sceneIndex === 2 ? '10vh' : sceneIndex === 3 ? '60vh' : '10vh',
+            scale: sceneIndex === 1 || sceneIndex === 3 ? 1.5 : 1
+          }}
+          transition={{ duration: 5, ease: 'easeInOut' }}
+        />
+
+        {/* Vignette */}
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }}
+        />
+
+        {/* Persistent brand mark with new logo */}
+        <motion.div
+          className="absolute top-[4vh] left-[4vw] z-40"
+          initial={{ opacity: 0, y: '-2vh' }}
+          animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
+          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.img
+            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
+            alt="Awajimaa"
+            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 10px rgba(138,43,226,0.6)) brightness(1.1)' }}
+            animate={{ opacity: [0.85, 1, 0.85] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </motion.div>
+
+        <AnimatePresence mode="popLayout">
+          {SceneComponent && <SceneComponent key={currentSceneKey} />}
+        </AnimatePresence>
+      </div>
+
+      <audio
+        ref={audioRef}
+        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        preload="auto"
+        autoPlay
+        muted={muted}
+      />
+    </>
   );
 }
