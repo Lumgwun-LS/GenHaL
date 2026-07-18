@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { applyAddToSelection, applyRemoveFromSelection } from "@/lib/vendor-selection";
 import { computeOptedOutVendors, formatOptOutBannerText, formatOptOutPopoverDescription } from "@/lib/bulk-message-opt-out";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -2277,15 +2278,14 @@ export default function AdminPanel() {
                   onApply={(vendorIds, mode) => {
                     setSelectAllVendors(false);
                     if (mode === "add") {
-                      setSelectedVendorIds((prev) => Array.from(new Set([...prev, ...vendorIds])));
+                      setSelectedVendorIds((prev) => applyAddToSelection(prev, vendorIds));
                       toast.success(
                         vendorIds.length > 0
                           ? `Added ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter to your selection`
                           : "No vendors matched that filter",
                       );
                     } else if (mode === "remove") {
-                      const removeSet = new Set(vendorIds);
-                      setSelectedVendorIds((prev) => prev.filter((id) => !removeSet.has(id)));
+                      setSelectedVendorIds((prev) => applyRemoveFromSelection(prev, vendorIds));
                       toast.success(
                         vendorIds.length > 0
                           ? `Removed ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} matching the filter from your selection`
