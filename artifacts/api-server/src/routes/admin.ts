@@ -870,6 +870,7 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
       oldValue: adminAuditLogTable.oldValue,
       newValue: adminAuditLogTable.newValue,
       changedAt: adminAuditLogTable.changedAt,
+      paymentId: adminAuditLogTable.paymentId,
     })
     .from(adminAuditLogTable)
     .leftJoin(vendorsTable, eq(adminAuditLogTable.vendorId, vendorsTable.id))
@@ -1301,6 +1302,7 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
     oldValue: attemptedStatus ?? "conflict",
     newValue: resolution,
     changedAt: new Date(),
+    paymentId: paymentId,
   });
 
   console.info(

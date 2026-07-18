@@ -192,6 +192,8 @@ type AuditLogEntry = {
   oldValue: string;
   newValue: string;
   changedAt: string;
+  /** Populated only for payment_conflict_resolution entries. */
+  paymentId: number | null;
 };
 
 type AuditLogPage = {
@@ -2941,21 +2943,33 @@ export default function AdminPanel() {
                                 ? "Tier"
                                 : entry.field === "verificationLevel"
                                 ? "Verification"
-                                : "Conflict Resolution"}
+                                : entry.field === "payment_conflict_resolution"
+                                ? `Conflict resolved: ${entry.newValue === "dismiss" ? "dismissed" : entry.newValue}`
+                                : entry.field}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {entry.field === "payment_conflict_resolution" ? (
-                              <div className="flex items-center gap-1.5 text-sm">
-                                <span className="text-xs text-muted-foreground">attempted:</span>
-                                <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
-                                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                <Badge
-                                  variant={entry.newValue === "dismiss" ? "outline" : "default"}
-                                  className="text-xs capitalize"
-                                >
-                                  {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
-                                </Badge>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 text-sm">
+                                  <span className="text-xs text-muted-foreground">provider reported:</span>
+                                  <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                  <Badge
+                                    variant={entry.newValue === "dismiss" ? "outline" : "default"}
+                                    className="text-xs capitalize"
+                                  >
+                                    {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
+                                  </Badge>
+                                </div>
+                                {entry.paymentId != null && (
+                                  <button
+                                    className="text-xs text-primary underline-offset-2 hover:underline"
+                                    onClick={() => setActiveAdminTab("payment-conflicts")}
+                                  >
+                                    Payment #{entry.paymentId}
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div className="flex items-center gap-1.5 text-sm">
