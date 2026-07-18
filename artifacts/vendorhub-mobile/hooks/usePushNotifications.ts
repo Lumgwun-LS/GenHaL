@@ -158,6 +158,8 @@ export function usePushNotifications(signedIn: boolean): UsePushNotificationsRes
         } else {
           router.push('/voice-campaigns');
         }
+      } else if (screen === 'admin/void-errors') {
+        router.push('/admin/void-errors');
       }
     });
     return () => subscription.remove();

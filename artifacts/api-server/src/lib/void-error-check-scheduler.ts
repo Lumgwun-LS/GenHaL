@@ -33,6 +33,7 @@ import Stripe from "stripe";
 import { logger } from "./logger";
 import { recordJobRun } from "./job-run-status";
 import { sendSlackAlert } from "./slack";
+import { sendPushToAdmins } from "./push";
 import { resolveStripeKey } from "./vendor-keys";
 
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
@@ -83,6 +84,13 @@ async function alertPass(): Promise<{ checkedCount: number; alertedCount: number
         `Review in the admin *Void Errors* panel.`,
     );
 
+    // Push notification to all admin devices so field staff can act immediately.
+    await sendPushToAdmins(
+      "⚠️ Void Error Detected",
+      `Payment #${row.id} (${row.currency} ${Number(row.amount).toFixed(2)}) for ${row.vendorName ?? `vendor #${row.vendorId}`} — checkout session may still be live.`,
+      { screen: "admin/void-errors", paymentId: row.id },
+    );
+
     await db
       .update(paymentsTable)
       .set({
@@ -93,7 +101,7 @@ async function alertPass(): Promise<{ checkedCount: number; alertedCount: number
     alertedCount++;
     logger.warn(
       { paymentId: row.id, vendorId: row.vendorId, error: voidError },
-      "[void-error-check] Slacked void-error payment",
+      "[void-error-check] Slacked+pushed void-error payment",
     );
   }
 

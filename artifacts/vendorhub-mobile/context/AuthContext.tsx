@@ -37,6 +37,8 @@ interface AuthContextValue {
   needsOnboarding: boolean;
   vendor: Vendor | null;
   features: string[];
+  /** True if the current vendor's Clerk user ID is listed in ADMIN_USER_IDS. */
+  isAdmin: boolean;
   /** Completes onboarding for an already Clerk-signed-in user by minting
    * a VendorHub session bound to their verified Clerk identity. */
   completeOnboarding: (input: { userType: AwajimaaUserType; phone?: string }) => Promise<void>;
@@ -59,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [jti, setJti] = useState<string | null>(null);
 
   const applyToken = useCallback((next: string | null) => {
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applyToken(null);
     setVendor(null);
     setFeatures([]);
+    setIsAdmin(false);
     setJti(null);
     await deleteSecureItem(TOKEN_STORAGE_KEY);
   }, [applyToken]);
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = await getExternalProfile();
     setVendor(profile.vendor);
     setFeatures(profile.features);
+    setIsAdmin((profile as any).isAdmin === true);
   }, []);
 
   // Restore a previously-issued VendorHub session from secure storage.
@@ -91,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = await getExternalProfile();
         setVendor(profile.vendor);
         setFeatures(profile.features);
+        setIsAdmin((profile as any).isAdmin === true);
       } catch {
         // Stored token is invalid/expired — fall back to logged-out state.
         await clearSession();
@@ -130,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await getExternalProfile();
       setVendor(profile.vendor);
       setFeatures(profile.features);
+      setIsAdmin((profile as any).isAdmin === true);
     },
     [applyToken, getToken],
   );
@@ -167,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       needsOnboarding: isClerkLoaded && !!isSignedIn && !isRestoring && !token,
       vendor,
       features,
+      isAdmin,
       completeOnboarding,
       logout,
       refreshProfile,
@@ -184,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRestoring,
       vendor,
       features,
+      isAdmin,
       completeOnboarding,
       logout,
       refreshProfile,

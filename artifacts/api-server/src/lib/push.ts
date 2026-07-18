@@ -6,7 +6,7 @@
  * Docs: https://docs.expo.dev/push-notifications/sending-notifications/
  */
 import { db, vendorPushTokensTable, vendorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const EXPO_PUSH_API = "https://exp.host/--/api/v2/push/send";
 
@@ -124,6 +124,36 @@ function formatCurrency(amount: string | number, currency: string): string {
   }
   const numeric = typeof amount === "string" ? Number(amount) : amount;
   return formatter ? formatter.format(numeric) : `${currency} ${numeric.toFixed(2)}`;
+}
+
+/**
+ * Sends a push notification to every admin who has a vendor account with a
+ * registered push token. Admin Clerk user IDs are read from ADMIN_USER_IDS.
+ * Never throws — errors are logged and swallowed (same contract as sendPushToVendor).
+ */
+export async function sendPushToAdmins(
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<void> {
+  const adminClerkIds = (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (adminClerkIds.length === 0) return;
+
+  try {
+    const adminVendors = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(inArray(vendorsTable.clerkUserId, adminClerkIds));
+
+    await Promise.all(
+      adminVendors.map((v) => sendPushToVendor(v.id, title, body, data)),
+    );
+  } catch (err) {
+    console.error("[push] sendPushToAdmins failed:", err);
+  }
 }
 
 /** Notifies a vendor that one of their payments changed status (paid/failed/refunded). */

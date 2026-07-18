@@ -5,6 +5,7 @@ import featuresRouter from "./features";
 import paymentsRouter from "./payments";
 import pushRouter from "./push";
 import voiceCampaignsRouter from "./voice-campaigns";
+import adminVoidErrorsRouter from "./admin-void-errors";
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use(featuresRouter);
 router.use(paymentsRouter);
 router.use(pushRouter);
 router.use(voiceCampaignsRouter);
+router.use(adminVoidErrorsRouter);
 
 export default router;

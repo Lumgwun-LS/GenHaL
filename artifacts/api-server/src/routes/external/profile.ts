@@ -6,6 +6,15 @@ import { requireExternalAuth, FEATURE_ACCESS } from "../../middlewares/requireEx
 
 const router = Router();
 
+function isAdminVendor(clerkUserId: string | null | undefined): boolean {
+  if (!clerkUserId) return false;
+  const ids = (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.includes(clerkUserId);
+}
+
 router.use(requireExternalAuth);
 
 /**
@@ -26,6 +35,7 @@ router.get("/profile", async (req, res) => {
   return res.json({
     vendor,
     features: FEATURE_ACCESS[awajimaaUserType] ?? [],
+    isAdmin: isAdminVendor(vendor.clerkUserId),
   });
 });
 
