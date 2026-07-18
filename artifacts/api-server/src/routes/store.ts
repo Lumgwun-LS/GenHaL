@@ -148,6 +148,7 @@ function serializeDev(dev: any) {
     country: dev.country ?? "Nigeria",
     avatarUrl: dev.avatarUrl ?? null,
     status: dev.status,
+    feeExempt: dev.feeExempt ?? false,
     paystackCustomerCode: dev.paystackCustomerCode ?? null,
     dedicatedNgnAccount: dev.dedicatedNgnAccount ?? null,
     dedicatedUsdAccount: dev.dedicatedUsdAccount ?? null,
@@ -652,6 +653,7 @@ router.post("/developers/register", requireAuth(), async (req, res) => {
       dedicatedNgnAccount = await requestPaystackDedicatedAccount(customerCode);
     }
 
+    const isFeeExempt = SUPER_ADMIN_EMAILS.includes(email.toLowerCase().trim());
     const [dev] = await db.insert(storeDeveloperAccountsTable).values({
       clerkUserId: userId!,
       displayName,
@@ -661,6 +663,7 @@ router.post("/developers/register", requireAuth(), async (req, res) => {
       company: company ?? null,
       country: country ?? "Nigeria",
       status: "active",
+      feeExempt: isFeeExempt,
       registrationFeePaid: true,
       paystackCustomerCode: customerCode ?? null,
       dedicatedNgnAccount: dedicatedNgnAccount,
@@ -753,6 +756,7 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
     const existing = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, slug) });
     if (existing) slug = `${slug}-${Date.now()}`;
 
+    const isFeeExempt = (dev as any).feeExempt === true;
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
       name, slug, tagline, description, category, platform, iconUrl,
@@ -761,8 +765,9 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       webUrl: webUrl ?? null,
       currentVersion: currentVersion ?? null,
       packageName: packageName ?? null,
-      status: "pending_payment",
-      publishingFeePaid: false,
+      // Fee-exempt developers (e.g. super admin) skip the payment step entirely
+      status: isFeeExempt ? "pending_review" : "pending_payment",
+      publishingFeePaid: isFeeExempt,
       publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
     } as any).returning();
     res.status(201).json(serializeApp(app, dev));

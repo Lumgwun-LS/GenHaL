@@ -16,6 +16,7 @@ export interface Developer {
   country: string;
   avatarUrl?: string | null;
   status: "active" | "suspended";
+  feeExempt?: boolean;
   paystackCustomerCode?: string | null;
   dedicatedNgnAccount?: DedicatedAccount | null;
   dedicatedUsdAccount?: DedicatedAccount | null;

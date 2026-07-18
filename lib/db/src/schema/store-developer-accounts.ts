@@ -12,6 +12,8 @@ export const storeDeveloperAccountsTable = pgTable("store_developer_accounts", {
   avatarUrl: text("avatar_url"),
   // Status lifecycle: active | suspended
   status: text("status").notNull().default("active"),
+  // When true: publishing fee is waived (e.g. super admin test accounts)
+  feeExempt: boolean("fee_exempt").notNull().default(false),
   // Paystack integration for dedicated virtual accounts
   paystackCustomerCode: text("paystack_customer_code"),
   // Dedicated bank accounts (JSON: { accountNumber, bankName, bankSlug })

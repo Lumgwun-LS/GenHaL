@@ -576,7 +576,7 @@ function PlatformsTab({ dev }: { dev: Developer }) {
 
 // ── AppsTab (with repo link + request update) ─────────────────────────────────
 
-function AppsTab({ apps, onPayApp, onRefresh }: { apps: App[]; onPayApp: (a: App) => void; onRefresh: () => void }) {
+function AppsTab({ apps, onPayApp, onRefresh, feeExempt }: { apps: App[]; onPayApp: (a: App) => void; onRefresh: () => void; feeExempt?: boolean }) {
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [repoLinks, setRepoLinks] = useState<Record<number, AppRepoLink | null>>({});
   const [linkingApp, setLinkingApp] = useState<App | null>(null);
@@ -617,7 +617,7 @@ function AppsTab({ apps, onPayApp, onRefresh }: { apps: App[]; onPayApp: (a: App
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ background: s.bg, color: s.color, padding: "4px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  {app.status === "pending_payment" && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay NGN 25K</button>}
+                  {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay NGN 25K</button>}
                   {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
                 </div>
               </div>
@@ -684,10 +684,11 @@ const STATUS_COLORS: Record<string, string> = {
   draft:           "#556070",
 };
 
-function DeveloperDashboard({ apps, onPayApp, onSubmit }: {
+function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
   apps: App[];
   onPayApp: (a: App) => void;
   onSubmit: () => void;
+  feeExempt?: boolean;
 }) {
   // Per-app download data for bar chart
   const downloadData = useMemo(
@@ -736,8 +737,8 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit }: {
         ))}
       </div>
 
-      {/* Pending payment banner */}
-      {apps.filter(a => a.status === "pending_payment").length > 0 && (
+      {/* Pending payment banner — hidden for fee-exempt developers */}
+      {!feeExempt && apps.filter(a => a.status === "pending_payment").length > 0 && (
         <div style={{ background: "rgba(255,179,0,0.05)", border: "1px solid rgba(255,179,0,0.15)", borderRadius: 14, padding: 20, marginBottom: 28 }}>
           <div style={{ fontWeight: 700, marginBottom: 10, color: "#ffb300" }}>💳 Awaiting Payment</div>
           {apps.filter(a => a.status === "pending_payment").map(app => (
@@ -1085,11 +1086,11 @@ export default function DeveloperPortal() {
 
       {/* Dashboard */}
       {view === "dashboard" && (
-        <DeveloperDashboard apps={apps} onPayApp={setPaymentApp} onSubmit={() => setView("submit")} />
+        <DeveloperDashboard apps={apps} onPayApp={setPaymentApp} onSubmit={() => setView("submit")} feeExempt={dev.feeExempt} />
       )}
 
       {/* Apps */}
-      {view === "apps" && <AppsTab apps={apps} onPayApp={setPaymentApp} onRefresh={loadData} />}
+      {view === "apps" && <AppsTab apps={apps} onPayApp={setPaymentApp} onRefresh={loadData} feeExempt={dev.feeExempt} />}
 
       {/* Platforms */}
       {view === "platforms" && <PlatformsTab dev={dev} />}
