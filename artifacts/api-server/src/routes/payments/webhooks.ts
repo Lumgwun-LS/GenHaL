@@ -25,6 +25,7 @@ import {
   registerSlackAlerter,
 } from "../../lib/webhook-buffer";
 import { resolveGatewayField } from "../../lib/platform-gateways";
+import { resolvePaystackKey } from "../../lib/vendor-keys";
 import { syncSaleFromPayment } from "../../lib/sales-sync";
 import { notifyVendorPaymentStatus } from "../../lib/push";
 import { sendEmail } from "../../lib/mailer";
@@ -810,6 +811,150 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
   return { matched: true };
 }
 
+const PAYSTACK_BASE = "https://api.paystack.co";
+
+/**
+ * When Paystack reports a charge.success for a payment that is already
+ * status=cancelled locally (because the vendor cancelled or retried before
+ * the customer completed the checkout link), the customer's money must be
+ * returned immediately.
+ *
+ * This helper:
+ *  1. Resolves the correct Paystack key (vendor's own key → platform key → env fallback).
+ *  2. POSTs to Paystack's /refund endpoint.
+ *  3. On success  — stamps lateArrivalRefunded:true on the payment's metadata.
+ *  4. On failure  — stamps lateArrivalRefundFailed:true, fires a Slack alert and an
+ *                   in-app vendor notification so a human can handle it manually.
+ */
+async function attemptPaystackLateArrivalRefund(reference: string): Promise<void> {
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.providerReference, reference));
+
+  if (!payment) {
+    console.warn(`[paystack webhook] late-arrival refund: payment not found for reference=${reference}`);
+    return;
+  }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, payment.vendorId));
+
+  let paystackKey: string;
+  try {
+    paystackKey = await resolvePaystackKey(
+      payment.vendorId,
+      vendor ?? { subscriptionTier: "free", verificationLevel: "basic" },
+    );
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      `Could not resolve Paystack key: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+
+  try {
+    const refundRes = await fetch(`${PAYSTACK_BASE}/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${paystackKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ transaction: reference }),
+    });
+    const refundData = (await refundRes.json()) as { status: boolean; message: string; data?: unknown };
+
+    if (!refundData.status) {
+      await escalateLateArrivalRefundFailure(
+        payment,
+        reference,
+        `Paystack refund API: ${refundData.message}`,
+      );
+      return;
+    }
+
+    // Stamp the payment row for auditability
+    const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...meta,
+          lateArrivalRefunded: true,
+          lateArrivalRefundedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+
+    console.info(
+      `[paystack webhook] late-arrival refund issued — payment=${payment.id} vendor=${payment.vendorId} reference=${reference}`,
+    );
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+/** Stamps a failure flag on the payment and notifies admins (Slack) + vendor (in-app). */
+async function escalateLateArrivalRefundFailure(
+  payment: { id: number; vendorId: number; metadata: unknown },
+  reference: string,
+  reason: string,
+): Promise<void> {
+  const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+
+  try {
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...meta,
+          lateArrivalRefundFailed: true,
+          lateArrivalRefundFailedAt: new Date().toISOString(),
+          lateArrivalRefundError: reason,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+  } catch (dbErr) {
+    console.error("[paystack webhook] Failed to persist late-arrival refund-failure flag:", dbErr);
+  }
+
+  // Admin Slack alert
+  await sendSlackAlert(
+    `🚨 *Paystack late-arrival refund failed — manual action required*\n` +
+    `• Payment #${payment.id} (vendor ${payment.vendorId}) was already *cancelled* locally, but Paystack confirmed the charge.\n` +
+    `• Automatic refund attempt failed: ${reason}\n` +
+    `• Reference: \`${reference}\`\n` +
+    `• Issue the refund manually from the Paystack dashboard.`,
+  );
+
+  // In-app vendor notification so it's visible on the vendor dashboard too
+  try {
+    await db.insert(vendorNotificationsTable).values({
+      vendorId: payment.vendorId,
+      type: "payment",
+      message:
+        `A customer paid a Paystack checkout link that had already been cancelled (reference: ${reference}). ` +
+        `An automatic refund was attempted but failed. Please issue a manual refund via your Paystack dashboard or contact support.`,
+    });
+  } catch (notifyErr) {
+    console.warn("[paystack webhook] Failed to insert late-arrival refund-failure notification:", notifyErr);
+  }
+
+  console.error(
+    `[paystack webhook] late-arrival auto-refund failed — payment=${payment.id} vendor=${payment.vendorId} reference=${reference} reason=${reason}`,
+  );
+}
+
 /**
  * Applies the business-logic side effects for a Paystack event. Idempotent-ish: safe to re-run.
  *
@@ -913,6 +1058,10 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
 
     const result = await applyPaymentStatusTransition(reference, "paid", "paystack");
     if (result.outcome === "conflict") {
+      // The payment was already cancelled locally (vendor cancelled/retried before
+      // the customer completed the checkout link). The customer's money must be
+      // returned. Attempt an automatic Paystack refund; escalate to admin if it fails.
+      await attemptPaystackLateArrivalRefund(reference);
       return { matched: true };
     }
     const updatedPayment = result.outcome === "updated" ? result.payment : null;
