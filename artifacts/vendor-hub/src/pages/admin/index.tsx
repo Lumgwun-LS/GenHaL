@@ -2535,7 +2535,11 @@ export default function AdminPanel() {
                   <TableBody>
                     {birthdayLogs.map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="font-medium">{log.vendorName}</TableCell>
+                        <TableCell className="font-medium">
+                          <Link href={`/vendors/${log.vendorId}`} className="hover:underline text-primary">
+                            {log.vendorName}
+                          </Link>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {log.vendorEmail ?? "—"}
                         </TableCell>
