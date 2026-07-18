@@ -845,6 +845,20 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
+  const DEFAULT_LIMIT = 50;
+  const MAX_LIMIT = 200;
+
+  const rawLimit = Number(req.query.limit ?? DEFAULT_LIMIT);
+  const rawOffset = Number(req.query.offset ?? 0);
+
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : DEFAULT_LIMIT;
+  const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(adminAuditLogTable);
+  const total = Number(countResult?.count ?? 0);
+
   const entries = await db
     .select({
       id: adminAuditLogTable.id,
@@ -860,9 +874,10 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
     .from(adminAuditLogTable)
     .leftJoin(vendorsTable, eq(adminAuditLogTable.vendorId, vendorsTable.id))
     .orderBy(desc(adminAuditLogTable.changedAt))
-    .limit(50);
+    .limit(limit)
+    .offset(offset);
 
-  res.json(entries);
+  res.json({ entries, total, limit, offset });
 });
 
 // ─── GET /admin/message-history ──────────────────────────────────────────────

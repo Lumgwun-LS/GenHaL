@@ -194,10 +194,21 @@ type AuditLogEntry = {
   changedAt: string;
 };
 
-async function fetchAuditLog(): Promise<AuditLogEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/audit-log`, { credentials: "include" });
+type AuditLogPage = {
+  entries: AuditLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+const AUDIT_LOG_PAGE_SIZE = 50;
+
+async function fetchAuditLog(page: number): Promise<AuditLogPage> {
+  const offset = (page - 1) * AUDIT_LOG_PAGE_SIZE;
+  const qs = new URLSearchParams({ limit: String(AUDIT_LOG_PAGE_SIZE), offset: String(offset) });
+  const res = await fetch(`${BASE_URL}/api/admin/audit-log?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load audit log");
-  return res.json() as Promise<AuditLogEntry[]>;
+  return res.json() as Promise<AuditLogPage>;
 }
 
 type BirthdayLog = {
@@ -1839,6 +1850,7 @@ export default function AdminPanel() {
   const [auditFieldFilter, setAuditFieldFilter] = useState(AUDIT_FIELD_ANY);
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
+  const [auditPage, setAuditPage] = useState(1);
 
   const [activeAdminTab, setActiveAdminTab] = useState("vendors");
   const [messageVendorSearch, setMessageVendorSearch] = useState("");
@@ -1897,12 +1909,14 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
-  const { data: auditLog, isLoading: auditLoading } = useQuery({
-    queryKey: ["admin-audit-log"],
-    queryFn: fetchAuditLog,
+  const { data: auditLogPage, isLoading: auditLoading } = useQuery({
+    queryKey: ["admin-audit-log", auditPage],
+    queryFn: () => fetchAuditLog(auditPage),
     enabled: isAdmin,
     refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
   });
+  const auditLog = auditLogPage?.entries;
 
   const { data: exportLogs, isLoading: exportLogsLoading } = useQuery({
     queryKey: ["admin-export-logs"],
@@ -2828,7 +2842,7 @@ export default function AdminPanel() {
                 <ClipboardList className="w-5 h-5 text-primary" /> Tier Change Audit Log
               </CardTitle>
               <CardDescription>
-                The last 50 changes to vendor subscription tiers, verification levels, and payment conflict resolutions. Read-only — entries cannot be deleted.
+                Changes to vendor subscription tiers, verification levels, and payment conflict resolutions. Read-only — entries cannot be deleted.
               </CardDescription>
               <div className="flex flex-wrap items-end gap-3 pt-3">
                 <div className="space-y-1">
@@ -2903,67 +2917,101 @@ export default function AdminPanel() {
                   <p className="text-xs mt-1">Try adjusting the vendor name, field, or date range.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Field</TableHead>
-                      <TableHead>Change</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead className="text-right">When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAuditLog.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell>
-                          <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
-                          <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {entry.field === "subscriptionTier"
-                              ? "Tier"
-                              : entry.field === "verificationLevel"
-                              ? "Verification"
-                              : "Conflict Resolution"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {entry.field === "payment_conflict_resolution" ? (
-                            <div className="flex items-center gap-1.5 text-sm">
-                              <span className="text-xs text-muted-foreground">attempted:</span>
-                              <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
-                              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <Badge
-                                variant={entry.newValue === "dismiss" ? "outline" : "default"}
-                                className="text-xs capitalize"
-                              >
-                                {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
-                              </Badge>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 text-sm">
-                              <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
-                              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <Badge variant="default" className="text-xs capitalize">{entry.newValue}</Badge>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {entry.adminDisplayName ? (
-                            <span className="text-xs">{entry.adminDisplayName}</span>
-                          ) : (
-                            <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {new Date(entry.changedAt).toLocaleString()}
-                        </TableCell>
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead>Field</TableHead>
+                        <TableHead>Change</TableHead>
+                        <TableHead>Admin</TableHead>
+                        <TableHead className="text-right">When</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAuditLog.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>
+                            <div className="font-medium">{entry.vendorName ?? `Vendor #${entry.vendorId}`}</div>
+                            <div className="text-xs text-muted-foreground">ID {entry.vendorId}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.field === "subscriptionTier"
+                                ? "Tier"
+                                : entry.field === "verificationLevel"
+                                ? "Verification"
+                                : "Conflict Resolution"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {entry.field === "payment_conflict_resolution" ? (
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <span className="text-xs text-muted-foreground">attempted:</span>
+                                <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                <Badge
+                                  variant={entry.newValue === "dismiss" ? "outline" : "default"}
+                                  className="text-xs capitalize"
+                                >
+                                  {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
+                                </Badge>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <Badge variant="secondary" className="text-xs capitalize">{entry.oldValue}</Badge>
+                                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                <Badge variant="default" className="text-xs capitalize">{entry.newValue}</Badge>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {entry.adminDisplayName ? (
+                              <span className="text-xs">{entry.adminDisplayName}</span>
+                            ) : (
+                              <span className="font-mono text-xs text-muted-foreground">{entry.adminUserId.slice(0, 12)}…</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {new Date(entry.changedAt).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {auditLogPage && auditLogPage.total > AUDIT_LOG_PAGE_SIZE && auditVendorSearch.trim() === "" && auditFieldFilter === AUDIT_FIELD_ANY && auditAfter === "" && auditBefore === "" && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+                      <span>
+                        Showing {(auditPage - 1) * AUDIT_LOG_PAGE_SIZE + 1}–
+                        {Math.min(auditPage * AUDIT_LOG_PAGE_SIZE, auditLogPage.total)} of{" "}
+                        {auditLogPage.total}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setAuditPage((p) => p - 1)}
+                          disabled={auditPage <= 1 || auditLoading}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-xs">
+                          Page {auditPage} of {Math.ceil(auditLogPage.total / AUDIT_LOG_PAGE_SIZE)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setAuditPage((p) => p + 1)}
+                          disabled={auditPage * AUDIT_LOG_PAGE_SIZE >= auditLogPage.total || auditLoading}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
