@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { applyAddToSelection, applyRemoveFromSelection } from "@/lib/vendor-selection";
 import { computeOptedOutVendors, formatOptOutBannerText, formatOptOutPopoverDescription } from "@/lib/bulk-message-opt-out";
 import { useUser } from "@clerk/react";
@@ -1821,6 +1821,27 @@ function RetryAllFailedButton({
   onDone: () => void;
 }) {
   const [jobState, setJobState] = useState<RetryJobState>({ status: "idle" });
+
+  // On mount, check if a retry is already running on the server so that
+  // navigating away and back mid-run resumes showing progress immediately.
+  useEffect(() => {
+    let cancelled = false;
+    pollRetryStatus(campaignId).then((state) => {
+      if (!cancelled && (state.status === "running" || state.status === "done" || state.status === "error")) {
+        setJobState(state);
+        if (state.status === "done") {
+          toast.success(
+            `Retried ${state.attempted} call(s): ${state.succeeded} placed, ${state.failed} still failed.`,
+          );
+          onDone();
+        } else if (state.status === "error") {
+          toast.error(`Retry failed: ${state.error}`);
+        }
+      }
+    }).catch(() => { /* ignore — server may not have a job for this campaign */ });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
 
   // Poll for progress while the job is running
   useQuery({
