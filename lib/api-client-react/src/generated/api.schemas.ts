@@ -861,6 +861,7 @@ export interface ExternalVoiceCampaignSummary {
   createdAt: string;
   totalCalls: number;
   answeredCalls: number;
+  totalLeads: number;
 }
 
 export interface ExternalVoiceCampaignCall {
@@ -880,6 +881,7 @@ export interface ExternalVoiceCampaignStats {
   answeredCalls: number;
   answerRate: number;
   avgDurationSeconds: number;
+  totalLeads: number;
 }
 
 export interface ExternalVoiceCampaignDetail {

@@ -5347,7 +5347,7 @@ components:
 
     ExternalVoiceCampaignSummary:
       type: object
-      required: [id, name, script, status, scheduledAt, createdAt, totalCalls, answeredCalls]
+      required: [id, name, script, status, scheduledAt, createdAt, totalCalls, answeredCalls, totalLeads]
       properties:
         id:
           type: integer
@@ -5364,6 +5364,8 @@ components:
         totalCalls:
           type: integer
         answeredCalls:
+          type: integer
+        totalLeads:
           type: integer
 
     ExternalVoiceCampaignCall:
@@ -5387,7 +5389,7 @@ components:
 
     ExternalVoiceCampaignStats:
       type: object
-      required: [totalCalls, answeredCalls, answerRate, avgDurationSeconds]
+      required: [totalCalls, answeredCalls, answerRate, avgDurationSeconds, totalLeads]
       properties:
         totalCalls:
           type: integer
@@ -5396,6 +5398,8 @@ components:
         answerRate:
           type: integer
         avgDurationSeconds:
+          type: integer
+        totalLeads:
           type: integer
 
     ExternalVoiceCampaignDetail:

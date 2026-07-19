@@ -171,6 +171,35 @@ export default function VoiceCampaignDetailScreen() {
             Created {formatDate(campaign.createdAt)}
           </Text>
 
+          {campaign.status === 'running' && (
+            <View style={[styles.runningBanner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+              <View style={styles.runningBannerTop}>
+                <Feather name="loader" size={14} color={colors.primary} />
+                <Text style={[styles.runningBannerText, { color: colors.primary }]}>
+                  {`${campaign.stats.totalCalls} / ${campaign.stats.totalLeads} calls placed`}
+                </Text>
+                <Text style={[styles.runningBannerPct, { color: colors.primary + 'CC' }]}>
+                  {campaign.stats.totalLeads > 0
+                    ? `${Math.round((campaign.stats.totalCalls / campaign.stats.totalLeads) * 100)}%`
+                    : ''}
+                </Text>
+              </View>
+              {campaign.stats.totalLeads > 0 && (
+                <View style={[styles.runningTrack, { backgroundColor: colors.primary + '25' }]}>
+                  <View
+                    style={[
+                      styles.runningFill,
+                      {
+                        backgroundColor: colors.primary,
+                        width: `${Math.min(100, Math.round((campaign.stats.totalCalls / campaign.stats.totalLeads) * 100))}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+            </View>
+          )}
+
           {canLaunch && (
             <GradientButton
               onPress={handleLaunch}
@@ -321,6 +350,36 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontFamily: 'Inter_700Bold',
+  },
+  runningBanner: {
+    marginTop: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  runningBannerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  runningBannerText: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    flex: 1,
+  },
+  runningBannerPct: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  runningTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  runningFill: {
+    height: 4,
+    borderRadius: 2,
   },
   scriptCard: {
     marginTop: 14,

@@ -24,11 +24,16 @@ router.use(requireExternalAuth);
 router.get("/voice-campaigns", async (req, res) => {
   const { vendorId } = req.externalUser!;
 
-  const campaigns = await db
-    .select()
-    .from(voiceCampaignsTable)
-    .where(eq(voiceCampaignsTable.vendorId, vendorId))
-    .orderBy(desc(voiceCampaignsTable.createdAt));
+  const E164_RE = /^\+[1-9]\d{1,14}$/;
+  const [campaigns, allLeads] = await Promise.all([
+    db
+      .select()
+      .from(voiceCampaignsTable)
+      .where(eq(voiceCampaignsTable.vendorId, vendorId))
+      .orderBy(desc(voiceCampaignsTable.createdAt)),
+    db.select().from(leadsTable).where(eq(leadsTable.vendorId, vendorId)),
+  ]);
+  const totalLeads = allLeads.filter((l) => l.phone && E164_RE.test(l.phone)).length;
 
   const summaries = await Promise.all(
     campaigns.map(async (campaign) => {
@@ -46,6 +51,7 @@ router.get("/voice-campaigns", async (req, res) => {
         createdAt: campaign.createdAt.toISOString(),
         totalCalls: calls.length,
         answeredCalls: answered,
+        totalLeads,
       };
     }),
   );
@@ -75,6 +81,10 @@ router.get("/voice-campaigns/:id", async (req, res): Promise<void> => {
   const avgDuration =
     withDuration.reduce((s, c) => s + (c.durationSeconds ?? 0), 0) / (withDuration.length || 1);
 
+  const E164_RE = /^\+[1-9]\d{1,14}$/;
+  const allLeads = await db.select().from(leadsTable).where(eq(leadsTable.vendorId, vendorId));
+  const totalLeads = allLeads.filter((l) => l.phone && E164_RE.test(l.phone)).length;
+
   res.json({
     id: campaign.id,
     name: campaign.name,
@@ -87,6 +97,7 @@ router.get("/voice-campaigns/:id", async (req, res): Promise<void> => {
       answeredCalls: answered,
       answerRate: calls.length ? Math.round((answered / calls.length) * 100) : 0,
       avgDurationSeconds: Math.round(avgDuration),
+      totalLeads,
     },
     calls: calls.map((c) => ({
       id: c.id,

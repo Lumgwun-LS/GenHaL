@@ -3235,7 +3235,8 @@ export const ListExternalVoiceCampaignsResponseItem = zod.object({
   "scheduledAt": zod.string().nullable(),
   "createdAt": zod.string(),
   "totalCalls": zod.number(),
-  "answeredCalls": zod.number()
+  "answeredCalls": zod.number(),
+  "totalLeads": zod.number()
 })
 export const ListExternalVoiceCampaignsResponse = zod.array(ListExternalVoiceCampaignsResponseItem)
 
@@ -3263,7 +3264,8 @@ export const CreateExternalVoiceCampaignResponse = zod.object({
   "scheduledAt": zod.string().nullable(),
   "createdAt": zod.string(),
   "totalCalls": zod.number(),
-  "answeredCalls": zod.number()
+  "answeredCalls": zod.number(),
+  "totalLeads": zod.number()
 })
 
 
@@ -3285,7 +3287,8 @@ export const GetExternalVoiceCampaignResponse = zod.object({
   "totalCalls": zod.number(),
   "answeredCalls": zod.number(),
   "answerRate": zod.number(),
-  "avgDurationSeconds": zod.number()
+  "avgDurationSeconds": zod.number(),
+  "totalLeads": zod.number()
 }),
   "calls": zod.array(zod.object({
   "id": zod.number(),
@@ -3326,7 +3329,8 @@ export const UpdateExternalVoiceCampaignResponse = zod.object({
   "scheduledAt": zod.string().nullable(),
   "createdAt": zod.string(),
   "totalCalls": zod.number(),
-  "answeredCalls": zod.number()
+  "answeredCalls": zod.number(),
+  "totalLeads": zod.number()
 })
 
 

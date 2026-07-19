@@ -16,4 +16,5 @@ export interface ExternalVoiceCampaignSummary {
   createdAt: string;
   totalCalls: number;
   answeredCalls: number;
+  totalLeads: number;
 }

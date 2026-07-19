@@ -11,4 +11,5 @@ export interface ExternalVoiceCampaignStats {
   answeredCalls: number;
   answerRate: number;
   avgDurationSeconds: number;
+  totalLeads: number;
 }

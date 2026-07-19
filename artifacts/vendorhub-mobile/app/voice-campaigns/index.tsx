@@ -79,6 +79,28 @@ export default function VoiceCampaignsScreen() {
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </View>
 
+          {item.status === 'running' && item.totalLeads > 0 && (
+            <View style={[styles.progressWrap, { backgroundColor: colors.primary + '12' }]}>
+              <View style={styles.progressRow}>
+                <Feather name="loader" size={12} color={colors.primary} />
+                <Text style={[styles.progressText, { color: colors.primary }]}>
+                  {`${item.totalCalls} / ${item.totalLeads} calls placed`}
+                </Text>
+              </View>
+              <View style={[styles.progressTrack, { backgroundColor: colors.primary + '25' }]}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.primary,
+                      width: `${Math.min(100, Math.round((item.totalCalls / item.totalLeads) * 100))}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <StatusBadge status={item.status} />
             <View style={styles.statsWrap}>
@@ -221,5 +243,29 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
+  },
+  progressWrap: {
+    marginTop: 10,
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  progressText: {
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  progressTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 3,
+    borderRadius: 2,
   },
 });
