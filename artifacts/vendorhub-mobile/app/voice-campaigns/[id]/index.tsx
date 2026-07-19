@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
@@ -100,6 +100,7 @@ export default function VoiceCampaignDetailScreen() {
   if (isLoading) return <LoadingView />;
   if (isError || !campaign) return <ErrorView onRetry={() => refetch()} />;
 
+  const canEdit = campaign.status === 'draft' || campaign.status === 'scheduled';
   const canLaunch = campaign.status === 'draft' || campaign.status === 'scheduled';
 
   const renderCall = ({ item, index }: { item: ExternalVoiceCampaignCall; index: number }) => (
@@ -146,8 +147,25 @@ export default function VoiceCampaignDetailScreen() {
       ListHeaderComponent={
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: colors.foreground }]}>{campaign.name}</Text>
-            <StatusBadge status={campaign.status} />
+            <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
+              {campaign.name}
+            </Text>
+            <View style={styles.titleTrailing}>
+              <StatusBadge status={campaign.status} />
+              {canEdit && (
+                <Pressable
+                  onPress={() => router.push(`/voice-campaigns/${campaignId}/edit`)}
+                  style={({ pressed }) => [
+                    styles.editBtn,
+                    { borderColor: colors.primary + '50', backgroundColor: colors.primary + '12', opacity: pressed ? 0.7 : 1 },
+                  ]}
+                  hitSlop={8}
+                >
+                  <Feather name="edit-2" size={14} color={colors.primary} />
+                  <Text style={[styles.editBtnLabel, { color: colors.primary }]}>Edit</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           <Text style={[styles.createdAt, { color: colors.mutedForeground }]}>
             Created {formatDate(campaign.createdAt)}
@@ -244,7 +262,7 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
   },
@@ -252,6 +270,24 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
     flexShrink: 1,
+  },
+  titleTrailing: {
+    alignItems: 'flex-end',
+    gap: 8,
+    flexShrink: 0,
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  editBtnLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
   createdAt: {
     fontSize: 12,
