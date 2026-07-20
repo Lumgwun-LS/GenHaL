@@ -181,6 +181,17 @@ export default function Orders() {
                     <Badge variant="outline" className={getStatusColor(order.status)}>
                       {order.status}
                     </Badge>
+                    {order.status === 'cancelled' && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {order.paymentStatus === 'cancelled'
+                          ? 'Customer cancelled'
+                          : order.paymentStatus === 'paid'
+                          ? 'Cancelled after payment'
+                          : order.paymentStatus === 'refunded'
+                          ? 'Cancelled & refunded'
+                          : null}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-bold">
                     ${order.totalAmount.toFixed(2)}

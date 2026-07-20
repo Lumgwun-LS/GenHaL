@@ -5031,7 +5031,7 @@ components:
     # ─── ORDER ──────────────────────────────────────────────────────────────
     Order:
       type: object
-      required: [id, vendorId, customerName, customerEmail, status, totalAmount, items, createdAt]
+      required: [id, vendorId, customerName, customerEmail, status, paymentStatus, totalAmount, items, createdAt]
       properties:
         id:
           type: integer
@@ -5049,6 +5049,10 @@ components:
           type: ["string", "null"]
         status:
           type: string
+          description: "pending | completed | cancelled"
+        paymentStatus:
+          type: string
+          description: "unpaid | paid | failed | refunded | cancelled"
         totalAmount:
           type: number
         notes:

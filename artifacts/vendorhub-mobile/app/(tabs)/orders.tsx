@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -42,6 +43,15 @@ const PROVIDER_OPTIONS: {
   { label: 'Paystack', currency: 'NGN', icon: 'globe', isEnabled: (v) => !!v.paystackEnabled },
 ];
 
+type StatusFilter = 'all' | 'pending' | 'completed' | 'cancelled';
+
+const FILTER_TABS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
 function currency(amount: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -50,12 +60,21 @@ function currency(amount: number) {
   }).format(amount);
 }
 
+/** Returns a human-readable cancellation reason inferred from paymentStatus */
+function cancelReason(order: Order): string {
+  if (order.paymentStatus === 'cancelled') return 'Customer cancelled';
+  if (order.paymentStatus === 'paid') return 'Cancelled after payment';
+  if (order.paymentStatus === 'refunded') return 'Cancelled & refunded';
+  return 'Cancelled';
+}
+
 export default function OrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const { data, isLoading, isError, refetch } = useListExternalOrders();
   const {
     data: profile,
@@ -110,127 +129,259 @@ export default function OrdersScreen() {
   if (isLoading) return <LoadingView />;
   if (isError) return <ErrorView onRetry={() => refetch()} />;
 
-  const orders = data ?? [];
+  const allOrders = data ?? [];
+  const filteredOrders =
+    statusFilter === 'all' ? allOrders : allOrders.filter((o) => o.status === statusFilter);
 
-  const renderItem = ({ item, index }: { item: Order; index: number }) => (
-    <AnimatedListItem index={index} baseDelay={60}>
-      <Card style={styles.card} onPress={() => setCheckoutOrder(item)}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.customer, { color: colors.foreground }]} numberOfLines={1}>
-            {item.customerName}
+  const isPendingOrder = (order: Order) => order.status === 'pending';
+
+  const handleCardPress = (order: Order) => {
+    if (isPendingOrder(order)) {
+      setCheckoutOrder(order);
+    }
+  };
+
+  const renderItem = ({ item, index }: { item: Order; index: number }) => {
+    const isActive = isPendingOrder(item);
+    const isCancelled = item.status === 'cancelled';
+
+    return (
+      <AnimatedListItem index={index} baseDelay={60}>
+        <Card
+          style={[styles.card, isCancelled && styles.cancelledCard]}
+          onPress={() => handleCardPress(item)}
+        >
+          <View style={styles.headerRow}>
+            <Text style={[styles.customer, { color: colors.foreground }]} numberOfLines={1}>
+              {item.customerName}
+            </Text>
+            <StatusBadge status={item.status} />
+          </View>
+          <Text style={[styles.email, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {item.customerEmail}
           </Text>
-          <StatusBadge status={item.status} />
-        </View>
-        <Text style={[styles.email, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {item.customerEmail}
-        </Text>
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <View style={styles.footerRow}>
-          <Text style={[styles.itemCount, { color: colors.mutedForeground }]}>
-            {item.items.length} item{item.items.length === 1 ? '' : 's'}
-          </Text>
-          <Text style={[styles.total, { color: colors.accent }]}>{currency(item.totalAmount)}</Text>
-        </View>
-        <View style={[styles.checkoutHint, { borderTopColor: colors.border }]}>
-          <Feather name="credit-card" size={13} color={colors.primary} />
-          <Text style={[styles.checkoutHintText, { color: colors.primary }]}>
-            Tap to start checkout
-          </Text>
-        </View>
-      </Card>
-    </AnimatedListItem>
-  );
+          {isCancelled && (
+            <View style={[styles.cancelReasonRow, { backgroundColor: colors.destructive + '10' }]}>
+              <Feather name="x-circle" size={12} color={colors.destructive} />
+              <Text style={[styles.cancelReasonText, { color: colors.destructive }]}>
+                {cancelReason(item)}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={styles.footerRow}>
+            <Text style={[styles.itemCount, { color: colors.mutedForeground }]}>
+              {item.items.length} item{item.items.length === 1 ? '' : 's'}
+            </Text>
+            <Text style={[styles.total, { color: isCancelled ? colors.mutedForeground : colors.accent }]}>
+              {currency(item.totalAmount)}
+            </Text>
+          </View>
+          {isActive && (
+            <View style={[styles.checkoutHint, { borderTopColor: colors.border }]}>
+              <Feather name="credit-card" size={13} color={colors.primary} />
+              <Text style={[styles.checkoutHintText, { color: colors.primary }]}>
+                Tap to start checkout
+              </Text>
+            </View>
+          )}
+        </Card>
+      </AnimatedListItem>
+    );
+  };
+
+  const cancelledCount = allOrders.filter((o) => o.status === 'cancelled').length;
 
   return (
     <>
-    <FlatList
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[
-        styles.content,
-        orders.length === 0 && styles.emptyContent,
-        { paddingBottom: insets.bottom + 32 },
-      ]}
-      data={orders}
-      keyExtractor={(item) => String(item.id)}
-      renderItem={renderItem}
-      scrollEnabled={orders.length > 0}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-      }
-      ListEmptyComponent={
-        <EmptyState
-          icon="shopping-bag"
-          title="No orders yet"
-          message="Orders placed by your customers will show up here."
-        />
-      }
-    />
-    <Modal
-      visible={checkoutOrder !== null}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setCheckoutOrder(null)}
-    >
-      <Pressable
-        style={styles.backdrop}
-        onPress={() => (initializePayment.isPending ? undefined : setCheckoutOrder(null))}
-      >
-        <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Start checkout</Text>
-          {checkoutOrder && (
-            <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {checkoutOrder.customerName} · {currency(checkoutOrder.totalAmount)}
-            </Text>
-          )}
-          <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>
-            Choose a payment provider
-          </Text>
-          {isProfileLoading ? (
-            <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
-              Checking which payment providers are available…
-            </Text>
-          ) : isProfileError ? (
-            <>
-              <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
-                Couldn't verify your available payment providers.
-              </Text>
-              <Pressable onPress={() => refetchProfile()} style={styles.retryLink}>
-                <Text style={[styles.retryLinkText, { color: colors.primary }]}>Try again</Text>
-              </Pressable>
-            </>
-          ) : enabledProviders.length === 0 ? (
-            <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
-              No payment providers are enabled for your account yet. Contact the admin to turn one on.
-            </Text>
-          ) : (
-            enabledProviders.map((option) => (
+      <View style={{ backgroundColor: colors.background }}>
+        {/* Status filter tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.filterBar, { paddingTop: 12 }]}
+        >
+          {FILTER_TABS.map((tab) => {
+            const isActive = statusFilter === tab.key;
+            const count =
+              tab.key === 'all'
+                ? allOrders.length
+                : allOrders.filter((o) => o.status === tab.key).length;
+            return (
               <Pressable
-                key={option.currency}
-                style={[styles.providerRow, { borderColor: colors.border }]}
-                disabled={initializePayment.isPending}
-                onPress={() => checkoutOrder && startCheckout(checkoutOrder, option.currency)}
+                key={tab.key}
+                style={[
+                  styles.filterTab,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                  isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+                onPress={() => setStatusFilter(tab.key)}
               >
-                <Feather name={option.icon} size={18} color={colors.primary} />
-                <Text style={[styles.providerLabel, { color: colors.foreground }]}>{option.label}</Text>
-                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    { color: isActive ? '#fff' : colors.mutedForeground },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+                {count > 0 && (
+                  <View
+                    style={[
+                      styles.filterBadge,
+                      {
+                        backgroundColor: isActive
+                          ? 'rgba(255,255,255,0.25)'
+                          : colors.muted,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterBadgeText,
+                        { color: isActive ? '#fff' : colors.mutedForeground },
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
-            ))
-          )}
-          <GradientButton
-            label="Cancel"
-            variant="outline"
-            onPress={() => setCheckoutOrder(null)}
-            disabled={initializePayment.isPending}
-            style={styles.cancelButton}
+            );
+          })}
+        </ScrollView>
+        {cancelledCount > 0 && statusFilter !== 'cancelled' && statusFilter !== 'all' ? null : null}
+      </View>
+      <FlatList
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[
+          styles.content,
+          filteredOrders.length === 0 && styles.emptyContent,
+          { paddingBottom: insets.bottom + 32 },
+        ]}
+        data={filteredOrders}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderItem}
+        scrollEnabled={filteredOrders.length > 0}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon={statusFilter === 'cancelled' ? 'x-circle' : 'shopping-bag'}
+            title={
+              statusFilter === 'cancelled'
+                ? 'No cancelled orders'
+                : statusFilter === 'all'
+                ? 'No orders yet'
+                : `No ${statusFilter} orders`
+            }
+            message={
+              statusFilter === 'cancelled'
+                ? 'Cancelled shop-link orders will appear here.'
+                : statusFilter === 'all'
+                ? 'Orders placed by your customers will show up here.'
+                : `No orders with status "${statusFilter}" found.`
+            }
           />
+        }
+      />
+      <Modal
+        visible={checkoutOrder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCheckoutOrder(null)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => (initializePayment.isPending ? undefined : setCheckoutOrder(null))}
+        >
+          <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Start checkout</Text>
+            {checkoutOrder && (
+              <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {checkoutOrder.customerName} · {currency(checkoutOrder.totalAmount)}
+              </Text>
+            )}
+            <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>
+              Choose a payment provider
+            </Text>
+            {isProfileLoading ? (
+              <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+                Checking which payment providers are available…
+              </Text>
+            ) : isProfileError ? (
+              <>
+                <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+                  Couldn't verify your available payment providers.
+                </Text>
+                <Pressable onPress={() => refetchProfile()} style={styles.retryLink}>
+                  <Text style={[styles.retryLinkText, { color: colors.primary }]}>Try again</Text>
+                </Pressable>
+              </>
+            ) : enabledProviders.length === 0 ? (
+              <Text style={[styles.noProvidersText, { color: colors.mutedForeground }]}>
+                No payment providers are enabled for your account yet. Contact the admin to turn one on.
+              </Text>
+            ) : (
+              enabledProviders.map((option) => (
+                <Pressable
+                  key={option.currency}
+                  style={[styles.providerRow, { borderColor: colors.border }]}
+                  disabled={initializePayment.isPending}
+                  onPress={() => checkoutOrder && startCheckout(checkoutOrder, option.currency)}
+                >
+                  <Feather name={option.icon} size={18} color={colors.primary} />
+                  <Text style={[styles.providerLabel, { color: colors.foreground }]}>{option.label}</Text>
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                </Pressable>
+              ))
+            )}
+            <GradientButton
+              label="Cancel"
+              variant="outline"
+              onPress={() => setCheckoutOrder(null)}
+              disabled={initializePayment.isPending}
+              style={styles.cancelButton}
+            />
+          </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  filterBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  filterTabText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  filterBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+  },
   content: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -241,6 +392,9 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 12,
+  },
+  cancelledCard: {
+    opacity: 0.8,
   },
   headerRow: {
     flexDirection: 'row',
@@ -257,6 +411,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
     marginTop: 3,
+  },
+  cancelReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  cancelReasonText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
   divider: {
     height: StyleSheet.hairlineWidth,

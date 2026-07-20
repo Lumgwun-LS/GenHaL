@@ -22,6 +22,7 @@ import {
   productsTable,
   inventoryTransactionsTable,
   ordersTable,
+  orderItemsTable,
   emailCampaignsTable,
   smsCampaignsTable,
 } from "@workspace/db/schema";
@@ -157,7 +158,27 @@ router.get("/orders", requireFeature("orders"), async (req, res) => {
     .where(eq(ordersTable.vendorId, vendorId))
     .orderBy(desc(ordersTable.createdAt))
     .limit(100);
-  res.json(orders);
+
+  const ordersWithItems = await Promise.all(
+    orders.map(async (order) => {
+      const items = await db
+        .select()
+        .from(orderItemsTable)
+        .where(eq(orderItemsTable.orderId, order.id));
+      return {
+        ...order,
+        totalAmount: parseFloat(order.totalAmount),
+        createdAt: order.createdAt.toISOString(),
+        items: items.map((item) => ({
+          ...item,
+          unitPrice: parseFloat(item.unitPrice),
+          totalPrice: parseFloat(item.totalPrice),
+        })),
+      };
+    }),
+  );
+
+  res.json(ordersWithItems);
 });
 
 // ─── Campaigns ───────────────────────────────────────────────────────────────

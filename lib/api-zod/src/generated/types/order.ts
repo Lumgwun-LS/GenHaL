@@ -18,7 +18,10 @@ export interface Order {
   customerEmail: string;
   /** @nullable */
   customerPhone?: string | null;
+  /** pending | completed | cancelled */
   status: string;
+  /** unpaid | paid | failed | refunded | cancelled */
+  paymentStatus: string;
   totalAmount: number;
   /** @nullable */
   notes?: string | null;
