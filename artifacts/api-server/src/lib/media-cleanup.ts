@@ -133,7 +133,7 @@ async function sendMediaExpiryWarning(
  * window (older than WARNING_HOURS, younger than RETENTION_HOURS, not yet
  * warned). Returns how many warnings were sent.
  */
-async function warnOrphanedAiMedia(): Promise<{ warned: number }> {
+export async function warnOrphanedAiMedia(): Promise<{ warned: number }> {
   const warnCutoff = new Date(Date.now() - WARNING_HOURS * 60 * 60 * 1000);
   const deleteCutoff = new Date(Date.now() - RETENTION_HOURS * 60 * 60 * 1000);
 
@@ -189,7 +189,7 @@ async function warnOrphanedAiMedia(): Promise<{ warned: number }> {
  * Warns vendors about orphaned vendor-uploaded media that entered the warning
  * window. Returns how many warnings were sent.
  */
-async function warnOrphanedVendorUploads(): Promise<{ warned: number }> {
+export async function warnOrphanedVendorUploads(): Promise<{ warned: number }> {
   const warnCutoff = new Date(Date.now() - WARNING_HOURS * 60 * 60 * 1000);
   const deleteCutoff = new Date(Date.now() - RETENTION_HOURS * 60 * 60 * 1000);
 

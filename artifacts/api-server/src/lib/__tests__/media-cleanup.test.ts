@@ -3,15 +3,28 @@
  * deletes a media object that is still attached to a post, always deletes
  * objects that are genuinely orphaned and past the retention window, and
  * leaves fresh generations alone regardless of attachment status.
+ *
+ * Also guards the warning pass (task #293): confirms that media still attached
+ * to a post never receives an expiry warning, orphaned media does, and a
+ * failed in-app insert prevents mediaWarningSentAt from being stamped.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Mock } from "vitest";
 
 // ─── Shared mutable state ─────────────────────────────────────────────────────
 
 /** Rows returned by the ai_generations SELECT candidate query. */
-let aiCandidateRows: Array<{ id: number; result: string }> = [];
+let aiCandidateRows: Array<{ id: number; result: string; vendorId?: number; type?: string }> = [];
 /** Rows returned by the vendor_uploads SELECT candidate query. */
-let uploadCandidateRows: Array<{ id: number; mediaUrl: string }> = [];
+let uploadCandidateRows: Array<{ id: number; mediaUrl: string; vendorId?: number; mediaType?: string }> = [];
+
+/** Records every db.insert().values() call: { table, values } */
+const insertedValues: Array<{ table: string; values: Record<string, unknown> }> = [];
+/**
+ * When true, the next db.insert().values() call for vendorNotificationsTable
+ * will throw, simulating a DB write failure.
+ */
+let insertShouldFail = false;
 
 /**
  * URL → boolean: controls whether isMediaStillInUse() returns true for that URL.
@@ -118,7 +131,16 @@ vi.mock("@workspace/db", () => {
         if (table === vendorNotificationsTableRef) return makeUpdate("vendor_notifications");
         return makeUpdate("unknown");
       },
-      insert: () => ({ values: async () => {} }),
+      insert: (table: unknown) => ({
+        values: async (vals: Record<string, unknown>) => {
+          const tableTag =
+            table === vendorNotificationsTableRef ? "vendor_notifications" : "unknown";
+          if (insertShouldFail && tableTag === "vendor_notifications") {
+            throw new Error("DB insert error (simulated)");
+          }
+          insertedValues.push({ table: tableTag, values: vals });
+        },
+      }),
     },
     aiGenerationsTable: aiGenerationsTableRef,
     postsTable: postsTableRef,
@@ -191,6 +213,8 @@ function resetState() {
   Object.keys(inUseByUrl).forEach((k) => delete inUseByUrl[k]);
   updateSets.length = 0;
   deletedObjectPaths.length = 0;
+  insertedValues.length = 0;
+  insertShouldFail = false;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -385,5 +409,155 @@ describe("sweepOrphanedMedia — mediaLastCheckedAt rotation", () => {
     expect(update).toBeDefined();
     expect(update!.set.mediaDeletedAt).toBeInstanceOf(Date);
     expect(update!.set.mediaLastCheckedAt).toBeInstanceOf(Date);
+  });
+});
+
+// ─── Warning-pass tests (task #293) ──────────────────────────────────────────
+
+describe("warnOrphanedAiMedia — warning pass", () => {
+  beforeEach(async () => {
+    resetState();
+    // Re-import push mock so we can inspect / reset call counts.
+    const pushMod = await import("../push");
+    (pushMod.sendPushToVendor as Mock).mockClear();
+  });
+
+  it("does not send a warning, push, or stamp mediaWarningSentAt for AI media still attached to a post", async () => {
+    // Media is in the warning window but still referenced by a live post.
+    aiCandidateRows = [{ id: 100, vendorId: 1, type: "image", result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = true;
+
+    const { warnOrphanedAiMedia } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedAiMedia();
+
+    expect(warned).toBe(0);
+
+    // No in-app notification inserted.
+    expect(insertedValues.filter((v) => v.table === "vendor_notifications")).toHaveLength(0);
+
+    // No push notification sent.
+    const pushMod = await import("../push");
+    expect(pushMod.sendPushToVendor).not.toHaveBeenCalled();
+
+    // mediaWarningSentAt must NOT be stamped on this row.
+    const update = updateSets.find(
+      (u) => u.table === "ai_generations" && u.whereVal === 100,
+    );
+    expect(update?.set.mediaWarningSentAt).toBeUndefined();
+  });
+
+  it("sends a warning notification and stamps mediaWarningSentAt for orphaned AI media in the warning window", async () => {
+    // Media is in the warning window and NOT attached to any post.
+    aiCandidateRows = [{ id: 101, vendorId: 2, type: "image", result: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false;
+
+    const { warnOrphanedAiMedia } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedAiMedia();
+
+    expect(warned).toBe(1);
+
+    // In-app notification inserted for the correct vendor.
+    const notification = insertedValues.find(
+      (v) => v.table === "vendor_notifications" && v.values.vendorId === 2,
+    );
+    expect(notification).toBeDefined();
+    expect(notification!.values.type).toBe("ai_media_expiry");
+
+    // Push notification sent.
+    const pushMod = await import("../push");
+    expect(pushMod.sendPushToVendor).toHaveBeenCalled();
+
+    // mediaWarningSentAt stamped on the row.
+    const update = updateSets.find(
+      (u) => u.table === "ai_generations" && u.whereVal === 101,
+    );
+    expect(update).toBeDefined();
+    expect(update!.set.mediaWarningSentAt).toBeInstanceOf(Date);
+  });
+
+  it("does not stamp mediaWarningSentAt when the in-app notification insert fails, so the next tick retries", async () => {
+    aiCandidateRows = [{ id: 102, vendorId: 3, type: "video", result: MEDIA_URL_B }];
+    inUseByUrl[MEDIA_URL_B] = false;
+    insertShouldFail = true; // make db.insert throw for vendor_notifications
+
+    const { warnOrphanedAiMedia } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedAiMedia();
+
+    expect(warned).toBe(0);
+
+    // No stamp — the row stays eligible for a retry on the next tick.
+    const update = updateSets.find(
+      (u) => u.table === "ai_generations" && u.whereVal === 102,
+    );
+    expect(update?.set.mediaWarningSentAt).toBeUndefined();
+  });
+});
+
+describe("warnOrphanedVendorUploads — warning pass", () => {
+  beforeEach(async () => {
+    resetState();
+    const pushMod = await import("../push");
+    (pushMod.sendPushToVendor as Mock).mockClear();
+  });
+
+  it("does not send a warning, push, or stamp mediaWarningSentAt for a vendor upload still attached to a post", async () => {
+    uploadCandidateRows = [{ id: 200, vendorId: 10, mediaType: "image", mediaUrl: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = true;
+
+    const { warnOrphanedVendorUploads } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedVendorUploads();
+
+    expect(warned).toBe(0);
+
+    expect(insertedValues.filter((v) => v.table === "vendor_notifications")).toHaveLength(0);
+
+    const pushMod = await import("../push");
+    expect(pushMod.sendPushToVendor).not.toHaveBeenCalled();
+
+    const update = updateSets.find(
+      (u) => u.table === "vendor_uploads" && u.whereVal === 200,
+    );
+    expect(update?.set.mediaWarningSentAt).toBeUndefined();
+  });
+
+  it("sends a warning notification and stamps mediaWarningSentAt for an orphaned vendor upload in the warning window", async () => {
+    uploadCandidateRows = [{ id: 201, vendorId: 11, mediaType: "video", mediaUrl: MEDIA_URL_B }];
+    inUseByUrl[MEDIA_URL_B] = false;
+
+    const { warnOrphanedVendorUploads } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedVendorUploads();
+
+    expect(warned).toBe(1);
+
+    const notification = insertedValues.find(
+      (v) => v.table === "vendor_notifications" && v.values.vendorId === 11,
+    );
+    expect(notification).toBeDefined();
+    expect(notification!.values.type).toBe("ai_media_expiry");
+
+    const pushMod = await import("../push");
+    expect(pushMod.sendPushToVendor).toHaveBeenCalled();
+
+    const update = updateSets.find(
+      (u) => u.table === "vendor_uploads" && u.whereVal === 201,
+    );
+    expect(update).toBeDefined();
+    expect(update!.set.mediaWarningSentAt).toBeInstanceOf(Date);
+  });
+
+  it("does not stamp mediaWarningSentAt when the in-app notification insert fails, so the next tick retries", async () => {
+    uploadCandidateRows = [{ id: 202, vendorId: 12, mediaType: "image", mediaUrl: MEDIA_URL_A }];
+    inUseByUrl[MEDIA_URL_A] = false;
+    insertShouldFail = true;
+
+    const { warnOrphanedVendorUploads } = await import("../media-cleanup");
+    const { warned } = await warnOrphanedVendorUploads();
+
+    expect(warned).toBe(0);
+
+    const update = updateSets.find(
+      (u) => u.table === "vendor_uploads" && u.whereVal === 202,
+    );
+    expect(update?.set.mediaWarningSentAt).toBeUndefined();
   });
 });
