@@ -1975,6 +1975,7 @@ export default function AdminPanel() {
   const [planChangeVendorSearch, setPlanChangeVendorSearch] = useState("");
   const [planChangePage, setPlanChangePage] = useState(1);
   const [planChangeVendorId, setPlanChangeVendorId] = useState<number | undefined>(undefined);
+  const [planChangeExportLoading, setPlanChangeExportLoading] = useState(false);
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
   const [selectAllVendors, setSelectAllVendors] = useState(false);
@@ -3209,6 +3210,42 @@ export default function AdminPanel() {
                     Clear filter
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 ml-auto flex items-center gap-1.5"
+                  disabled={planChangeExportLoading}
+                  data-testid="button-tier-change-history-export"
+                  onClick={async () => {
+                    setPlanChangeExportLoading(true);
+                    try {
+                      const qs = new URLSearchParams();
+                      if (planChangeVendorId !== undefined) qs.set("vendorId", String(planChangeVendorId));
+                      const url = `${BASE_URL}/api/admin/tier-change-history/export${qs.toString() ? `?${qs}` : ""}`;
+                      const resp = await fetch(url, { credentials: "include" });
+                      if (!resp.ok) {
+                        const err = (await resp.json().catch(() => ({ error: "Export failed" }))) as { error?: string };
+                        toast.error(err.error ?? "Export failed");
+                        return;
+                      }
+                      const blob = await resp.blob();
+                      const a = document.createElement("a");
+                      a.href = URL.createObjectURL(blob);
+                      const cd = resp.headers.get("Content-Disposition") ?? "";
+                      const match = cd.match(/filename="([^"]+)"/);
+                      a.download = match?.[1] ?? "tier-change-history.csv";
+                      a.click();
+                      URL.revokeObjectURL(a.href);
+                    } catch {
+                      toast.error("Failed to download CSV. Please try again.");
+                    } finally {
+                      setPlanChangeExportLoading(false);
+                    }
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {planChangeExportLoading ? "Exporting…" : "Download CSV"}
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">

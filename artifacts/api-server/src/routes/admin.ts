@@ -1050,6 +1050,118 @@ router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
   res.json({ data: changes, page, pageSize, total });
 });
 
+// ─── GET /admin/tier-change-history/export ───────────────────────────────────
+
+/**
+ * Streams every tier_change notification row (optionally filtered to one
+ * vendor) as a `text/csv` attachment. Follows the same burst-detection and
+ * logging pattern as GET /admin/vendors/export so the Export History tab and
+ * Slack alerts cover this export type too.
+ *
+ * Rows are streamed in ascending-id batches so memory use stays constant
+ * regardless of how many plan changes exist.
+ */
+router.get("/admin/tier-change-history/export", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const burstStatus = await getExportBurstStatus(userId);
+  if (burstStatus.blocked) {
+    res.status(429).json({
+      error:
+        "Exports from this account are paused after unusually frequent downloads. Ask another admin to review and clear the flag in the Admin Panel's Export History before exporting again.",
+      count: burstStatus.count,
+      threshold: burstStatus.threshold,
+      windowMinutes: burstStatus.windowMinutes,
+    });
+    return;
+  }
+
+  const rawVendorId = req.query.vendorId ? parseInt(String(req.query.vendorId), 10) : null;
+  const vendorId = rawVendorId !== null && !isNaN(rawVendorId) ? rawVendorId : null;
+
+  const HEADERS = ["ID", "Vendor ID", "Vendor Name", "Previous Tier", "New Tier", "Message", "Changed At"];
+
+  function csvCell(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    const s = v instanceof Date ? v.toISOString() : String(v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  const vendorSuffix = vendorId !== null ? `-vendor${vendorId}` : "";
+  const filename = `tier-change-history${vendorSuffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  res.write(HEADERS.join(",") + "\r\n");
+
+  const BATCH_SIZE = 500;
+  let lastId = 0;
+  let totalRows = 0;
+
+  while (true) {
+    const baseConditions: SQL[] = [
+      eq(vendorNotificationsTable.type, "tier_change"),
+      sql`${vendorNotificationsTable.previousTier} IS NOT NULL`,
+      sql`${vendorNotificationsTable.newTier} IS NOT NULL`,
+      gt(vendorNotificationsTable.id, lastId),
+    ];
+    if (vendorId !== null) {
+      baseConditions.push(eq(vendorNotificationsTable.vendorId, vendorId));
+    }
+
+    const batch = await db
+      .select({
+        id: vendorNotificationsTable.id,
+        vendorId: vendorNotificationsTable.vendorId,
+        vendorName: vendorsTable.name,
+        previousTier: vendorNotificationsTable.previousTier,
+        newTier: vendorNotificationsTable.newTier,
+        message: vendorNotificationsTable.message,
+        createdAt: vendorNotificationsTable.createdAt,
+      })
+      .from(vendorNotificationsTable)
+      .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))
+      .where(and(...baseConditions))
+      .orderBy(asc(vendorNotificationsTable.id))
+      .limit(BATCH_SIZE);
+
+    if (batch.length === 0) break;
+
+    let chunk = "";
+    for (const row of batch) {
+      chunk += [
+        row.id,
+        row.vendorId,
+        row.vendorName ?? "",
+        row.previousTier ?? "",
+        row.newTier ?? "",
+        row.message ?? "",
+        row.createdAt,
+      ].map(csvCell).join(",") + "\r\n";
+    }
+    res.write(chunk);
+
+    totalRows += batch.length;
+    lastId = batch[batch.length - 1]!.id;
+    if (batch.length < BATCH_SIZE) break;
+  }
+
+  res.end();
+
+  await db.insert(adminExportLogsTable).values({
+    adminUserId: userId,
+    filters: JSON.stringify({ exportType: "tier-change-history", vendorId }),
+    rowCount: totalRows,
+  });
+
+  await checkExportBurst(userId);
+});
+
 // ─── GET /admin/site-content ─────────────────────────────────────────────────
 
 router.get("/admin/site-content", async (req, res): Promise<void> => {
