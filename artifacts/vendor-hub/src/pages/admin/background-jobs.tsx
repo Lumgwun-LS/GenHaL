@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -37,10 +37,10 @@ function jobLabel(jobName: string): string {
 }
 
 export default function BackgroundJobsPanel() {
-  const { data: statuses, isLoading, error } = useQuery({
+  const { data: statuses, isLoading, error, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ["admin-job-run-status"],
     queryFn: fetchAllStatuses,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   });
 
   if (isLoading) {
@@ -51,16 +51,25 @@ export default function BackgroundJobsPanel() {
   }
 
   const failing = (statuses ?? []).filter((s) => s.isFailing);
+  const lastRefreshed = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : null;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Every scheduled background job (reminders, auto-publishing, gateway and social-account
-        health checks, billing sync, voice call reconciliation) reports here after each run — so a
-        job silently failing every tick (for example, because a migration was written but never
-        applied to this database — see the startup schema-drift check in the server logs) shows up
-        here instead of only in logs no one is watching.
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Every scheduled background job (reminders, auto-publishing, gateway and social-account
+          health checks, billing sync, voice call reconciliation) reports here after each run — so a
+          job silently failing every tick (for example, because a migration was written but never
+          applied to this database — see the startup schema-drift check in the server logs) shows up
+          here instead of only in logs no one is watching.
+        </p>
+        {lastRefreshed && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap ml-4 shrink-0">
+            <RefreshCw className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`} />
+            Last refreshed {lastRefreshed}
+          </div>
+        )}
+      </div>
 
       {failing.length > 0 && (
         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 flex items-start gap-2">
