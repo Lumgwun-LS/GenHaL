@@ -40,6 +40,7 @@ export default function AccountScreen() {
     isLoadingPushPreference,
     isTogglingPushAlerts,
     setPushAlertsEnabled,
+    isAdmin,
   } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -410,8 +411,50 @@ export default function AccountScreen() {
         </Card>
       </AnimatedListItem>
 
+      {/* ── Admin tools ── */}
+      {isAdmin && (
+        <AnimatedListItem index={4} baseDelay={120}>
+          <Card style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, marginBottom: 8 }]}>
+              Admin tools
+            </Text>
+            <Pressable
+              onPress={() => router.push('/admin/voice-backfill' as any)}
+              style={({ pressed }) => [styles.adminRow, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <View style={[styles.detailIconWrap, { backgroundColor: colors.primary + '15' }]}>
+                <Feather name="phone-missed" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.linkTextWrap}>
+                <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Voice call backfill</Text>
+                <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                  Reconciled calls with stuck statuses.
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
+            <View style={[styles.adminRowSeparator, { borderTopColor: colors.border }]} />
+            <Pressable
+              onPress={() => router.push('/admin/void-errors' as any)}
+              style={({ pressed }) => [styles.adminRow, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <View style={[styles.detailIconWrap, { backgroundColor: '#FF4444' + '15' }]}>
+                <Feather name="alert-triangle" size={16} color="#FF4444" />
+              </View>
+              <View style={styles.linkTextWrap}>
+                <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Void errors</Text>
+                <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                  Stripe sessions that failed to expire.
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          </Card>
+        </AnimatedListItem>
+      )}
+
       {/* ── Sign out ── */}
-      <AnimatedListItem index={4} baseDelay={120}>
+      <AnimatedListItem index={isAdmin ? 5 : 4} baseDelay={120}>
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [
@@ -508,6 +551,16 @@ const styles = StyleSheet.create({
   linkTextWrap: {
     flex: 1,
     gap: 3,
+  },
+  adminRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  adminRowSeparator: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginVertical: 8,
   },
   sectionHeader: {
     flexDirection: 'row',

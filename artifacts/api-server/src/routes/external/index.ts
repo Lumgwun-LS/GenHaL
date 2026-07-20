@@ -6,6 +6,7 @@ import paymentsRouter from "./payments";
 import pushRouter from "./push";
 import voiceCampaignsRouter from "./voice-campaigns";
 import adminVoidErrorsRouter from "./admin-void-errors";
+import adminVoiceBackfillRouter from "./admin-voice-backfill";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use(paymentsRouter);
 router.use(pushRouter);
 router.use(voiceCampaignsRouter);
 router.use(adminVoidErrorsRouter);
+router.use(adminVoiceBackfillRouter);
 
 export default router;
