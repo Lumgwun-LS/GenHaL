@@ -43,7 +43,7 @@ export default function Scene1({ currentScene }: { currentScene: number }) {
             damping: 15, 
             mass: 1.5
           }}
-          className="w-48 h-48 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_80px_rgba(212,43,43,0.6)] mb-12 bg-white flex items-center justify-center"
+          className="w-28 h-28 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_60px_rgba(212,43,43,0.6)] mb-6 bg-white flex items-center justify-center"
         >
           <img 
             src={`${import.meta.env.BASE_URL}images/logo.jpg`} 

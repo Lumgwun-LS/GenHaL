@@ -36,7 +36,7 @@ export default function Scene5({ currentScene }: { currentScene: number }) {
             rotate: phase >= 1 ? 0 : 90
           }}
           transition={{ type: "spring", stiffness: 60, damping: 15 }}
-          className="w-56 h-56 rounded-full overflow-hidden border-2 border-white/20 mb-16 shadow-[0_0_100px_rgba(245,197,24,0.4)] bg-white flex items-center justify-center"
+          className="w-32 h-32 rounded-full overflow-hidden border-2 border-white/20 mb-8 shadow-[0_0_80px_rgba(245,197,24,0.4)] bg-white flex items-center justify-center"
         >
           <img 
             src={`${import.meta.env.BASE_URL}images/logo.jpg`} 
