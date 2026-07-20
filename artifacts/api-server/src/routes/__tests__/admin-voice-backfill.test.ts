@@ -36,6 +36,9 @@ const siteContent = new Map<string, unknown>();
 /** Twilio snapshot returned by fetchCallStatus (per callSid). */
 const callStatuses = new Map<string, { status: string; durationSeconds?: number } | null>();
 
+/** If a callSid is present here, fetchCallStatus will reject with this error. */
+const callStatusErrors = new Map<string, Error>();
+
 // ─── Sentinel table references ────────────────────────────────────────────────
 // These are arbitrary values — the DB mock distinguishes tables by reference
 // equality, so the schema mock just needs to export the same object the DB
@@ -135,8 +138,10 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("../../lib/voice-caller", () => ({
   isTwilioConfigured: () => true,
-  fetchCallStatus: (callSid: string) =>
-    Promise.resolve(callStatuses.get(callSid) ?? null),
+  fetchCallStatus: (callSid: string) => {
+    if (callStatusErrors.has(callSid)) return Promise.reject(callStatusErrors.get(callSid));
+    return Promise.resolve(callStatuses.get(callSid) ?? null);
+  },
 }));
 
 vi.mock("../../lib/site-content", () => ({
@@ -223,6 +228,7 @@ describe("GET /admin/voice-backfill — route shape and auth", () => {
     dbUpdates.length = 0;
     siteContent.clear();
     callStatuses.clear();
+    callStatusErrors.clear();
     app = await buildApp();
   });
 
@@ -296,6 +302,7 @@ describe("POST /admin/voice-backfill/run — end-to-end with real backfill logic
     dbUpdates.length = 0;
     siteContent.clear();
     callStatuses.clear();
+    callStatusErrors.clear();
     app = await buildApp();
   });
 
@@ -423,6 +430,58 @@ describe("POST /admin/voice-backfill/run — end-to-end with real backfill logic
     expect(fixes[0]!.callSid).toBe("CA_NEW_001");
     expect(fixes[0]!.fromStatus).toBe("ringing");
     expect(fixes[0]!.toStatus).toBe("completed");
+  });
+
+  it("keeps running after one Twilio error: failed count increments and the successful fix still lands", async () => {
+    // Seed two stuck calls in the log table.
+    logRows = [
+      { callSid: "CA_TWILIO_ERROR", status: "in-progress", vendorId: 10, campaignId: null },
+      { callSid: "CA_TWILIO_OK",    status: "queued",      vendorId: 11, campaignId: null },
+    ];
+
+    // CA_TWILIO_ERROR will cause fetchCallStatus to reject (simulates a network
+    // blip or a bad Twilio SID that returns a 404-style error).
+    callStatusErrors.set("CA_TWILIO_ERROR", new Error("Twilio API error: 20404 — The requested resource could not be found"));
+
+    // CA_TWILIO_OK resolves normally to a terminal status.
+    callStatuses.set("CA_TWILIO_OK", { status: "completed", durationSeconds: 45 });
+
+    // Trigger on-demand run
+    const runRes = await callApp(app, "POST", "/admin/voice-backfill/run");
+    expect(runRes.status).toBe(200);
+
+    const runBody = runRes.body as Record<string, unknown>;
+    // Both calls were checked
+    expect(runBody.checked).toBe(2);
+    // Only the successful one produced a DB update
+    expect(runBody.updated).toBe(1);
+    // The erroring one is counted as failed, not silently swallowed
+    expect(runBody.failed).toBe(1);
+
+    // The successful call's DB update must be present
+    const okUpdate = dbUpdates.find((u) => u.callSid === "CA_TWILIO_OK");
+    expect(okUpdate).toBeDefined();
+    expect(okUpdate!.status).toBe("completed");
+
+    // The erroring call must NOT have produced a DB update
+    const errUpdate = dbUpdates.find((u) => u.callSid === "CA_TWILIO_ERROR");
+    expect(errUpdate).toBeUndefined();
+
+    // GET /admin/voice-backfill should list only the successful fix
+    const getRes = await callApp(app, "GET", "/admin/voice-backfill");
+    expect(getRes.status).toBe(200);
+    const getBody = getRes.body as Record<string, unknown>;
+    const fixes = getBody.recentFixes as Array<Record<string, unknown>>;
+
+    const okFix  = fixes.find((f) => f.callSid === "CA_TWILIO_OK");
+    const errFix = fixes.find((f) => f.callSid === "CA_TWILIO_ERROR");
+
+    expect(okFix).toBeDefined();
+    expect(okFix!.fromStatus).toBe("queued");
+    expect(okFix!.toStatus).toBe("completed");
+
+    // The erroring call should not appear in recentFixes at all
+    expect(errFix).toBeUndefined();
   });
 
   it("POST /admin/voice-backfill/run returns 403 for non-admin users", async () => {
