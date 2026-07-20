@@ -276,8 +276,28 @@ export default function AccountScreen() {
         </Card>
       </AnimatedListItem>
 
-      {/* ── Voice campaigns ── */}
+      {/* ── Subscription / upgrade ── */}
       <AnimatedListItem index={2} baseDelay={120}>
+        <Pressable onPress={() => router.push('/upgrade-plan' as any)}>
+          <Card style={[styles.section, styles.linkCard]}>
+            <View style={[styles.detailIconWrap, { backgroundColor: colors.primary + '15' }]}>
+              <Feather name="zap" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.linkTextWrap}>
+              <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Subscription</Text>
+              <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                {vendor?.subscriptionTier && vendor.subscriptionTier !== 'free'
+                  ? `You're on the ${vendor.subscriptionTier.charAt(0).toUpperCase()}${vendor.subscriptionTier.slice(1)} plan. Tap to upgrade or switch.`
+                  : 'Upgrade to unlock more features.'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Card>
+        </Pressable>
+      </AnimatedListItem>
+
+      {/* ── Voice campaigns ── */}
+      <AnimatedListItem index={3} baseDelay={120}>
         <Pressable onPress={() => router.push('/voice-campaigns')}>
           <Card style={[styles.section, styles.linkCard]}>
             <View style={[styles.detailIconWrap, { backgroundColor: colors.primary + '15' }]}>
@@ -295,7 +315,7 @@ export default function AccountScreen() {
       </AnimatedListItem>
 
       {/* ── Notifications ── */}
-      <AnimatedListItem index={3} baseDelay={120}>
+      <AnimatedListItem index={4} baseDelay={120}>
         <Card style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary, marginBottom: 4 }]}>
             Notifications
@@ -413,7 +433,7 @@ export default function AccountScreen() {
 
       {/* ── Admin tools ── */}
       {isAdmin && (
-        <AnimatedListItem index={4} baseDelay={120}>
+        <AnimatedListItem index={5} baseDelay={120}>
           <Card style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.primary, marginBottom: 8 }]}>
               Admin tools
@@ -454,7 +474,7 @@ export default function AccountScreen() {
       )}
 
       {/* ── Sign out ── */}
-      <AnimatedListItem index={isAdmin ? 5 : 4} baseDelay={120}>
+      <AnimatedListItem index={isAdmin ? 6 : 5} baseDelay={120}>
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [
