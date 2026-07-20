@@ -108,6 +108,55 @@ async function persistRefresh(
  * token-refresh-scheduler.ts for accounts whose token is within EXPIRY_WARNING_DAYS
  * of expiry and have no refresh token stored.
  */
+/**
+ * Returns platform-specific context that makes the expiry warning actionable.
+ * X tokens are extremely short-lived and can be revoked without notice, so
+ * vendors need a clear explanation — not just a generic "reconnect" nudge.
+ */
+function expiryWarningCopy(account: SocialAccount, timeLabel: string): { subject: string; inAppMessage: string; emailBodyHtml: string } {
+  const platformHtml = escapeHtml(account.platform);
+  const accountHtml = escapeHtml(account.accountName);
+
+  if (account.connectedVia === "oauth_twitter") {
+    // X access tokens are valid for as little as 2 hours when no refresh token
+    // is stored, and X can revoke refresh tokens at any time. Make the urgency
+    // and the reason crystal clear.
+    return {
+      subject: `Urgent: reconnect your X (Twitter) account now — it expires in ${timeLabel}`,
+      inAppMessage:
+        `Your X (Twitter) account "${account.accountName}" connection expires in ${timeLabel} and cannot be renewed automatically. ` +
+        `X access tokens are short-lived and your stored token has no renewal credential — reconnect immediately from the Social Hub to avoid losing access.`,
+      emailBodyHtml: `
+        <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">⚠️ Your X (Twitter) connection is about to expire</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: #444;">
+          Hi ${escapeHtml(account.accountName ? account.accountName.split(" ")[0] : "there")}, your X (Twitter) account "<strong>${accountHtml}</strong>" connection will expire in approximately <strong>${escapeHtml(timeLabel)}</strong>.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #444;">
+          X access tokens are short-lived and this connection has no stored renewal credential, which means it <strong>cannot be refreshed automatically</strong>. Once it expires, any scheduled posts to this account will fail.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #444;">
+          <strong>Please reconnect your X account from the Social Hub right away</strong> — you have ${escapeHtml(timeLabel)} before posts start failing.
+        </p>`,
+    };
+  }
+
+  // Default copy for LinkedIn, Meta, and any future OAuth platforms.
+  return {
+    subject: `Action needed: reconnect your ${account.platform} account in ${timeLabel}`,
+    inAppMessage:
+      `Your ${account.platform} account "${account.accountName}" connection will expire in ${timeLabel} ` +
+      `and cannot be renewed automatically. Reconnect it from the Social Hub before it expires to avoid interrupted publishing.`,
+    emailBodyHtml: `
+      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your ${platformHtml} connection is expiring soon</h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Your ${platformHtml} account "<strong>${accountHtml}</strong>" connection will expire in approximately <strong>${escapeHtml(timeLabel)}</strong>.
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        This connection cannot be renewed automatically. To avoid any interruption to your scheduled posts, please reconnect it from the <strong>Social Hub</strong> before it expires.
+      </p>`,
+  };
+}
+
 export async function notifyVendorExpiringSoon(account: SocialAccount): Promise<void> {
   const [vendor] = await db
     .select({ name: vendorsTable.name, email: vendorsTable.email })
@@ -115,35 +164,34 @@ export async function notifyVendorExpiringSoon(account: SocialAccount): Promise<
     .where(eq(vendorsTable.id, account.vendorId));
   if (!vendor) return;
 
-  const daysLeft = account.tokenExpiresAt
-    ? Math.max(0, Math.ceil((account.tokenExpiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-    : 0;
-  const daysLabel = daysLeft <= 1 ? "1 day" : `${daysLeft} days`;
+  const msLeft = account.tokenExpiresAt ? Math.max(0, account.tokenExpiresAt.getTime() - Date.now()) : 0;
+  const hoursLeft = Math.ceil(msLeft / (60 * 60 * 1000));
+  const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
 
-  const message =
-    `Your ${account.platform} account "${account.accountName}" connection will expire in ${daysLabel} ` +
-    `and cannot be renewed automatically. Reconnect it from the Social Hub before it expires to avoid interrupted publishing.`;
+  // For very short-lived tokens (X), show hours rather than days so the
+  // urgency is immediately obvious to the vendor.
+  const timeLabel =
+    account.connectedVia === "oauth_twitter" && hoursLeft <= 48
+      ? hoursLeft <= 1
+        ? "less than 1 hour"
+        : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`
+      : daysLeft <= 1
+        ? "1 day"
+        : `${daysLeft} days`;
+
+  const copy = expiryWarningCopy(account, timeLabel);
 
   await db.insert(vendorNotificationsTable).values({
     vendorId: account.vendorId,
     type: "social_reconnect",
-    message,
+    message: copy.inAppMessage,
   });
 
-  const html = wrapVendorEmail({
-    bodyHtml: `
-      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your ${escapeHtml(account.platform)} connection is expiring soon</h1>
-      <p style="font-size: 14px; line-height: 1.6; color: #444;">
-        Hi ${escapeHtml(vendor.name)}, your ${escapeHtml(account.platform)} account "${escapeHtml(account.accountName)}" connection will expire in approximately <strong>${escapeHtml(daysLabel)}</strong>.
-      </p>
-      <p style="font-size: 14px; line-height: 1.6; color: #444;">
-        This connection cannot be renewed automatically. To avoid any interruption to your scheduled posts, please reconnect it from the <strong>Social Hub</strong> before it expires.
-      </p>`,
-  });
+  const html = wrapVendorEmail({ bodyHtml: copy.emailBodyHtml });
 
   const result = await sendEmail({
     to: vendor.email,
-    subject: `Action needed: reconnect your ${account.platform} account in ${daysLabel}`,
+    subject: copy.subject,
     html,
   });
   if (result.status !== "sent") {

@@ -23,7 +23,16 @@ import { logger } from "./logger";
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 // How many days before expiry to warn vendors whose tokens can't be auto-renewed.
-const EXPIRY_WARNING_DAYS = 7;
+// LinkedIn/Meta tokens are ~60 days so a 7-day heads-up is comfortable.
+// X access tokens are much shorter-lived (as little as 2 hours); a 48-hour
+// window keeps the warning actionable without crying wolf a week early.
+const EXPIRY_WARNING_DAYS_DEFAULT = 7;
+const EXPIRY_WARNING_DAYS_X = 2; // 48 hours
+
+/** Returns the per-platform warning window in days. */
+function expiryWarningDaysFor(connectedVia: string): number {
+  return connectedVia === "oauth_twitter" ? EXPIRY_WARNING_DAYS_X : EXPIRY_WARNING_DAYS_DEFAULT;
+}
 
 // Name this tick's state is recorded under in job_run_status, for the admin panel.
 export const TOKEN_REFRESH_JOB_NAME = "social-token-refresh";
@@ -75,7 +84,9 @@ export async function tick(): Promise<void> {
  */
 export async function tickExpiryWarnings(): Promise<void> {
   try {
-    const warningCutoff = new Date(Date.now() + EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000);
+    // Use the widest warning window for the DB query so we pull all candidates
+    // in one round-trip, then filter per-platform in the loop below.
+    const maxWarningCutoff = new Date(Date.now() + EXPIRY_WARNING_DAYS_DEFAULT * 24 * 60 * 60 * 1000);
 
     const accounts = await db
       .select()
@@ -88,9 +99,9 @@ export async function tickExpiryWarnings(): Promise<void> {
           eq(socialAccountsTable.status, "active"),
           // No refresh token stored means we can't silently renew this one.
           isNull(socialAccountsTable.refreshTokenEncrypted),
-          // Token expires within the warning window.
+          // Token expires within the widest warning window.
           isNotNull(socialAccountsTable.tokenExpiresAt),
-          lte(socialAccountsTable.tokenExpiresAt, warningCutoff),
+          lte(socialAccountsTable.tokenExpiresAt, maxWarningCutoff),
           // Token hasn't already expired (those will surface as needs_reconnect
           // via ensureFreshAccessToken once a publish is attempted).
           gt(socialAccountsTable.tokenExpiresAt, new Date()),
@@ -101,6 +112,15 @@ export async function tickExpiryWarnings(): Promise<void> {
 
     let warned = 0;
     for (const account of accounts) {
+      // Apply the per-platform window: X gets a tighter 48-hour threshold so
+      // the warning only fires when there's actually time to act on it.
+      const platformWindowMs = expiryWarningDaysFor(account.connectedVia) * 24 * 60 * 60 * 1000;
+      const platformCutoff = new Date(Date.now() + platformWindowMs);
+      if (!account.tokenExpiresAt || account.tokenExpiresAt > platformCutoff) {
+        // Not yet within this platform's warning window — check again next tick.
+        continue;
+      }
+
       try {
         await notifyVendorExpiringSoon(account);
         // Stamp the sentinel so we don't warn again for this expiry cycle.
