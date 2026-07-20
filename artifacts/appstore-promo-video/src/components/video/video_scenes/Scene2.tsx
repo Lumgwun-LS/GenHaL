@@ -25,7 +25,7 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
 
   return (
     <motion.div 
-      className="absolute inset-0 flex items-center justify-center p-24"
+      className="absolute inset-0 flex items-center justify-center p-10"
       initial={{ x: "100%", clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}
       animate={{ x: 0, clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}
       exit={{ x: "-50%", opacity: 0, filter: "blur(10px)" }}
