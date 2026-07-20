@@ -78,7 +78,7 @@ async function launchDueCampaigns(): Promise<void> {
   }
 }
 
-async function tick(): Promise<void> {
+export async function tick(): Promise<void> {
   try {
     await launchDueCampaigns();
     await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: true });

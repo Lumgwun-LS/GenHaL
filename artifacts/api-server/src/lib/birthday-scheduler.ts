@@ -397,42 +397,45 @@ export async function retryBirthdayCall(logId: number): Promise<{ ok: true } | {
 export const BIRTHDAY_CALL_JOB_NAME = "birthday-calls";
 export const BIRTHDAY_NOTIFY_JOB_NAME = "birthday-notifications";
 
-export function startBirthdayScheduler(): void {
-  let lastCallDate = "";   // tracks 06:00 UTC voice call run
-  let lastNotifDate = "";  // tracks 08:00 UTC in-app / email run
+// Module-level state so tick() can be exported for unit tests while still
+// advancing the dedup guards across successive calls within the same instance.
+let lastCallDate = "";   // tracks 06:00 UTC voice call run
+let lastNotifDate = "";  // tracks 08:00 UTC in-app / email run
 
-  async function tick() {
-    const now        = new Date();
-    const utcHour    = now.getUTCHours();
-    const utcDateStr = now.toISOString().split("T")[0]!;
+/** One tick: fire birthday jobs at their respective UTC hours. Exported for unit tests. */
+export async function tick(): Promise<void> {
+  const now        = new Date();
+  const utcHour    = now.getUTCHours();
+  const utcDateStr = now.toISOString().split("T")[0]!;
 
-    // 06:00 UTC — voice birthday calls
-    if (utcHour === 6 && lastCallDate !== utcDateStr) {
-      try {
-        await runBirthdayCallJob(utcDateStr);
-        lastCallDate = utcDateStr;
-        await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: false, error: message });
-        logger.error({ err }, "[voice-birthday] Unhandled error — will retry next tick");
-      }
-    }
-
-    // 08:00 UTC — in-app notifications + email queuing
-    if (utcHour === 8 && lastNotifDate !== utcDateStr) {
-      try {
-        await runBirthdayJob(utcDateStr);
-        lastNotifDate = utcDateStr;
-        await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: false, error: message });
-        logger.error({ err }, "[birthday] Unhandled error — will retry next tick");
-      }
+  // 06:00 UTC — voice birthday calls
+  if (utcHour === 6 && lastCallDate !== utcDateStr) {
+    try {
+      await runBirthdayCallJob(utcDateStr);
+      lastCallDate = utcDateStr;
+      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: false, error: message });
+      logger.error({ err }, "[voice-birthday] Unhandled error — will retry next tick");
     }
   }
 
+  // 08:00 UTC — in-app notifications + email queuing
+  if (utcHour === 8 && lastNotifDate !== utcDateStr) {
+    try {
+      await runBirthdayJob(utcDateStr);
+      lastNotifDate = utcDateStr;
+      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: false, error: message });
+      logger.error({ err }, "[birthday] Unhandled error — will retry next tick");
+    }
+  }
+}
+
+export function startBirthdayScheduler(): void {
   setInterval(() => { tick().catch(() => {}); }, 5 * 60 * 1000);
   tick().catch(() => {}); // no-op outside the trigger hours
 

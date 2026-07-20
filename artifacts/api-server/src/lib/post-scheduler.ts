@@ -105,7 +105,7 @@ export async function publishDuePosts(): Promise<void> {
   }
 }
 
-async function tick(): Promise<void> {
+export async function tick(): Promise<void> {
   try {
     await publishDuePosts();
     await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: true });

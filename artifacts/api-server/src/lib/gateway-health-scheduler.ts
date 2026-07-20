@@ -16,7 +16,7 @@ const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 // Name this tick's state is recorded under in job_run_status, for the admin panel.
 export const GATEWAY_HEALTH_JOB_NAME = "gateway-health";
 
-async function tick(): Promise<void> {
+export async function tick(): Promise<void> {
   try {
     const results = await recheckAllPlatformCredentials();
     let affected = 0;
