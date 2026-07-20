@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { GradientButton } from '@/components/GradientButton';
@@ -24,6 +24,72 @@ import {
   useSubmitPostForReview,
   getListPostsQueryKey,
 } from '@workspace/api-client-react';
+import { getAuthToken } from '@/lib/auth-token';
+
+type GatewayAvailability = { provider: string; available: boolean; reason: string | null };
+
+const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
+async function fetchPaymentAvailability(vendorId: number): Promise<GatewayAvailability[]> {
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE}/api/vendors/${vendorId}/payment-availability`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Failed to load payment availability');
+  const data = await res.json();
+  return (data.gateways ?? []) as GatewayAvailability[];
+}
+
+/**
+ * Warns the vendor if any enabled payment gateway is unavailable.
+ * Only shown when the vendor has at least one gateway configured.
+ * Tapping "Fix in Payment Settings" navigates to the Payments tab.
+ */
+function CheckoutPaymentHealthWarning({ vendorId }: { vendorId: number }) {
+  const colors = useColors();
+  const { data: gateways } = useQuery({
+    queryKey: ['vendor-payment-availability', vendorId],
+    queryFn: () => fetchPaymentAvailability(vendorId),
+    enabled: vendorId > 0,
+    staleTime: 60_000,
+  });
+
+  if (!gateways || gateways.length === 0) return null;
+
+  const unavailable = gateways.filter((g) => !g.available);
+  if (unavailable.length === 0) return null;
+
+  const allDown = unavailable.length === gateways.length;
+  const borderColor = allDown ? colors.destructive + '50' : '#F59E0B80';
+  const bgColor = allDown ? colors.destructive + '12' : '#F59E0B0F';
+  const titleColor = allDown ? colors.destructive : '#D97706';
+  const title = allDown ? 'No payment methods are working' : 'Some payment methods unavailable';
+
+  return (
+    <View style={[styles.paymentWarning, { borderColor, backgroundColor: bgColor }]}>
+      <View style={styles.paymentWarningHeader}>
+        <Feather name="alert-circle" size={14} color={titleColor} />
+        <Text style={[styles.paymentWarningTitle, { color: titleColor }]}>{title}</Text>
+      </View>
+      {unavailable.map((g) => (
+        <Text key={g.provider} style={[styles.paymentWarningDetail, { color: colors.mutedForeground }]}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold' }}>
+            {g.provider.charAt(0).toUpperCase() + g.provider.slice(1)}:
+          </Text>{' '}
+          {g.reason ?? 'Credentials missing or not verified'}
+        </Text>
+      ))}
+      <Pressable
+        onPress={() => router.push('/(tabs)/payments' as any)}
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      >
+        <Text style={[styles.paymentWarningLink, { color: titleColor }]}>
+          Fix in Payment Settings →
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
 const PLATFORMS = [
   { id: 'facebook', label: 'Facebook' },
@@ -216,6 +282,9 @@ export default function NewSocialPostScreen() {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       keyboardShouldPersistTaps="handled"
     >
+      {/* ── Payment health warning ── */}
+      <CheckoutPaymentHealthWarning vendorId={vendorId} />
+
       {/* ── Platform chips ── */}
       <View style={styles.section}>
         <Text style={[styles.label, { color: colors.primary }]}>Platforms</Text>
@@ -387,6 +456,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     gap: 4,
+  },
+  paymentWarning: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 4,
+    gap: 6,
+  },
+  paymentWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  paymentWarningTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    flex: 1,
+  },
+  paymentWarningDetail: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 17,
+    paddingLeft: 20,
+  },
+  paymentWarningLink: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    paddingLeft: 20,
+    marginTop: 2,
   },
   section: {
     marginBottom: 22,
