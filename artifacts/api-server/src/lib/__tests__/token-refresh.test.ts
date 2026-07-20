@@ -290,4 +290,32 @@ describe("ensureFreshAccessToken", () => {
     await expect(ensureFreshAccessToken(account as any)).rejects.toBeInstanceOf(ReconnectRequiredError);
     expect(refreshTwitterAccessToken).not.toHaveBeenCalled();
   });
+
+  it("persistRefresh clears expiryWarningSentAt so the next expiry cycle can warn again after reconnect", async () => {
+    // Simulate a vendor who received an expiry warning, then successfully reconnected.
+    // ensureFreshAccessToken → persistRefresh must set expiryWarningSentAt: null so
+    // the warning sentinel is cleared and the next expiry window issues a fresh heads-up.
+    const { ensureFreshAccessToken } = await import("../token-refresh");
+    const account = makeAccount({
+      connectedVia: "oauth_twitter",
+      tokenExpiresAt: new Date(NOW + 5 * 60 * 1000), // near expiry → triggers refresh
+      expiryWarningSentAt: new Date(NOW - 24 * 60 * 60 * 1000), // was warned yesterday
+    });
+
+    refreshTwitterAccessToken.mockResolvedValue({
+      accessToken: "reconnected-access",
+      refreshToken: "reconnected-refresh",
+      expiresInSeconds: 7200,
+    });
+
+    await ensureFreshAccessToken(account as any);
+
+    // persistRefresh must write expiryWarningSentAt: null so the sentinel is cleared
+    expect(updateSetCalledWith).not.toBeNull();
+    expect(updateSetCalledWith).toHaveProperty("expiryWarningSentAt", null);
+    // And the new access token must be persisted
+    expect(updateSetCalledWith).toMatchObject({
+      accessTokenEncrypted: "enc:reconnected-access",
+    });
+  });
 });
