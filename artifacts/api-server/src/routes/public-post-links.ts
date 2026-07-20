@@ -27,10 +27,11 @@ import {
   paymentsTable,
 } from "@workspace/db";
 import { resolveStripeKey, resolvePaystackKey, getPaymentMethodAvailability, type TierCheckable } from "../lib/vendor-keys";
-import { GATEWAY_DEFS } from "../lib/platform-gateways";
+import { GATEWAY_DEFS, getPlatformCredentials } from "../lib/platform-gateways";
 import { createRemitaCheckout } from "./payments/remita";
 import { createFlutterwaveCheckout } from "./payments/flutterwave";
 import { createNombaCheckout } from "./payments/nomba";
+import { getPayPalAccessToken, paypalBaseUrl } from "../lib/paypal-catalog";
 
 const router: IRouter = Router();
 
@@ -43,11 +44,12 @@ type GatewayVendor = TierCheckable & {
   remitaEnabled: boolean;
   flutterwaveEnabled: boolean;
   nombaEnabled: boolean;
+  paypalEnabled: boolean;
 };
 
-type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba";
+type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba" | "paypal";
 
-const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "flutterwave", "nomba", "remita"];
+const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "paypal", "flutterwave", "nomba", "remita"];
 
 /** Statuses from which a payment can still be superseded by a retry. Mirrors external/payments.ts. */
 const OPEN_PAYMENT_STATUSES = new Set(["pending", "failed"]);
@@ -176,6 +178,80 @@ async function chargeProvider(params: {
       const result = await createNombaCheckout({ orderId, vendorId: vendor.id, amount, currency, email, callbackUrl: redirectUrl, description });
       if (!result.ok) return { ok: false, status: result.status, error: result.error };
       return { ok: true, body: { orderId, provider: "nomba", url: result.url } };
+    }
+
+    if (provider === "paypal") {
+      const creds = await getPlatformCredentials("paypal");
+      const clientId = creds?.clientId || process.env.PAYPAL_CLIENT_ID;
+      const clientSecret = creds?.clientSecret || process.env.PAYPAL_CLIENT_SECRET;
+      if (!clientId || !clientSecret) {
+        return { ok: false, status: 503, error: "PayPal is not configured on the platform." };
+      }
+      const mode = (creds?.mode as "sandbox" | "live" | undefined) ?? "live";
+      const base = paypalBaseUrl(mode);
+      let ppToken: string;
+      try {
+        ppToken = await getPayPalAccessToken(clientId, clientSecret, mode);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, status: 503, error: `PayPal auth failed: ${msg}` };
+      }
+
+      const orderPayload = {
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            amount: { currency_code: currency.toUpperCase(), value: amount.toFixed(2) },
+            description,
+            custom_id: JSON.stringify({ orderId, vendorId: vendor.id }),
+          },
+        ],
+        application_context: {
+          brand_name: "VendorHub",
+          return_url: redirectUrl,
+          cancel_url: redirectUrl,
+          shipping_preference: "NO_SHIPPING",
+          user_action: "PAY_NOW",
+        },
+      };
+
+      const ppResponse = await fetch(`${base}/v2/checkout/orders`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ppToken}`,
+          "Content-Type": "application/json",
+          "PayPal-Request-Id": `vendorhub-spl-${orderId}-${Date.now()}`,
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!ppResponse.ok) {
+        const text = await ppResponse.text().catch(() => "(no body)");
+        return { ok: false, status: 502, error: `PayPal create order failed (${ppResponse.status}): ${text}` };
+      }
+
+      const ppData = (await ppResponse.json()) as {
+        id: string;
+        links?: Array<{ rel: string; href: string }>;
+      };
+
+      const approvalUrl = ppData.links?.find((l) => l.rel === "approve")?.href;
+      if (!approvalUrl) {
+        return { ok: false, status: 502, error: "PayPal order created but no approval URL in response" };
+      }
+
+      await db.insert(paymentsTable).values({
+        orderId,
+        vendorId: vendor.id,
+        provider: "paypal",
+        providerReference: ppData.id,
+        amount: amount.toString(),
+        currency: currency.toUpperCase(),
+        status: "pending",
+        metadata: { paypalOrderId: ppData.id, approvalUrl, source: "social_post" },
+      });
+
+      return { ok: true, body: { orderId, provider: "paypal", url: approvalUrl } };
     }
 
     if (provider === "stripe") {
@@ -611,6 +687,125 @@ router.post("/public/post-links/:token/orders/:orderId/retry", async (req, res):
   }
 
   res.json(chargeResult.body);
+});
+
+/**
+ * POST /public/post-links/:token/orders/:orderId/paypal-capture
+ * Called by the public shop page after PayPal redirects back with ?token=ORDER_ID.
+ * Scoped by the shop-link token AND orderId so only a customer who knows both
+ * can trigger a capture for an order placed through that specific link.
+ *
+ * Credentials follow the same env-fallback path used at checkout.
+ */
+router.post("/public/post-links/:token/orders/:orderId/paypal-capture", async (req, res): Promise<void> => {
+  const { paypalOrderId } = req.body as { paypalOrderId?: string };
+  if (!paypalOrderId) {
+    res.status(400).json({ error: "paypalOrderId is required" });
+    return;
+  }
+
+  const link = await loadLink(req.params.token);
+  if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
+
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId)) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  const order = await loadLinkOrder(link.vendor.id, link.post.id, orderId);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+
+  // Locate the pending PayPal payment row, verified to belong to this order
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(and(eq(paymentsTable.providerReference, paypalOrderId), eq(paymentsTable.orderId, orderId)));
+
+  if (!payment) {
+    res.status(404).json({ error: "No PayPal payment found for this order" });
+    return;
+  }
+  if (payment.status === "paid") {
+    res.json({ success: true, paymentId: payment.id, status: "paid" });
+    return;
+  }
+  if (payment.status === "cancelled") {
+    res.status(409).json({ error: "This payment was cancelled and cannot be captured" });
+    return;
+  }
+
+  const creds = await getPlatformCredentials("paypal");
+  const clientId = creds?.clientId || process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = creds?.clientSecret || process.env.PAYPAL_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    res.status(503).json({ error: "PayPal is not configured on the platform." });
+    return;
+  }
+
+  const mode = (creds?.mode ?? "live") as string;
+  const base = paypalBaseUrl(mode);
+
+  let ppToken: string;
+  try {
+    ppToken = await getPayPalAccessToken(clientId, clientSecret, mode);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(503).json({ error: `PayPal auth failed: ${msg}` });
+    return;
+  }
+
+  const captureRes = await fetch(`${base}/v2/checkout/orders/${paypalOrderId}/capture`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ppToken}`,
+      "Content-Type": "application/json",
+      "PayPal-Request-Id": `vendorhub-spl-capture-${paypalOrderId}`,
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (!captureRes.ok) {
+    const text = await captureRes.text().catch(() => "(no body)");
+    res.status(502).json({ error: `PayPal capture failed (${captureRes.status}): ${text}` });
+    return;
+  }
+
+  const captureData = (await captureRes.json()) as {
+    status: string;
+    purchase_units?: Array<{
+      payments?: { captures?: Array<{ id: string; status: string }> };
+    }>;
+  };
+
+  const captureStatus = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.status;
+  if (captureData.status !== "COMPLETED" && captureStatus !== "COMPLETED") {
+    res.status(502).json({ error: `PayPal capture status is ${captureData.status ?? captureStatus ?? "unknown"}` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(paymentsTable)
+    .set({ status: "paid", updatedAt: new Date() })
+    .where(and(eq(paymentsTable.providerReference, paypalOrderId), eq(paymentsTable.orderId, orderId)))
+    .returning({ id: paymentsTable.id, vendorId: paymentsTable.vendorId, orderId: paymentsTable.orderId, amount: paymentsTable.amount, currency: paymentsTable.currency });
+
+  if (updated?.orderId) {
+    await db
+      .update(ordersTable)
+      .set({ paymentStatus: "paid", updatedAt: new Date() })
+      .where(eq(ordersTable.id, updated.orderId));
+  }
+
+  if (updated) {
+    const { syncSaleFromPayment } = await import("../lib/sales-sync");
+    await syncSaleFromPayment({
+      id: payment.id,
+      vendorId: updated.vendorId,
+      amount: updated.amount,
+      currency: updated.currency,
+    });
+  }
+
+  console.info(`[paypal public-capture] COMPLETED — paypalOrderId=${paypalOrderId} orderId=${orderId} paymentId=${payment.id}`);
+  res.json({ success: true, paymentId: payment.id, status: "paid" });
 });
 
 /**

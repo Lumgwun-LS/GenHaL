@@ -175,17 +175,19 @@ router.post("/payments/paypal/capture", async (req, res): Promise<void> => {
   }
 
   const creds = await getPlatformCredentials("paypal");
-  if (!creds?.clientId || !creds?.clientSecret) {
+  const captureClientId = creds?.clientId || process.env.PAYPAL_CLIENT_ID;
+  const captureClientSecret = creds?.clientSecret || process.env.PAYPAL_CLIENT_SECRET;
+  if (!captureClientId || !captureClientSecret) {
     res.status(503).json({ error: "PayPal is not configured. Add platform PayPal credentials in Admin → Payment Gateways." });
     return;
   }
 
-  const mode = creds.mode ?? "live";
+  const mode = creds?.mode ?? "live";
   const base = paypalBaseUrl(mode);
 
   let token: string;
   try {
-    token = await getPayPalAccessToken(creds.clientId, creds.clientSecret, mode);
+    token = await getPayPalAccessToken(captureClientId, captureClientSecret, mode);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(503).json({ error: `PayPal auth failed: ${msg}` });

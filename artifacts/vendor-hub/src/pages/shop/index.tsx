@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShoppingBag, Store, Check, Loader2, Minus, Plus, AlertTriangle } from "lucide-react";
@@ -19,11 +19,12 @@ type ShopProduct = {
   inStock: boolean;
 };
 
-type PaymentProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba";
+type PaymentProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba" | "paypal";
 
 const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   paystack: "Paystack",
   stripe: "Card (Stripe)",
+  paypal: "PayPal",
   flutterwave: "Flutterwave",
   nomba: "Nomba",
   remita: "Remita",
@@ -72,7 +73,10 @@ async function fetchOrderStatus(token: string, orderId: string): Promise<OrderSt
 export default function ShopLinkPage() {
   const { token = "" } = useParams();
   const search = useSearch();
-  const orderIdFromUrl = new URLSearchParams(search).get("order");
+  const searchParams = new URLSearchParams(search);
+  const orderIdFromUrl = searchParams.get("order");
+  /** PayPal appends ?token=ORDER_ID to the returnUrl after customer approval. */
+  const paypalTokenFromUrl = searchParams.get("token");
   const queryClient = useQueryClient();
 
   const { data: link, isLoading, error } = useQuery({
@@ -100,6 +104,38 @@ export default function ShopLinkPage() {
   const [done, setDone] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider | null>(null);
   const [retryProvider, setRetryProvider] = useState<PaymentProvider | null>(null);
+
+  // PayPal capture state — triggered automatically when PayPal redirects back with ?token=
+  const [paypalCapturing, setPaypalCapturing] = useState(false);
+  const [paypalCaptureResult, setPaypalCaptureResult] = useState<
+    { ok: true } | { ok: false; error: string } | null
+  >(null);
+
+  useEffect(() => {
+    if (!paypalTokenFromUrl || !orderIdFromUrl || paypalCaptureResult || paypalCapturing) return;
+    setPaypalCapturing(true);
+    fetch(`${BASE_URL}/api/public/post-links/${token}/orders/${orderIdFromUrl}/paypal-capture`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paypalOrderId: paypalTokenFromUrl }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Capture failed");
+        setPaypalCaptureResult({ ok: true });
+        // Refresh order status so the "Payment received" banner shows
+        if (orderIdFromUrl) {
+          queryClient.invalidateQueries({ queryKey: ["post-link-order", token, orderIdFromUrl] });
+        }
+      })
+      .catch((e: unknown) => {
+        setPaypalCaptureResult({ ok: false, error: e instanceof Error ? e.message : "Something went wrong" });
+      })
+      .finally(() => {
+        setPaypalCapturing(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paypalTokenFromUrl]);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
@@ -255,7 +291,42 @@ export default function ShopLinkPage() {
           </div>
         </div>
 
-        {orderIdFromUrl && orderStatusLoading && (
+        {/* PayPal return — capturing payment */}
+        {paypalTokenFromUrl && paypalCapturing && (
+          <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Completing your PayPal payment…
+          </div>
+        )}
+
+        {/* PayPal capture failed */}
+        {paypalTokenFromUrl && paypalCaptureResult && !paypalCaptureResult.ok && (
+          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium text-sm">PayPal payment could not be completed</div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {(paypalCaptureResult as { ok: false; error: string }).error}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PayPal capture succeeded */}
+        {paypalTokenFromUrl && paypalCaptureResult?.ok && !(orderStatus?.paymentStatus === "paid") && (
+          <div className="mb-6 flex flex-col items-center text-center gap-3 py-10 rounded-lg border">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <Check className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h2 className="text-lg font-semibold">Payment received!</h2>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              Your PayPal payment was successful — thanks for your order!
+            </p>
+          </div>
+        )}
+
+        {orderIdFromUrl && orderStatusLoading && !paypalCapturing && (
           <div className="mb-6 text-sm text-muted-foreground">Checking your order…</div>
         )}
 

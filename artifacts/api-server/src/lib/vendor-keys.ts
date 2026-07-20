@@ -85,6 +85,12 @@ export async function getPaymentMethodAvailability(
     if (envKey) return { provider, available: true, reason: null };
   }
 
+  if (provider === "paypal") {
+    if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
+      return { provider, available: true, reason: null };
+    }
+  }
+
   return { provider, available: false, reason: `${label} isn't configured on the platform yet.` };
 }
 
