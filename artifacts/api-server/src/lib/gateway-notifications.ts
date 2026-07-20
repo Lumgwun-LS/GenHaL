@@ -182,3 +182,125 @@ export async function notifyVendorsOfGatewayFailure(
 
   return notified;
 }
+
+/**
+ * Sends the vendor an in-app notification and (if email is reachable) an email
+ * telling them the specified gateway has recovered and payments are working again.
+ */
+async function notifyVendorOfRecovery(vendor: Vendor, provider: GatewayProvider): Promise<void> {
+  const label = GATEWAY_DEFS[provider].label;
+  const message =
+    `Your ${label} payment gateway is working again. ` +
+    `Customers can now complete payments through ${label} on your shop.`;
+
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: vendor.id,
+    type: "payment_gateway_recovered",
+    message,
+  });
+
+  await sendPushToVendor(
+    vendor.id,
+    `${label} payments are back online`,
+    `Your ${label} gateway is working again. Customers can complete purchases.`,
+    { provider },
+    "payments",
+  );
+
+  const html = wrapVendorEmail({
+    bodyHtml: `
+      <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">
+        ${escapeHtml(label)} payment gateway is back online
+      </h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Hi ${escapeHtml(vendor.name)}, great news — the <strong>${escapeHtml(label)}</strong>
+        payment gateway on your shop has <strong>recovered and is working again</strong>.
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        Customers can now complete purchases through ${escapeHtml(label)} on your shop as normal.
+        No action is needed on your end.
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #444;">
+        If you have any questions, please reach out to platform support.
+      </p>`,
+  });
+
+  const result = await sendEmail({
+    to: vendor.email,
+    subject: `${label} payments are back online on your shop`,
+    html,
+  });
+
+  if (result.status !== "sent") {
+    console.warn(
+      `[gateway-notifications] recovery email to vendor ${vendor.id} (${vendor.email}) did not send — reason=${result.error}`,
+    );
+  }
+}
+
+/**
+ * Called by `recheckPlatformCredentials` immediately after a fail → pass
+ * transition is detected (i.e. `recovered = true`).
+ *
+ * Queries every vendor who has `provider` enabled, then filters to those
+ * for whom this provider is now their only working gateway (i.e. the same
+ * population that was notified about the failure). Notifies each affected
+ * vendor in-app, by push, and by email that payments are working again.
+ *
+ * Returns the number of vendors notified.
+ */
+export async function notifyVendorsOfGatewayRecovery(provider: GatewayProvider): Promise<number> {
+  const enabledCol = PROVIDER_ENABLED_COL[provider];
+  if (!enabledCol) {
+    // Provider has no per-vendor toggle (e.g. paypal) — nothing to do.
+    return 0;
+  }
+
+  // All vendors who have this provider switched on.
+  const vendors = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable[enabledCol] as Parameters<typeof eq>[0], true));
+
+  let notified = 0;
+  for (const vendor of vendors) {
+    // Is this provider actually available for this specific vendor now?
+    // If it's not, there's nothing to celebrate — skip.
+    const avail = await getPaymentMethodAvailability(provider, vendor.id, vendor);
+    if (!avail.available) {
+      continue;
+    }
+
+    // Only notify vendors who have no other working gateway — they were
+    // the ones left unable to accept payments during the outage.
+    const others = otherEnabledProviders(vendor, provider);
+    let hadWorkingAlternative = false;
+    for (const other of others) {
+      const otherAvail = await getPaymentMethodAvailability(other, vendor.id, vendor);
+      if (otherAvail.available) {
+        hadWorkingAlternative = true;
+        break;
+      }
+    }
+
+    if (!hadWorkingAlternative) {
+      try {
+        await notifyVendorOfRecovery(vendor, provider);
+        notified++;
+      } catch (err) {
+        console.error(
+          `[gateway-notifications] failed to notify vendor ${vendor.id} about ${provider} recovery:`,
+          err,
+        );
+      }
+    }
+  }
+
+  if (notified > 0) {
+    console.log(
+      `[gateway-notifications] notified ${notified} vendor(s) that ${provider} has recovered and is their only working gateway.`,
+    );
+  }
+
+  return notified;
+}

@@ -448,6 +448,16 @@ export async function recheckPlatformCredentials(provider: GatewayProvider): Pro
       await sendSlackAlert(
         `:white_check_mark: *${def.label}* platform gateway credentials are working again after previously failing.`,
       );
+
+      // Notify vendors whose only working gateway just recovered.
+      // Dynamic import breaks the circular-module cycle (gateway-notifications
+      // imports from this file for GATEWAY_DEFS / GatewayProvider types).
+      try {
+        const { notifyVendorsOfGatewayRecovery } = await import("./gateway-notifications");
+        await notifyVendorsOfGatewayRecovery(provider);
+      } catch (notifyErr) {
+        console.error("[platform-gateways] vendor gateway-recovery notification threw:", notifyErr);
+      }
     }
     return { provider, checked: true, testPassed: true, becameFailing: false, recovered };
   } catch (err: unknown) {
