@@ -14,6 +14,13 @@
  *   - no prior open payment: new payment created, no update to old payment
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── Hoisted Stripe spy state (must be vi.hoisted so the mock factory can close over it) ──
+const stripeState = vi.hoisted(() => ({
+  expireCalls: [] as string[],
+  retrieveCalls: [] as string[],
+  expireShouldThrow: false,
+}));
 import express, { type Request, type Response } from "express";
 import { createServer } from "node:http";
 
@@ -106,6 +113,18 @@ const MOCK_PAYMENT_FAILED = {
   id: 51,
   orderId: 201,
   status: "failed",
+};
+
+const MOCK_PAYMENT_STRIPE = {
+  id: 52,
+  orderId: 200,
+  vendorId: 1,
+  provider: "stripe",
+  providerReference: "cs_old_session",
+  amount: "25.00",
+  currency: "NGN",
+  status: "pending",
+  metadata: {},
 };
 
 // ── Mutable mock state ────────────────────────────────────────────────────────
@@ -253,8 +272,17 @@ vi.mock("stripe", () => {
             url: "https://checkout.stripe.com/pay/cs_test_new",
             status: "open",
           }),
-          retrieve: async (_id: string) => ({ id: _id, status: "open" }),
-          expire: async () => ({}),
+          retrieve: async (_id: string) => {
+            stripeState.retrieveCalls.push(_id);
+            return { id: _id, status: "open" };
+          },
+          expire: async (_id: string) => {
+            stripeState.expireCalls.push(_id);
+            if (stripeState.expireShouldThrow) {
+              throw new Error("Stripe session already expired");
+            }
+            return {};
+          },
         },
       },
     };
@@ -429,6 +457,9 @@ describe("POST /public/post-links/:token/orders/:orderId/retry", () => {
     insertedPayments = [];
     updatedPayments = [];
     paystackShouldFail = false;
+    stripeState.expireCalls = [];
+    stripeState.retrieveCalls = [];
+    stripeState.expireShouldThrow = false;
     app = await buildApp();
   });
 
@@ -650,5 +681,94 @@ describe("POST /public/post-links/:token/orders/:orderId/retry", () => {
     expect(insertedPayments).toHaveLength(0);
     // No prior payment cancel since the new charge failed
     expect(updatedPayments).toHaveLength(0);
+  });
+
+  it("calls stripe.checkout.sessions.expire on the old session when retrying a Stripe-provider pending payment", async () => {
+    primeLinkSelects();
+    selectQueue.push([MOCK_ORDER_UNPAID]);       // loadLinkOrder
+    selectQueue.push([MOCK_PAYMENT_STRIPE]);     // prior payment lookup
+
+    // Switch to paystack on retry
+    const { status, body } = await callApp(
+      app,
+      "POST",
+      "/public/post-links/tok_abc/orders/200/retry",
+      { provider: "paystack" },
+    );
+
+    expect(status).toBe(200);
+    expect(body.provider).toBe("paystack");
+
+    // A new payment row was inserted with the new provider
+    expect(insertedPayments).toHaveLength(1);
+    expect((insertedPayments[0] as any).provider).toBe("paystack");
+
+    // The old Stripe session was expired
+    expect(stripeState.expireCalls).toHaveLength(1);
+    expect(stripeState.expireCalls[0]).toBe("cs_old_session");
+
+    // The old payment was also marked cancelled in the DB
+    expect(updatedPayments).toHaveLength(1);
+    expect(updatedPayments[0].set).toMatchObject({ status: "cancelled" });
+  });
+
+  it("records voidError in payment metadata when stripe.expire() throws but still completes the retry", async () => {
+    stripeState.expireShouldThrow = true;
+
+    primeLinkSelects();
+    selectQueue.push([MOCK_ORDER_UNPAID]);       // loadLinkOrder
+    selectQueue.push([MOCK_PAYMENT_STRIPE]);     // prior payment lookup
+
+    const { status, body } = await callApp(
+      app,
+      "POST",
+      "/public/post-links/tok_abc/orders/200/retry",
+      { provider: "paystack" },
+    );
+
+    // Retry still succeeds — void failure is best-effort
+    expect(status).toBe(200);
+    expect(body.provider).toBe("paystack");
+
+    // New payment was still inserted
+    expect(insertedPayments).toHaveLength(1);
+
+    // Two DB updates: first the voidError metadata write (from catch), then status: "cancelled"
+    expect(updatedPayments).toHaveLength(2);
+    const metadataUpdate = updatedPayments.find((u) => u.set.metadata !== undefined);
+    expect(metadataUpdate).toBeDefined();
+    expect((metadataUpdate!.set.metadata as any).voidError).toMatch(/expired/i);
+    expect((metadataUpdate!.set.metadata as any).voidErrorAt).toBeDefined();
+    const cancelUpdate = updatedPayments.find((u) => u.set.status === "cancelled");
+    expect(cancelUpdate).toBeDefined();
+  });
+
+  it("cancels a non-Stripe prior payment in the DB without calling stripe.expire()", async () => {
+    // MOCK_PAYMENT_PENDING has provider: "paystack" — voidProviderSession is a no-op for non-stripe
+    primeLinkSelects();
+    selectQueue.push([MOCK_ORDER_UNPAID]);       // loadLinkOrder
+    selectQueue.push([MOCK_PAYMENT_PENDING]);    // prior paystack payment
+
+    // Retry, switching to stripe
+    const { status, body } = await callApp(
+      app,
+      "POST",
+      "/public/post-links/tok_abc/orders/200/retry",
+      { provider: "stripe" },
+    );
+
+    expect(status).toBe(200);
+    expect(body.provider).toBe("stripe");
+
+    // New payment inserted with stripe
+    expect(insertedPayments).toHaveLength(1);
+    expect((insertedPayments[0] as any).provider).toBe("stripe");
+
+    // No Stripe API was called — expire list must be empty
+    expect(stripeState.expireCalls).toHaveLength(0);
+
+    // Old paystack payment was still cancelled in the DB
+    expect(updatedPayments).toHaveLength(1);
+    expect(updatedPayments[0].set).toMatchObject({ status: "cancelled" });
   });
 });
