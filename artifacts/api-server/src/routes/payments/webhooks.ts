@@ -1768,6 +1768,70 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
     return { matched: !!updated };
   }
 
+  // ── Subscription payment failure (soft failure — PayPal will retry) ─────────
+  // BILLING.SUBSCRIPTION.PAYMENT.FAILED fires when a recurring charge fails.
+  // PayPal automatically retries according to its retry schedule, so we do NOT
+  // downgrade the tier here — that only happens on SUSPENDED/CANCELLED/EXPIRED.
+  // We notify the vendor so they can fix their payment method before losing access.
+  if (eventType === "BILLING.SUBSCRIPTION.PAYMENT.FAILED") {
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, subscriptionProvider: vendorsTable.subscriptionProvider })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.paypalSubscriptionId, subscriptionId));
+
+    if (!vendor) {
+      console.warn(`[paypal webhook] PAYMENT.FAILED — no vendor found for sub=${subscriptionId} event=${event.id}`);
+      return { matched: true }; // not our subscription — treat as handled
+    }
+
+    // Only warn if this vendor is actively managed by PayPal
+    if (vendor.subscriptionProvider !== "paypal") {
+      console.info(
+        `[paypal webhook] PAYMENT.FAILED — vendor=${vendor.id} subscriptionProvider=${vendor.subscriptionProvider} — skipping stale PayPal sub=${subscriptionId}`,
+      );
+      return { matched: true };
+    }
+
+    // In-app notification
+    try {
+      await db.insert(vendorNotificationsTable).values({
+        vendorId: vendor.id,
+        type: "subscription",
+        message: `A PayPal subscription payment for your ${vendor.subscriptionTier} plan failed. PayPal will automatically retry the charge. Please update your payment method in PayPal to avoid losing access.`,
+      });
+    } catch (notifyErr) {
+      console.warn(`[paypal webhook] PAYMENT.FAILED — failed to insert notification — vendor=${vendor.id}:`, notifyErr);
+    }
+
+    // Email warning
+    if (vendor.email) {
+      const tierName = vendor.subscriptionTier.charAt(0).toUpperCase() + vendor.subscriptionTier.slice(1);
+      const bodyHtml = `
+        <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Action required: PayPal payment failed</h1>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          Hi ${escapeHtml(vendor.name)}, a recurring payment for your <strong>${escapeHtml(tierName)}</strong> plan could not be processed through PayPal.
+        </p>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          PayPal will automatically retry the charge according to its retry schedule. However, if the payment continues to fail, your subscription will be suspended and your account will be moved to the Free tier.
+        </p>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          To avoid losing access to your ${escapeHtml(tierName)} features, please log in to PayPal and update your payment method as soon as possible.
+        </p>`;
+      const html = wrapVendorEmail({ bodyHtml });
+      const emailResult = await sendEmail({
+        to: vendor.email,
+        subject: "Action required: Your PayPal subscription payment failed",
+        html,
+      });
+      if (emailResult.status !== "sent") {
+        console.warn(`[paypal webhook] PAYMENT.FAILED — email did not send — vendor=${vendor.id} reason=${emailResult.error}`);
+      }
+    }
+
+    console.info(`[paypal webhook] PAYMENT.FAILED — vendor=${vendor.id} sub=${subscriptionId} notified (tier NOT changed)`);
+    return { matched: true };
+  }
+
   if (
     eventType === "BILLING.SUBSCRIPTION.CANCELLED" ||
     eventType === "BILLING.SUBSCRIPTION.EXPIRED" ||
