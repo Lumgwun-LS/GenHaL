@@ -28,10 +28,11 @@ type PaymentSettingsBody = {
   remitaEnabled?: boolean;
   flutterwaveEnabled?: boolean;
   nombaEnabled?: boolean;
+  paypalEnabled?: boolean;
   defaultCurrency?: string;
 };
 
-const BOOLEAN_GATEWAY_FIELDS = ["stripeEnabled", "paystackEnabled", "remitaEnabled", "flutterwaveEnabled", "nombaEnabled"] as const;
+const BOOLEAN_GATEWAY_FIELDS = ["stripeEnabled", "paystackEnabled", "remitaEnabled", "flutterwaveEnabled", "nombaEnabled", "paypalEnabled"] as const;
 
 function parsePaymentSettings(body: unknown): { data: PaymentSettingsBody } | { error: string } {
   if (typeof body !== "object" || body === null) return { error: "Request body must be an object" };
@@ -256,6 +257,7 @@ router.patch("/vendors/:id/payment-settings", async (req, res): Promise<void> =>
     remitaEnabled: vendor.remitaEnabled,
     flutterwaveEnabled: vendor.flutterwaveEnabled,
     nombaEnabled: vendor.nombaEnabled,
+    paypalEnabled: vendor.paypalEnabled,
     defaultCurrency: vendor.defaultCurrency,
   });
 });

@@ -84,6 +84,7 @@ export default function VendorDetail() {
   const [remitaEnabled, setRemitaEnabled] = useState(false);
   const [flutterwaveEnabled, setFlutterwaveEnabled] = useState(false);
   const [nombaEnabled, setNombaEnabled] = useState(false);
+  const [paypalEnabled, setPaypalEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
@@ -133,6 +134,7 @@ export default function VendorDetail() {
       setRemitaEnabled(vendor.remitaEnabled ?? false);
       setFlutterwaveEnabled(vendor.flutterwaveEnabled ?? false);
       setNombaEnabled(vendor.nombaEnabled ?? false);
+      setPaypalEnabled(vendor.paypalEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
       setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
@@ -198,6 +200,7 @@ export default function VendorDetail() {
           remitaEnabled,
           flutterwaveEnabled,
           nombaEnabled,
+          paypalEnabled,
           defaultCurrency,
         }),
       });
@@ -484,6 +487,23 @@ export default function VendorDetail() {
                 </div>
                 {nombaEnabled && unavailableByProvider.has("nomba") && (
                   <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("nomba")}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="paypal-toggle" className="text-sm font-medium">PayPal</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via PayPal</p>
+                  </div>
+                  <Switch
+                    id="paypal-toggle"
+                    checked={paypalEnabled}
+                    onCheckedChange={setPaypalEnabled}
+                  />
+                </div>
+                {paypalEnabled && unavailableByProvider.has("paypal") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("paypal")}</p>
                 )}
               </div>
 
