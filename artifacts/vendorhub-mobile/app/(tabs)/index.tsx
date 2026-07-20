@@ -239,6 +239,25 @@ export default function DashboardScreen() {
           <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>New Post</Text>
           <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
         </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/social' as any)}
+          style={({ pressed }) => [
+            styles.quickActionBtn,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.accent + '30',
+              opacity: pressed ? 0.75 : 1,
+              marginTop: 10,
+            },
+          ]}
+        >
+          <View style={[styles.quickActionIcon, { backgroundColor: colors.accent + '18' }]}>
+            <Feather name="send" size={18} color={colors.accent} />
+          </View>
+          <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>My Posts</Text>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </Pressable>
       </Animated.View>
 
       {/* ── Revenue trend (last 7 days) ── */}

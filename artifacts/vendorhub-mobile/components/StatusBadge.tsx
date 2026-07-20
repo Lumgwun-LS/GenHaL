@@ -23,6 +23,13 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   // Vendor / verification
   approved: 'success',
   suspended: 'destructive',
+  // Social posts
+  pending_review: 'warning',
+  scheduled: 'primary',
+  published: 'success',
+  // publication per-platform
+  publishing: 'primary',
+  skipped: 'muted',
 };
 
 function humanize(value: string): string {

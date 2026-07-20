@@ -45,7 +45,9 @@ function RootLayoutNav() {
       <Stack.Screen name="voice-campaigns/index" options={{ title: 'Voice Campaigns' }} />
       <Stack.Screen name="voice-campaigns/new" options={{ title: 'New Campaign' }} />
       <Stack.Screen name="voice-campaigns/[id]" options={{ title: 'Campaign' }} />
+      <Stack.Screen name="social/index" options={{ title: 'My Posts' }} />
       <Stack.Screen name="social/new" options={{ title: 'New Post' }} />
+      <Stack.Screen name="social/[id]" options={{ title: 'Post' }} />
       <Stack.Screen name="admin/void-errors" options={{ title: 'Void Errors' }} />
       <Stack.Screen name="admin/voice-backfill" options={{ title: 'Voice Call Backfill' }} />
       <Stack.Screen name="admin/vendor/[id]" options={{ title: 'Vendor Detail' }} />
