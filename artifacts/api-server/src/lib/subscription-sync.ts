@@ -55,6 +55,21 @@ export interface PaystackUpgradeFields {
   paystackEmailToken?: string | null;
 }
 
+/** PayPal analogue of applyVendorTierUpgrade — same idempotency/notification behavior. */
+export async function applyVendorPayPalTierUpgrade(
+  vendorId: number,
+  tier: string,
+  paypalSubscriptionId: string | null,
+  source: string,
+): Promise<ApplyUpgradeResult> {
+  return applyVendorTierUpgradeInternal(
+    vendorId,
+    tier,
+    { subscriptionProvider: "paypal", paypalSubscriptionId },
+    source,
+  );
+}
+
 /** Paystack analogue of applyVendorTierUpgrade — same idempotency/notification behavior. */
 export async function applyVendorPaystackTierUpgrade(
   vendorId: number,
@@ -71,11 +86,12 @@ export async function applyVendorPaystackTierUpgrade(
 }
 
 interface UpgradeFields {
-  subscriptionProvider: "stripe" | "paystack";
+  subscriptionProvider: "stripe" | "paystack" | "paypal";
   stripeSubscriptionId?: string | null;
   paystackCustomerCode?: string | null;
   paystackSubscriptionCode?: string | null;
   paystackEmailToken?: string | null;
+  paypalSubscriptionId?: string | null;
 }
 
 async function applyVendorTierUpgradeInternal(
@@ -93,11 +109,14 @@ async function applyVendorTierUpgradeInternal(
     return { applied: false, reason: `vendor ${vendorId} not found` };
   }
 
-  const subscriptionId = fields.stripeSubscriptionId ?? fields.paystackSubscriptionCode ?? null;
+  const subscriptionId =
+    fields.stripeSubscriptionId ?? fields.paystackSubscriptionCode ?? fields.paypalSubscriptionId ?? null;
   const alreadyOnSubscription =
     fields.subscriptionProvider === "stripe"
       ? vendor.stripeSubscriptionId === subscriptionId
-      : vendor.paystackSubscriptionCode === subscriptionId;
+      : fields.subscriptionProvider === "paystack"
+        ? vendor.paystackSubscriptionCode === subscriptionId
+        : vendor.paypalSubscriptionId === subscriptionId;
 
   if (vendor.subscriptionTier === tier && (!subscriptionId || alreadyOnSubscription)) {
     return { applied: false, reason: "already up to date", tier };
@@ -115,6 +134,7 @@ async function applyVendorTierUpgradeInternal(
       paystackCustomerCode: fields.paystackCustomerCode ?? vendor.paystackCustomerCode,
       paystackSubscriptionCode: fields.paystackSubscriptionCode ?? vendor.paystackSubscriptionCode,
       paystackEmailToken: fields.paystackEmailToken ?? vendor.paystackEmailToken,
+      paypalSubscriptionId: fields.paypalSubscriptionId ?? vendor.paypalSubscriptionId,
       // Reset the metered-usage billing-period anchor on an actual tier
       // change so quotas start fresh from this upgrade rather than
       // whenever the vendor last signed up or changed tier before. A

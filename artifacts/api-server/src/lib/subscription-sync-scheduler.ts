@@ -16,12 +16,13 @@
  */
 import { db } from "@workspace/db";
 import { vendorsTable } from "@workspace/db/schema";
-import { isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 import { recordJobRun } from "./job-run-status";
 import { resolveGatewayField, callWithPlatformStripe } from "./platform-gateways";
 import { reconcileVendorSubscription } from "./subscription-sync";
 import { reconcileVendorPaystackSubscription } from "./paystack-sync";
+import { reconcileVendorPayPalSubscription } from "./paypal-sync";
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -89,8 +90,40 @@ export async function tick(): Promise<void> {
       }
     }
 
-    if (!primaryStripeKey && !fallbackStripeKey && !paystackKey) {
-      // Neither gateway is configured on this platform yet — nothing to
+    const paypalClientId = await resolveGatewayField("paypal", "clientId");
+    const paypalClientSecret = await resolveGatewayField("paypal", "clientSecret");
+    const paypalMode = (await resolveGatewayField("paypal", "mode")) ?? "sandbox";
+    if (paypalClientId && paypalClientSecret) {
+      const paypalCandidates = await db
+        .select()
+        .from(vendorsTable)
+        .where(and(isNotNull(vendorsTable.paypalSubscriptionId), eq(vendorsTable.subscriptionProvider, "paypal")));
+
+      checkedCount += paypalCandidates.length;
+      for (const vendor of paypalCandidates) {
+        try {
+          const result = await reconcileVendorPayPalSubscription(
+            vendor,
+            paypalClientId,
+            paypalClientSecret,
+            paypalMode,
+            "scheduled-sync",
+          );
+          if (result.synced) {
+            syncedCount++;
+            logger.info(
+              { vendorId: vendor.id, tier: result.currentTier },
+              "[subscription-sync-scheduler] Caught a missed PayPal subscription cancellation — downgraded to free",
+            );
+          }
+        } catch (err) {
+          logger.error({ err, vendorId: vendor.id }, "[subscription-sync-scheduler] Error reconciling PayPal vendor — will retry next tick");
+        }
+      }
+    }
+
+    if (!primaryStripeKey && !fallbackStripeKey && !paystackKey && !paypalClientId) {
+      // No gateway is configured on this platform yet — nothing to
       // reconcile against. Still a "successful" run: nothing to check.
       await recordJobRun(SUBSCRIPTION_SYNC_JOB_NAME, { success: true, checkedCount: 0, affectedCount: 0 });
       return;
