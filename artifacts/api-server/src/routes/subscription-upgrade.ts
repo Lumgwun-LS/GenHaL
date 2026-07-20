@@ -31,6 +31,7 @@ import { ensurePaystackCatalog } from "../lib/paystack-catalog";
 import { ensurePayPalCatalog, createPayPalSubscription, cancelPayPalSubscription } from "../lib/paypal-catalog";
 import { reconcileVendorSubscription, applyVendorTierDowngrade } from "../lib/subscription-sync";
 import { reconcileVendorPaystackSubscription } from "../lib/paystack-sync";
+import { reconcileVendorPayPalSubscription } from "../lib/paypal-sync";
 import { getSubscriptionPlans, getEnabledSubscriptionGateways, type SubscriptionGateway } from "../lib/subscription-plans";
 import { getUsageSummary } from "../lib/usage";
 import { getSiteContentBlock } from "../lib/site-content";
@@ -353,6 +354,15 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
             { upgradeVendorId: id.toString(), upgradeTier: tier, upgradeClerkUserId: userId },
           );
 
+          // Persist the subscription ID immediately so the manual sync route
+          // can recover the tier even if BILLING.SUBSCRIPTION.ACTIVATED never
+          // arrives (e.g. missed webhook after the vendor approves in PayPal).
+          // The subscription ID carries the custom_id metadata needed for upgrade.
+          await db
+            .update(vendorsTable)
+            .set({ paypalSubscriptionId: subscriptionId, updatedAt: new Date() })
+            .where(eq(vendorsTable.id, id));
+
           return { sessionId: subscriptionId, url: approvalUrl };
         })()
       : callWithPlatformStripe(async (stripe, stripeKey) => {
@@ -611,7 +621,20 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
   }
 
   const isPaystackVendor = vendor.subscriptionProvider === "paystack" && !!vendor.paystackSubscriptionCode;
-  if (!vendor.stripeCustomerId && !isPaystackVendor) {
+  // PayPal sync uses two signals, with explicit provider taking priority:
+  //  1. subscriptionProvider === "paypal" → webhook already fired; vendor is fully on PayPal.
+  //  2. subscriptionProvider is null AND paypalSubscriptionId is set → vendor approved the
+  //     PayPal flow but BILLING.SUBSCRIPTION.ACTIVATED webhook hasn't arrived yet (the
+  //     missed-webhook recovery window). We intentionally do NOT exclude vendors who also
+  //     have stripeCustomerId — that field is never cleared after a Stripe downgrade, so
+  //     former Stripe subscribers who then start a PayPal checkout legitimately have both.
+  //     Provider precedence is enforced by subscriptionProvider being null (not "stripe"),
+  //     and reconcileVendorPayPalSubscription refuses to downgrade if subscriptionProvider
+  //     is explicitly set to another provider.
+  const isPayPalVendor =
+    vendor.subscriptionProvider === "paypal" ||
+    (!vendor.subscriptionProvider && !!vendor.paypalSubscriptionId);
+  if (!vendor.stripeCustomerId && !isPaystackVendor && !isPayPalVendor) {
     res.json({ synced: false, reason: "No billing account on file yet — nothing to sync.", currentTier: vendor.subscriptionTier });
     return;
   }
@@ -643,6 +666,17 @@ router.post("/vendors/:id/subscription/sync", async (req, res): Promise<void> =>
       return;
     }
     syncPromise = reconcileVendorPaystackSubscription(vendor, paystackKey, "manual-sync");
+  } else if (isPayPalVendor) {
+    const [paypalClientId, paypalClientSecret] = await Promise.all([
+      resolveGatewayField("paypal", "clientId"),
+      resolveGatewayField("paypal", "clientSecret"),
+    ]);
+    const paypalMode = (await resolveGatewayField("paypal", "mode")) ?? "live";
+    if (!paypalClientId || !paypalClientSecret) {
+      res.status(503).json({ error: "PayPal is not configured on this platform." });
+      return;
+    }
+    syncPromise = reconcileVendorPayPalSubscription(vendor, paypalClientId, paypalClientSecret, paypalMode, "manual-sync");
   } else {
     syncPromise = callWithPlatformStripe((stripe) => reconcileVendorSubscription(vendor, stripe, "manual-sync"));
   }

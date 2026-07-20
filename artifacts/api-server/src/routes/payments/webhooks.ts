@@ -1774,7 +1774,7 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
     eventType === "BILLING.SUBSCRIPTION.SUSPENDED"
   ) {
     const [vendor] = await db
-      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, subscriptionProvider: vendorsTable.subscriptionProvider })
       .from(vendorsTable)
       .where(eq(vendorsTable.paypalSubscriptionId, subscriptionId));
 
@@ -1785,6 +1785,24 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
 
     if (vendor.subscriptionTier === "free") {
       return { matched: true }; // already downgraded
+    }
+
+    // Cross-provider ownership guard: since paypalSubscriptionId is now persisted at
+    // checkout creation (before ACTIVATED fires), a vendor who initiated a PayPal
+    // checkout but then completed via another provider (Stripe, Paystack) will have a
+    // stale paypalSubscriptionId on their row. When that stale PayPal subscription later
+    // emits a cancellation/expiry event, we must not downgrade a vendor who is actually
+    // managed by a different provider.
+    if (vendor.subscriptionProvider !== null && vendor.subscriptionProvider !== "paypal") {
+      console.warn(
+        `[paypal webhook] ${eventType} — vendor=${vendor.id} has subscriptionProvider=${vendor.subscriptionProvider}; stale PayPal subscriptionId=${subscriptionId} — skipping downgrade to avoid cross-provider misrouting`,
+      );
+      // Clear the stale ID so this event can never trigger again
+      await db
+        .update(vendorsTable)
+        .set({ paypalSubscriptionId: null, updatedAt: new Date() })
+        .where(eq(vendorsTable.id, vendor.id));
+      return { matched: true };
     }
 
     const previousTier = vendor.subscriptionTier;
