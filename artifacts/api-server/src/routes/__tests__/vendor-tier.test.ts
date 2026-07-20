@@ -258,6 +258,92 @@ describe("PATCH /vendors/:id/tier", () => {
     expect(committed[0].auditRows).toHaveLength(0);
   });
 
+  // ── Audit-log field-label correctness tests ──────────────────────────────
+
+  it("writes an audit row with field 'verificationLevel' (not 'subscriptionTier') when only verificationLevel changes", async () => {
+    // MOCK_VENDOR has verificationLevel = "unverified"
+    const { status } = await callRoute("PATCH", "/vendors/1/tier", {
+      verificationLevel: "verified",
+    });
+
+    expect(status).toBe(200);
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    // Exactly one audit row, and it must name the correct field
+    expect(commit.auditRows).toHaveLength(1);
+    expect(commit.auditRows[0]).toMatchObject({
+      adminUserId: "user_admin",
+      vendorId: 1,
+      field: "verificationLevel",
+      oldValue: "unverified",
+      newValue: "verified",
+    });
+    // Must NOT carry a subscriptionTier field label
+    expect((commit.auditRows[0] as Record<string, unknown>).field).not.toBe("subscriptionTier");
+  });
+
+  it("writes an audit row with field 'subscriptionTier' and correct old/new values when only subscriptionTier changes", async () => {
+    // MOCK_VENDOR has subscriptionTier = "free"
+    const { status } = await callRoute("PATCH", "/vendors/1/tier", {
+      subscriptionTier: "enterprise",
+    });
+
+    expect(status).toBe(200);
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    expect(commit.auditRows).toHaveLength(1);
+    expect(commit.auditRows[0]).toMatchObject({
+      adminUserId: "user_admin",
+      vendorId: 1,
+      field: "subscriptionTier",
+      oldValue: "free",
+      newValue: "enterprise",
+    });
+    // Must NOT carry a verificationLevel field label
+    expect((commit.auditRows[0] as Record<string, unknown>).field).not.toBe("verificationLevel");
+  });
+
+  it("writes two audit rows with distinct field labels when both fields change", async () => {
+    // MOCK_VENDOR has subscriptionTier = "free" and verificationLevel = "unverified"
+    const { status } = await callRoute("PATCH", "/vendors/1/tier", {
+      subscriptionTier: "pro",
+      verificationLevel: "basic",
+    });
+
+    expect(status).toBe(200);
+    expect(committed).toHaveLength(1);
+    const [commit] = committed;
+
+    expect(commit.auditRows).toHaveLength(2);
+
+    const tierAuditRow = commit.auditRows.find(
+      (r: unknown) => (r as Record<string, unknown>).field === "subscriptionTier",
+    ) as Record<string, unknown> | undefined;
+    const verAuditRow = commit.auditRows.find(
+      (r: unknown) => (r as Record<string, unknown>).field === "verificationLevel",
+    ) as Record<string, unknown> | undefined;
+
+    expect(tierAuditRow).toBeDefined();
+    expect(tierAuditRow).toMatchObject({
+      adminUserId: "user_admin",
+      vendorId: 1,
+      field: "subscriptionTier",
+      oldValue: "free",
+      newValue: "pro",
+    });
+
+    expect(verAuditRow).toBeDefined();
+    expect(verAuditRow).toMatchObject({
+      adminUserId: "user_admin",
+      vendorId: 1,
+      field: "verificationLevel",
+      oldValue: "unverified",
+      newValue: "basic",
+    });
+  });
+
   // ── Notification-type correctness tests ──────────────────────────────────
 
   it("inserts a verification_change notification (not tier_change) when only verificationLevel changes", async () => {
