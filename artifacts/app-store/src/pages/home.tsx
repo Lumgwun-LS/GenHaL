@@ -345,6 +345,71 @@ function AppGrid({ apps, layout = "grid" }: { apps: AppSummary[]; layout?: "grid
   );
 }
 
+/* ── promo video section ─────────────────────── */
+function PromoVideoSection() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 40 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.8, ease: EASE_OUT_EXPO }}
+      style={{ width: "100%", position: "relative" }}
+    >
+      {/* Label */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={inView ? { opacity: 1, y: 0 } : {}}
+        transition={{ duration: 0.6, delay: 0.15, ease: EASE_OUT_EXPO }}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 10, marginBottom: 20,
+        }}
+      >
+        <div style={{ height: 1, width: 48, background: "linear-gradient(90deg, transparent, rgba(0,200,83,0.5))" }} />
+        <span style={{
+          fontSize: 12, fontWeight: 700, letterSpacing: "0.18em",
+          color: "#00c853", textTransform: "uppercase",
+        }}>
+          ▶ Watch the Story
+        </span>
+        <div style={{ height: 1, width: 48, background: "linear-gradient(90deg, rgba(0,200,83,0.5), transparent)" }} />
+      </motion.div>
+
+      {/* iframe wrapper — full width, 16:9 */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={inView ? { opacity: 1, scale: 1 } : {}}
+        transition={{ duration: 0.9, delay: 0.25, ease: EASE_OUT_EXPO }}
+        style={{
+          position: "relative",
+          width: "100%",
+          paddingTop: "56.25%", /* 16:9 */
+          borderRadius: 0,
+          overflow: "hidden",
+          boxShadow: "0 0 80px rgba(0,200,83,0.08), 0 0 0 1px rgba(255,255,255,0.04)",
+        }}
+      >
+        <iframe
+          src="/appstore-promo-video/"
+          title="Awajimaa App Store — Promotional Video"
+          allow="autoplay; fullscreen"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            border: "none",
+            display: "block",
+          }}
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ── home page ──────────────────────────────── */
 export default function Home() {
   const [featured, setFeatured]     = useState<AppSummary[]>([]);
@@ -370,6 +435,8 @@ export default function Home() {
   return (
     <div>
       <HeroSection />
+
+      <PromoVideoSection />
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "48px 20px 96px" }}>
 
