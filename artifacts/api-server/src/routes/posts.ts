@@ -8,6 +8,7 @@ import { publishLinkedInTextPost, publishLinkedInImagePost, publishLinkedInVideo
 import { publishTweet, publishTweetWithImage, publishTweetWithVideo, isTwitterAuthError } from "../lib/twitter";
 import { ensureFreshAccessToken } from "../lib/token-refresh";
 import { notifyScheduledPostFailed } from "../lib/post-notifications";
+import { releaseOrphanedPostMedia } from "../lib/media-cleanup";
 import { logger } from "../lib/logger";
 import {
   ListPostsQueryParams,
@@ -211,12 +212,19 @@ router.patch("/posts/:id", async (req, res): Promise<void> => {
 router.delete("/posts/:id", async (req, res): Promise<void> => {
   const params = DeletePostParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [existing] = await db.select({ vendorId: postsTable.vendorId }).from(postsTable).where(eq(postsTable.id, params.data.id));
+  const [existing] = await db.select({ vendorId: postsTable.vendorId, mediaUrls: postsTable.mediaUrls }).from(postsTable).where(eq(postsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Post not found" }); return; }
   const authed = await resolveAuthedVendor(req);
   if (!authed.isAdmin && authed.vendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to delete this post." }); return; }
   await db.delete(postsTable).where(eq(postsTable.id, params.data.id));
   res.sendStatus(204);
+  // After the response is sent, reset mediaLastCheckedAt for any media URLs
+  // that are no longer referenced by any remaining post — this brings them to
+  // the front of the next cleanup tick so the orphaned objects are swept
+  // promptly rather than waiting up to RETENTION_HOURS (48h) for their turn.
+  // Errors are swallowed inside releaseOrphanedPostMedia so this fire-and-forget
+  // call can never bubble up and corrupt the already-sent 204.
+  releaseOrphanedPostMedia(existing.mediaUrls ?? []).catch(() => {});
 });
 
 /**

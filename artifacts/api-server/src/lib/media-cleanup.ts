@@ -360,6 +360,43 @@ async function tick(): Promise<void> {
   }
 }
 
+/**
+ * Called immediately after a post is deleted. For each URL that was in the
+ * deleted post's `media_urls`, checks whether it is still referenced by any
+ * other post. If not, clears `mediaLastCheckedAt` (sets it to null) on the
+ * matching `ai_generations` and `vendor_uploads` rows so they sort to the
+ * front of the next cleanup tick instead of waiting up to RETENTION_HOURS
+ * to be re-examined.
+ *
+ * Errors are logged but never re-thrown — the post deletion itself must not
+ * be rolled back because of a cleanup book-keeping failure.
+ */
+export async function releaseOrphanedPostMedia(mediaUrls: string[]): Promise<void> {
+  if (mediaUrls.length === 0) return;
+
+  for (const url of mediaUrls) {
+    try {
+      // If the URL is still attached to another post, leave everything alone.
+      if (await isMediaStillInUse(url)) continue;
+
+      // No longer referenced — reset mediaLastCheckedAt so the row sorts to
+      // the front (NULLS FIRST) of the next cleanup tick's candidate query.
+      await Promise.all([
+        db
+          .update(aiGenerationsTable)
+          .set({ mediaLastCheckedAt: null })
+          .where(and(eq(aiGenerationsTable.result, url), isNull(aiGenerationsTable.mediaDeletedAt))),
+        db
+          .update(vendorUploadsTable)
+          .set({ mediaLastCheckedAt: null })
+          .where(and(eq(vendorUploadsTable.mediaUrl, url), isNull(vendorUploadsTable.mediaDeletedAt))),
+      ]);
+    } catch (err) {
+      logger.error({ err, url }, "[media-cleanup] Failed to reset mediaLastCheckedAt after post deletion");
+    }
+  }
+}
+
 /** Starts the orphaned media sweeper (AI-generated + vendor-uploaded): checks every hour. */
 export function startMediaCleanupScheduler(): void {
   setInterval(() => { tick().catch(() => {}); }, 60 * 60 * 1000);
