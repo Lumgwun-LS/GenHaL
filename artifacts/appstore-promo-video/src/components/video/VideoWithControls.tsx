@@ -200,25 +200,25 @@ export default function VideoWithControls() {
   if (!isIframed) return <VideoTemplate />;
 
   return (
-    <div className="relative w-full h-screen">
-      <VideoTemplate
-        key={mountKey}
-        durations={durations}
-        loop
-        muted={muted}
-        onSceneChange={onSceneChange}
-      />
+    <div className="flex flex-col w-full h-screen bg-black">
+      {/* Video fills all remaining vertical space above the control bar */}
+      <div className="flex-1 min-h-0 relative">
+        <VideoTemplate
+          key={mountKey}
+          durations={durations}
+          loop
+          muted={muted}
+          onSceneChange={onSceneChange}
+        />
+      </div>
 
-      {/* Bottom hover sensor + control bar */}
+      {/* Control bar sits below the video — never overlaps it */}
       <div
         ref={sensorRef}
-        className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
-        style={{ height: '25%' }}
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
         onPointerDown={handlePointerDown}
       >
-        <div className="flex-1 w-full" aria-hidden="true" />
         <ControlBar
           visible={barVisible}
           collapsed={collapsed}
