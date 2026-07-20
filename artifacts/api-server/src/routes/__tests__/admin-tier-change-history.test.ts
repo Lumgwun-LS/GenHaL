@@ -6,6 +6,8 @@
  *    excluding a verification-level "tier_change"-typed row without those
  *    fields and an unrelated "general" notification
  *  - joins in the vendor's name
+ *  - tie-breaker: two entries at the same timestamp appear exactly once
+ *    across pages (no skips or duplicates at the page boundary)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express, { type Request, type Response } from "express";
@@ -69,26 +71,44 @@ function evaluateCondition(cond: unknown, notifRow: NotificationRow, vendorRow: 
   return true;
 }
 
+/**
+ * Sort matching rows: primary DESC by createdAt, secondary DESC by id —
+ * mirrors the tie-breaker orderBy the route applies.
+ */
+function sortRows(rows: NotificationRow[]): NotificationRow[] {
+  return [...rows].sort((a, b) => {
+    const tDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (tDiff !== 0) return tDiff;
+    return b.id - a.id; // tie-breaker: higher id first (DESC)
+  });
+}
+
 // ── Mock @workspace/db ────────────────────────────────────────────────────────
 
 vi.mock("@workspace/db", () => ({
   db: {
     select: (_fields: unknown) => ({
       from: (_table: unknown) => ({
+        // Path used by the count query (no leftJoin).
+        where: (whereCond: unknown) => {
+          const filtered = notificationRows.filter((n) =>
+            evaluateCondition(whereCond, n, vendorRows.find((v) => v.id === n.vendorId)),
+          );
+          return Promise.resolve([{ count: filtered.length }]);
+        },
+        // Path used by the data query (with leftJoin).
         leftJoin: (_joinTable: unknown, _onCond: unknown) => ({
           where: (whereCond: unknown) => {
             const filtered = notificationRows.filter((n) =>
               evaluateCondition(whereCond, n, vendorRows.find((v) => v.id === n.vendorId)),
             );
+            const sorted = sortRows(filtered);
             return {
-              orderBy: (_o: unknown) => {
-                const sorted = [...filtered].sort(
-                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-                );
-                return {
-                  limit: (n: number) =>
+              orderBy: (..._args: unknown[]) => ({
+                limit: (n: number) => ({
+                  offset: (skip: number) =>
                     Promise.resolve(
-                      sorted.slice(0, n).map((r) => ({
+                      sorted.slice(skip, skip + n).map((r) => ({
                         id: r.id,
                         vendorId: r.vendorId,
                         vendorName: vendorRows.find((v) => v.id === r.vendorId)?.name ?? null,
@@ -98,8 +118,8 @@ vi.mock("@workspace/db", () => ({
                         createdAt: r.createdAt,
                       })),
                     ),
-                };
-              },
+                }),
+              }),
             };
           },
         }),
@@ -117,6 +137,7 @@ vi.mock("@workspace/db/schema", () => ({
   adminExportLogsTable: {},
   adminExportAcknowledgmentsTable: {},
   adminExportAcknowledgmentLogTable: {},
+  adminExportBurstSentAlertsTable: {},
   voiceCampaignsTable: {},
   voiceCampaignCallsTable: {},
   voiceSignatureFailuresTable: {},
@@ -166,7 +187,15 @@ vi.mock("../../lib/voice-backfill", () => ({
   getVoiceBackfillRecentFixes: async () => [],
 }));
 vi.mock("../../lib/sales-sync", () => ({ syncSaleFromPayment: async () => {} }));
-vi.mock("../../lib/push", () => ({ notifyVendorPaymentStatus: async () => {} }));
+vi.mock("../../lib/push", () => ({
+  notifyVendorPaymentStatus: async () => {},
+  sendPushToVendor: async () => {},
+}));
+vi.mock("../../lib/mailer", () => ({ sendEmail: async () => {} }));
+vi.mock("../../lib/email-branding", () => ({
+  wrapVendorEmail: (_opts: unknown, body: string) => body,
+  escapeHtml: (s: string) => s,
+}));
 
 async function buildApp() {
   vi.resetModules();
@@ -267,7 +296,7 @@ describe("GET /admin/tier-change-history", () => {
     const { status, body } = await callApp(app, "/admin/tier-change-history", { "x-test-user": "user_admin" });
 
     expect(status).toBe(200);
-    const rows = body as Array<Record<string, unknown>>;
+    const { data: rows } = body as { data: Array<Record<string, unknown>>; page: number; pageSize: number; total: number };
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       id: 1,
@@ -305,9 +334,69 @@ describe("GET /admin/tier-change-history", () => {
     const { status, body } = await callApp(app, "/admin/tier-change-history", { "x-test-user": "user_admin" });
 
     expect(status).toBe(200);
-    const rows = body as Array<Record<string, unknown>>;
+    const { data: rows } = body as { data: Array<Record<string, unknown>>; page: number; pageSize: number; total: number };
     expect(rows).toHaveLength(2);
     expect(rows[0].id).toBe(11);
     expect(rows[1].id).toBe(10);
+  });
+
+  it("returns both same-timestamp entries exactly once when paging with pageSize=1", async () => {
+    // Two tier-change notifications inserted at the exact same timestamp.
+    // Without a tie-breaker, the DESC-by-createdAt order is non-deterministic
+    // and a page boundary could skip or repeat one entry. With the secondary
+    // DESC-by-id sort the order is always id=20 first, then id=19.
+    vendorRows = [{ id: 5, name: "Tie Vendor" }];
+    const sharedTimestamp = "2026-07-20T12:00:00.000Z";
+    notificationRows = [
+      {
+        id: 19,
+        vendorId: 5,
+        type: "tier_change",
+        previousTier: "free",
+        newTier: "starter",
+        message: "First simultaneous change.",
+        createdAt: sharedTimestamp,
+      },
+      {
+        id: 20,
+        vendorId: 5,
+        type: "tier_change",
+        previousTier: "starter",
+        newTier: "pro",
+        message: "Second simultaneous change.",
+        createdAt: sharedTimestamp,
+      },
+    ];
+
+    const app = await buildApp();
+
+    // Page 1 — should return the higher-id entry first (tie-breaker: id DESC).
+    const { status: s1, body: b1 } = await callApp(
+      app,
+      "/admin/tier-change-history?page=1&pageSize=1",
+      { "x-test-user": "user_admin" },
+    );
+    expect(s1).toBe(200);
+    const page1 = b1 as { data: Array<Record<string, unknown>>; total: number };
+    expect(page1.total).toBe(2);
+    expect(page1.data).toHaveLength(1);
+    expect(page1.data[0].id).toBe(20);
+
+    // Page 2 — should return the lower-id entry (no skip, no repeat).
+    const { status: s2, body: b2 } = await callApp(
+      app,
+      "/admin/tier-change-history?page=2&pageSize=1",
+      { "x-test-user": "user_admin" },
+    );
+    expect(s2).toBe(200);
+    const page2 = b2 as { data: Array<Record<string, unknown>>; total: number };
+    expect(page2.total).toBe(2);
+    expect(page2.data).toHaveLength(1);
+    expect(page2.data[0].id).toBe(19);
+
+    // Confirm the two pages together cover both entries exactly once.
+    const allIds = [page1.data[0].id, page2.data[0].id];
+    expect(allIds).toEqual(expect.arrayContaining([19, 20]));
+    expect(new Set(allIds).size).toBe(2);
   });
 });

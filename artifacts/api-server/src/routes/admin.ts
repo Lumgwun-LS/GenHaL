@@ -1043,7 +1043,7 @@ router.get("/admin/tier-change-history", async (req, res): Promise<void> => {
     .from(vendorNotificationsTable)
     .leftJoin(vendorsTable, eq(vendorNotificationsTable.vendorId, vendorsTable.id))
     .where(baseWhere)
-    .orderBy(desc(vendorNotificationsTable.createdAt))
+    .orderBy(desc(vendorNotificationsTable.createdAt), desc(vendorNotificationsTable.id))
     .limit(pageSize)
     .offset(offset);
 
