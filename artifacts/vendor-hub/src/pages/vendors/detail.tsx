@@ -207,6 +207,10 @@ export default function VendorDetail() {
         return;
       }
       toast.success("Payment settings saved");
+      // Immediately invalidate the cached payment-availability result so the
+      // Social Hub checkout health warning reflects the updated credentials
+      // without waiting for the 60-second stale-time window to expire.
+      void queryClient.invalidateQueries({ queryKey: ["vendor-payment-availability", id] });
     } catch {
       toast.error("Network error — could not save payment settings");
     } finally {
