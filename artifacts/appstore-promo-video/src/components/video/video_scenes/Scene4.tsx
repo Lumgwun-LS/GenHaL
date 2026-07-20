@@ -28,7 +28,7 @@ export default function Scene4({ currentScene }: { currentScene: number }) {
       <div className="relative z-10 flex flex-col items-center justify-center text-center w-full px-12">
         <div className="overflow-hidden">
           <motion.h2
-            className="text-[140px] leading-none font-sans font-black text-white uppercase tracking-tighter"
+            className="text-[80px] leading-none font-sans font-black text-white uppercase tracking-tighter"
             initial={{ y: "100%" }}
             animate={{ y: phase >= 1 ? 0 : "100%" }}
             transition={{ duration: 1.2, ease: "circOut" }}
@@ -45,7 +45,7 @@ export default function Scene4({ currentScene }: { currentScene: number }) {
             transition={{ duration: 1.2, ease: "circOut" }}
           >
             <div className="w-48 h-2 bg-accent" />
-            <h2 className="text-[120px] leading-none font-serif font-bold text-accent italic">
+            <h2 className="text-[70px] leading-none font-serif font-bold text-accent italic">
               App Store
             </h2>
             <div className="w-48 h-2 bg-accent" />
@@ -54,7 +54,7 @@ export default function Scene4({ currentScene }: { currentScene: number }) {
 
         <div className="overflow-hidden">
           <motion.h2
-            className="text-[140px] leading-none font-sans font-black text-white uppercase tracking-tighter"
+            className="text-[80px] leading-none font-sans font-black text-white uppercase tracking-tighter"
             initial={{ y: "-100%" }}
             animate={{ y: phase >= 3 ? 0 : "-100%" }}
             transition={{ duration: 1.2, ease: "circOut" }}
@@ -64,7 +64,7 @@ export default function Scene4({ currentScene }: { currentScene: number }) {
         </div>
 
         <motion.p
-          className="mt-16 text-4xl text-white/90 font-serif max-w-4xl leading-relaxed"
+          className="mt-8 text-2xl text-white/90 font-serif max-w-4xl leading-relaxed"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: phase >= 4 ? 1 : 0, y: phase >= 4 ? 0 : 30 }}
           transition={{ duration: 1.5, ease: "easeOut" }}

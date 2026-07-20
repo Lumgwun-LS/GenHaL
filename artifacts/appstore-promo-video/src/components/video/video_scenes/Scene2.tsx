@@ -53,7 +53,7 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
           </motion.div>
           
           <motion.h2 
-            className="text-7xl font-sans font-black leading-tight text-white mb-4"
+            className="text-5xl font-sans font-black leading-tight text-white mb-4"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: phase >= 2 ? 1 : 0, y: phase >= 2 ? 0 : 50 }}
             transition={{ duration: 1.2, ease: "easeOut" }}
@@ -62,7 +62,7 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
           </motion.h2>
           
           <motion.h2 
-            className="text-7xl font-sans font-black leading-tight text-accent"
+            className="text-5xl font-sans font-black leading-tight text-accent"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: phase >= 3 ? 1 : 0, y: phase >= 3 ? 0 : 50 }}
             transition={{ duration: 1.2, ease: "easeOut" }}
@@ -71,7 +71,7 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
           </motion.h2>
           
           <motion.p
-            className="text-2xl text-gray-400 mt-8 max-w-xl font-serif leading-relaxed"
+            className="text-lg text-gray-400 mt-6 max-w-xl font-serif leading-relaxed"
             initial={{ opacity: 0, filter: "blur(10px)" }}
             animate={{ opacity: phase >= 4 ? 1 : 0, filter: phase >= 4 ? "blur(0px)" : "blur(10px)" }}
             transition={{ duration: 1.5, ease: "easeOut" }}
@@ -99,8 +99,8 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
                 animate={{ scaleY: phase >= i + 5 ? 1 : 0 }}
                 transition={{ duration: 1, delay: 0.5 }}
               />
-              <h3 className="text-4xl font-sans font-bold text-white mb-4 pl-4">{card.title}</h3>
-              <p className="text-xl text-gray-400 font-serif pl-4">{card.subtitle}</p>
+              <h3 className="text-2xl font-sans font-bold text-white mb-2 pl-4">{card.title}</h3>
+              <p className="text-base text-gray-400 font-serif pl-4">{card.subtitle}</p>
             </motion.div>
           ))}
         </div>

@@ -35,7 +35,7 @@ export default function Scene3({ currentScene }: { currentScene: number }) {
 
       <div className="relative z-10 w-full max-w-[1600px] flex flex-col items-center">
         <motion.h2
-          className="text-7xl font-serif font-bold text-center text-white mb-24"
+          className="text-5xl font-serif font-bold text-center text-white mb-12"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: phase >= 1 ? 1 : 0, y: phase >= 1 ? 0 : 50 }}
           transition={{ duration: 1.2, ease: "easeOut" }}
@@ -64,8 +64,8 @@ export default function Scene3({ currentScene }: { currentScene: number }) {
               <div className="w-20 h-20 bg-white/10 rounded-full mb-auto backdrop-blur-md flex items-center justify-center border border-white/20">
                  <div className="w-10 h-10 rounded-full bg-accent" />
               </div>
-              <h3 className="text-5xl font-sans font-bold text-white relative z-10">{label}</h3>
-              <p className="text-2xl text-gray-300 font-serif mt-4 relative z-10">Curated for you</p>
+              <h3 className="text-3xl font-sans font-bold text-white relative z-10">{label}</h3>
+              <p className="text-lg text-gray-300 font-serif mt-2 relative z-10">Curated for you</p>
             </motion.div>
           ))}
         </div>

@@ -47,7 +47,7 @@ export default function Scene5({ currentScene }: { currentScene: number }) {
 
         <div className="overflow-hidden mb-8">
           <motion.h2
-            className="text-8xl font-serif font-bold text-white tracking-wide"
+            className="text-5xl font-serif font-bold text-white tracking-wide"
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: phase >= 2 ? 0 : 80, opacity: phase >= 2 ? 1 : 0 }}
             transition={{ duration: 1.2, ease: "easeOut" }}
@@ -57,7 +57,7 @@ export default function Scene5({ currentScene }: { currentScene: number }) {
         </div>
 
         <motion.p
-          className="text-4xl font-sans text-accent font-bold tracking-[0.2em] uppercase"
+          className="text-2xl font-sans text-accent font-bold tracking-[0.2em] uppercase"
           initial={{ opacity: 0, filter: "blur(20px)", y: 20 }}
           animate={{ 
             opacity: phase >= 2 ? 1 : 0, 
@@ -75,7 +75,7 @@ export default function Scene5({ currentScene }: { currentScene: number }) {
           animate={{ opacity: phase >= 3 ? 1 : 0, y: phase >= 3 ? 0 : 50 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
         >
-          <p className="text-gray-400 font-sans text-xl tracking-[0.3em] uppercase">
+          <p className="text-gray-400 font-sans text-sm tracking-[0.3em] uppercase">
             Powered by The Lumgwun Solutions & Awajimaa Group
           </p>
         </motion.div>

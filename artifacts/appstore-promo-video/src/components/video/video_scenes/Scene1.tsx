@@ -54,7 +54,7 @@ export default function Scene1({ currentScene }: { currentScene: number }) {
 
         <div className="overflow-hidden">
           <motion.h1 
-            className="text-8xl font-serif font-bold text-white tracking-tight"
+            className="text-5xl font-serif font-bold text-white tracking-tight"
             initial={{ y: "120%" }}
             animate={{ y: phase >= 2 ? 0 : "120%" }}
             transition={{ type: "spring", stiffness: 80, damping: 20 }}
@@ -65,7 +65,7 @@ export default function Scene1({ currentScene }: { currentScene: number }) {
 
         <div className="overflow-hidden mt-4">
           <motion.h1 
-            className="text-9xl font-sans font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-primary"
+            className="text-7xl font-sans font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-primary"
             initial={{ y: "120%" }}
             animate={{ y: phase >= 3 ? 0 : "120%" }}
             transition={{ type: "spring", stiffness: 80, damping: 20 }}
