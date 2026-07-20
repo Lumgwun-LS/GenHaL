@@ -28,6 +28,12 @@ let ackRow: { id: number; acknowledgedAt: Date; acknowledgedBy: string } | null 
 let logRows: Array<Record<string, unknown>> = [];
 let nextLogId = 1;
 
+/**
+ * Captures the condition object passed to `.where(...)` on the
+ * voiceSignatureFailuresTable query so tests can assert the windowStart value.
+ */
+let capturedWhereCondition: unknown = null;
+
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock("@clerk/express", () => ({
@@ -52,9 +58,12 @@ vi.mock("@workspace/db", () => ({
         // voiceSignatureFailuresTable — returns recent failures
         if (table === "VOICE_SIG_FAILURES") {
           return {
-            where: (_cond: unknown) => ({
-              orderBy: (_ord: unknown) => Promise.resolve([...recentFailures]),
-            }),
+            where: (cond: unknown) => {
+              capturedWhereCondition = cond;
+              return {
+                orderBy: (_ord: unknown) => Promise.resolve([...recentFailures]),
+              };
+            },
           };
         }
         // voiceSignatureFailureAcknowledgmentsTable — singleton ack
@@ -244,6 +253,7 @@ describe("Twilio signature-failure burst alert lifecycle", () => {
     ackRow = null;
     logRows = [];
     nextLogId = 1;
+    capturedWhereCondition = null;
     app = await buildApp();
   });
 
@@ -421,5 +431,69 @@ describe("Twilio signature-failure burst alert lifecycle", () => {
       });
     });
     expect(result.status).toBe(403);
+  });
+
+  // 10. windowStart is derived from the configured windowMinutes setting
+  it("queries the DB with a windowStart timestamp derived from the windowMinutes setting", async () => {
+    // windowMinutes = 60 (from getSiteContentBlock mock)
+    const beforeCall = Date.now();
+    await callApp(app, "GET", "/admin/voice/signature-failures/alert");
+    const afterCall = Date.now();
+
+    // capturedWhereCondition is { gte: [col, windowStart] }
+    const cond = capturedWhereCondition as { gte: [unknown, Date] } | null;
+    expect(cond).not.toBeNull();
+    const windowStart = cond!.gte[1];
+    expect(windowStart).toBeInstanceOf(Date);
+
+    // The windowStart should be approximately now - 60 * 60 * 1000 ms
+    const expectedWindowStart = 60 * 60 * 1000; // 60 minutes in ms
+    const actualOffset = afterCall - windowStart.getTime();
+    // Allow 5 s of test-execution slack on either side
+    expect(actualOffset).toBeGreaterThanOrEqual(expectedWindowStart - 5_000);
+    expect(actualOffset).toBeLessThanOrEqual(expectedWindowStart + 5_000);
+  });
+
+  // 11. Zero rows in window → not flagged, even when a prior burst was acknowledged
+  it("is not flagged when zero failures fall within the window (all aged out), even with a prior burst", async () => {
+    // Simulate: there WAS a burst that was acknowledged, but now zero failures
+    // are returned by the DB (all aged out of the window).
+    ackRow = {
+      id: 1,
+      acknowledgedAt: new Date(Date.now() - 1_000),
+      acknowledgedBy: "user_admin",
+    };
+    recentFailures = []; // DB returns zero rows — every failure is outside the window
+
+    const { status, body } = await callApp(app, "GET", "/admin/voice/signature-failures/alert");
+
+    expect(status).toBe(200);
+    expect(body.flagged).toBe(false);
+    expect(body.count).toBe(0);
+    // The banner must not re-light even though there was a prior acknowledgment
+  });
+
+  // 12. Response payload includes threshold and windowMinutes from site-content
+  it("includes threshold and windowMinutes from site-content in every response", async () => {
+    // Test with a flagged burst so we confirm the values appear in both states
+    const now = new Date();
+    recentFailures = [
+      { createdAt: new Date(now.getTime() - 1_000) },
+      { createdAt: new Date(now.getTime() - 2_000) },
+      { createdAt: new Date(now.getTime() - 3_000) },
+    ];
+
+    const flaggedRes = await callApp(app, "GET", "/admin/voice/signature-failures/alert");
+    expect(flaggedRes.status).toBe(200);
+    expect(flaggedRes.body.threshold).toBe(3);      // from getSiteContentBlock mock
+    expect(flaggedRes.body.windowMinutes).toBe(60); // from getSiteContentBlock mock
+
+    // Also confirm the values appear when not flagged (below threshold)
+    recentFailures = [{ createdAt: new Date(now.getTime() - 1_000) }];
+    app = await buildApp();
+    const unflaggedRes = await callApp(app, "GET", "/admin/voice/signature-failures/alert");
+    expect(unflaggedRes.status).toBe(200);
+    expect(unflaggedRes.body.threshold).toBe(3);
+    expect(unflaggedRes.body.windowMinutes).toBe(60);
   });
 });
