@@ -65,6 +65,57 @@ function deriveExpectedFromDrizzleSchema(): {
   return { expectedTables, expectedColumns };
 }
 
+export interface SchemaDriftResult {
+  missingTables: MissingTable[];
+  /** Columns missing from tables that ARE present (excludes columns of wholly-absent tables). */
+  missingColumns: MissingColumn[];
+}
+
+/**
+ * Pure query layer: connects to the real database and compares its
+ * information_schema against the Drizzle schema.  Returns the findings
+ * without any side effects (no logging, no Slack alert).
+ *
+ * This is the function used by the integration smoke-test
+ * (src/lib/__tests__/schema-drift-guard.integration.ts) so it can assert on
+ * the actual findings rather than just checking for logged side-effects.
+ *
+ * Throws if the database is unreachable — the caller (runSchemaDriftGuard)
+ * wraps it in a try/catch so the server keeps starting even on DB trouble.
+ */
+export async function checkSchemaDrift(): Promise<SchemaDriftResult> {
+  const { expectedTables, expectedColumns } = deriveExpectedFromDrizzleSchema();
+
+  const rows = await db.execute<{ table_name: string; column_name: string }>(
+    sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
+  );
+
+  const presentColumns = new Set(rows.rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const presentTables = new Set(rows.rows.map((r) => r.table_name));
+
+  const missingColumns: MissingColumn[] = [];
+  for (const col of expectedColumns) {
+    if (!presentColumns.has(col)) {
+      const [table, column] = col.split(".");
+      missingColumns.push({ table, column });
+    }
+  }
+
+  const missingTables: MissingTable[] = [];
+  for (const table of expectedTables) {
+    if (!presentTables.has(table)) {
+      missingTables.push({ table });
+    }
+  }
+
+  // Suppress per-column entries for wholly-absent tables — the table line
+  // already captures the full extent of the drift.
+  const missingTableNames = new Set(missingTables.map((t) => t.table));
+  const orphanColumns = missingColumns.filter((c) => !missingTableNames.has(c.table));
+
+  return { missingTables, missingColumns: orphanColumns };
+}
+
 /**
  * Queries information_schema for all columns in the public schema, then
  * compares against the expected set derived from the Drizzle schema. Any
@@ -75,40 +126,12 @@ function deriveExpectedFromDrizzleSchema(): {
  */
 export async function runSchemaDriftGuard(): Promise<void> {
   try {
-    const { expectedTables, expectedColumns } = deriveExpectedFromDrizzleSchema();
+    const { missingTables, missingColumns: orphanColumns } = await checkSchemaDrift();
 
-    const rows = await db.execute<{ table_name: string; column_name: string }>(
-      sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
-    );
-
-    const presentColumns = new Set(rows.rows.map((r) => `${r.table_name}.${r.column_name}`));
-    const presentTables = new Set(rows.rows.map((r) => r.table_name));
-
-    const missingColumns: MissingColumn[] = [];
-    for (const col of expectedColumns) {
-      if (!presentColumns.has(col)) {
-        const [table, column] = col.split(".");
-        missingColumns.push({ table, column });
-      }
-    }
-
-    const missingTables: MissingTable[] = [];
-    for (const table of expectedTables) {
-      if (!presentTables.has(table)) {
-        missingTables.push({ table });
-      }
-    }
-
-    if (missingColumns.length === 0 && missingTables.length === 0) {
+    if (missingTables.length === 0 && orphanColumns.length === 0) {
       logger.info("[schema-guard] No schema drift detected — database matches Drizzle schema");
       return;
     }
-
-    // Columns in a missing table will all be reported as missing columns too.
-    // Suppress per-column lines for tables that are entirely absent to avoid
-    // flooding the alert with redundant entries.
-    const missingTableNames = new Set(missingTables.map((t) => t.table));
-    const orphanColumns = missingColumns.filter((c) => !missingTableNames.has(c.table));
 
     const tableLines = missingTables.map((t) => `- table: ${t.table}`);
     const columnLines = orphanColumns.map((c) => `- column: ${c.table}.${c.column}`);
