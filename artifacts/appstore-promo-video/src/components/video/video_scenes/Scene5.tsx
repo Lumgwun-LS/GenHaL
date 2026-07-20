@@ -69,16 +69,14 @@ export default function Scene5({ currentScene }: { currentScene: number }) {
           Stay Safe, Do More, & Be More
         </motion.p>
 
-        <motion.div
-          className="absolute bottom-[-20vh] w-full text-center"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: phase >= 3 ? 1 : 0, y: phase >= 3 ? 0 : 50 }}
+        <motion.p
+          className="mt-8 text-gray-400 font-sans text-sm tracking-[0.3em] uppercase text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: phase >= 3 ? 1 : 0, y: phase >= 3 ? 0 : 20 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
         >
-          <p className="text-gray-400 font-sans text-sm tracking-[0.3em] uppercase">
-            Powered by The Lumgwun Solutions & Awajimaa Group
-          </p>
-        </motion.div>
+          Powered by The Lumgwun Solutions &amp; Awajimaa Group
+        </motion.p>
       </div>
     </motion.div>
   );

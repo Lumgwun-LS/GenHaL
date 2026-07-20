@@ -80,11 +80,11 @@ export default function Scene2({ currentScene }: { currentScene: number }) {
           </motion.p>
         </div>
 
-        <div className="w-1/2 relative flex flex-col justify-center gap-8 pl-10">
+        <div className="w-1/2 relative flex flex-col justify-center gap-3 pl-10">
           {featureCards.map((card, i) => (
             <motion.div
               key={i}
-              className="bg-black/40 border border-white/10 backdrop-blur-xl p-10 rounded-3xl relative overflow-hidden"
+              className="bg-black/40 border border-white/10 backdrop-blur-xl p-5 rounded-2xl relative overflow-hidden"
               initial={{ x: 100, opacity: 0 }}
               animate={{ 
                 x: phase >= i + 5 ? 0 : 100, 
