@@ -14,7 +14,7 @@
  *    These confirm that a stuck call seeded into the mock DB surfaces in both
  *    the DB update log and the recentFixes list returned by GET.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express, { type Request, type Response } from "express";
 import { createServer } from "node:http";
 
@@ -38,6 +38,9 @@ const callStatuses = new Map<string, { status: string; durationSeconds?: number 
 
 /** If a callSid is present here, fetchCallStatus will reject with this error. */
 const callStatusErrors = new Map<string, Error>();
+
+/** Controls the return value of isTwilioConfigured() across tests. */
+let twilioConfigured = true;
 
 // ─── Sentinel table references ────────────────────────────────────────────────
 // These are arbitrary values — the DB mock distinguishes tables by reference
@@ -137,7 +140,7 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("../../lib/voice-caller", () => ({
-  isTwilioConfigured: () => true,
+  isTwilioConfigured: () => twilioConfigured,
   fetchCallStatus: (callSid: string) => {
     if (callStatusErrors.has(callSid)) return Promise.reject(callStatusErrors.get(callSid));
     return Promise.resolve(callStatuses.get(callSid) ?? null);
@@ -229,6 +232,7 @@ describe("GET /admin/voice-backfill — route shape and auth", () => {
     siteContent.clear();
     callStatuses.clear();
     callStatusErrors.clear();
+    twilioConfigured = true;
     app = await buildApp();
   });
 
@@ -303,6 +307,7 @@ describe("POST /admin/voice-backfill/run — end-to-end with real backfill logic
     siteContent.clear();
     callStatuses.clear();
     callStatusErrors.clear();
+    twilioConfigured = true;
     app = await buildApp();
   });
 
@@ -489,5 +494,72 @@ describe("POST /admin/voice-backfill/run — end-to-end with real backfill logic
       headers: { "x-test-user": "user_regular" },
     });
     expect(status).toBe(403);
+  });
+});
+
+describe("POST /admin/voice-backfill/run — Twilio not configured (early-exit guard)", () => {
+  /**
+   * When isTwilioConfigured() returns false, runVoiceBackfill returns immediately
+   * with checked:0 / updated:0 and must not touch the DB or write any recentFixes.
+   * These tests confirm the guard is present and behaves correctly.
+   */
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    logRows = [];
+    campaignRows = [];
+    dbUpdates.length = 0;
+    siteContent.clear();
+    callStatuses.clear();
+    callStatusErrors.clear();
+    // Simulate Twilio credentials not being configured
+    twilioConfigured = false;
+    app = await buildApp();
+  });
+
+  afterEach(() => {
+    // Restore default so other suites are unaffected
+    twilioConfigured = true;
+  });
+
+  it("returns 200 with checked:0 and updated:0 when Twilio is not configured", async () => {
+    // Seed a stuck call — it should NOT be touched because Twilio is not configured
+    logRows = [
+      { callSid: "CA_UNCONFIGURED_001", status: "in-progress", vendorId: 1, campaignId: null },
+    ];
+
+    const { status, body } = await callApp(app, "POST", "/admin/voice-backfill/run");
+
+    expect(status).toBe(200);
+    const b = body as Record<string, unknown>;
+    expect(b.checked).toBe(0);
+    expect(b.updated).toBe(0);
+  });
+
+  it("records no DB updates when Twilio is not configured", async () => {
+    logRows = [
+      { callSid: "CA_UNCONFIGURED_002", status: "queued", vendorId: 2, campaignId: null },
+    ];
+
+    await callApp(app, "POST", "/admin/voice-backfill/run");
+
+    expect(dbUpdates).toHaveLength(0);
+  });
+
+  it("GET /admin/voice-backfill returns an empty recentFixes list after an unconfigured run", async () => {
+    logRows = [
+      { callSid: "CA_UNCONFIGURED_003", status: "ringing", vendorId: 3, campaignId: null },
+    ];
+
+    // Trigger the run — should exit early
+    await callApp(app, "POST", "/admin/voice-backfill/run");
+
+    // GET should show no fixes were recorded
+    const { status, body } = await callApp(app, "GET", "/admin/voice-backfill");
+    expect(status).toBe(200);
+    const b = body as Record<string, unknown>;
+    expect(Array.isArray(b.recentFixes)).toBe(true);
+    expect((b.recentFixes as unknown[]).length).toBe(0);
   });
 });
