@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, useSearch, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, SignInButton } from "@clerk/react";
 import { apiFetch } from "../lib/api";
 import type {
   Developer, App, PaymentInitResult, OfflinePayment,
-  LinkedAccount, PlatformRepo, AppRepoLink, UpdateRequest, PlatformId
+  LinkedAccount, PlatformRepo, AppRepoLink, UpdateRequest, PlatformId,
+  AiLaunchSession, AiLaunchGeneratedData,
 } from "../lib/types";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -977,9 +978,430 @@ function AppEngagementStats({ apps }: { apps: App[] }) {
   );
 }
 
+// ── AiLaunchTab ───────────────────────────────────────────────────────────────
+
+const AFRICA_CATS = [
+  "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
+  "Logistics & Delivery","Food & Restaurant","Entertainment & Music","Social & Community",
+  "Business & Commerce","Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
+  "Fashion & Beauty","Real Estate",
+];
+
+type LaunchStep = "upload" | "processing" | "review" | "done";
+
+function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app: App) => void }) {
+  const [step, setStep] = useState<LaunchStep>("upload");
+  const [session, setSession] = useState<AiLaunchSession | null>(null);
+  const [form, setForm] = useState<AiLaunchGeneratedData>({});
+  const [keywords, setKeywords] = useState("");
+  const [features, setFeatures] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [bundleFile, setBundleFile] = useState<File | null>(null);
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [screenshotFiles, setScreenshotFiles] = useState<File[]>([]);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
+
+  // Stop polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  function populateForm(ai: AiLaunchGeneratedData) {
+    setForm(ai);
+    setKeywords((ai.keywords ?? []).join(", "));
+    setFeatures((ai.features ?? []).join("\n"));
+  }
+
+  function startPolling(sid: number) {
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await apiFetch<AiLaunchSession>(`/ai-launch/${sid}`);
+        setSession(s);
+        if (s.status === "ready") {
+          clearInterval(pollRef.current!);
+          populateForm(s.aiGenerated ?? {});
+          setStep("review");
+        } else if (s.status === "failed") {
+          clearInterval(pollRef.current!);
+          setError(s.errorMessage ?? "AI analysis failed. Please fill in the details manually.");
+          populateForm(s.aiGenerated ?? {});
+          setStep("review");
+        }
+      } catch { /* keep polling */ }
+    }, 2500);
+  }
+
+  async function handleUpload() {
+    if (!bundleFile && !iconFile && screenshotFiles.length === 0) {
+      setError("Add a ZIP bundle, or at least an icon or screenshots.");
+      return;
+    }
+    setError(""); setUploading(true);
+    try {
+      const fd = new FormData();
+      if (bundleFile) fd.append("bundle", bundleFile);
+      if (iconFile) fd.append("icon", iconFile);
+      screenshotFiles.forEach(f => fd.append("screenshots", f));
+
+      const res = await fetch("/api/store/ai-launch/upload", {
+        method: "POST",
+        body: fd,
+        // Note: no Content-Type header — browser sets it with boundary for multipart
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      const data = await res.json() as AiLaunchSession;
+      setSession(data);
+      setStep("processing");
+      startPolling(data.sessionId);
+    } catch (err: any) {
+      setError(err.message ?? "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!session) return;
+    if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) {
+      setError("App Name, Tagline, Description, Icon URL, and Download URL are required."); return;
+    }
+    setError(""); setSubmitting(true);
+    try {
+      const payload = {
+        ...form,
+        keywords: keywords.split(",").map(k => k.trim()).filter(Boolean),
+        features: features.split("\n").map(f => f.trim()).filter(Boolean),
+        screenshots: form.screenshots ?? [],
+      };
+      const app = await apiFetch<any>(`/ai-launch/${session.sessionId}/submit`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      onAppCreated(app);
+      setStep("done");
+    } catch (err: any) {
+      setError(err.message ?? "Submit failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    for (const f of files) {
+      if (f.name.endsWith(".zip")) { setBundleFile(f); }
+      else if (/icon/i.test(f.name) && /\.(png|jpg|jpeg|webp)$/i.test(f.name)) { setIconFile(f); }
+      else if (/\.(png|jpg|jpeg|webp)$/i.test(f.name)) { setScreenshotFiles(p => [...p, f].slice(0, 8)); }
+    }
+  }
+
+  function setF(k: keyof AiLaunchGeneratedData, v: string) {
+    setForm(p => ({ ...p, [k]: v }));
+  }
+
+  // ── Step: Upload ─────────────────────────────────────────────────────────
+  if (step === "upload") return (
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontWeight: 800, fontSize: 22, marginBottom: 6 }}>🤖 AI App Launcher</h2>
+        <p style={{ color: "#8892a4", fontSize: 14, lineHeight: 1.6 }}>
+          Upload your app assets — a ZIP bundle or individual files — and our AI will analyze your screenshots,
+          generate a compelling store listing, and pre-fill every field. Review, edit, then launch with one click.
+        </p>
+      </div>
+
+      {/* How it works */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 28 }}>
+        {[
+          { icon: "📦", title: "Upload Assets", desc: "Drop a ZIP with icon, screenshots, and an app.json — or upload files separately" },
+          { icon: "🧠", title: "AI Analyzes", desc: "GPT-4o Vision reads your screenshots and writes the listing copy automatically" },
+          { icon: "🚀", title: "One-Click Launch", desc: "Review, edit if needed, then submit — your app goes straight into the review queue" },
+        ].map(s => (
+          <div key={s.icon} style={{ background: "rgba(124,77,255,0.06)", border: "1px solid rgba(124,77,255,0.15)", borderRadius: 14, padding: "16px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 5, color: "#a78bfa" }}>{s.title}</div>
+            <div style={{ fontSize: 12, color: "#8892a4", lineHeight: 1.5 }}>{s.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDrop={handleDrop}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          border: `2px dashed ${dragOver ? "#a78bfa" : "rgba(124,77,255,0.3)"}`,
+          borderRadius: 18, padding: "40px 24px", textAlign: "center", cursor: "pointer",
+          background: dragOver ? "rgba(124,77,255,0.08)" : "rgba(124,77,255,0.03)",
+          transition: "all 0.2s", marginBottom: 20,
+        }}
+      >
+        <div style={{ fontSize: 44, marginBottom: 10 }}>📂</div>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
+          {bundleFile ? `✅ ${bundleFile.name}` : "Drop your ZIP bundle here"}
+        </div>
+        <div style={{ fontSize: 13, color: "#8892a4" }}>
+          or click to browse · ZIP containing <code style={{ color: "#a78bfa" }}>app.json</code>, <code style={{ color: "#a78bfa" }}>icon.png</code>, screenshots
+        </div>
+        <input ref={fileInputRef} type="file" accept=".zip" style={{ display: "none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) setBundleFile(f); }} />
+      </div>
+
+      {/* Separator */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.07)" }} />
+        <span style={{ color: "#8892a4", fontSize: 12 }}>or upload individually</span>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.07)" }} />
+      </div>
+
+      {/* Individual file pickers */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+        <div
+          onClick={() => iconInputRef.current?.click()}
+          style={{ border: `1px solid ${iconFile ? "rgba(0,200,83,0.4)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}
+        >
+          <div style={{ fontSize: 24, marginBottom: 4 }}>{iconFile ? "✅" : "🖼️"}</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{iconFile ? iconFile.name : "App Icon"}</div>
+          <div style={{ fontSize: 11, color: "#8892a4" }}>PNG / JPG</div>
+          <input ref={iconInputRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) setIconFile(f); }} />
+        </div>
+        <div
+          onClick={() => screenshotInputRef.current?.click()}
+          style={{ border: `1px solid ${screenshotFiles.length ? "rgba(0,200,83,0.4)" : "rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}
+        >
+          <div style={{ fontSize: 24, marginBottom: 4 }}>{screenshotFiles.length ? "✅" : "📸"}</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{screenshotFiles.length ? `${screenshotFiles.length} screenshot${screenshotFiles.length > 1 ? "s" : ""}` : "Screenshots"}</div>
+          <div style={{ fontSize: 11, color: "#8892a4" }}>Up to 8 images</div>
+          <input ref={screenshotInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={e => setScreenshotFiles(Array.from(e.target.files ?? []).slice(0, 8))} />
+        </div>
+      </div>
+
+      {/* app.json hint */}
+      <details style={{ marginBottom: 24 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "#a78bfa", fontWeight: 600 }}>📋 app.json format (optional — AI generates everything without it)</summary>
+        <pre style={{ background: "#0a0d13", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: 14, fontSize: 12, color: "#8892a4", marginTop: 10, overflowX: "auto" }}>{`{
+  "name": "My App",
+  "version": "1.0.0",
+  "platform": "android",
+  "downloadUrl": "https://play.google.com/...",
+  "webUrl": "https://myapp.com",
+  "packageName": "com.example.myapp"
+}`}</pre>
+      </details>
+
+      {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14, marginBottom: 16 }}>❌ {error}</div>}
+
+      <button
+        className="btn-green"
+        onClick={handleUpload}
+        disabled={uploading || (!bundleFile && !iconFile && screenshotFiles.length === 0)}
+        style={{ width: "100%", padding: 14, fontSize: 16, fontWeight: 700 }}
+      >
+        {uploading ? "⏫ Uploading..." : "🤖 Analyze with AI →"}
+      </button>
+    </div>
+  );
+
+  // ── Step: Processing ─────────────────────────────────────────────────────
+  if (step === "processing") return (
+    <div style={{ textAlign: "center", padding: "60px 20px" }}>
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+        style={{ fontSize: 64, display: "inline-block", marginBottom: 24 }}
+      >🧠</motion.div>
+      <h2 style={{ fontWeight: 800, fontSize: 22, marginBottom: 10 }}>AI is analyzing your app…</h2>
+      <p style={{ color: "#8892a4", fontSize: 14, maxWidth: 400, margin: "0 auto 24px" }}>
+        Our AI is examining your screenshots and writing a compelling store listing. This usually takes 10–20 seconds.
+      </p>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+        {["📦 Extracting files","🖼️ Uploading images","🧠 Analyzing visuals","✍️ Writing copy"].map((s, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0.3 }}
+            animate={{ opacity: [0.3, 1, 0.3] }}
+            transition={{ repeat: Infinity, duration: 2, delay: i * 0.5 }}
+            style={{ background: "rgba(124,77,255,0.1)", border: "1px solid rgba(124,77,255,0.2)", borderRadius: 20, padding: "6px 12px", fontSize: 12, color: "#a78bfa" }}
+          >
+            {s}
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── Step: Review ─────────────────────────────────────────────────────────
+  if (step === "review") {
+    const isFailed = session?.status === "failed";
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>
+              {isFailed ? "⚠️ Fill in Details" : "✨ Review AI-Generated Listing"}
+            </h2>
+            <p style={{ color: "#8892a4", fontSize: 13 }}>
+              {isFailed
+                ? "AI analysis had an issue — please fill in the fields manually."
+                : "AI pre-filled everything from your screenshots. Edit any field before launching."}
+            </p>
+          </div>
+          {!isFailed && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 20, padding: "6px 14px", fontSize: 12, color: "#00c853" }}>
+              🤖 AI generated
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Icon preview + URL */}
+          {form.iconUrl && (
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
+              <img src={form.iconUrl} alt="icon" style={{ width: 72, height: 72, borderRadius: 18, border: "1px solid rgba(255,255,255,0.1)", objectFit: "cover" }} />
+              <div style={{ flex: 1 }}>
+                <label className="form-label">Icon URL *</label>
+                <input className="input" value={form.iconUrl ?? ""} onChange={e => setF("iconUrl", e.target.value)} placeholder="https://..." />
+              </div>
+            </div>
+          )}
+          {!form.iconUrl && (
+            <div>
+              <label className="form-label">Icon URL *</label>
+              <input className="input" value={form.iconUrl ?? ""} onChange={e => setF("iconUrl", e.target.value)} placeholder="https://..." />
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label className="form-label">App Name *</label>
+              <input className="input" value={form.name ?? ""} onChange={e => setF("name", e.target.value)} placeholder="My App" />
+            </div>
+            <div>
+              <label className="form-label">Platform *</label>
+              <select className="input" value={form.platform ?? "android"} onChange={e => setF("platform", e.target.value)}>
+                <option value="android">🤖 Android</option>
+                <option value="ios">🍎 iOS</option>
+                <option value="web">🌐 Web App</option>
+                <option value="all">📱 All Platforms</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">Tagline * <span style={{ color: "#8892a4", fontWeight: 400 }}>— one punchy sentence</span></label>
+            <input className="input" value={form.tagline ?? ""} onChange={e => setF("tagline", e.target.value)} placeholder="One powerful sentence about your app" />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label className="form-label">Category *</label>
+              <select className="input" value={form.category ?? AFRICA_CATS[8]} onChange={e => setF("category", e.target.value)}>
+                {AFRICA_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Version</label>
+              <input className="input" value={form.currentVersion ?? ""} onChange={e => setF("currentVersion", e.target.value)} placeholder="1.0.0" />
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">Description * <span style={{ color: "#a78bfa", fontWeight: 400 }}>✨ AI-written</span></label>
+            <textarea className="input" value={form.description ?? ""} onChange={e => setF("description", e.target.value)} style={{ minHeight: 140 }} placeholder="Detailed description..." />
+          </div>
+
+          <div>
+            <label className="form-label">Key Features <span style={{ color: "#a78bfa", fontWeight: 400 }}>✨ AI-written — one per line</span></label>
+            <textarea className="input" value={features} onChange={e => setFeatures(e.target.value)} style={{ minHeight: 100 }} placeholder="🔐 Secure login&#10;📊 Real-time analytics&#10;📱 Works offline" />
+          </div>
+
+          <div>
+            <label className="form-label">Search Keywords <span style={{ color: "#a78bfa", fontWeight: 400 }}>✨ AI-generated — comma separated</span></label>
+            <input className="input" value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="fintech, mobile money, payments..." />
+          </div>
+
+          <div>
+            <label className="form-label">Download / Install Link *</label>
+            <input className="input" type="url" value={form.downloadUrl ?? ""} onChange={e => setF("downloadUrl", e.target.value)} placeholder="https://play.google.com/..." />
+          </div>
+
+          <div>
+            <label className="form-label">Web App URL (optional)</label>
+            <input className="input" type="url" value={form.webUrl ?? ""} onChange={e => setF("webUrl", e.target.value)} placeholder="https://..." />
+          </div>
+
+          <div>
+            <label className="form-label">Package / Bundle ID <span style={{ color: "#8892a4", fontWeight: 400 }}>(recommended)</span></label>
+            <input className="input" value={form.packageName ?? ""} onChange={e => setF("packageName", e.target.value)} placeholder="com.example.myapp" />
+          </div>
+
+          {/* Screenshots preview */}
+          {(form.screenshots ?? []).length > 0 && (
+            <div>
+              <label className="form-label">Screenshots ({(form.screenshots ?? []).length} uploaded by AI)</label>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                {(form.screenshots ?? []).map((url, i) => (
+                  <img key={i} src={url} alt={`Screenshot ${i + 1}`} style={{ height: 120, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, objectFit: "cover" }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!dev.feeExempt && (
+            <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
+              💳 After launch you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer.
+            </div>
+          )}
+
+          {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn-outline" onClick={() => { setStep("upload"); setSession(null); setForm({}); setError(""); }} style={{ flex: 1 }}>
+              ← Start Over
+            </button>
+            <button className="btn-green" onClick={handleSubmit} disabled={submitting} style={{ flex: 2, padding: 14, fontSize: 15, fontWeight: 700 }}>
+              {submitting ? "🚀 Launching..." : "🚀 Launch App →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: Done ───────────────────────────────────────────────────────────
+  return (
+    <div style={{ textAlign: "center", padding: "48px 20px" }}>
+      <div style={{ fontSize: 72, marginBottom: 20 }}>🎉</div>
+      <h2 style={{ fontWeight: 800, fontSize: 24, marginBottom: 10 }}>App Launched!</h2>
+      <p style={{ color: "#8892a4", fontSize: 14, maxWidth: 420, margin: "0 auto 28px", lineHeight: 1.7 }}>
+        {dev.feeExempt
+          ? "Your app is now in the review queue. An admin will approve it shortly."
+          : "Your app has been submitted. Complete the NGN 25,000 publishing fee from My Apps to go live."}
+      </p>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <button className="btn-outline" onClick={() => { setStep("upload"); setSession(null); setForm({}); setError(""); }}>
+          🤖 Launch Another App
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main DeveloperPortal ──────────────────────────────────────────────────────
 
-type View = "dashboard" | "apps" | "platforms" | "submit";
+type View = "dashboard" | "apps" | "platforms" | "submit" | "ai-launch";
 
 export default function DeveloperPortal() {
   const { isSignedIn } = useUser();
@@ -1037,9 +1459,10 @@ export default function DeveloperPortal() {
   );
 
   const TABS: { id: View; label: string }[] = [
-    { id: "dashboard", label: "📊 Overview" },
-    { id: "apps",      label: `📱 My Apps (${apps.length})` },
-    { id: "platforms", label: "🔗 Platforms" },
+    { id: "dashboard",  label: "📊 Overview" },
+    { id: "apps",       label: `📱 My Apps (${apps.length})` },
+    { id: "ai-launch",  label: "🤖 AI Launch" },
+    { id: "platforms",  label: "🔗 Platforms" },
   ];
 
   return (
@@ -1067,9 +1490,14 @@ export default function DeveloperPortal() {
 
       {/* Tabs */}
       {view !== "submit" && (
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 28 }}>
+        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 28, overflowX: "auto" }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setView(t.id)} style={{ padding: "10px 20px", background: "none", border: "none", borderBottom: view === t.id ? "2px solid #00c853" : "2px solid transparent", color: view === t.id ? "#00c853" : "#8892a4", fontWeight: view === t.id ? 700 : 400, fontSize: 14, cursor: "pointer" }}>
+            <button key={t.id} onClick={() => setView(t.id)} style={{
+              padding: "10px 18px", background: "none", border: "none", whiteSpace: "nowrap",
+              borderBottom: view === t.id ? `2px solid ${t.id === "ai-launch" ? "#a78bfa" : "#00c853"}` : "2px solid transparent",
+              color: view === t.id ? (t.id === "ai-launch" ? "#a78bfa" : "#00c853") : "#8892a4",
+              fontWeight: view === t.id ? 700 : 400, fontSize: 14, cursor: "pointer",
+            }}>
               {t.label}
             </button>
           ))}
@@ -1091,6 +1519,17 @@ export default function DeveloperPortal() {
 
       {/* Apps */}
       {view === "apps" && <AppsTab apps={apps} onPayApp={setPaymentApp} onRefresh={loadData} feeExempt={dev.feeExempt} />}
+
+      {/* AI Launch */}
+      {view === "ai-launch" && (
+        <AiLaunchTab
+          dev={dev}
+          onAppCreated={app => {
+            setApps(p => [app as unknown as App, ...p]);
+            setView("apps");
+          }}
+        />
+      )}
 
       {/* Platforms */}
       {view === "platforms" && <PlatformsTab dev={dev} />}

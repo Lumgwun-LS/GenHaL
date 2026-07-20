@@ -178,6 +178,37 @@ export interface AppRepoLink {
   createdAt: string;
 }
 
+// ── AI App Launcher ──────────────────────────────────────────────────────────
+
+export interface AiLaunchGeneratedData {
+  name?: string;
+  tagline?: string;
+  description?: string;
+  category?: string;
+  platform?: string;
+  keywords?: string[];
+  features?: string[];
+  iconUrl?: string;
+  screenshots?: string[];
+  downloadUrl?: string;
+  webUrl?: string;
+  currentVersion?: string;
+  packageName?: string;
+}
+
+export interface AiLaunchSession {
+  sessionId: number;
+  status: "uploading" | "processing" | "ready" | "failed" | "submitted";
+  errorMessage?: string | null;
+  extractedFiles?: {
+    manifest?: Record<string, unknown>;
+    iconUrl?: string;
+    screenshotUrls?: string[];
+  };
+  aiGenerated?: AiLaunchGeneratedData;
+  appId?: number | null;
+}
+
 export interface UpdateRequest {
   id: number;
   appId: number;

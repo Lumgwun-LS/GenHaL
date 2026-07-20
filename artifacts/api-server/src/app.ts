@@ -74,20 +74,31 @@ app.use(
 // Clerk proxy must come before express.json()
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [];
+
+// First-party Awajimaa domains that are always permitted regardless of env config.
+const FIRST_PARTY_ORIGINS = [
+  "https://awajimaaai.com",
+  "https://awajimaaappstore.com",
+  "https://awajimaa-omni-business-suite.replit.app",
+];
+
+const ALLOWED_ORIGINS = Array.from(new Set([...FIRST_PARTY_ORIGINS, ...ALLOWED_ORIGINS_ENV]));
 
 app.use(
   cors({
     credentials: true,
     origin: (origin, callback) => {
-      // Allow requests with no origin (server-to-server, curl)
+      // Allow requests with no origin (server-to-server, curl, Twilio, etc.)
       if (!origin) return callback(null, true);
       // In development allow all origins for easier local testing
       if (process.env.NODE_ENV !== "production") return callback(null, true);
       // In production, check against explicit allowlist
       if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      // Also allow any *.replit.dev / *.replit.app preview domains
+      if (/\.(replit\.dev|replit\.app)$/.test(new URL(origin).hostname)) return callback(null, true);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
   }),

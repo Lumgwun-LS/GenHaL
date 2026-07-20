@@ -30,6 +30,7 @@ import investmentsRouter from "./investments";
 import branchesRouter from "./branches";
 import workersRouter from "./workers";
 import storeRouter from "./store";
+import storeAiLaunchRouter from "./store-ai-launch";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
 import voiceCampaignsRouter from "./voice-campaigns";
@@ -76,6 +77,9 @@ router.use("/external", externalRouter);
 
 // Awajimaa App Store — auth handled per-route inside storeRouter (public browse + auth-gated portal)
 router.use("/store", storeRouter);
+
+// AI App Launcher — requires developer auth per-route, mounts inside /store namespace
+router.use("/store/ai-launch", storeAiLaunchRouter);
 
 // Visitor pageview beacon — public, no auth needed
 router.use(analyticsPublicRouter);
