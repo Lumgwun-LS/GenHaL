@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -107,6 +108,143 @@ function normalizePlatformKey(platform: string): PlatformId | string {
   return p;
 }
 
+/** Returns a Date 1 hour from now, rounded down to the minute. */
+function defaultScheduleDate(): Date {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  return d;
+}
+
+/** Pads a number to 2 digits. */
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Parses a schedule field object into a Date, or returns null if invalid/past. */
+function parseScheduleDate(fields: ScheduleFields): Date | null {
+  const year = parseInt(fields.year, 10);
+  const month = parseInt(fields.month, 10);
+  const day = parseInt(fields.day, 10);
+  const hour = parseInt(fields.hour, 10);
+  const minute = parseInt(fields.minute, 10);
+
+  if (
+    isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute) ||
+    month < 1 || month > 12 ||
+    day < 1 || day > 31 ||
+    hour < 0 || hour > 23 ||
+    minute < 0 || minute > 59
+  ) {
+    return null;
+  }
+  const d = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+interface ScheduleFields {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+}
+
+function initScheduleFields(date: Date): ScheduleFields {
+  return {
+    year: String(date.getFullYear()),
+    month: pad2(date.getMonth() + 1),
+    day: pad2(date.getDate()),
+    hour: pad2(date.getHours()),
+    minute: pad2(date.getMinutes()),
+  };
+}
+
+/** Inline date/time picker made from labelled TextInputs — no native module required. */
+function ScheduleDatePicker({
+  fields,
+  onChange,
+  colors,
+}: {
+  fields: ScheduleFields;
+  onChange: (updated: ScheduleFields) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const fieldStyle = [
+    styles.scheduleField,
+    { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
+  ];
+  const labelStyle = [styles.scheduleFieldLabel, { color: colors.mutedForeground }];
+
+  return (
+    <View style={styles.schedulePicker}>
+      {/* Date row */}
+      <View style={styles.scheduleRow}>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Year</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.year}
+            onChangeText={(v) => onChange({ ...fields, year: v })}
+            keyboardType="numeric"
+            maxLength={4}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>/</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Month</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.month}
+            onChangeText={(v) => onChange({ ...fields, month: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>/</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Day</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.day}
+            onChangeText={(v) => onChange({ ...fields, day: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}> </Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Hour</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.hour}
+            onChangeText={(v) => onChange({ ...fields, hour: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>:</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Min</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.minute}
+            onChangeText={(v) => onChange({ ...fields, minute: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+      </View>
+      <Text style={[styles.scheduleHint, { color: colors.mutedForeground }]}>
+        24-hour clock · your device's local time · must be in the future
+      </Text>
+    </View>
+  );
+}
+
 export default function NewSocialPostScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -121,6 +259,12 @@ export default function NewSocialPostScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Scheduling state ────────────────────────────────────────────────────────
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleFields, setScheduleFields] = useState<ScheduleFields>(() =>
+    initScheduleFields(defaultScheduleDate())
+  );
 
   const { mutateAsync: getUploadUrl } = useGetAiImageUploadUrl();
   const { mutateAsync: createPost } = useCreatePost();
@@ -219,7 +363,7 @@ export default function NewSocialPostScreen() {
     ]);
   };
 
-  const handleSubmit = async (mode: 'draft' | 'review') => {
+  const handleSubmit = async (mode: 'draft' | 'review' | 'schedule') => {
     setError(null);
 
     if (!caption.trim()) {
@@ -229,6 +373,20 @@ export default function NewSocialPostScreen() {
     if (selectedPlatforms.length === 0) {
       setError('Select at least one platform.');
       return;
+    }
+
+    // Validate schedule date when scheduling.
+    let scheduledDate: Date | null = null;
+    if (mode === 'schedule') {
+      scheduledDate = parseScheduleDate(scheduleFields);
+      if (!scheduledDate) {
+        setError('Enter a valid date and time for scheduling (e.g. month 1–12, day 1–31, hour 0–23).');
+        return;
+      }
+      if (scheduledDate.getTime() <= Date.now()) {
+        setError('Scheduled time must be in the future.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -247,6 +405,7 @@ export default function NewSocialPostScreen() {
           productIds: [],
           linkMode: 'none',
           ...(imageUrl ? { mediaUrls: [imageUrl], mediaType: 'image' } : {}),
+          ...(scheduledDate ? { scheduledAt: scheduledDate.toISOString() } : {}),
         },
       });
 
@@ -403,6 +562,53 @@ export default function NewSocialPostScreen() {
         )}
       </View>
 
+      {/* ── Schedule for later ── */}
+      <View style={[styles.section, styles.scheduleSection, { borderColor: scheduleEnabled ? colors.primary + '50' : colors.border, backgroundColor: scheduleEnabled ? colors.primary + '08' : colors.card }]}>
+        <Pressable
+          onPress={() => setScheduleEnabled((v) => !v)}
+          style={styles.scheduleToggleRow}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: scheduleEnabled }}
+        >
+          <View style={styles.scheduleToggleLeft}>
+            <Feather
+              name="clock"
+              size={16}
+              color={scheduleEnabled ? colors.primary : colors.mutedForeground}
+            />
+            <View>
+              <Text
+                style={[
+                  styles.scheduleToggleTitle,
+                  { color: scheduleEnabled ? colors.primary : colors.foreground },
+                ]}
+              >
+                Schedule for later
+              </Text>
+              {!scheduleEnabled && (
+                <Text style={[styles.scheduleToggleSubtitle, { color: colors.mutedForeground }]}>
+                  Auto-publishes at the chosen time — no review needed
+                </Text>
+              )}
+            </View>
+          </View>
+          <Switch
+            value={scheduleEnabled}
+            onValueChange={setScheduleEnabled}
+            trackColor={{ false: colors.border, true: colors.primary + '80' }}
+            thumbColor={scheduleEnabled ? colors.primary : colors.mutedForeground}
+          />
+        </Pressable>
+
+        {scheduleEnabled && (
+          <ScheduleDatePicker
+            fields={scheduleFields}
+            onChange={setScheduleFields}
+            colors={colors}
+          />
+        )}
+      </View>
+
       {/* ── Error ── */}
       {error ? (
         <View
@@ -439,14 +645,40 @@ export default function NewSocialPostScreen() {
           <Text style={[styles.draftBtnText, { color: colors.foreground }]}>Save Draft</Text>
         </Pressable>
 
-        <GradientButton
-          onPress={() => handleSubmit('review')}
-          label="Submit for Review"
-          loading={submitting}
-          disabled={submitting}
-          style={styles.submitBtn}
-        />
+        {scheduleEnabled ? (
+          <GradientButton
+            onPress={() => handleSubmit('schedule')}
+            label="Schedule Post"
+            loading={submitting}
+            disabled={submitting}
+            style={styles.submitBtn}
+          />
+        ) : (
+          <GradientButton
+            onPress={() => handleSubmit('review')}
+            label="Submit for Review"
+            loading={submitting}
+            disabled={submitting}
+            style={styles.submitBtn}
+          />
+        )}
       </View>
+
+      {/* ── Schedule badge (confirmation hint) ── */}
+      {scheduleEnabled && (() => {
+        const d = parseScheduleDate(scheduleFields);
+        if (!d || d.getTime() <= Date.now()) return null;
+        return (
+          <View style={[styles.scheduleBadge, { backgroundColor: colors.primary + '14', borderColor: colors.primary + '40' }]}>
+            <Feather name="calendar" size={13} color={colors.primary} />
+            <Text style={[styles.scheduleBadgeText, { color: colors.primary }]}>
+              Will auto-publish on{' '}
+              {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+              at {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+        );
+      })()}
     </ScrollView>
   );
 }
@@ -580,6 +812,97 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
+  // ── Schedule section ────────────────────────────────────────────────────────
+  scheduleSection: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    marginBottom: 22,
+  },
+  scheduleToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  scheduleToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  scheduleToggleTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  scheduleToggleSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  schedulePicker: {
+    marginTop: 16,
+    gap: 10,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  scheduleFieldWrap: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  scheduleFieldLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  scheduleField: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    width: '100%',
+  },
+  scheduleSep: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    paddingBottom: 10,
+    textAlign: 'center',
+    minWidth: 8,
+  },
+  scheduleHint: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  scheduleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  scheduleBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    flex: 1,
+    lineHeight: 17,
+  },
+  // ── Error ──────────────────────────────────────────────────────────────────
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -595,6 +918,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     lineHeight: 18,
   },
+  // ── Actions ────────────────────────────────────────────────────────────────
   actions: {
     flexDirection: 'row',
     gap: 10,
