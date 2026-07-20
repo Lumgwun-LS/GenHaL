@@ -291,6 +291,40 @@ describe("ensureFreshAccessToken", () => {
     expect(refreshTwitterAccessToken).not.toHaveBeenCalled();
   });
 
+  it("flips a Meta Instagram account to needs_reconnect when the user token is valid but the page is no longer in managed pages", async () => {
+    const { ensureFreshAccessToken, ReconnectRequiredError } = await import("../token-refresh");
+    // accountId for an Instagram account is the instagramBusinessAccountId
+    const account = makeAccount({
+      connectedVia: "oauth_meta",
+      platform: "Instagram",
+      accountId: "ig-biz-999",
+      accountName: "AcmeIG",
+      tokenExpiresAt: new Date(NOW + 5 * 60 * 1000), // near expiry → triggers refresh
+    });
+
+    // User token re-exchange succeeds — the credential itself is valid
+    refreshLongLivedUserToken.mockResolvedValue({
+      accessToken: "fresh-user-token",
+      expiresInSeconds: 5184000,
+    });
+    // But the returned pages list does NOT contain the expected instagramBusinessAccountId
+    listManagedPages.mockResolvedValue([
+      { id: "page-111", accessToken: "page-111-token", instagramBusinessAccountId: "ig-biz-111" },
+      { id: "page-222", accessToken: "page-222-token", instagramBusinessAccountId: "ig-biz-222" },
+    ]);
+
+    await expect(ensureFreshAccessToken(account as any)).rejects.toBeInstanceOf(ReconnectRequiredError);
+
+    // The account must be flipped to needs_reconnect
+    expect(updateSetCalledWith).toMatchObject({ status: "needs_reconnect" });
+    // A Slack alert must fire
+    expect(sendSlackAlert).toHaveBeenCalledTimes(1);
+    // An in-app vendor notification must be inserted
+    expect(insertValuesCalledWith).toMatchObject({ type: "social_reconnect" });
+    // A reconnect email must be sent to the vendor
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("persistRefresh clears expiryWarningSentAt so the next expiry cycle can warn again after reconnect", async () => {
     // Simulate a vendor who received an expiry warning, then successfully reconnected.
     // ensureFreshAccessToken → persistRefresh must set expiryWarningSentAt: null so
