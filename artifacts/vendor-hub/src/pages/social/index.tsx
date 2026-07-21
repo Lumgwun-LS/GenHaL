@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2 } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2, Bookmark, BookmarkCheck, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -57,8 +57,37 @@ function fromDatetimeLocalValue(value: string): Date {
 }
 
 const SCHEDULE_REOPEN_KEY = "schedule_reopen";
+const SAVED_VIEWS_KEY = "schedule_saved_views";
 
 type ScheduleReopenState = { postId: number; scheduledAt: string };
+
+/** A named snapshot of the Upcoming Schedule filter state persisted to localStorage. */
+type SavedView = {
+  name: string;
+  selectedFilters: string[];
+  search: string;
+  dateFrom: string;
+  dateTo: string;
+};
+
+function loadSavedViews(): SavedView[] {
+  try {
+    const raw = localStorage.getItem(SAVED_VIEWS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedViews(views: SavedView[]): void {
+  try {
+    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(views));
+  } catch {
+    // localStorage unavailable — silently skip persistence
+  }
+}
 
 /**
  * Warns a vendor, before they confirm a schedule, that one or more of the
@@ -610,6 +639,12 @@ function UpcomingScheduleView({
   const [dateTo, setDateTo] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
 
+  // Saved views — persisted to localStorage.
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews());
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+
   const platforms = Array.from(new Set((scheduled ?? []).flatMap((p) => p.platforms))).sort();
 
   const toggleFilter = (key: string) => {
@@ -629,6 +664,47 @@ function UpcomingScheduleView({
   };
 
   const hasActiveFilters = selectedFilters.size > 0 || search.trim() !== "" || dateFrom !== "" || dateTo !== "";
+
+  const handleSaveView = () => {
+    const name = saveViewName.trim();
+    if (!name) {
+      toast.error("Enter a name for this view");
+      return;
+    }
+    if (savedViews.some((v) => v.name.toLowerCase() === name.toLowerCase())) {
+      toast.error("A saved view with that name already exists");
+      return;
+    }
+    const newView: SavedView = {
+      name,
+      selectedFilters: Array.from(selectedFilters),
+      search,
+      dateFrom,
+      dateTo,
+    };
+    const next = [...savedViews, newView];
+    setSavedViews(next);
+    persistSavedViews(next);
+    setSaveViewName("");
+    setSaveViewOpen(false);
+    toast.success(`Saved view "${name}"`);
+  };
+
+  const handleRestoreView = (view: SavedView) => {
+    setSelectedFilters(new Set(view.selectedFilters));
+    setSearch(view.search);
+    setDateFrom(view.dateFrom);
+    setDateTo(view.dateTo);
+    setSavedViewsOpen(false);
+    toast.success(`Applied view "${view.name}"`);
+  };
+
+  const handleDeleteView = (name: string) => {
+    const next = savedViews.filter((v) => v.name !== name);
+    setSavedViews(next);
+    persistSavedViews(next);
+    toast.success(`Deleted view "${name}"`);
+  };
 
   const filtered = (scheduled ?? []).filter((post: Post) => {
     // Multi-select platform/account filter (OR logic across the selection).
@@ -665,11 +741,83 @@ function UpcomingScheduleView({
           <CardTitle className="flex items-center gap-2 text-base">
             <CalendarClock className="w-4 h-4" /> Upcoming Schedule
           </CardTitle>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={clearAllFilters}>
-              <XIcon className="w-3 h-3 mr-1" /> Clear filters
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Saved views dropdown */}
+            <Popover open={savedViewsOpen} onOpenChange={setSavedViewsOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs gap-1.5">
+                  <Bookmark className="w-3.5 h-3.5" />
+                  Saved views
+                  {savedViews.length > 0 && (
+                    <Badge className="ml-0.5 h-4 min-w-4 px-1 text-[10px] rounded-full">{savedViews.length}</Badge>
+                  )}
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="end">
+                {savedViews.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-2 py-1.5">
+                    No saved views yet. Set a filter and click "Save view" to pin it.
+                  </p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {savedViews.map((view) => (
+                      <div key={view.name} className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-muted group">
+                        <button
+                          type="button"
+                          className="flex-1 text-left text-sm truncate px-1"
+                          onClick={() => handleRestoreView(view)}
+                        >
+                          {view.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
+                          title={`Delete "${view.name}"`}
+                          onClick={() => handleDeleteView(view.name)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Save current filter as a named view */}
+            {hasActiveFilters && (
+              <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs gap-1.5">
+                    <BookmarkCheck className="w-3.5 h-3.5" /> Save view
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3" align="end">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium">Save current filter as…</p>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="View name"
+                      value={saveViewName}
+                      onChange={(e) => setSaveViewName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveView(); }}
+                      autoFocus
+                    />
+                    <Button size="sm" className="w-full h-8 text-xs" onClick={handleSaveView}>
+                      Save
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={clearAllFilters}>
+                <XIcon className="w-3 h-3 mr-1" /> Clear filters
+              </Button>
+            )}
+          </div>
         </div>
         {/* Filter row */}
         <div className="flex flex-wrap items-center gap-2">
