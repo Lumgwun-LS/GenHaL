@@ -42,6 +42,7 @@ import {
   getListCampaignAnalyticsSnapshotsQueryKey,
   getSyncCampaignAnalyticsFromPlatformQueryKey,
   useCreateAdContact,
+  useCreateAdEmailCampaign,
   useDeleteAdContact,
   useListAdCampaigns,
   useListAdContacts,
@@ -919,6 +920,151 @@ function AnalyticsSection() {
 
 // ─── EMAIL SECTION ────────────────────────────────────────────────────────────
 
+// ── Compose Email Modal ───────────────────────────────────────────────────────
+
+function ComposeEmailModal({
+  visible,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: (campaign: AdEmailCampaign) => void;
+}) {
+  const colors = useColors();
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [fromName, setFromName] = useState('');
+  const [tagsRaw, setTagsRaw] = useState('');
+
+  const { mutateAsync, isPending } = useCreateAdEmailCampaign();
+
+  const handleSave = useCallback(async () => {
+    if (!subject.trim()) {
+      Alert.alert('Subject required', 'Please enter a subject line.');
+      return;
+    }
+    if (!body.trim()) {
+      Alert.alert('Body required', 'Please write something in the email body.');
+      return;
+    }
+    if (!fromName.trim()) {
+      Alert.alert('Sender name required', 'Please enter a sender name.');
+      return;
+    }
+    try {
+      const tags = tagsRaw
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const result = await mutateAsync({
+        data: {
+          subject: subject.trim(),
+          bodyHtml: body.trim(),
+          fromName: fromName.trim(),
+          ...(tags.length > 0 ? { contactFilterJson: { tags } } : {}),
+        },
+      });
+      setSubject('');
+      setBody('');
+      setFromName('');
+      setTagsRaw('');
+      onCreated(result);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not create campaign.');
+    }
+  }, [subject, body, fromName, tagsRaw, mutateAsync, onCreated]);
+
+  const inputStyle = [
+    styles.modalInput,
+    { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground },
+  ];
+  const labelStyle = [styles.modalLabel, { color: colors.mutedForeground }];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalOverlay} />
+      </TouchableWithoutFeedback>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalSheetWrap}
+      >
+        <View
+          style={[
+            styles.modalSheet,
+            styles.composeSheet,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+          <Text style={[styles.modalTitle, { color: colors.foreground }]}>New Email Campaign</Text>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={labelStyle}>Subject *</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="e.g. Big summer sale — 30% off everything"
+              placeholderTextColor={colors.mutedForeground}
+              value={subject}
+              onChangeText={setSubject}
+            />
+
+            <Text style={labelStyle}>Sender name *</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="e.g. Awa Store"
+              placeholderTextColor={colors.mutedForeground}
+              value={fromName}
+              onChangeText={setFromName}
+            />
+
+            <Text style={labelStyle}>Body *</Text>
+            <TextInput
+              style={[inputStyle, styles.composeBodyInput]}
+              placeholder="Write your message here…"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              textAlignVertical="top"
+              value={body}
+              onChangeText={setBody}
+            />
+
+            <Text style={labelStyle}>Tag filter (comma-separated, optional)</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="vip, lagos — leave blank to send to all"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              value={tagsRaw}
+              onChangeText={setTagsRaw}
+            />
+          </ScrollView>
+
+          <View style={[styles.modalActions, { marginTop: 8 }]}>
+            <Pressable
+              onPress={onClose}
+              style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>
+                Cancel
+              </Text>
+            </Pressable>
+            <GradientButton
+              label={isPending ? 'Saving…' : 'Save Draft'}
+              loading={isPending}
+              onPress={handleSave}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function EmailDetailModal({
   campaign,
   onClose,
@@ -1034,6 +1180,7 @@ function EmailSection() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<AdEmailCampaign | null>(null);
+  const [showCompose, setShowCompose] = useState(false);
 
   const { data, isLoading, isError, refetch } = useListAdEmailCampaigns({
     query: { queryKey: getListAdEmailCampaignsQueryKey() },
@@ -1043,6 +1190,12 @@ function EmailSection() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
+  }, [refetch]);
+
+  const handleCreated = useCallback(async (campaign: AdEmailCampaign) => {
+    setShowCompose(false);
+    await refetch();
+    setSelected(campaign);
   }, [refetch]);
 
   if (isLoading) return <LoadingView />;
@@ -1056,7 +1209,7 @@ function EmailSection() {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 32 },
+          { paddingBottom: insets.bottom + 80 },
           campaigns.length === 0 && styles.emptyContent,
         ]}
         data={campaigns}
@@ -1068,7 +1221,7 @@ function EmailSection() {
           <EmptyState
             icon="mail"
             title="No email campaigns"
-            message="Create email campaigns from the web dashboard."
+            message="Tap the + button to compose your first email campaign."
           />
         }
         renderItem={({ item, index }) => {
@@ -1109,6 +1262,29 @@ function EmailSection() {
             </AnimatedListItem>
           );
         }}
+      />
+
+      {/* FAB — compose new campaign */}
+      <View style={[styles.fab, { bottom: insets.bottom + 24 }]}>
+        <Pressable
+          onPress={() => setShowCompose(true)}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+        >
+          <LinearGradient
+            colors={['#7F50FF', '#FF7F50']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabInner}
+          >
+            <Feather name="plus" size={24} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      <ComposeEmailModal
+        visible={showCompose}
+        onClose={() => setShowCompose(false)}
+        onCreated={handleCreated}
       />
 
       {selected && (
@@ -1423,6 +1599,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Compose email modal specifics
+  composeSheet: { maxHeight: '88%', gap: 0 },
+  composeBodyInput: { minHeight: 120, paddingTop: 12 },
 
   // Email detail modal specifics
   emailSheetHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
