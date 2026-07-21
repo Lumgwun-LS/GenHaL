@@ -129,6 +129,14 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
     let connectedCount = 0;
 
     for (const page of pages) {
+      // Soft-reconnect: reuse the existing social_accounts row (matched by
+      // vendor_id + platform + account_id) rather than inserting a new one.
+      // This preserves the social_account_reconnect_log history across
+      // token-expiry / revocation reconnect cycles, so the admin "N× in 30d"
+      // repeat-offender badge accumulates correctly even when the vendor
+      // reconnects multiple times.  (See lib/db/src/schema/social-account-reconnect-log.ts
+      // for the trade-off that applies when a vendor explicitly deletes the row
+      // before re-adding the same account.)
       const [existingFb] = await db
         .select({ id: socialAccountsTable.id })
         .from(socialAccountsTable)
@@ -244,6 +252,8 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
     const profile = await fetchLinkedInProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
 
+    // Soft-reconnect: reuse the existing row rather than inserting so that
+    // social_account_reconnect_log history survives routine token-expiry reconnects.
     const [existing] = await db
       .select({ id: socialAccountsTable.id })
       .from(socialAccountsTable)
@@ -332,6 +342,8 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
     const profile = await fetchTwitterProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
 
+    // Soft-reconnect: reuse the existing row rather than inserting so that
+    // social_account_reconnect_log history survives routine token-expiry reconnects.
     const [existing] = await db
       .select({ id: socialAccountsTable.id })
       .from(socialAccountsTable)

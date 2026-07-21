@@ -90,6 +90,13 @@ router.delete("/social-accounts/:id", async (req, res): Promise<void> => {
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!isAdmin && authedVendorId !== existing.vendorId) { res.status(403).json({ error: "You do not have permission to disconnect this account." }); return; }
 
+  // Hard delete: ON DELETE CASCADE in social_account_reconnect_log will also
+  // remove all reconnect-break history for this account.  This is intentional —
+  // an explicit disconnect signals the vendor wants to sever the connection
+  // entirely.  If the same platform account is re-added via OAuth later, the
+  // OAuth callback will insert a fresh social_accounts row and the break
+  // history will reset to zero.  See social-account-reconnect-log.ts for the
+  // full trade-off discussion.
   await db.delete(socialAccountsTable).where(eq(socialAccountsTable.id, params.data.id));
   res.sendStatus(204);
 });
