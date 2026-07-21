@@ -22,6 +22,7 @@ import {
   type Post,
   type PostPublication,
 } from "@workspace/api-client-react";
+import { handleAddTikTokAccount } from "@/lib/social-connect";
 import {
   Select,
   SelectContent,
@@ -118,15 +119,24 @@ function ConnectionWarningsNotice({
   };
 
   const handleAddTikTok = async () => {
-    if (!tiktokAccountName.trim()) { toast.error("Enter the account name"); return; }
-    try {
-      await createAccount.mutateAsync({ data: { vendorId: 1, platform: "TikTok", accountName: tiktokAccountName.trim() } });
-      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
-      queryClient.invalidateQueries({ queryKey: getGetPostConnectionWarningsQueryKey(postId) });
+    const result = await handleAddTikTokAccount({
+      accountName: tiktokAccountName,
+      vendorId: 1,
+      postId,
+      mutateAsync: createAccount.mutateAsync,
+      connectionWarningsQueryKey: getGetPostConnectionWarningsQueryKey(postId),
+      onInvalidateConnectionWarnings: (queryKey) =>
+        queryClient.invalidateQueries({ queryKey: queryKey as string[] }),
+      onInvalidateSocialAccounts: () =>
+        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) }),
+    });
+    if (result.ok) {
       toast.success("TikTok account connected");
       setTiktokAccountName("");
       setTiktokDialogOpen(false);
-    } catch {
+    } else if ("validationError" in result) {
+      toast.error(result.validationError);
+    } else {
       toast.error("Failed to connect account");
     }
   };
