@@ -764,8 +764,20 @@ router.get("/admin/voice-call-logs", async (req, res): Promise<void> => {
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
 
   const logs = await db
-    .select()
+    .select({
+      id: voiceCallLogsTable.id,
+      vendorId: voiceCallLogsTable.vendorId,
+      campaignId: voiceCallLogsTable.campaignId,
+      phone: voiceCallLogsTable.phone,
+      purpose: voiceCallLogsTable.purpose,
+      status: voiceCallLogsTable.status,
+      durationSeconds: voiceCallLogsTable.durationSeconds,
+      callSid: voiceCallLogsTable.callSid,
+      initiatedAt: voiceCallLogsTable.initiatedAt,
+      vendorName: vendorsTable.name,
+    })
     .from(voiceCallLogsTable)
+    .leftJoin(vendorsTable, eq(voiceCallLogsTable.vendorId, vendorsTable.id))
     .orderBy(desc(voiceCallLogsTable.initiatedAt))
     .limit(300);
 

@@ -233,6 +233,7 @@ async function fetchBirthdayLogs(): Promise<BirthdayLog[]> {
 type VoiceCallLog = {
   id: number;
   vendorId: number | null;
+  vendorName: string | null;
   campaignId: number | null;
   phone: string;
   purpose: string;
@@ -2847,6 +2848,7 @@ export default function AdminPanel() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Vendor</TableHead>
                         <TableHead>Phone</TableHead>
                         <TableHead>Purpose</TableHead>
                         <TableHead>Status</TableHead>
@@ -2858,6 +2860,15 @@ export default function AdminPanel() {
                     <TableBody>
                       {voiceCallLogs.map((log) => (
                         <TableRow key={log.id}>
+                          <TableCell className="font-medium">
+                            {log.vendorId != null ? (
+                              <Link href={`/vendors/${log.vendorId}`} className="hover:underline text-primary">
+                                {log.vendorName ?? `Vendor #${log.vendorId}`}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="font-mono text-sm">{log.phone}</TableCell>
                           <TableCell>
                             {log.purpose === "birthday" ? (
