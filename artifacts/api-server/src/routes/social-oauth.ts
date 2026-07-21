@@ -79,10 +79,16 @@ router.get("/social/oauth/meta/start", async (req, res): Promise<void> => {
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
+  // Optional: vendor can pass ?reconnect=<accountId> when re-authorising an
+  // existing expired account so the callback updates that row in-place.
+  const reconnectId = typeof req.query.reconnect === "string" ? parseInt(req.query.reconnect, 10) : undefined;
+
   // The state is a signed, short-lived token binding this OAuth attempt to the
   // vendor who started it — Facebook echoes it back verbatim on the callback,
   // so we never have to trust a client-supplied vendorId there.
-  const state = jwt.sign({ vendorId }, secret, { expiresIn: STATE_TTL_SECONDS });
+  const statePayload: Record<string, unknown> = { vendorId };
+  if (reconnectId && !Number.isNaN(reconnectId)) statePayload.reconnectId = reconnectId;
+  const state = jwt.sign(statePayload, secret, { expiresIn: STATE_TTL_SECONDS });
   const authUrl = buildMetaAuthUrl(state, redirectUriFor(req));
   res.redirect(authUrl);
 });
@@ -98,9 +104,9 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
-  let statePayload: { vendorId: number };
+  let statePayload: { vendorId: number; reconnectId?: number };
   try {
-    statePayload = jwt.verify(state, secret) as { vendorId: number };
+    statePayload = jwt.verify(state, secret) as { vendorId: number; reconnectId?: number };
   } catch {
     res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20expired%2C%20please%20try%20again"));
     return;
@@ -127,21 +133,26 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
 
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
     let connectedCount = 0;
+    const { reconnectId } = statePayload;
+
+    // If the vendor clicked "Reconnect" from the schedule-warning banner, resolve
+    // the hinted row exactly ONCE here — outside the per-page loop — so we know
+    // both its database id and the external page_id it was tracking.  We use this
+    // to update that specific row for the matching page only, and then fall through
+    // to the normal soft-reconnect path for every other page returned by the API.
+    let hintedRow: { id: number; accountId: string | null } | null = null;
+    if (reconnectId) {
+      const [row] = await db
+        .select({ id: socialAccountsTable.id, accountId: socialAccountsTable.accountId })
+        .from(socialAccountsTable)
+        .where(and(eq(socialAccountsTable.id, reconnectId), eq(socialAccountsTable.vendorId, currentVendorId)));
+      hintedRow = row ?? null;
+    }
+
+    // Tracks whether the reconnect hint was consumed so we apply it at most once.
+    let reconnectApplied = false;
 
     for (const page of pages) {
-      // Soft-reconnect: reuse the existing social_accounts row (matched by
-      // vendor_id + platform + account_id) rather than inserting a new one.
-      // This preserves the social_account_reconnect_log history across
-      // token-expiry / revocation reconnect cycles, so the admin "N× in 30d"
-      // repeat-offender badge accumulates correctly even when the vendor
-      // reconnects multiple times.  (See lib/db/src/schema/social-account-reconnect-log.ts
-      // for the trade-off that applies when a vendor explicitly deletes the row
-      // before re-adding the same account.)
-      const [existingFb] = await db
-        .select({ id: socialAccountsTable.id })
-        .from(socialAccountsTable)
-        .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "Facebook"), eq(socialAccountsTable.accountId, page.id)));
-
       const fbValues = {
         vendorId: currentVendorId,
         platform: "Facebook",
@@ -160,12 +171,32 @@ router.get("/social/oauth/meta/callback", async (req, res): Promise<void> => {
         // the next time this token approaches expiry after reconnecting.
         expiryWarningSentAt: null,
       };
-      if (existingFb) {
-        await db.update(socialAccountsTable).set(fbValues).where(eq(socialAccountsTable.id, existingFb.id));
+
+      // Apply the reconnect hint at most once, for the page whose external id
+      // matches the one stored on the hinted row. This prevents the same row from
+      // being overwritten on every loop iteration when Facebook returns multiple pages.
+      // (See lib/db/src/schema/social-account-reconnect-log.ts for the soft-reconnect
+      // trade-off that applies when a vendor explicitly deletes the row first.)
+      if (hintedRow && !reconnectApplied && hintedRow.accountId === page.id) {
+        await db.update(socialAccountsTable).set(fbValues).where(eq(socialAccountsTable.id, hintedRow.id));
+        connectedCount += 1;
+        reconnectApplied = true;
+        // Still process the Instagram account linked to this page normally below.
       } else {
-        await db.insert(socialAccountsTable).values(fbValues);
+        // Normal soft-reconnect path: reuse the existing row matched by
+        // vendor_id + platform + account_id, or insert if it doesn't exist yet.
+        const [existingFb] = await db
+          .select({ id: socialAccountsTable.id })
+          .from(socialAccountsTable)
+          .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "Facebook"), eq(socialAccountsTable.accountId, page.id)));
+
+        if (existingFb) {
+          await db.update(socialAccountsTable).set(fbValues).where(eq(socialAccountsTable.id, existingFb.id));
+        } else {
+          await db.insert(socialAccountsTable).values(fbValues);
+        }
+        connectedCount += 1;
       }
-      connectedCount += 1;
 
       if (page.instagramBusinessAccountId) {
         const [existingIg] = await db
@@ -216,7 +247,10 @@ router.get("/social/oauth/linkedin/start", async (req, res): Promise<void> => {
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
-  const state = jwt.sign({ vendorId }, secret, { expiresIn: STATE_TTL_SECONDS });
+  const reconnectId = typeof req.query.reconnect === "string" ? parseInt(req.query.reconnect, 10) : undefined;
+  const statePayload: Record<string, unknown> = { vendorId };
+  if (reconnectId && !Number.isNaN(reconnectId)) statePayload.reconnectId = reconnectId;
+  const state = jwt.sign(statePayload, secret, { expiresIn: STATE_TTL_SECONDS });
   const authUrl = buildLinkedInAuthUrl(state, linkedInRedirectUriFor(req));
   res.redirect(authUrl);
 });
@@ -232,9 +266,9 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
-  let statePayload: { vendorId: number };
+  let statePayload: { vendorId: number; reconnectId?: number };
   try {
-    statePayload = jwt.verify(state, secret) as { vendorId: number };
+    statePayload = jwt.verify(state, secret) as { vendorId: number; reconnectId?: number };
   } catch {
     res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20expired%2C%20please%20try%20again"));
     return;
@@ -251,13 +285,7 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
     const { accessToken, refreshToken, expiresInSeconds } = await exchangeLinkedInCodeForAccessToken(code, redirectUri);
     const profile = await fetchLinkedInProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
-
-    // Soft-reconnect: reuse the existing row rather than inserting so that
-    // social_account_reconnect_log history survives routine token-expiry reconnects.
-    const [existing] = await db
-      .select({ id: socialAccountsTable.id })
-      .from(socialAccountsTable)
-      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "LinkedIn"), eq(socialAccountsTable.accountId, profile.memberId)));
+    const { reconnectId } = statePayload;
 
     const values = {
       vendorId: currentVendorId,
@@ -277,6 +305,28 @@ router.get("/social/oauth/linkedin/callback", async (req, res): Promise<void> =>
       // the next time this (new) token approaches expiry after reconnecting.
       expiryWarningSentAt: null,
     };
+
+    // If the vendor arrived here via the "Reconnect" button in the schedule
+    // warning, update the specific row by id to avoid creating a duplicate.
+    if (reconnectId) {
+      const [hinted] = await db
+        .select({ id: socialAccountsTable.id })
+        .from(socialAccountsTable)
+        .where(and(eq(socialAccountsTable.id, reconnectId), eq(socialAccountsTable.vendorId, currentVendorId)));
+      if (hinted) {
+        await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, hinted.id));
+        res.redirect(frontendSocialUrl(req, "?social_connect=success&count=1&provider=linkedin"));
+        return;
+      }
+    }
+
+    // Soft-reconnect: reuse the existing row rather than inserting so that
+    // social_account_reconnect_log history survives routine token-expiry reconnects.
+    const [existing] = await db
+      .select({ id: socialAccountsTable.id })
+      .from(socialAccountsTable)
+      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "LinkedIn"), eq(socialAccountsTable.accountId, profile.memberId)));
+
     if (existing) {
       await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));
     } else {
@@ -301,12 +351,16 @@ router.get("/social/oauth/twitter/start", async (req, res): Promise<void> => {
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
+  const reconnectId = typeof req.query.reconnect === "string" ? parseInt(req.query.reconnect, 10) : undefined;
+
   // X's PKCE flow needs the code_verifier again at the callback, but the
   // callback is a separate request/redirect — we embed it in the signed state
   // JWT alongside vendorId rather than stashing it server-side, so it survives
   // without needing sticky sessions.
   const { codeVerifier, codeChallenge } = generatePkcePair();
-  const state = jwt.sign({ vendorId, codeVerifier }, secret, { expiresIn: STATE_TTL_SECONDS });
+  const statePayload: Record<string, unknown> = { vendorId, codeVerifier };
+  if (reconnectId && !Number.isNaN(reconnectId)) statePayload.reconnectId = reconnectId;
+  const state = jwt.sign(statePayload, secret, { expiresIn: STATE_TTL_SECONDS });
   const authUrl = buildTwitterAuthUrl(state, twitterRedirectUriFor(req), codeChallenge);
   res.redirect(authUrl);
 });
@@ -322,9 +376,9 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
   const secret = process.env.SESSION_SECRET;
   if (!secret) { res.status(500).json({ error: "Server misconfiguration: SESSION_SECRET not set" }); return; }
 
-  let statePayload: { vendorId: number; codeVerifier: string };
+  let statePayload: { vendorId: number; codeVerifier: string; reconnectId?: number };
   try {
-    statePayload = jwt.verify(state, secret) as { vendorId: number; codeVerifier: string };
+    statePayload = jwt.verify(state, secret) as { vendorId: number; codeVerifier: string; reconnectId?: number };
   } catch {
     res.redirect(frontendSocialUrl(req, "?social_connect=error&message=Connection%20request%20expired%2C%20please%20try%20again"));
     return;
@@ -341,13 +395,7 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
     const { accessToken, refreshToken, expiresInSeconds } = await exchangeTwitterCodeForAccessToken(code, redirectUri, statePayload.codeVerifier);
     const profile = await fetchTwitterProfile(accessToken);
     const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
-
-    // Soft-reconnect: reuse the existing row rather than inserting so that
-    // social_account_reconnect_log history survives routine token-expiry reconnects.
-    const [existing] = await db
-      .select({ id: socialAccountsTable.id })
-      .from(socialAccountsTable)
-      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "X (Twitter)"), eq(socialAccountsTable.accountId, profile.userId)));
+    const { reconnectId } = statePayload;
 
     const values = {
       vendorId: currentVendorId,
@@ -367,6 +415,28 @@ router.get("/social/oauth/twitter/callback", async (req, res): Promise<void> => 
       // the next time this (new) token approaches expiry after reconnecting.
       expiryWarningSentAt: null,
     };
+
+    // If the vendor arrived here via the "Reconnect" button in the schedule
+    // warning, update the specific row by id to avoid creating a duplicate.
+    if (reconnectId) {
+      const [hinted] = await db
+        .select({ id: socialAccountsTable.id })
+        .from(socialAccountsTable)
+        .where(and(eq(socialAccountsTable.id, reconnectId), eq(socialAccountsTable.vendorId, currentVendorId)));
+      if (hinted) {
+        await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, hinted.id));
+        res.redirect(frontendSocialUrl(req, "?social_connect=success&count=1&provider=twitter"));
+        return;
+      }
+    }
+
+    // Soft-reconnect: reuse the existing row rather than inserting so that
+    // social_account_reconnect_log history survives routine token-expiry reconnects.
+    const [existing] = await db
+      .select({ id: socialAccountsTable.id })
+      .from(socialAccountsTable)
+      .where(and(eq(socialAccountsTable.vendorId, currentVendorId), eq(socialAccountsTable.platform, "X (Twitter)"), eq(socialAccountsTable.accountId, profile.userId)));
+
     if (existing) {
       await db.update(socialAccountsTable).set(values).where(eq(socialAccountsTable.id, existing.id));
     } else {

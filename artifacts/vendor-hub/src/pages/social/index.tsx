@@ -98,17 +98,20 @@ function ConnectionWarningsNotice({
   const warnings = data?.warnings ?? [];
   if (warnings.length === 0) return null;
 
-  const handleConnectPlatform = (platform: string) => {
+  const handleConnectPlatform = (platform: string, accountId?: number) => {
     const normalized = platform.toLowerCase();
+    // When reconnecting an existing expired/revoked account, pass ?reconnect=<accountId>
+    // so the OAuth callback updates the existing row instead of inserting a new one.
+    const reconnectParam = accountId ? `?reconnect=${accountId}` : "";
     if (normalized === "facebook" || normalized === "instagram") {
       sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
-      window.location.href = `${BASE_URL}/api/social/oauth/meta/start`;
+      window.location.href = `${BASE_URL}/api/social/oauth/meta/start${reconnectParam}`;
     } else if (normalized === "linkedin") {
       sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
-      window.location.href = `${BASE_URL}/api/social/oauth/linkedin/start`;
+      window.location.href = `${BASE_URL}/api/social/oauth/linkedin/start${reconnectParam}`;
     } else if (normalized === "x" || normalized === "twitter") {
       sessionStorage.setItem(SCHEDULE_REOPEN_KEY, JSON.stringify({ postId, scheduledAt: scheduledAtValue } satisfies ScheduleReopenState));
-      window.location.href = `${BASE_URL}/api/social/oauth/twitter/start`;
+      window.location.href = `${BASE_URL}/api/social/oauth/twitter/start${reconnectParam}`;
     } else if (normalized === "tiktok") {
       setTiktokDialogOpen(true);
     }
@@ -144,9 +147,13 @@ function ConnectionWarningsNotice({
                 size="sm"
                 variant="outline"
                 className="h-6 px-2 text-[11px] shrink-0"
-                onClick={() => handleConnectPlatform(w.platform)}
+                onClick={() => handleConnectPlatform(w.platform, w.accountId ?? undefined)}
               >
-                {MANUAL_ONLY_PLATFORMS.includes(w.platform) ? "Add account" : "Connect"}
+                {MANUAL_ONLY_PLATFORMS.includes(w.platform)
+                  ? "Add account"
+                  : w.accountId
+                  ? "Reconnect"
+                  : "Connect"}
               </Button>
             </div>
           ))}

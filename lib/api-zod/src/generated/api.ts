@@ -791,7 +791,8 @@ export const GetPostConnectionWarningsParams = zod.object({
 export const GetPostConnectionWarningsResponse = zod.object({
   "warnings": zod.array(zod.object({
   "platform": zod.string(),
-  "message": zod.string()
+  "message": zod.string(),
+  "accountId": zod.number().optional()
 }))
 })
 

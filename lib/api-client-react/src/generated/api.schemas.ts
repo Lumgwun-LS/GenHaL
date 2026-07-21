@@ -387,6 +387,8 @@ export interface SchedulePostInput {
 export interface ConnectionWarning {
   platform: string;
   message: string;
+  /** Present when the warning is about an existing account that needs reconnecting. */
+  accountId?: number;
 }
 
 export interface ConnectionWarningsResponse {

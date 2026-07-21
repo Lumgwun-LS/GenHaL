@@ -373,23 +373,60 @@ async function getConnectionWarnings(
   vendorId: number,
   platforms: string[],
   socialAccountIds: number[],
-): Promise<{ platform: string; message: string }[]> {
+): Promise<{ platform: string; message: string; accountId?: number }[]> {
+  // Fetch both active and needs_reconnect accounts so we can surface a targeted
+  // "Reconnect" action (with the account id) instead of a generic "Connect" one
+  // for accounts whose token has expired or been revoked.
   const vendorAccounts = await db
     .select()
     .from(socialAccountsTable)
-    .where(and(eq(socialAccountsTable.vendorId, vendorId), eq(socialAccountsTable.status, "active")));
+    .where(
+      and(
+        eq(socialAccountsTable.vendorId, vendorId),
+        inArray(socialAccountsTable.status, ["active", "needs_reconnect"]),
+      ),
+    );
 
-  const warnings: { platform: string; message: string }[] = [];
+  // Active accounts only — used to resolve whether a post's selected account is usable.
+  const activeAccounts = vendorAccounts.filter((a) => a.status === "active");
+
+  const warnings: { platform: string; message: string; accountId?: number }[] = [];
   for (let i = 0; i < platforms.length; i++) {
     const platformLabel = platforms[i];
     const explicitAccountId = socialAccountIds[i] ?? null;
-    const { account, error } = resolveTargetAccount(platformLabel, explicitAccountId, vendorAccounts);
+    const { account, error } = resolveTargetAccount(platformLabel, explicitAccountId, activeAccounts);
     if (error) {
+      // resolveTargetAccount returned an error with a specific account id — pass it through.
+      // Check whether the account referenced by explicitAccountId needs reconnecting.
+      if (explicitAccountId !== null) {
+        const reconnectCandidate = vendorAccounts.find(
+          (a) => a.id === explicitAccountId && a.status === "needs_reconnect",
+        );
+        if (reconnectCandidate) {
+          warnings.push({ platform: platformLabel, message: error, accountId: reconnectCandidate.id });
+          continue;
+        }
+      }
       warnings.push({ platform: platformLabel, message: error });
     } else if (!account) {
-      warnings.push({ platform: platformLabel, message: `No connected ${platformLabel} account. Connect it from the Social Hub before this post can publish.` });
+      // No active account at all — check if there's a needs_reconnect one for this platform.
+      const reconnectCandidate = vendorAccounts.find(
+        (a) =>
+          a.platform === platformLabel &&
+          a.status === "needs_reconnect" &&
+          (explicitAccountId === null || a.id === explicitAccountId),
+      );
+      if (reconnectCandidate) {
+        warnings.push({
+          platform: platformLabel,
+          message: `The connected ${platformLabel} account's access has expired. Reconnect it from the Social Hub.`,
+          accountId: reconnectCandidate.id,
+        });
+      } else {
+        warnings.push({ platform: platformLabel, message: `No connected ${platformLabel} account. Connect it from the Social Hub before this post can publish.` });
+      }
     } else if (!account.accessTokenEncrypted) {
-      warnings.push({ platform: platformLabel, message: `The connected ${platformLabel} account has no live connection. Reconnect it from the Social Hub.` });
+      warnings.push({ platform: platformLabel, message: `The connected ${platformLabel} account has no live connection. Reconnect it from the Social Hub.`, accountId: account.id });
     }
   }
   return warnings;

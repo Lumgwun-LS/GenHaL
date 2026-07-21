@@ -4644,6 +4644,12 @@ components:
           type: string
         message:
           type: string
+        accountId:
+          type: integer
+          description: >
+            Present when the warning is about an existing account that needs to be
+            reconnected (status = "needs_reconnect"). When absent the platform has
+            no account at all and a fresh OAuth connection is needed.
 
     ConnectionWarningsResponse:
       type: object
