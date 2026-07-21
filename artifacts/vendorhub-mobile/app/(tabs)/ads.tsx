@@ -42,12 +42,14 @@ import {
   getListCampaignAnalyticsSnapshotsQueryKey,
   getSyncCampaignAnalyticsFromPlatformQueryKey,
   useCreateAdContact,
+  useDeleteAdContact,
   useListAdCampaigns,
   useListAdContacts,
   useListAdEmailCampaigns,
   useListCampaignAnalyticsSnapshots,
   useSendAdEmailCampaign,
   useSyncCampaignAnalyticsFromPlatform,
+  useUpdateAdContact,
 } from '@workspace/api-client-react';
 import type {
   AdCampaign,
@@ -332,12 +334,198 @@ function AddContactModal({
   );
 }
 
+// ─── Contact Detail Modal ─────────────────────────────────────────────────────
+
+function ContactDetailModal({
+  contact,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  contact: AdContact;
+  onClose: () => void;
+  onSaved: () => void;
+  onDeleted: () => void;
+}) {
+  const colors = useColors();
+  const [name, setName] = useState(contact.name);
+  const [email, setEmail] = useState(contact.email ?? '');
+  const [phone, setPhone] = useState(contact.phone ?? '');
+  const [tagsRaw, setTagsRaw] = useState(contact.tags.join(', '));
+
+  const { mutateAsync: updateAsync, isPending: isSaving } = useUpdateAdContact();
+  const { mutateAsync: deleteAsync, isPending: isDeleting } = useDeleteAdContact();
+
+  const handleSave = useCallback(async () => {
+    if (!name.trim()) {
+      Alert.alert('Name required', 'Please enter a contact name.');
+      return;
+    }
+    try {
+      const tags = tagsRaw
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await updateAsync({
+        id: contact.id,
+        data: {
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          tags,
+        },
+      });
+      onSaved();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not update contact.');
+    }
+  }, [name, email, phone, tagsRaw, contact.id, updateAsync, onSaved]);
+
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Delete contact',
+      `Remove "${contact.name}" from your contacts? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAsync({ id: contact.id });
+              onDeleted();
+            } catch (err) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Could not delete contact.');
+            }
+          },
+        },
+      ],
+    );
+  }, [contact.id, contact.name, deleteAsync, onDeleted]);
+
+  const inputStyle = [
+    styles.modalInput,
+    { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground },
+  ];
+  const labelStyle = [styles.modalLabel, { color: colors.mutedForeground }];
+  const isBusy = isSaving || isDeleting;
+
+  return (
+    <Modal visible animationType="slide" transparent presentationStyle="overFullScreen">
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalOverlay} />
+      </TouchableWithoutFeedback>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalSheetWrap}
+      >
+        <View style={[styles.modalSheet, styles.detailSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Handle */}
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+          {/* Header row with delete */}
+          <View style={styles.detailHeaderRow}>
+            <LinearGradient
+              colors={['#7F50FF22', '#FF7F5022']}
+              style={[styles.detailAvatar, { borderColor: colors.primary + '30', borderWidth: 1 }]}
+            >
+              <Text style={[styles.contactAvatarText, { color: colors.primary }]}>
+                {name.charAt(0).toUpperCase() || '?'}
+              </Text>
+            </LinearGradient>
+            <Text style={[styles.modalTitle, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
+              Edit Contact
+            </Text>
+            <TouchableOpacity
+              onPress={handleDelete}
+              disabled={isBusy}
+              style={[styles.deleteBtn, { borderColor: colors.destructive + '40' }]}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : (
+                <Feather name="trash-2" size={18} color={colors.destructive} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={labelStyle}>Name *</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="Full name"
+              placeholderTextColor={colors.mutedForeground}
+              value={name}
+              onChangeText={setName}
+              editable={!isBusy}
+            />
+
+            <Text style={labelStyle}>Email</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="email@example.com"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+              editable={!isBusy}
+            />
+
+            <Text style={labelStyle}>Phone</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="+1 234 567 8900"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+              editable={!isBusy}
+            />
+
+            <Text style={labelStyle}>Tags (comma-separated)</Text>
+            <TextInput
+              style={inputStyle}
+              placeholder="vip, lagos, retail"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              value={tagsRaw}
+              onChangeText={setTagsRaw}
+              editable={!isBusy}
+            />
+          </ScrollView>
+
+          <View style={[styles.modalActions, { marginTop: 8 }]}>
+            <Pressable
+              onPress={onClose}
+              style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+              disabled={isBusy}
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>
+                Cancel
+              </Text>
+            </Pressable>
+            <GradientButton
+              label={isSaving ? 'Saving…' : 'Save Changes'}
+              loading={isSaving}
+              onPress={handleSave}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── CONTACTS SECTION ─────────────────────────────────────────────────────────
 
 function ContactsSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState<AdContact | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, isError, refetch } = useListAdContacts({
@@ -378,7 +566,7 @@ function ContactsSection() {
         }
         renderItem={({ item, index }) => (
           <AnimatedListItem index={index} baseDelay={40}>
-            <Card style={styles.contactCard}>
+            <Card style={styles.contactCard} onPress={() => setSelected(item)}>
               <View style={styles.contactRow}>
                 <LinearGradient
                   colors={['#7F50FF22', '#FF7F5022']}
@@ -413,6 +601,8 @@ function ContactsSection() {
                     </View>
                   )}
                 </View>
+
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
               </View>
             </Card>
           </AnimatedListItem>
@@ -441,6 +631,15 @@ function ContactsSection() {
         onClose={() => setShowAdd(false)}
         onCreated={() => { setShowAdd(false); refetch(); }}
       />
+
+      {selected && (
+        <ContactDetailModal
+          contact={selected}
+          onClose={() => setSelected(null)}
+          onSaved={() => { setSelected(null); refetch(); }}
+          onDeleted={() => { setSelected(null); refetch(); }}
+        />
+      )}
     </>
   );
 }
@@ -1198,6 +1397,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
+  },
+
+  // Contact detail modal specifics
+  detailSheet: { gap: 0 },
+  detailHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  deleteBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Email detail modal specifics
