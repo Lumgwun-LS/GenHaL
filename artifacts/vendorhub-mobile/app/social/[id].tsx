@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Linking,
   Pressable,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,13 +20,147 @@ import { Card } from '@/components/Card';
 import { LoadingView } from '@/components/LoadingView';
 import { ErrorView } from '@/components/ErrorView';
 import { StatusBadge } from '@/components/StatusBadge';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useGetPost,
   useListPostPublications,
+  useUpdatePost,
   getGetPostQueryKey,
   getListPostPublicationsQueryKey,
+  getListPostsQueryKey,
+  ApiError,
 } from '@workspace/api-client-react';
 import type { PostPublication } from '@workspace/api-client-react';
+
+// ── Schedule-field helpers (mirrors new.tsx) ──────────────────────────────────
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+interface ScheduleFields {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+}
+
+function initScheduleFields(date: Date): ScheduleFields {
+  return {
+    year: String(date.getFullYear()),
+    month: pad2(date.getMonth() + 1),
+    day: pad2(date.getDate()),
+    hour: pad2(date.getHours()),
+    minute: pad2(date.getMinutes()),
+  };
+}
+
+function parseScheduleDate(fields: ScheduleFields): Date | null {
+  const year = parseInt(fields.year, 10);
+  const month = parseInt(fields.month, 10);
+  const day = parseInt(fields.day, 10);
+  const hour = parseInt(fields.hour, 10);
+  const minute = parseInt(fields.minute, 10);
+
+  if (
+    isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute) ||
+    month < 1 || month > 12 ||
+    day < 1 || day > 31 ||
+    hour < 0 || hour > 23 ||
+    minute < 0 || minute > 59
+  ) {
+    return null;
+  }
+  const d = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+// ── Inline date/time picker ───────────────────────────────────────────────────
+
+function ScheduleDatePicker({
+  fields,
+  onChange,
+  colors,
+}: {
+  fields: ScheduleFields;
+  onChange: (updated: ScheduleFields) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const fieldStyle = [
+    styles.scheduleField,
+    { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
+  ];
+  const labelStyle = [styles.scheduleFieldLabel, { color: colors.mutedForeground }];
+
+  return (
+    <View style={styles.schedulePicker}>
+      <View style={styles.scheduleRow}>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Year</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.year}
+            onChangeText={(v) => onChange({ ...fields, year: v })}
+            keyboardType="numeric"
+            maxLength={4}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>/</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Month</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.month}
+            onChangeText={(v) => onChange({ ...fields, month: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>/</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Day</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.day}
+            onChangeText={(v) => onChange({ ...fields, day: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}> </Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Hour</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.hour}
+            onChangeText={(v) => onChange({ ...fields, hour: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+        <Text style={[styles.scheduleSep, { color: colors.mutedForeground }]}>:</Text>
+        <View style={styles.scheduleFieldWrap}>
+          <Text style={labelStyle}>Min</Text>
+          <TextInput
+            style={fieldStyle}
+            value={fields.minute}
+            onChangeText={(v) => onChange({ ...fields, minute: v })}
+            keyboardType="numeric"
+            maxLength={2}
+            selectTextOnFocus
+          />
+        </View>
+      </View>
+      <Text style={[styles.scheduleHint, { color: colors.mutedForeground }]}>
+        24-hour clock · your device's local time · must be in the future
+      </Text>
+    </View>
+  );
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -115,6 +251,194 @@ function MetaRow({
       <Text style={[styles.metaLabel, { color: colors.mutedForeground }]}>{label}</Text>
       <Text style={[styles.metaValue, { color: colors.foreground }]}>{value}</Text>
     </View>
+  );
+}
+
+// ── Reschedule section ────────────────────────────────────────────────────────
+
+interface RescheduleWarning {
+  platform: string;
+  message: string;
+}
+
+function RescheduleSection({ postId }: { postId: number }) {
+  const colors = useColors();
+  const queryClient = useQueryClient();
+
+  const [fields, setFields] = useState<ScheduleFields>(() =>
+    initScheduleFields(new Date(Date.now() + 60 * 60 * 1000))
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<RescheduleWarning[]>([]);
+  const [pendingDate, setPendingDate] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const { mutateAsync: updatePost } = useUpdatePost();
+
+  const doReschedule = async (scheduledAt: string, force: boolean) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updatePost({ id: postId, data: { scheduledAt, ...(force ? { force: true } : {}) } });
+      // Invalidate so the detail screen and list both show the new time.
+      await queryClient.invalidateQueries({ queryKey: getGetPostQueryKey(postId) });
+      await queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
+      setWarnings([]);
+      setPendingDate(null);
+      setSuccess(true);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Server returned warnings — store them and the date so the vendor
+        // can confirm ("Reschedule anyway") after reviewing.
+        const body = err.data as { error?: string; warnings?: RescheduleWarning[] };
+        setWarnings(body.warnings ?? []);
+        setPendingDate(scheduledAt);
+        setError(null);
+      } else {
+        setError(
+          err instanceof Error ? err.message : 'Could not reschedule. Please try again.'
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setError(null);
+    setWarnings([]);
+    setPendingDate(null);
+    setSuccess(false);
+
+    const date = parseScheduleDate(fields);
+    if (!date) {
+      setError('Enter a valid date and time (e.g. month 1–12, day 1–31, hour 0–23).');
+      return;
+    }
+    if (date.getTime() <= Date.now()) {
+      setError('Scheduled time must be in the future.');
+      return;
+    }
+    await doReschedule(date.toISOString(), false);
+  };
+
+  const handleForce = async () => {
+    if (!pendingDate) return;
+    await doReschedule(pendingDate, true);
+  };
+
+  const handleDismissWarnings = () => {
+    setWarnings([]);
+    setPendingDate(null);
+  };
+
+  return (
+    <Animated.View entering={FadeInDown.delay(220).springify().damping(18)} style={styles.section}>
+      <Text style={[styles.sectionLabel, { color: colors.primary }]}>Reschedule</Text>
+      <Card style={styles.rescheduleCard}>
+        <ScheduleDatePicker fields={fields} onChange={setFields} colors={colors} />
+
+        {/* Success banner */}
+        {success && (
+          <View
+            style={[
+              styles.warningBanner,
+              { backgroundColor: '#16A34A12', borderColor: '#16A34A35' },
+            ]}
+          >
+            <Feather name="check-circle" size={14} color="#16A34A" />
+            <Text style={[styles.warningBannerText, { color: '#16A34A' }]}>
+              Post rescheduled successfully.
+            </Text>
+          </View>
+        )}
+
+        {/* Validation / API error */}
+        {error ? (
+          <View
+            style={[
+              styles.warningBanner,
+              { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '35' },
+            ]}
+          >
+            <Feather name="alert-circle" size={14} color={colors.destructive} />
+            <Text style={[styles.warningBannerText, { color: colors.destructive }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        {/* Connection warnings (409 response) */}
+        {warnings.length > 0 && (
+          <View
+            style={[
+              styles.warningBox,
+              { backgroundColor: '#F59E0B0F', borderColor: '#F59E0B40' },
+            ]}
+          >
+            <View style={styles.warningBoxHeader}>
+              <Feather name="alert-triangle" size={14} color="#D97706" />
+              <Text style={[styles.warningBoxTitle, { color: '#D97706' }]}>
+                Platform connection issue
+              </Text>
+            </View>
+            {warnings.map((w, i) => (
+              <Text key={i} style={[styles.warningBoxItem, { color: colors.foreground }]}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold' }}>
+                  {w.platform.charAt(0).toUpperCase() + w.platform.slice(1)}:{' '}
+                </Text>
+                {w.message}
+              </Text>
+            ))}
+            <Text style={[styles.warningBoxFooter, { color: colors.mutedForeground }]}>
+              The post won't publish unless the connection is fixed before the scheduled time. You can reschedule anyway and fix the connection later.
+            </Text>
+            <View style={styles.warningBoxActions}>
+              <Pressable
+                onPress={handleDismissWarnings}
+                style={({ pressed }) => [
+                  styles.outlineBtn,
+                  { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[styles.outlineBtnText, { color: colors.foreground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleForce}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  styles.forceBtn,
+                  { backgroundColor: '#D97706', opacity: pressed || submitting ? 0.7 : 1 },
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.forceBtnText}>Reschedule anyway</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Save button (hidden while warnings are shown so the vendor acts on them first) */}
+        {warnings.length === 0 && (
+          <Pressable
+            onPress={handleSave}
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.saveBtn,
+              { backgroundColor: colors.primary, opacity: pressed || submitting ? 0.7 : 1 },
+            ]}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveBtnText}>Save new schedule</Text>
+            )}
+          </Pressable>
+        )}
+      </Card>
+    </Animated.View>
   );
 }
 
@@ -249,6 +573,9 @@ export default function PostDetailScreen() {
           ) : null}
         </Card>
       </Animated.View>
+
+      {/* ── Reschedule (scheduled posts only) ── */}
+      {post.status === 'scheduled' && <RescheduleSection postId={postId} />}
 
       {/* ── Per-platform publication statuses ── */}
       <Animated.View entering={FadeInDown.delay(200).springify().damping(18)} style={styles.section}>
@@ -410,5 +737,125 @@ const styles = StyleSheet.create({
   pubDate: {
     fontSize: 11,
     fontFamily: 'Inter_400Regular',
+  },
+
+  // ── Reschedule styles ────────────────────────────────────────────────────────
+  rescheduleCard: {
+    padding: 14,
+    gap: 12,
+  },
+  schedulePicker: {
+    gap: 8,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  scheduleFieldWrap: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  scheduleFieldLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+  },
+  scheduleField: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    width: 48,
+  },
+  scheduleSep: {
+    fontSize: 18,
+    fontFamily: 'Inter_400Regular',
+    paddingBottom: 6,
+  },
+  scheduleHint: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 16,
+  },
+  saveBtn: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  warningBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
+  },
+  warningBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  warningBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  warningBoxTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  warningBoxItem: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 19,
+  },
+  warningBoxFooter: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 17,
+  },
+  warningBoxActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  outlineBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  outlineBtnText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  forceBtn: {
+    flex: 1,
+    borderRadius: 9,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  forceBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
   },
 });
