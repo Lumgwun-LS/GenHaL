@@ -66,6 +66,9 @@ vi.mock("drizzle-orm", () => ({
   gt: (col: unknown, val: unknown) => ({ col, val }),
   desc: (col: unknown) => ({ desc: col }),
   inArray: (col: unknown, val: unknown) => ({ col, val }),
+  relations: () => ({}),
+  many: () => ({}),
+  one: () => ({}),
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -277,6 +280,70 @@ describe("POST /posts/:id/schedule — connection-warnings precheck", () => {
   it("schedules successfully with no warnings when all accounts are healthy", async () => {
     existingPost = { ...existingPost, socialAccountIds: [1] };
     currentSocialAccounts = [makeActiveAccount({ id: 1 })]; // live token, one account
+
+    const mod = await import("../posts");
+    const handler = findHandler(mod.default as any, "/posts/:id/schedule", "post");
+
+    const req = {
+      params: { id: String(POST_ID) },
+      body: { scheduledAt: FUTURE_DATE },
+    };
+    const res = makeRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(lastUpdateSet).toMatchObject({
+      status: "scheduled",
+      autoPublishFailed: false,
+    });
+  });
+
+  it("returns 409 with exactly 1 warning when 3 platforms are targeted and only 1 has no account", async () => {
+    // facebook and instagram have active accounts; twitter has none.
+    existingPost = {
+      ...existingPost,
+      platforms: ["facebook", "instagram", "twitter"],
+      socialAccountIds: [0, 0, 0], // 0 = not explicitly chosen → falls back to "vendor's one account for this platform"
+    };
+    currentSocialAccounts = [
+      makeActiveAccount({ id: 1, platform: "facebook", accountId: "fb-123" }),
+      makeActiveAccount({ id: 2, platform: "instagram", accountId: "ig-456", accountName: "acme-ig" }),
+      // no twitter account
+    ];
+
+    const mod = await import("../posts");
+    const handler = findHandler(mod.default as any, "/posts/:id/schedule", "post");
+
+    const req = {
+      params: { id: String(POST_ID) },
+      body: { scheduledAt: FUTURE_DATE }, // no force flag
+    };
+    const res = makeRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(409);
+    // Exactly 1 warning — only the missing twitter account, not the healthy facebook/instagram ones.
+    expect(res.body.warnings).toHaveLength(1);
+    expect(res.body.warnings[0]).toMatchObject({
+      platform: "twitter",
+      message: expect.stringContaining("No connected"),
+    });
+    expect(lastUpdateSet).toBeNull(); // must NOT have been scheduled
+  });
+
+  it("schedules successfully with no warnings when 3 platforms all have healthy accounts", async () => {
+    existingPost = {
+      ...existingPost,
+      platforms: ["facebook", "instagram", "twitter"],
+      socialAccountIds: [1, 2, 3], // each platform has an explicitly chosen account
+    };
+    currentSocialAccounts = [
+      makeActiveAccount({ id: 1, platform: "facebook", accountId: "fb-123" }),
+      makeActiveAccount({ id: 2, platform: "instagram", accountId: "ig-456", accountName: "acme-ig" }),
+      makeActiveAccount({ id: 3, platform: "twitter", accountId: "tw-789", accountName: "@acme" }),
+    ];
 
     const mod = await import("../posts");
     const handler = findHandler(mod.default as any, "/posts/:id/schedule", "post");
