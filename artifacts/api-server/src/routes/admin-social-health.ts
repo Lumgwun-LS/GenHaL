@@ -9,10 +9,13 @@
  *                                             accounts currently broken, with
  *                                             30-day reconnect-break counts so
  *                                             admins can spot repeat offenders
+ * GET  /admin/social-account-health/frequent-breakers — currently-active accounts
+ *                                             that have broken 2+ times in the last
+ *                                             30 days; they may break again soon
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { db, socialAccountsTable, vendorsTable, socialAccountReconnectLogTable } from "@workspace/db";
 import { getJobRunStatus } from "../lib/job-run-status";
 import { SOCIAL_ACCOUNT_HEALTH_JOB_NAME, tick } from "../lib/social-account-health-scheduler";
@@ -90,6 +93,54 @@ router.get("/admin/social-account-health/needs-reconnect", async (req, res): Pro
     .leftJoin(reconnectCounts, eq(socialAccountsTable.id, reconnectCounts.socialAccountId))
     .where(eq(socialAccountsTable.status, "needs_reconnect"))
     .orderBy(socialAccountsTable.healthCheckFailingSince);
+
+  res.json(rows);
+});
+
+/**
+ * GET /admin/social-account-health/frequent-breakers
+ *
+ * Returns currently-active social accounts that have broken (transitioned
+ * active → needs_reconnect) 2 or more times in the last 30 days. Even though
+ * they're connected right now, their history signals a deeper issue and an
+ * admin may want to proactively reach out.
+ */
+router.get("/admin/social-account-health/frequent-breakers", async (req, res): Promise<void> => {
+  if (!requireAdmin(req, res)) return;
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Subquery: count reconnect-log entries per social_account_id in the last 30 days.
+  const reconnectCounts = db
+    .select({
+      socialAccountId: socialAccountReconnectLogTable.socialAccountId,
+      count: sql<number>`cast(count(*) as int)`.as("count"),
+    })
+    .from(socialAccountReconnectLogTable)
+    .where(gte(socialAccountReconnectLogTable.occurredAt, thirtyDaysAgo))
+    .groupBy(socialAccountReconnectLogTable.socialAccountId)
+    .as("reconnect_counts");
+
+  const rows = await db
+    .select({
+      id: socialAccountsTable.id,
+      vendorId: socialAccountsTable.vendorId,
+      vendorName: vendorsTable.name,
+      platform: socialAccountsTable.platform,
+      accountName: socialAccountsTable.accountName,
+      lastHealthCheckAt: socialAccountsTable.lastHealthCheckAt,
+      reconnectCount30d: sql<number>`${reconnectCounts.count}`.as("reconnect_count_30d"),
+    })
+    .from(socialAccountsTable)
+    .innerJoin(vendorsTable, eq(socialAccountsTable.vendorId, vendorsTable.id))
+    .innerJoin(reconnectCounts, eq(socialAccountsTable.id, reconnectCounts.socialAccountId))
+    .where(
+      and(
+        eq(socialAccountsTable.status, "active"),
+        sql`${reconnectCounts.count} >= 2`,
+      ),
+    )
+    .orderBy(sql`${reconnectCounts.count} desc`);
 
   res.json(rows);
 });

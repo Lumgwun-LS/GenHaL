@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -20,10 +20,26 @@ type NeedsReconnectAccount = {
   reconnectCount30d: number;
 };
 
+type FrequentBreakerAccount = {
+  id: number;
+  vendorId: number;
+  vendorName: string;
+  platform: string;
+  accountName: string;
+  lastHealthCheckAt: string | null;
+  reconnectCount30d: number;
+};
+
 async function fetchNeedsReconnect(): Promise<NeedsReconnectAccount[]> {
   const res = await fetch(`${BASE_URL}/api/admin/social-account-health/needs-reconnect`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load social account health list");
   return (await res.json()) as NeedsReconnectAccount[];
+}
+
+async function fetchFrequentBreakers(): Promise<FrequentBreakerAccount[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/social-account-health/frequent-breakers`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load frequent breakers list");
+  return (await res.json()) as FrequentBreakerAccount[];
 }
 
 function formatTimestamp(iso: string | null): string {
@@ -63,44 +79,64 @@ function ReconnectCountBadge({ count }: { count: number }) {
 }
 
 export default function SocialAccountHealthPanel() {
-  const { data: accounts, isLoading, error } = useQuery({
+  const { data: accounts, isLoading: loadingReconnect, error: errorReconnect } = useQuery({
     queryKey: ["admin-social-account-needs-reconnect"],
     queryFn: fetchNeedsReconnect,
     refetchInterval: 60_000,
   });
 
-  if (isLoading) {
+  const { data: frequentBreakers, isLoading: loadingBreakers, error: errorBreakers } = useQuery({
+    queryKey: ["admin-social-account-frequent-breakers"],
+    queryFn: fetchFrequentBreakers,
+    refetchInterval: 60_000,
+  });
+
+  if (loadingReconnect || loadingBreakers) {
     return <div className="p-8 text-center text-muted-foreground">Loading social account health…</div>;
   }
-  if (error) {
+  if (errorReconnect || errorBreakers) {
     return <div className="p-8 text-center text-destructive">Failed to load social account health.</div>;
   }
 
   const list = accounts ?? [];
+  const breakers = frequentBreakers ?? [];
   const repeatOffenders = list.filter((a) => a.reconnectCount30d >= 3);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
         Facebook/Instagram accounts are re-checked periodically (see Background Jobs). When a
         vendor's connection stops validating — expired or revoked — it shows up here so admins
         don't have to rely on Slack history or a vendor complaint to find out.
       </p>
 
-      {list.length > 0 && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            {list.length} account{list.length > 1 ? "s" : ""} currently need{list.length > 1 ? "" : "s"} reconnecting.
-            {repeatOffenders.length > 0 && (
-              <span className="ml-1 font-medium text-orange-700">
-                {repeatOffenders.length} {repeatOffenders.length > 1 ? "are" : "is"} repeat offender{repeatOffenders.length > 1 ? "s" : ""} (3+ breaks in 30 days).
-              </span>
-            )}
-          </div>
+      {(list.length > 0 || breakers.length > 0) && (
+        <div className="space-y-2">
+          {list.length > 0 && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                {list.length} account{list.length > 1 ? "s" : ""} currently need{list.length > 1 ? "" : "s"} reconnecting.
+                {repeatOffenders.length > 0 && (
+                  <span className="ml-1 font-medium text-orange-700">
+                    {repeatOffenders.length} {repeatOffenders.length > 1 ? "are" : "is"} repeat offender{repeatOffenders.length > 1 ? "s" : ""} (3+ breaks in 30 days).
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          {breakers.length > 0 && (
+            <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3 text-sm text-orange-700 flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                {breakers.length} currently-active account{breakers.length > 1 ? "s have" : " has"} broken 2+ times in the last 30 days — consider proactive outreach before they break again.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Section 1: Accounts currently broken and needing reconnect */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Accounts Needing Reconnect</CardTitle>
@@ -151,6 +187,69 @@ export default function SocialAccountHealthPanel() {
                     <TableCell className="text-sm">{formatTimestamp(a.healthCheckFailingSince)}</TableCell>
                     <TableCell className="text-sm text-red-600 max-w-xs truncate" title={a.lastHealthCheckError ?? ""}>
                       {a.lastHealthCheckError ?? "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 2: Currently-active accounts that have broken multiple times */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-orange-500" />
+            Reconnected But At Risk
+          </CardTitle>
+          <CardDescription>
+            These accounts are currently active but have broken 2 or more times in the last 30 days.
+            They may indicate a deeper issue — a token that keeps expiring early, a platform policy
+            change, or a misconfigured app. Consider reaching out proactively.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {breakers.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              No currently-active accounts have broken 2+ times in the last 30 days.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Platform</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead>30-day breaks</TableHead>
+                  <TableHead>Last checked</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {breakers.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="font-medium">
+                      <Link href={`/vendors/${a.vendorId}`} className="text-primary hover:underline">
+                        {a.vendorName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{a.platform}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{a.accountName}</TableCell>
+                    <TableCell className="text-sm">
+                      <Badge
+                        className={
+                          a.reconnectCount30d >= 3
+                            ? "gap-1 bg-orange-500/15 text-orange-700 hover:bg-orange-500/15 border-orange-400/30"
+                            : "gap-1 bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/10 border-yellow-400/30"
+                        }
+                      >
+                        ↻ {a.reconnectCount30d}× in 30d
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatTimestamp(a.lastHealthCheckAt)}
                     </TableCell>
                   </TableRow>
                 ))}
