@@ -25,7 +25,7 @@
  * regardless of transition — that's fine for a one-off publish-triggered
  * retry, but would spam Slack/email every hour here.
  */
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, gte, count } from "drizzle-orm";
 import { db, socialAccountsTable, vendorsTable, vendorNotificationsTable, socialAccountReconnectLogTable } from "@workspace/db";
 import { decrypt, encrypt } from "./encryption";
 import { validateMetaAccessToken } from "./meta";
@@ -39,6 +39,14 @@ import { logger } from "./logger";
 // The three OAuth-connected providers with a real token that can expire or
 // be revoked out-of-band; manual entries aren't in scope.
 const OAUTH_CONNECTED_VIA = ["oauth_meta", "oauth_linkedin", "oauth_twitter"] as const;
+
+/**
+ * Number of active → needs_reconnect transitions within the rolling 30-day
+ * window that triggers the repeat-offender escalation Slack alert.
+ * Fires only at the threshold crossing (exactly the Nth break), not on every
+ * subsequent one.
+ */
+const REPEAT_OFFENDER_THRESHOLD = 3;
 
 export interface SocialAccountRecheckResult {
   accountId: number;
@@ -141,10 +149,34 @@ async function markInvalid(account: SocialAccountRow, wasActive: boolean, messag
     // can surface accounts that keep flapping (broken, reconnected, broken again).
     await db.insert(socialAccountReconnectLogTable).values({ socialAccountId: account.id });
 
+    // Count how many reconnect-log entries exist for this account in the last
+    // 30 days (including the one we just inserted).
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [{ value: recentBreakCount }] = await db
+      .select({ value: count() })
+      .from(socialAccountReconnectLogTable)
+      .where(
+        and(
+          eq(socialAccountReconnectLogTable.socialAccountId, account.id),
+          gte(socialAccountReconnectLogTable.occurredAt, thirtyDaysAgo),
+        ),
+      );
+
     await sendSlackAlert(
       `:rotating_light: *${account.platform}* account "${account.accountName}" (vendor ${account.vendorId}) stopped validating: ${message}\n` +
         `The vendor has been notified to reconnect it from the Social Hub.`,
     );
+
+    // Fire an escalation alert only at the threshold crossing — the Nth break,
+    // not every subsequent one — so admins know this vendor needs direct follow-up.
+    if (recentBreakCount === REPEAT_OFFENDER_THRESHOLD) {
+      await sendSlackAlert(
+        `:rotating_light::rotating_light: *Repeat offender – direct follow-up needed*\n` +
+          `*${account.platform}* account "${account.accountName}" (vendor ${account.vendorId}) has broken ` +
+          `*${recentBreakCount} times in the last 30 days*. The vendor may need direct support.`,
+      );
+    }
+
     await notifyVendorToReconnect(account.vendorId, account.platform, account.accountName, message);
   }
 }
