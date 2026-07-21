@@ -23,6 +23,7 @@ import {
   type PostPublication,
 } from "@workspace/api-client-react";
 import { handleAddTikTokAccount } from "@/lib/social-connect";
+import { filterScheduledPosts } from "@/lib/schedule-filters";
 import {
   Select,
   SelectContent,
@@ -706,28 +707,7 @@ function UpcomingScheduleView({
     toast.success(`Deleted view "${name}"`);
   };
 
-  const filtered = (scheduled ?? []).filter((post: Post) => {
-    // Multi-select platform/account filter (OR logic across the selection).
-    if (selectedFilters.size > 0) {
-      const platformKeys = Array.from(selectedFilters).filter((f) => f.startsWith("platform:"));
-      const accountKeys = Array.from(selectedFilters).filter((f) => f.startsWith("account:"));
-      const matchesPlatform = platformKeys.some((f) => post.platforms.includes(f.slice("platform:".length)));
-      const matchesAccount = accountKeys.some((f) => (post.socialAccountIds ?? []).includes(Number(f.slice("account:".length))));
-      if (!matchesPlatform && !matchesAccount) return false;
-    }
-    // Caption text search.
-    if (search.trim() !== "") {
-      if (!(post.caption ?? "").toLowerCase().includes(search.trim().toLowerCase())) return false;
-    }
-    // Date range — compare against the scheduled date (local date, YYYY-MM-DD).
-    if (post.scheduledAt) {
-      const postDate = new Date(post.scheduledAt);
-      const postDateStr = `${postDate.getFullYear()}-${String(postDate.getMonth() + 1).padStart(2, "0")}-${String(postDate.getDate()).padStart(2, "0")}`;
-      if (dateFrom !== "" && postDateStr < dateFrom) return false;
-      if (dateTo !== "" && postDateStr > dateTo) return false;
-    }
-    return true;
-  });
+  const filtered = filterScheduledPosts(scheduled ?? [], { selectedFilters, search, dateFrom, dateTo });
 
   const groups = groupByDay(filtered);
 
