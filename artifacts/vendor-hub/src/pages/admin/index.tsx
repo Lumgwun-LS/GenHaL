@@ -3113,9 +3113,12 @@ export default function AdminPanel() {
                                     {entry.newValue === "dismiss" ? "dismissed" : entry.newValue}
                                   </Badge>
                                 </div>
+                                {/* paymentId is null for entries created before the payment_id
+                                    column was added — render nothing in that case, not a broken link */}
                                 {entry.paymentId != null && (
                                   <button
                                     className="text-xs text-primary underline-offset-2 hover:underline"
+                                    data-testid={`audit-payment-link-${entry.id}`}
                                     onClick={() => {
                                       setActiveAdminTab("payment-conflicts");
                                       setConflictsHighlightId(entry.paymentId);
