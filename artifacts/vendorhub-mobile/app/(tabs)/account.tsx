@@ -48,10 +48,35 @@ export default function AccountScreen() {
   const [isTogglingCategory, setIsTogglingCategory] = useState<
     'payments' | 'voiceCampaigns' | 'postReminders' | null
   >(null);
+  const [isSavingLeadTime, setIsSavingLeadTime] = useState(false);
 
   const paymentAlertsEnabled = vendor?.pushPaymentAlertsEnabled ?? true;
   const voiceCampaignAlertsEnabled = vendor?.pushVoiceCampaignAlertsEnabled ?? true;
   const postRemindersEnabled = vendor?.pushPostRemindersEnabled ?? true;
+
+  const LEAD_TIME_OPTIONS: { value: number; label: string }[] = [
+    { value: 15, label: '15 min' },
+    { value: 30, label: '30 min' },
+    { value: 60, label: '1 hour' },
+    { value: 240, label: '4 hours' },
+    { value: 1440, label: '1 day' },
+  ];
+  const currentLeadMinutes = vendor?.postReminderLeadMinutes ?? 30;
+
+  const handleLeadTimeChange = async (minutes: number) => {
+    if (minutes === currentLeadMinutes) return;
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    setIsSavingLeadTime(true);
+    try {
+      await updateProfile({ postReminderLeadMinutes: minutes });
+    } catch {
+      Alert.alert('Could not save', 'Please try again.');
+    } finally {
+      setIsSavingLeadTime(false);
+    }
+  };
 
   const handleToggleCategory = async (
     key: 'payments' | 'voiceCampaigns' | 'postReminders',
@@ -426,6 +451,56 @@ export default function AccountScreen() {
                   />
                 )}
               </View>
+
+              {postRemindersEnabled && (
+                <View
+                  style={[
+                    styles.leadTimeRow,
+                    { borderTopColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.leadTimeHeader}>
+                    <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                      Reminder timing
+                    </Text>
+                    {isSavingLeadTime && (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    )}
+                  </View>
+                  <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground, marginBottom: 10 }]}>
+                    How far in advance to send the reminder.
+                  </Text>
+                  <View style={styles.leadTimePills}>
+                    {LEAD_TIME_OPTIONS.map((opt) => {
+                      const isSelected = currentLeadMinutes === opt.value;
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          onPress={() => void handleLeadTimeChange(opt.value)}
+                          disabled={isSavingLeadTime}
+                          style={[
+                            styles.leadTimePill,
+                            {
+                              backgroundColor: isSelected ? colors.primary : 'transparent',
+                              borderColor: isSelected ? colors.primary : colors.border,
+                              opacity: isSavingLeadTime ? 0.6 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.leadTimePillText,
+                              { color: isSelected ? '#FFFFFF' : colors.mutedForeground },
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </>
           )}
         </Card>
@@ -722,5 +797,31 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
+  },
+  leadTimeRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  leadTimeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  leadTimePills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  leadTimePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  leadTimePillText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
 });
