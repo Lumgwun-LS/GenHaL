@@ -97,6 +97,18 @@ export default function ExpensesPage() {
     });
   }, [allExpenses]);
 
+  // Projected monthly recurring cost — active (non-paused) templates only
+  const projectedMonthlyTotal = useMemo(() => {
+    return recurringTemplates
+      .filter((e) => !e.recurringPaused)
+      .reduce((sum, e) => {
+        const freq = e.recurringFrequency;
+        if (freq === "weekly") return sum + e.amount * 4.33;
+        if (freq === "yearly") return sum + e.amount / 12;
+        return sum + e.amount; // monthly
+      }, 0);
+  }, [recurringTemplates]);
+
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
@@ -380,6 +392,22 @@ export default function ExpensesPage() {
 
         {/* ── RECURRING TAB ── */}
         <TabsContent value="recurring">
+          {recurringTemplates.length > 0 && (
+            <Card className="mb-4 border-primary/20 bg-primary/5">
+              <CardContent className="flex items-center gap-4 py-4">
+                <Repeat className="w-5 h-5 text-primary shrink-0" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Projected monthly recurring cost</p>
+                  <p className="text-2xl font-bold tracking-tight text-primary">
+                    ${projectedMonthlyTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Active templates only · Weekly ×4.33, Yearly ÷12
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <div className="p-4 border-b flex flex-wrap gap-3 items-end">
               <div className="space-y-1.5">
