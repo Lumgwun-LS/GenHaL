@@ -71,10 +71,25 @@ export default function CreatePost() {
   const [sceneCount, setSceneCount] = useState<1 | 2 | 3>(1);
   const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
   const [includeMusic, setIncludeMusic] = useState(false);
+  // Session-storage key used to persist scene previews (including edited
+  // prompts) across accidental reloads. Cleared whenever scenes are discarded
+  // or the vendor finishes rendering the video.
+  const SCENE_STORAGE_KEY = "vendorhub:video-scenes-draft";
+
   // Scene previews the vendor can review/regenerate before any render (and
   // therefore before any aiVideos quota) is spent. Each entry mirrors the
   // AiGeneration (type "image") row the server created for that scene.
-  const [videoScenes, setVideoScenes] = useState<{ id: number; prompt: string; imageUrl: string }[] | null>(null);
+  // Initialised lazily from sessionStorage so a reload restores any edits.
+  const [videoScenes, setVideoScenes] = useState<{ id: number; prompt: string; imageUrl: string }[] | null>(() => {
+    try {
+      const stored = sessionStorage.getItem("vendorhub:video-scenes-draft");
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
   const [regeneratingSceneId, setRegeneratingSceneId] = useState<number | null>(null);
   const [uploadedVideoStage, setUploadedVideoStage] = useState<"idle" | "uploading" | "analyzing">("idle");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -172,6 +187,23 @@ export default function CreatePost() {
   // SCENE_GUARD_MSG is a stable string literal; excluding from deps is intentional.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnconfirmedScenes]);
+
+  // Persist scene previews (including any edited prompts) to sessionStorage so
+  // they survive an accidental reload. Cleared automatically when videoScenes
+  // is set back to null (render complete, discard, or new image/video chosen).
+  useEffect(() => {
+    if (videoScenes === null) {
+      sessionStorage.removeItem(SCENE_STORAGE_KEY);
+    } else {
+      try {
+        sessionStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(videoScenes));
+      } catch {
+        // sessionStorage full or unavailable — silently skip persistence.
+      }
+    }
+  // SCENE_STORAGE_KEY is a stable string defined at component level above.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoScenes]);
 
   // Simple back navigation — the pushState patch above handles the confirm
   // dialog so this can just call setLocation unconditionally.
