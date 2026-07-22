@@ -908,6 +908,7 @@ async function escalateLateArrivalRefundFailure(
   payment: { id: number; vendorId: number; metadata: unknown },
   reference: string,
   reason: string,
+  provider = "Paystack",
 ): Promise<void> {
   const meta = (payment.metadata ?? {}) as Record<string, unknown>;
 
@@ -925,16 +926,16 @@ async function escalateLateArrivalRefundFailure(
       })
       .where(eq(paymentsTable.id, payment.id));
   } catch (dbErr) {
-    console.error("[paystack webhook] Failed to persist late-arrival refund-failure flag:", dbErr);
+    console.error(`[${provider.toLowerCase()} webhook] Failed to persist late-arrival refund-failure flag:`, dbErr);
   }
 
   // Admin Slack alert
   await sendSlackAlert(
-    `🚨 *Paystack late-arrival refund failed — manual action required*\n` +
-    `• Payment #${payment.id} (vendor ${payment.vendorId}) was already *cancelled* locally, but Paystack confirmed the charge.\n` +
+    `🚨 *${provider} late-arrival refund failed — manual action required*\n` +
+    `• Payment #${payment.id} (vendor ${payment.vendorId}) was already *cancelled* locally, but ${provider} confirmed the charge.\n` +
     `• Automatic refund attempt failed: ${reason}\n` +
     `• Reference: \`${reference}\`\n` +
-    `• Issue the refund manually from the Paystack dashboard.`,
+    `• Issue the refund manually from the ${provider} dashboard.`,
   );
 
   // In-app vendor notification so it's visible on the vendor dashboard too
@@ -943,15 +944,15 @@ async function escalateLateArrivalRefundFailure(
       vendorId: payment.vendorId,
       type: "payment",
       message:
-        `A customer paid a Paystack checkout link that had already been cancelled (reference: ${reference}). ` +
-        `An automatic refund was attempted but failed. Please issue a manual refund via your Paystack dashboard or contact support.`,
+        `A customer paid a ${provider} checkout link that had already been cancelled (reference: ${reference}). ` +
+        `An automatic refund was attempted but failed. Please issue a manual refund via your ${provider} dashboard or contact support.`,
     });
   } catch (notifyErr) {
-    console.warn("[paystack webhook] Failed to insert late-arrival refund-failure notification:", notifyErr);
+    console.warn(`[${provider.toLowerCase()} webhook] Failed to insert late-arrival refund-failure notification:`, notifyErr);
   }
 
   console.error(
-    `[paystack webhook] late-arrival auto-refund failed — payment=${payment.id} vendor=${payment.vendorId} reference=${reference} reason=${reason}`,
+    `[${provider.toLowerCase()} webhook] late-arrival auto-refund failed — payment=${payment.id} vendor=${payment.vendorId} reference=${reference} reason=${reason}`,
   );
 }
 
@@ -1156,6 +1157,242 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
   }
 }
 
+const FLUTTERWAVE_BASE = "https://api.flutterwave.com/v3";
+const NOMBA_BASE = "https://api.nomba.com/v1";
+
+/**
+ * When Flutterwave reports a successful charge for a payment that is already
+ * status=cancelled locally, the customer's money must be returned.
+ *
+ * Flow:
+ *  1. Resolve the platform Flutterwave secret key.
+ *  2. Look up the Flutterwave numeric transaction ID by tx_ref (required for the refund call).
+ *  3. POST to Flutterwave's /transactions/{id}/refund endpoint.
+ *  4. On success  — stamp lateArrivalRefunded:true on payment.metadata.
+ *  5. On failure  — stamp lateArrivalRefundFailed:true, Slack alert + vendor in-app notification.
+ */
+async function attemptFlutterwaveLateArrivalRefund(reference: string): Promise<void> {
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.providerReference, reference));
+
+  if (!payment) {
+    console.warn(`[flutterwave webhook] late-arrival refund: payment not found for reference=${reference}`);
+    return;
+  }
+
+  const secretKey = await resolveGatewayField("flutterwave", "secretKey");
+  if (!secretKey) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      "Flutterwave secret key is not configured on this platform.",
+      "Flutterwave",
+    );
+    return;
+  }
+
+  // Step 1: find the Flutterwave numeric transaction ID from the tx_ref
+  let flwTxId: number | null = null;
+  try {
+    const lookupRes = await fetch(`${FLUTTERWAVE_BASE}/transactions?tx_ref=${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    const lookupData = (await lookupRes.json()) as { status: string; data?: Array<{ id: number }> };
+    if (lookupData.status === "success" && lookupData.data?.[0]?.id) {
+      flwTxId = lookupData.data[0].id;
+    }
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      `Flutterwave transaction lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+      "Flutterwave",
+    );
+    return;
+  }
+
+  if (!flwTxId) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      `Could not find Flutterwave transaction ID for tx_ref=${reference}`,
+      "Flutterwave",
+    );
+    return;
+  }
+
+  // Step 2: issue the refund
+  try {
+    const refundRes = await fetch(`${FLUTTERWAVE_BASE}/transactions/${flwTxId}/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const refundData = (await refundRes.json()) as { status: string; message: string; data?: unknown };
+
+    if (refundData.status !== "success") {
+      await escalateLateArrivalRefundFailure(
+        payment,
+        reference,
+        `Flutterwave refund API: ${refundData.message}`,
+        "Flutterwave",
+      );
+      return;
+    }
+
+    const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...meta,
+          lateArrivalRefunded: true,
+          lateArrivalRefundedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+
+    console.info(
+      `[flutterwave webhook] late-arrival refund issued — payment=${payment.id} vendor=${payment.vendorId} reference=${reference} flwTxId=${flwTxId}`,
+    );
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      err instanceof Error ? err.message : String(err),
+      "Flutterwave",
+    );
+  }
+}
+
+/**
+ * When Nomba reports a successful payment for a payment that is already
+ * status=cancelled locally, the customer's money must be returned.
+ *
+ * Flow:
+ *  1. Resolve Nomba credentials (accountId, clientId, clientSecret) from the platform.
+ *  2. Obtain a short-lived bearer token via Nomba's token endpoint.
+ *  3. POST to Nomba's /accounts/{accountId}/transactions/{orderReference}/refund.
+ *  4. On success  — stamp lateArrivalRefunded:true on payment.metadata.
+ *  5. On failure  — stamp lateArrivalRefundFailed:true, Slack alert + vendor in-app notification.
+ */
+async function attemptNombaLateArrivalRefund(reference: string): Promise<void> {
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.providerReference, reference));
+
+  if (!payment) {
+    console.warn(`[nomba webhook] late-arrival refund: payment not found for reference=${reference}`);
+    return;
+  }
+
+  const [accountId, clientId, clientSecret] = await Promise.all([
+    resolveGatewayField("nomba", "accountId"),
+    resolveGatewayField("nomba", "clientId"),
+    resolveGatewayField("nomba", "clientSecret"),
+  ]);
+
+  if (!accountId || !clientId || !clientSecret) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      "Nomba credentials (accountId, clientId, clientSecret) are not fully configured on this platform.",
+      "Nomba",
+    );
+    return;
+  }
+
+  // Step 1: obtain a Nomba access token
+  let accessToken: string;
+  try {
+    const tokenRes = await fetch(`${NOMBA_BASE}/auth/token/issue`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accountId,
+      },
+      body: JSON.stringify({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+    });
+    const tokenData = (await tokenRes.json()) as { access_token?: string; description?: string; message?: string };
+    if (!tokenRes.ok || !tokenData.access_token) {
+      await escalateLateArrivalRefundFailure(
+        payment,
+        reference,
+        `Nomba auth failed: ${tokenData.description ?? tokenData.message ?? `HTTP ${tokenRes.status}`}`,
+        "Nomba",
+      );
+      return;
+    }
+    accessToken = tokenData.access_token;
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      `Nomba auth request threw: ${err instanceof Error ? err.message : String(err)}`,
+      "Nomba",
+    );
+    return;
+  }
+
+  // Step 2: issue the refund
+  try {
+    const refundRes = await fetch(
+      `${NOMBA_BASE}/accounts/${encodeURIComponent(accountId)}/transactions/${encodeURIComponent(reference)}/refund`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          accountId,
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    const refundData = (await refundRes.json().catch(() => ({}))) as { description?: string; message?: string; code?: string };
+
+    if (!refundRes.ok) {
+      await escalateLateArrivalRefundFailure(
+        payment,
+        reference,
+        `Nomba refund API (HTTP ${refundRes.status}): ${refundData.description ?? refundData.message ?? "unknown error"}`,
+        "Nomba",
+      );
+      return;
+    }
+
+    const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+    await db
+      .update(paymentsTable)
+      .set({
+        metadata: {
+          ...meta,
+          lateArrivalRefunded: true,
+          lateArrivalRefundedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+
+    console.info(
+      `[nomba webhook] late-arrival refund issued — payment=${payment.id} vendor=${payment.vendorId} reference=${reference}`,
+    );
+  } catch (err) {
+    await escalateLateArrivalRefundFailure(
+      payment,
+      reference,
+      err instanceof Error ? err.message : String(err),
+      "Nomba",
+    );
+  }
+}
+
 /**
  * Applies the business-logic side effects for a Flutterwave event. Idempotent-ish: safe to re-run.
  * Returns `matched: false` when the target payment could not be found (see processStripeEvent).
@@ -1177,6 +1414,10 @@ async function processFlutterwaveEvent(event: {
 
   const result = await applyPaymentStatusTransition(reference, "paid", "flutterwave");
   if (result.outcome === "conflict") {
+    // The payment was already cancelled locally (vendor cancelled/retried before
+    // the customer completed the checkout link). The customer's money must be
+    // returned. Attempt an automatic Flutterwave refund; escalate to admin if it fails.
+    await attemptFlutterwaveLateArrivalRefund(reference);
     return { matched: true };
   }
   const updatedPayment = result.outcome === "updated" ? result.payment : null;
@@ -1232,6 +1473,10 @@ async function processNombaEvent(event: {
 
   const result = await applyPaymentStatusTransition(reference, "paid", "nomba");
   if (result.outcome === "conflict") {
+    // The payment was already cancelled locally (vendor cancelled/retried before
+    // the customer completed the checkout link). The customer's money must be
+    // returned. Attempt an automatic Nomba refund; escalate to admin if it fails.
+    await attemptNombaLateArrivalRefund(reference);
     return { matched: true };
   }
   const updatedPayment = result.outcome === "updated" ? result.payment : null;
