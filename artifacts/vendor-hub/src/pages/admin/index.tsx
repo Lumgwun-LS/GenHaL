@@ -207,9 +207,12 @@ type AuditLogPage = {
 
 const AUDIT_LOG_PAGE_SIZE = 50;
 
-async function fetchAuditLog(page: number): Promise<AuditLogPage> {
+async function fetchAuditLog(page: number, adminSearch?: string): Promise<AuditLogPage> {
   const offset = (page - 1) * AUDIT_LOG_PAGE_SIZE;
   const qs = new URLSearchParams({ limit: String(AUDIT_LOG_PAGE_SIZE), offset: String(offset) });
+  if (adminSearch && adminSearch.trim()) {
+    qs.set("adminSearch", adminSearch.trim());
+  }
   const res = await fetch(`${BASE_URL}/api/admin/audit-log?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load audit log");
   return res.json() as Promise<AuditLogPage>;
@@ -1962,6 +1965,7 @@ export default function AdminPanel() {
   const { user: currentUser } = useUser();
 
   const [auditVendorSearch, setAuditVendorSearch] = useState("");
+  const [auditAdminSearch, setAuditAdminSearch] = useState("");
   const [auditFieldFilter, setAuditFieldFilter] = useState(AUDIT_FIELD_ANY);
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
@@ -2026,8 +2030,8 @@ export default function AdminPanel() {
   });
 
   const { data: auditLogPage, isLoading: auditLoading } = useQuery({
-    queryKey: ["admin-audit-log", auditPage],
-    queryFn: () => fetchAuditLog(auditPage),
+    queryKey: ["admin-audit-log", auditPage, auditAdminSearch],
+    queryFn: () => fetchAuditLog(auditPage, auditAdminSearch),
     enabled: isAdmin,
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
@@ -2125,7 +2129,7 @@ export default function AdminPanel() {
   }, [auditLog, auditVendorSearch, auditFieldFilter, auditAfter, auditBefore]);
 
   const auditFiltersActive =
-    auditVendorSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
+    auditVendorSearch.trim() !== "" || auditAdminSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
 
   const filteredMessageHistory = useMemo(() => {
     if (!messageHistory) return messageHistory;
@@ -2988,6 +2992,19 @@ export default function AdminPanel() {
                   />
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-xs">Admin</Label>
+                  <Input
+                    placeholder="Name or ID…"
+                    className="h-8 w-44 text-xs"
+                    value={auditAdminSearch}
+                    onChange={(e) => {
+                      setAuditAdminSearch(e.target.value);
+                      setAuditPage(1);
+                    }}
+                    data-testid="input-audit-admin-search"
+                  />
+                </div>
+                <div className="space-y-1">
                   <Label className="text-xs">Field</Label>
                   <Select value={auditFieldFilter} onValueChange={setAuditFieldFilter}>
                     <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
@@ -3024,9 +3041,11 @@ export default function AdminPanel() {
                     className="text-xs h-8"
                     onClick={() => {
                       setAuditVendorSearch("");
+                      setAuditAdminSearch("");
                       setAuditFieldFilter(AUDIT_FIELD_ANY);
                       setAuditAfter("");
                       setAuditBefore("");
+                      setAuditPage(1);
                     }}
                   >
                     Clear filters
@@ -3124,7 +3143,7 @@ export default function AdminPanel() {
                       ))}
                     </TableBody>
                   </Table>
-                  {auditLogPage && auditLogPage.total > AUDIT_LOG_PAGE_SIZE && auditVendorSearch.trim() === "" && auditFieldFilter === AUDIT_FIELD_ANY && auditAfter === "" && auditBefore === "" && (
+                  {auditLogPage && auditLogPage.total > AUDIT_LOG_PAGE_SIZE && auditVendorSearch.trim() === "" && auditAdminSearch.trim() === "" && auditFieldFilter === AUDIT_FIELD_ANY && auditAfter === "" && auditBefore === "" && (
                     <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
                       <span>
                         Showing {(auditPage - 1) * AUDIT_LOG_PAGE_SIZE + 1}–

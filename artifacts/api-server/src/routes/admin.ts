@@ -824,9 +824,34 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
   const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : DEFAULT_LIMIT;
   const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
+  // Optional admin filters: exact Clerk user ID or a case-insensitive display name substring.
+  const adminUserIdFilter = typeof req.query.adminUserId === "string" && req.query.adminUserId.trim()
+    ? req.query.adminUserId.trim()
+    : null;
+  const adminSearchFilter = typeof req.query.adminSearch === "string" && req.query.adminSearch.trim()
+    ? req.query.adminSearch.trim()
+    : null;
+
+  const conditions: SQL[] = [];
+  if (adminUserIdFilter) {
+    conditions.push(eq(adminAuditLogTable.adminUserId, adminUserIdFilter));
+  } else if (adminSearchFilter) {
+    // Match against both the persisted display name and the raw Clerk user ID
+    // so admins can search by name or partial ID.
+    conditions.push(
+      sql`(
+        lower(${adminAuditLogTable.adminDisplayName}) LIKE lower(${"%" + adminSearchFilter + "%"})
+        OR lower(${adminAuditLogTable.adminUserId}) LIKE lower(${"%" + adminSearchFilter + "%"})
+      )`
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(adminAuditLogTable);
+    .from(adminAuditLogTable)
+    .where(whereClause);
   const total = Number(countResult?.count ?? 0);
 
   const entries = await db
@@ -844,6 +869,7 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
     })
     .from(adminAuditLogTable)
     .leftJoin(vendorsTable, eq(adminAuditLogTable.vendorId, vendorsTable.id))
+    .where(whereClause)
     .orderBy(desc(adminAuditLogTable.changedAt))
     .limit(limit)
     .offset(offset);
