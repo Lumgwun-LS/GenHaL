@@ -20,6 +20,34 @@
  *  - Once a post is actually due, post-scheduler.ts moves it out of
  *    'scheduled' before this job would otherwise re-check it, so there's no
  *    risk of reminding about a post that has already published.
+ *
+ * Lead-time preference changes and reminder behaviour:
+ *
+ *  Case A — vendor changes lead time AFTER the reminder has already fired:
+ *    `reminderSentAt` is set on the post. The query's `isNull(reminderSentAt)`
+ *    clause excludes the post entirely, so the reminder is never re-sent.
+ *    This is correct regardless of whether the vendor widens or narrows the
+ *    preference.
+ *
+ *  Case B — vendor changes lead time BEFORE the reminder fires (reminderSentAt
+ *    is still NULL):
+ *    The job re-evaluates each candidate against the vendor's current preference
+ *    at the moment each tick runs. This means:
+ *    • Widening the lead time (e.g. 30 min → 2 h) can cause the next tick to
+ *      send a reminder that would otherwise have waited — the vendor has
+ *      explicitly asked for a longer heads-up, so firing sooner is the correct
+ *      response to their updated preference. A guard here would silently ignore
+ *      the preference change for in-flight posts, which would be more confusing.
+ *    • Narrowing the lead time (e.g. 2 h → 10 min) can delay the reminder or
+ *      mean it never fires at all if the post publishes before the next tick
+ *      with the narrower window. This is also intentional — the vendor chose a
+ *      shorter heads-up.
+ *    In both sub-cases the atomic `reminderSentAt` claim ensures exactly-once
+ *    delivery once the post enters the window, even across concurrent ticks.
+ *
+ *  No additional guard is needed: the single-send guarantee already comes from
+ *  `reminderSentAt`, and the preference is intentionally evaluated live so that
+ *  changes take effect for posts that have not yet been reminded.
  */
 import { db, postsTable, vendorsTable } from "@workspace/db";
 import { and, eq, gt, isNull, lte } from "drizzle-orm";
