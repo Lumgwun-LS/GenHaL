@@ -113,6 +113,60 @@ export default function CreatePost() {
   //   2. pushState patch — every in-app SPA navigation (sidebar links,
   //                        <Link> components, setLocation() calls)
   //   3. popstate listener — browser back / forward button
+  //
+  // ─── Browser compatibility matrix ────────────────────────────────────────
+  //
+  //  Chrome (desktop, ≥76)
+  //    beforeunload: fires IF the page has received at least one user gesture
+  //    (click, keydown, scroll). Pages loaded fresh without any interaction
+  //    silently suppress the dialog — Chrome's anti-abuse policy. The custom
+  //    message text is also ignored; Chrome shows its own generic string.
+  //    pushState patch (Guard 2): works reliably.
+  //    popstate (Guard 3): works reliably.
+  //
+  //  Firefox (desktop)
+  //    beforeunload: fires reliably; shows a browser-native dialog. Custom
+  //    message text is ignored (Firefox replaced it with a generic string in
+  //    v44 to prevent phishing). Guards 2 & 3 work reliably.
+  //
+  //  Safari (desktop, ≥12.1)
+  //    beforeunload: fires reliably but ignores the returnValue string —
+  //    Safari shows its own "Are you sure you want to leave?" dialog.
+  //    Guards 2 & 3 work reliably.
+  //
+  //  Mobile Safari (iOS, all versions)
+  //    beforeunload: NOT supported — the event fires but the browser does NOT
+  //    pause navigation or show any dialog. iOS intentionally omits this
+  //    behaviour. Guard 1 provides ZERO protection here.
+  //    pushState patch (Guard 2): works for in-app navigation.
+  //    popstate (Guard 3): works for the browser back button, but the URL
+  //    change is instant and the confirm() call may open with a short delay on
+  //    older iOS; in practice the guard still catches it.
+  //
+  //  Chrome Android (≥80)
+  //    beforeunload: inconsistently suppressed — Google has deprioritised the
+  //    event on Android to match the back-navigation model used on mobile.
+  //    Vendors who tap the system Back button or close the tab may not see a
+  //    dialog even after interacting with the page.
+  //    Guards 2 & 3 work for in-app navigations; system-level gestures remain
+  //    uncatchable.
+  //
+  //  Samsung Internet / WebView / other Android browsers
+  //    beforeunload: similarly unreliable. Treat the same as Chrome Android.
+  //
+  // ─── UX fallback ─────────────────────────────────────────────────────────
+  //
+  //  Because beforeunload is silent on iOS and unreliable on Android, a
+  //  persistent in-page banner is rendered whenever hasUnconfirmedScenes is
+  //  true (see the JSX below). The banner:
+  //    • is always visible — no browser permissions required
+  //    • reinforces the disk-icon reminder that credits have already been spent
+  //    • gives the vendor a one-click path to render or discard without
+  //      needing to navigate away first
+  //  This makes Guard 1 effectively optional on mobile — the banner alone is
+  //  sufficient to prevent accidental loss in the most common use pattern
+  //  (vendor reviews scenes on the same screen before navigating).
+  //
   const hasUnconfirmedScenes = videoScenes !== null && videoScenes.length > 0;
 
   const SCENE_GUARD_MSG =
@@ -572,6 +626,25 @@ export default function CreatePost() {
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">Compose Post</h1>
       </div>
+
+      {/* Persistent scene-preview warning banner — visible on all browsers
+          including Mobile Safari and Chrome Android where the beforeunload
+          dialog is suppressed or unreliable. This is the primary guard on
+          mobile; the beforeunload / pushState / popstate guards are a
+          secondary layer on desktop browsers that support them. */}
+      {hasUnconfirmedScenes && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <Film className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+          <div className="flex-1 leading-snug">
+            <span className="font-semibold">You have scene previews that haven't been rendered yet.</span>
+            {" "}AI image credits were already spent to generate them — navigating away will discard those scenes permanently.
+            Render the video or discard the scenes before leaving.
+          </div>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-8 h-full">
         {/* Editor Side */}
