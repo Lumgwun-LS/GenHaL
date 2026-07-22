@@ -8,6 +8,7 @@ import { ai as gemini } from "@workspace/integrations-gemini-ai";
 import { generateVideoBuffer, type MotionTemplate, type VideoScene } from "../lib/video-generation";
 import { extractVideoFrames } from "../lib/video-frames";
 import { generateMusicBuffer } from "../lib/ai-music";
+import { buildMusicPrompt } from "../lib/ai-music-prompt";
 import { storeGeneratedMedia, extractMediaObjectId } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
@@ -151,54 +152,6 @@ router.post("/ai/generate-image", async (req, res): Promise<void> => {
   if (status === "failed") { res.status(502).json(GenerateAiImageResponse.parse(serialized)); return; }
   res.json(GenerateAiImageResponse.parse(serialized));
 });
-
-const MUSIC_MOOD_DESCRIPTORS: Record<string, string> = {
-  upbeat:    "Upbeat, energetic, modern instrumental. Fast tempo, bright synths, punchy beat, no vocals.",
-  calm:      "Calm, soothing, laid-back instrumental. Gentle piano or acoustic guitar, soft pads, slow tempo, no vocals.",
-  corporate: "Clean, professional corporate instrumental. Light piano, subtle strings, steady mid-tempo beat, no vocals.",
-  festive:   "Festive, celebratory instrumental. Bright brass, hand percussion, joyful and lively, no vocals.",
-  dramatic:  "Cinematic and dramatic instrumental. Building tension, orchestral swells, powerful dynamics, no vocals.",
-  romantic:  "Warm, romantic instrumental. Smooth acoustic guitar or piano, gentle melody, no vocals.",
-};
-
-/**
- * Derives a music-mood description from the video's content (prompt + caption)
- * by asking the LLM to suggest the best-fitting musical mood and expand it into
- * an ElevenLabs sound-generation prompt. Falls back to a safe generic prompt
- * so music generation is never blocked by this step.
- */
-async function buildMusicPrompt(
-  videoPrompt: string,
-  captionText?: string,
-  musicMood?: string,
-): Promise<string> {
-  // Vendor picked an explicit mood — no LLM call needed
-  if (musicMood && MUSIC_MOOD_DESCRIPTORS[musicMood]) {
-    return `${MUSIC_MOOD_DESCRIPTORS[musicMood]} Short social media background music bed, ~15 seconds.`;
-  }
-
-  // Derive the mood from video content via a short LLM call
-  try {
-    const contentSummary = [videoPrompt, captionText].filter(Boolean).join(" | ").slice(0, 600);
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.4-mini",
-      max_completion_tokens: 120,
-      messages: [
-        {
-          role: "system",
-          content: `You write brief ElevenLabs sound-generation prompts for short social-media video background music. Given a video's content description, produce a single music-prompt sentence (20-40 words) that captures the right mood, tempo, and instrumentation for the video. The prompt must end with ", no vocals, no lyrics." Return ONLY the prompt sentence.`,
-        },
-        { role: "user", content: `Video content: ${contentSummary}` },
-      ],
-    });
-    const raw = (response.choices[0]?.message?.content ?? "").trim();
-    if (raw && raw.length > 10) return raw;
-    throw new Error("empty or too-short music prompt from model");
-  } catch (err) {
-    logger.warn({ err }, "AI music prompt derivation failed; using generic fallback");
-    return "Upbeat, modern instrumental background music bed for a short small business social media product video. Soft synths and a subtle beat, no vocals, no lyrics.";
-  }
-}
 
 /**
  * Splits a base image prompt into N distinct-but-consistent scene prompts for
