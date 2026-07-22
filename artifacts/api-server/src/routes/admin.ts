@@ -1299,7 +1299,7 @@ router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
   const conflicts = rows.map((r) => {
     const meta = (r.metadata ?? {}) as Record<string, unknown>;
     const conflict = meta.reconciliationConflict as
-      | { attemptedStatus: string; provider: string; detectedAt: string; resolution?: string; resolvedAt?: string; resolvedBy?: string }
+      | { attemptedStatus: string; provider: string; detectedAt: string; resolution?: string; resolvedAt?: string; resolvedBy?: string; resolvedByDisplayName?: string | null }
       | undefined;
     return {
       id: r.id,
@@ -1318,6 +1318,7 @@ router.get("/admin/payment-conflicts", async (req, res): Promise<void> => {
       resolution: conflict?.resolution ?? null,
       resolvedAt: conflict?.resolvedAt ?? null,
       resolvedBy: conflict?.resolvedBy ?? null,
+      resolvedByDisplayName: conflict?.resolvedByDisplayName ?? null,
     };
   });
 
@@ -1366,6 +1367,22 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
     return;
   }
 
+  // Resolve the admin's display name from Clerk before writing metadata so it
+  // is stored on the conflict record — follows the admin-sender-attribution pattern.
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
   const resolvedMetadata = {
     ...meta,
     reconciliationConflict: {
@@ -1373,6 +1390,7 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
       resolution,
       resolvedAt: new Date().toISOString(),
       resolvedBy: userId,
+      resolvedByDisplayName: adminDisplayName,
     },
   };
 
@@ -1402,22 +1420,6 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
   }
   if (resolution === "paid" || resolution === "failed" || resolution === "refunded") {
     await notifyVendorPaymentStatus(updated.vendorId, resolution, updated.amount, updated.currency);
-  }
-
-  // Resolve the admin's display name from Clerk so the audit entry is readable
-  // without a separate lookup later — follows the admin-sender-attribution pattern.
-  let adminDisplayName: string | null = null;
-  try {
-    const adminUser = await clerkClient.users.getUser(userId);
-    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
-    adminDisplayName =
-      fullName ||
-      adminUser.username ||
-      adminUser.primaryEmailAddress?.emailAddress ||
-      adminUser.emailAddresses[0]?.emailAddress ||
-      null;
-  } catch {
-    adminDisplayName = null;
   }
 
   // Write a durable audit entry so this resolution shows up in the Audit Log

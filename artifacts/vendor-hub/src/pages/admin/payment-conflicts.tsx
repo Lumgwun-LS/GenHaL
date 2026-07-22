@@ -36,6 +36,7 @@ type PaymentConflict = {
   resolution: string | null;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  resolvedByDisplayName: string | null;
 };
 
 type Resolution = "dismiss" | "paid" | "failed" | "refunded";
@@ -258,6 +259,7 @@ function ResolvedHistoryTab({ initialSearch = "" }: { initialSearch?: string }) 
       (c.vendorName ?? "").toLowerCase().includes(q) ||
       (c.providerReference ?? "").toLowerCase().includes(q) ||
       (c.resolution ?? "").toLowerCase().includes(q) ||
+      (c.resolvedByDisplayName ?? "").toLowerCase().includes(q) ||
       (c.resolvedBy ?? "").toLowerCase().includes(q)
     );
   });
@@ -324,7 +326,16 @@ function ResolvedHistoryTab({ initialSearch = "" }: { initialSearch?: string }) 
                     {c.attemptedStatus ?? "—"} ({c.webhookProvider ?? c.provider})
                   </TableCell>
                   <TableCell>{resolutionBadge(c.resolution)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{c.resolvedBy ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {c.resolvedByDisplayName ? (
+                      <>
+                        <span className="font-medium text-foreground">{c.resolvedByDisplayName}</span>
+                        <div className="text-muted-foreground">{c.resolvedBy}</div>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">{c.resolvedBy ?? "—"}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {c.resolvedAt ? new Date(c.resolvedAt).toLocaleString() : "—"}
                   </TableCell>
