@@ -45,6 +45,7 @@ export async function notifyPostReminderDue(
       vendorId,
       type: "post_reminder",
       message,
+      resourceId: postId,
     });
   } catch (err) {
     logger.error({ err, postId, vendorId }, "[post-notifications] Failed to insert post-reminder notification");

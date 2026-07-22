@@ -792,7 +792,7 @@ export const GetPostConnectionWarningsResponse = zod.object({
   "warnings": zod.array(zod.object({
   "platform": zod.string(),
   "message": zod.string(),
-  "accountId": zod.number().optional()
+  "accountId": zod.number().optional().describe('Present when the warning is about an existing account that needs to be reconnected (status = \"needs_reconnect\"). When absent the platform has no account at all and a fresh OAuth connection is needed.\n')
 }))
 })
 
@@ -2837,7 +2837,8 @@ export const ListVendorNotificationsResponseItem = zod.object({
   "previousTier": zod.string().nullish(),
   "newTier": zod.string().nullish(),
   "readAt": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "resourceId": zod.number().nullish().describe('The primary resource this notification refers to. For \"post_reminder\" and related post notifications this is the post ID; for \"voice_campaign\" notifications this is the campaign ID. Null for notifications that do not correspond to a single resource.\n')
 })
 export const ListVendorNotificationsResponse = zod.array(ListVendorNotificationsResponseItem)
 
@@ -2867,7 +2868,8 @@ export const CreateVendorNotificationResponse = zod.object({
   "previousTier": zod.string().nullish(),
   "newTier": zod.string().nullish(),
   "readAt": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "resourceId": zod.number().nullish().describe('The primary resource this notification refers to. For \"post_reminder\" and related post notifications this is the post ID; for \"voice_campaign\" notifications this is the campaign ID. Null for notifications that do not correspond to a single resource.\n')
 })
 
 
@@ -2903,7 +2905,8 @@ export const MarkVendorNotificationReadResponse = zod.object({
   "previousTier": zod.string().nullish(),
   "newTier": zod.string().nullish(),
   "readAt": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "resourceId": zod.number().nullish().describe('The primary resource this notification refers to. For \"post_reminder\" and related post notifications this is the post ID; for \"voice_campaign\" notifications this is the campaign ID. Null for notifications that do not correspond to a single resource.\n')
 })
 
 

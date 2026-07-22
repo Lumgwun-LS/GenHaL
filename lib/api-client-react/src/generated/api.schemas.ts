@@ -147,6 +147,11 @@ export interface VendorNotification {
   /** @nullable */
   readAt: string | null;
   createdAt: string;
+  /**
+     * The primary resource this notification refers to. For "post_reminder" and related post notifications this is the post ID; for "voice_campaign" notifications this is the campaign ID. Null for notifications that do not correspond to a single resource.
+     * @nullable
+     */
+  resourceId?: number | null;
 }
 
 export interface VendorNotificationInput {
@@ -387,7 +392,7 @@ export interface SchedulePostInput {
 export interface ConnectionWarning {
   platform: string;
   message: string;
-  /** Present when the warning is about an existing account that needs reconnecting. */
+  /** Present when the warning is about an existing account that needs to be reconnected (status = "needs_reconnect"). When absent the platform has no account at all and a fresh OAuth connection is needed. */
   accountId?: number;
 }
 

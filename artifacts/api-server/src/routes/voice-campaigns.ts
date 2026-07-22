@@ -328,6 +328,7 @@ async function notifyCampaignFinished(
       vendorId,
       type: "voice_campaign",
       message,
+      resourceId: campaign.id,
     });
 
     const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));

@@ -63,14 +63,24 @@ function typeIcon(
 }
 
 /** Navigate to the most relevant screen for a notification type. */
-function navigateForType(type: string) {
+function navigateForType(type: string, resourceId?: number | null) {
   switch (type as NotificationType) {
     case 'post_reminder':
+      if (resourceId) {
+        router.push(`/social/${resourceId}` as any);
+      } else {
+        router.push('/social/new');
+      }
+      break;
     case 'social_reconnect':
       router.push('/social/new');
       break;
     case 'voice_campaign':
-      router.push('/voice-campaigns');
+      if (resourceId) {
+        router.push(`/voice-campaigns/${resourceId}` as any);
+      } else {
+        router.push('/voice-campaigns');
+      }
       break;
     case 'tier_change':
     case 'verification_change':
@@ -101,7 +111,7 @@ function NotificationItem({
   const handlePress = () => {
     if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
     if (isUnread) onRead(item);
-    navigateForType(item.type);
+    navigateForType(item.type, item.resourceId);
   };
 
   return (

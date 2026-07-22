@@ -30,6 +30,13 @@ export const vendorNotificationsTable = pgTable("vendor_notifications", {
    * non-bulk or non-email notifications (birthday, tier_change, etc.).
    */
   emailFailed: boolean("email_failed"),
+  /**
+   * The primary resource this notification refers to. For "post_reminder" and
+   * related post notifications, this is the post ID. For "voice_campaign"
+   * notifications this is the campaign ID. Null for notifications that do not
+   * correspond to a single resource (e.g. birthday, general, tier_change).
+   */
+  resourceId: integer("resource_id"),
 });
 
 export type VendorNotification = typeof vendorNotificationsTable.$inferSelect;

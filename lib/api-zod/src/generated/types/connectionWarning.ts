@@ -9,6 +9,6 @@
 export interface ConnectionWarning {
   platform: string;
   message: string;
-  /** Present when the warning is about an existing account that needs reconnecting. */
+  /** Present when the warning is about an existing account that needs to be reconnected (status = "needs_reconnect"). When absent the platform has no account at all and a fresh OAuth connection is needed. */
   accountId?: number;
 }

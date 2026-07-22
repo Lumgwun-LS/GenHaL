@@ -23,4 +23,9 @@ export interface VendorNotification {
   /** @nullable */
   readAt: string | null;
   createdAt: string;
+  /**
+     * The primary resource this notification refers to. For "post_reminder" and related post notifications this is the post ID; for "voice_campaign" notifications this is the campaign ID. Null for notifications that do not correspond to a single resource.
+     * @nullable
+     */
+  resourceId?: number | null;
 }
