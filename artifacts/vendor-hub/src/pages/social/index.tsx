@@ -344,21 +344,33 @@ function AutoPublishFailureNotice({ postId }: { postId: number }) {
 }
 
 /**
+ * Returns the refetch interval for PostProcessingPublications: 15 s while any
+ * row is still processing, false (stop polling) once all have resolved.
+ *
+ * Exported for unit testing.
+ */
+export function computePostProcessingRefetchInterval(
+  rows: PostPublication[] | undefined
+): number | false {
+  const hasProcessing = (rows ?? []).some((p) => p.status === "processing");
+  return hasProcessing ? 15_000 : false;
+}
+
+/**
  * Polls GET /posts/:id/publications for any "processing" entries on a published
  * Facebook video post and renders a yellow "Processing…" badge per row until
  * they resolve to "success" or "failed". Polling stops automatically once all
  * entries have left the processing state, so no timer leaks on resolved posts.
  */
-function PostProcessingPublications({ postId }: { postId: number }) {
+export function PostProcessingPublications({ postId }: { postId: number }) {
   const { data: publications } = useListPostPublications(postId, {
     query: {
       queryKey: getListPostPublicationsQueryKey(postId),
       // Poll every 15 s while any row is still processing; stop once all resolve.
-      refetchInterval: (query) => {
-        const rows = query.state.data as PostPublication[] | undefined;
-        const hasProcessing = (rows ?? []).some((p: PostPublication) => p.status === "processing");
-        return hasProcessing ? 15_000 : false;
-      },
+      refetchInterval: (query) =>
+        computePostProcessingRefetchInterval(
+          query.state.data as PostPublication[] | undefined
+        ),
     },
   });
 
