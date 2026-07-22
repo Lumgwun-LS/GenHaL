@@ -55,6 +55,7 @@ export const ListVendorsResponseItem = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -114,6 +115,7 @@ export const CreateVendorResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -170,6 +172,7 @@ export const OnboardVendorResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -235,6 +238,7 @@ export const GetVendorResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -276,6 +280,7 @@ export const UpdateVendorBody = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.')
 })
@@ -309,6 +314,7 @@ export const UpdateVendorResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -3104,6 +3110,7 @@ export const GetExternalProfileResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),
@@ -3138,6 +3145,7 @@ export const UpdateExternalProfileBody = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.')
 })
 
@@ -3170,6 +3178,7 @@ export const UpdateExternalProfileResponse = zod.object({
   "pushVoiceCampaignAlertsEnabled": zod.boolean().optional(),
   "pushPostRemindersEnabled": zod.boolean().optional(),
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
+  "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
   "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
   "subscriptionTier": zod.string().optional(),

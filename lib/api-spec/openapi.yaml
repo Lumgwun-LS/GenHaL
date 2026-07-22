@@ -4080,6 +4080,8 @@ components:
           type: boolean
         pushAiMediaExpiryEnabled:
           type: boolean
+        pushFacebookVideoAlertsEnabled:
+          type: boolean
         announcementEmailOptOut:
           type: boolean
         postReminderLeadMinutes:
@@ -4180,6 +4182,8 @@ components:
         pushPostRemindersEnabled:
           type: boolean
         pushAiMediaExpiryEnabled:
+          type: boolean
+        pushFacebookVideoAlertsEnabled:
           type: boolean
         announcementEmailOptOut:
           type: boolean
@@ -5383,6 +5387,8 @@ components:
         pushPostRemindersEnabled:
           type: boolean
         pushAiMediaExpiryEnabled:
+          type: boolean
+        pushFacebookVideoAlertsEnabled:
           type: boolean
         postReminderLeadMinutes:
           type: integer

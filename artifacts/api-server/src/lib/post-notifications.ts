@@ -110,6 +110,7 @@ export async function notifyFacebookVideoLive(
     "Your Facebook video is live!",
     `"${truncate(caption, 60)}" finished processing and is now live.`,
     { screen: "social", postId },
+    "facebook_video",
   ).catch((err) => {
     logger.error({ err, postId, vendorId }, "[post-notifications] Failed to send facebook-video-live push");
   });
@@ -144,6 +145,7 @@ export async function notifyFacebookVideoFailed(
     "Facebook video failed to process",
     `"${truncate(caption, 60)}" could not be published. Tap to retry.`,
     { screen: "social", postId },
+    "facebook_video",
   ).catch((err) => {
     logger.error({ err, postId, vendorId }, "[post-notifications] Failed to send facebook-video-failed push");
   });

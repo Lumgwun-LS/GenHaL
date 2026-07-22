@@ -48,7 +48,7 @@ router.patch("/profile", async (req, res) => {
   const {
     name, phone, address, description, logoUrl, gender, country, state, city,
     pushPaymentAlertsEnabled, pushVoiceCampaignAlertsEnabled, pushPostRemindersEnabled,
-    pushAiMediaExpiryEnabled, postReminderLeadMinutes,
+    pushAiMediaExpiryEnabled, pushFacebookVideoAlertsEnabled, postReminderLeadMinutes,
   } = req.body as {
     name?: string;
     phone?: string;
@@ -63,6 +63,7 @@ router.patch("/profile", async (req, res) => {
     pushVoiceCampaignAlertsEnabled?: boolean;
     pushPostRemindersEnabled?: boolean;
     pushAiMediaExpiryEnabled?: boolean;
+    pushFacebookVideoAlertsEnabled?: boolean;
     postReminderLeadMinutes?: number;
   };
 
@@ -88,6 +89,7 @@ router.patch("/profile", async (req, res) => {
       ...(pushVoiceCampaignAlertsEnabled !== undefined && { pushVoiceCampaignAlertsEnabled }),
       ...(pushPostRemindersEnabled !== undefined && { pushPostRemindersEnabled }),
       ...(pushAiMediaExpiryEnabled !== undefined && { pushAiMediaExpiryEnabled }),
+      ...(pushFacebookVideoAlertsEnabled !== undefined && { pushFacebookVideoAlertsEnabled }),
       ...(postReminderLeadMinutes !== undefined && { postReminderLeadMinutes }),
       updatedAt: new Date(),
     })

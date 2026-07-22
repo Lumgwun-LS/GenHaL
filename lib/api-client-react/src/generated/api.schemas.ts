@@ -48,6 +48,7 @@ export interface Vendor {
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
+  pushFacebookVideoAlertsEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
   postReminderLeadMinutes?: number;
@@ -108,6 +109,7 @@ export interface VendorUpdate {
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
+  pushFacebookVideoAlertsEnabled?: boolean;
   announcementEmailOptOut?: boolean;
   /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
   postReminderLeadMinutes?: number;
@@ -824,6 +826,7 @@ export interface ExternalProfileUpdate {
   pushVoiceCampaignAlertsEnabled?: boolean;
   pushPostRemindersEnabled?: boolean;
   pushAiMediaExpiryEnabled?: boolean;
+  pushFacebookVideoAlertsEnabled?: boolean;
   /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
   postReminderLeadMinutes?: number;
 }

@@ -46,13 +46,14 @@ export default function AccountScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingCategory, setIsTogglingCategory] = useState<
-    'payments' | 'voiceCampaigns' | 'postReminders' | null
+    'payments' | 'voiceCampaigns' | 'postReminders' | 'facebookVideo' | null
   >(null);
   const [isSavingLeadTime, setIsSavingLeadTime] = useState(false);
 
   const paymentAlertsEnabled = vendor?.pushPaymentAlertsEnabled ?? true;
   const voiceCampaignAlertsEnabled = vendor?.pushVoiceCampaignAlertsEnabled ?? true;
   const postRemindersEnabled = vendor?.pushPostRemindersEnabled ?? true;
+  const facebookVideoAlertsEnabled = vendor?.pushFacebookVideoAlertsEnabled ?? true;
 
   const LEAD_TIME_OPTIONS: { value: number; label: string }[] = [
     { value: 15, label: '15 min' },
@@ -79,7 +80,7 @@ export default function AccountScreen() {
   };
 
   const handleToggleCategory = async (
-    key: 'payments' | 'voiceCampaigns' | 'postReminders',
+    key: 'payments' | 'voiceCampaigns' | 'postReminders' | 'facebookVideo',
     next: boolean,
   ) => {
     if (Platform.OS !== 'web') {
@@ -92,7 +93,9 @@ export default function AccountScreen() {
           ? { pushPaymentAlertsEnabled: next }
           : key === 'voiceCampaigns'
           ? { pushVoiceCampaignAlertsEnabled: next }
-          : { pushPostRemindersEnabled: next },
+          : key === 'postReminders'
+          ? { pushPostRemindersEnabled: next }
+          : { pushFacebookVideoAlertsEnabled: next },
       );
     } catch {
       Alert.alert('Could not save', 'Please try again.');
@@ -501,6 +504,34 @@ export default function AccountScreen() {
                   </View>
                 </View>
               )}
+
+              <View
+                style={[
+                  styles.toggleRow,
+                  styles.toggleSubRow,
+                  { borderTopColor: colors.border },
+                ]}
+              >
+                <View style={styles.toggleTextWrap}>
+                  <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                    Facebook video alerts
+                  </Text>
+                  <Text style={[styles.toggleSubLabel, { color: colors.mutedForeground }]}>
+                    Get notified when a Facebook video finishes processing or fails.
+                  </Text>
+                </View>
+                {isTogglingCategory === 'facebookVideo' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Switch
+                    value={facebookVideoAlertsEnabled}
+                    onValueChange={(next) => void handleToggleCategory('facebookVideo', next)}
+                    disabled={isTogglingCategory !== null}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor="#FFFFFF"
+                  />
+                )}
+              </View>
             </>
           )}
         </Card>

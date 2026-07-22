@@ -52,6 +52,7 @@ export const vendorsTable = pgTable("vendors", {
   pushVoiceCampaignAlertsEnabled: boolean("push_voice_campaign_alerts_enabled").notNull().default(true),
   pushPostRemindersEnabled: boolean("push_post_reminders_enabled").notNull().default(true),
   pushAiMediaExpiryEnabled: boolean("push_ai_media_expiry_enabled").notNull().default(true),
+  pushFacebookVideoAlertsEnabled: boolean("push_facebook_video_alerts_enabled").notNull().default(true),
   // Bulk admin announcement emails — vendor-controlled, default on (opt-out, not opt-in),
   // so existing behavior (everyone gets emailed) doesn't silently change for anyone.
   announcementEmailOptOut: boolean("announcement_email_opt_out").notNull().default(false),
