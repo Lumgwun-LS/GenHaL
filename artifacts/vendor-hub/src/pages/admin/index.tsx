@@ -33,6 +33,7 @@ import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 import AdminFinanceRollupPanel from "./finance-rollup";
 import PaymentConflictsPanel from "./payment-conflicts";
+import LateArrivalRefundsPanel from "./late-arrival-refunds";
 import VoidErrorsPanel from "./void-errors";
 import BackgroundJobsPanel from "./background-jobs";
 import SocialAccountHealthPanel from "./social-account-health";
@@ -748,6 +749,12 @@ async function fetchVoidErrors(): Promise<VoidErrorSummary> {
   const res = await fetch(`${BASE_URL}/api/admin/void-errors`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load void errors");
   return res.json() as Promise<VoidErrorSummary>;
+}
+
+async function fetchLateArrivalRefundSummary(): Promise<{ unresolvedFailures: number }> {
+  const res = await fetch(`${BASE_URL}/api/admin/late-arrival-refunds/summary`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load late-arrival refund summary");
+  return res.json() as Promise<{ unresolvedFailures: number }>;
 }
 
 async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureAlert> {
@@ -2104,6 +2111,13 @@ export default function AdminPanel() {
     refetchInterval: 30_000,
   });
 
+  const { data: lateArrivalRefundSummary } = useQuery({
+    queryKey: ["admin-late-arrival-refunds-summary"],
+    queryFn: fetchLateArrivalRefundSummary,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
   const { data: voiceBackfillStatus } = useQuery({
     queryKey: ["admin-voice-backfill"],
     queryFn: fetchVoiceBackfillStatus,
@@ -2255,6 +2269,14 @@ export default function AdminPanel() {
             {(paymentConflicts?.length ?? 0) > 0 && (
               <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px] leading-4">
                 {paymentConflicts!.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="refund-issues" className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" /> Refund Issues
+            {(lateArrivalRefundSummary?.unresolvedFailures ?? 0) > 0 && (
+              <Badge variant="destructive" className="ml-1 px-1.5 py-0 text-[10px] leading-4">
+                {lateArrivalRefundSummary!.unresolvedFailures}
               </Badge>
             )}
           </TabsTrigger>
@@ -3519,6 +3541,11 @@ export default function AdminPanel() {
             highlightPaymentId={conflictsHighlightId}
             onClearHighlight={() => setConflictsHighlightId(null)}
           />
+        </TabsContent>
+
+        {/* ── Refund Issues tab ────────────────────────────────────────── */}
+        <TabsContent value="refund-issues">
+          <LateArrivalRefundsPanel />
         </TabsContent>
 
         {/* ── Void Errors tab ──────────────────────────────────────────── */}

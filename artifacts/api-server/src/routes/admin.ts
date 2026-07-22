@@ -1552,6 +1552,198 @@ router.post("/admin/vendors/:id/trial", async (req, res): Promise<void> => {
   res.json({ success: true, vendorId: id, trialEndsAt: trialEndsAt.toISOString(), durationDays });
 });
 
+// ─── GET /admin/late-arrival-refunds ─────────────────────────────────────────
+// Payments where a Paystack (or other provider) charge arrived after the vendor
+// cancelled the link. The platform tried an automatic refund; these rows show
+// whether that succeeded (lateArrivalRefunded) or failed (lateArrivalRefundFailed).
+// Failed rows stay here until an admin marks them resolved after handling manually.
+//
+// Query params:
+//   ?status=failed   — only unresolved failures (default when omitted)
+//   ?status=refunded — only successfully auto-refunded rows
+//   ?status=all      — everything
+
+router.get("/admin/late-arrival-refunds", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const statusFilter = (req.query.status as string | undefined) ?? "failed";
+
+  // Build the SQL WHERE predicate from the JSONB metadata column
+  let whereClause: SQL;
+  if (statusFilter === "refunded") {
+    whereClause = sql`(${paymentsTable.metadata} ->> 'lateArrivalRefunded')::boolean = true`;
+  } else if (statusFilter === "all") {
+    whereClause = sql`
+      (${paymentsTable.metadata} ->> 'lateArrivalRefunded')::boolean = true
+      OR (${paymentsTable.metadata} ->> 'lateArrivalRefundFailed')::boolean = true
+    `;
+  } else {
+    // "failed" (default) — unresolved failures only
+    whereClause = sql`
+      (${paymentsTable.metadata} ->> 'lateArrivalRefundFailed')::boolean = true
+      AND (${paymentsTable.metadata} ->> 'lateArrivalRefundResolved') IS NULL
+    `;
+  }
+
+  const rows = await db
+    .select({
+      id: paymentsTable.id,
+      vendorId: paymentsTable.vendorId,
+      vendorName: vendorsTable.name,
+      orderId: paymentsTable.orderId,
+      provider: paymentsTable.provider,
+      providerReference: paymentsTable.providerReference,
+      amount: paymentsTable.amount,
+      currency: paymentsTable.currency,
+      status: paymentsTable.status,
+      metadata: paymentsTable.metadata,
+      updatedAt: paymentsTable.updatedAt,
+    })
+    .from(paymentsTable)
+    .leftJoin(vendorsTable, eq(paymentsTable.vendorId, vendorsTable.id))
+    .where(whereClause)
+    .orderBy(desc(paymentsTable.updatedAt))
+    .limit(200);
+
+  const result = rows.map((r) => {
+    const meta = (r.metadata ?? {}) as Record<string, unknown>;
+    return {
+      id: r.id,
+      vendorId: r.vendorId,
+      vendorName: r.vendorName,
+      orderId: r.orderId,
+      provider: r.provider,
+      providerReference: r.providerReference,
+      amount: r.amount,
+      currency: r.currency,
+      status: r.status,
+      // Refund outcome flags
+      lateArrivalRefunded: Boolean(meta.lateArrivalRefunded),
+      lateArrivalRefundedAt: (meta.lateArrivalRefundedAt as string | undefined) ?? null,
+      lateArrivalRefundFailed: Boolean(meta.lateArrivalRefundFailed),
+      lateArrivalRefundFailedAt: (meta.lateArrivalRefundFailedAt as string | undefined) ?? null,
+      lateArrivalRefundError: (meta.lateArrivalRefundError as string | undefined) ?? null,
+      // Resolution fields (failed-only — set by POST /resolve)
+      lateArrivalRefundResolved: Boolean(meta.lateArrivalRefundResolved),
+      lateArrivalRefundResolvedAt: (meta.lateArrivalRefundResolvedAt as string | undefined) ?? null,
+      lateArrivalRefundResolvedBy: (meta.lateArrivalRefundResolvedBy as string | undefined) ?? null,
+      lateArrivalRefundResolvedByDisplayName: (meta.lateArrivalRefundResolvedByDisplayName as string | undefined) ?? null,
+      updatedAt: r.updatedAt,
+    };
+  });
+
+  res.json(result);
+});
+
+// ─── GET /admin/late-arrival-refunds/summary ──────────────────────────────────
+// Returns a lightweight count of unresolved late-arrival refund failures — used
+// by the admin panel badge so the tab lights up without loading the full list.
+
+router.get("/admin/late-arrival-refunds/summary", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(paymentsTable)
+    .where(sql`
+      (${paymentsTable.metadata} ->> 'lateArrivalRefundFailed')::boolean = true
+      AND (${paymentsTable.metadata} ->> 'lateArrivalRefundResolved') IS NULL
+    `);
+
+  res.json({ unresolvedFailures: Number(row?.count ?? 0) });
+});
+
+// ─── POST /admin/late-arrival-refunds/:id/resolve ─────────────────────────────
+// An admin marks a failed late-arrival refund as resolved after handling it
+// manually in the Paystack dashboard. Records who resolved it and when.
+
+router.post("/admin/late-arrival-refunds/:id/resolve", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const paymentId = Number(req.params.id);
+  if (!Number.isInteger(paymentId) || paymentId <= 0) {
+    res.status(400).json({ error: "Invalid payment id." });
+    return;
+  }
+
+  const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
+  if (!existing) {
+    res.status(404).json({ error: "Payment not found." });
+    return;
+  }
+
+  const meta = (existing.metadata ?? {}) as Record<string, unknown>;
+  if (!meta.lateArrivalRefundFailed) {
+    res.status(400).json({ error: "This payment has no late-arrival refund failure to resolve." });
+    return;
+  }
+  if (meta.lateArrivalRefundResolved) {
+    res.status(400).json({ error: "This refund failure was already marked resolved." });
+    return;
+  }
+
+  // Resolve the admin's display name for audit attribution
+  let adminDisplayName: string | null = null;
+  try {
+    const adminUser = await clerkClient.users.getUser(userId);
+    const fullName = [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ").trim();
+    adminDisplayName =
+      fullName ||
+      adminUser.username ||
+      adminUser.primaryEmailAddress?.emailAddress ||
+      adminUser.emailAddresses[0]?.emailAddress ||
+      null;
+  } catch {
+    adminDisplayName = null;
+  }
+
+  const resolvedAt = new Date().toISOString();
+
+  await db
+    .update(paymentsTable)
+    .set({
+      metadata: {
+        ...meta,
+        lateArrivalRefundResolved: true,
+        lateArrivalRefundResolvedAt: resolvedAt,
+        lateArrivalRefundResolvedBy: userId,
+        lateArrivalRefundResolvedByDisplayName: adminDisplayName,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentId));
+
+  // Write to audit log for traceability
+  await db.insert(adminAuditLogTable).values({
+    adminUserId: userId,
+    adminDisplayName,
+    vendorId: existing.vendorId,
+    field: "late_arrival_refund_resolved",
+    oldValue: "unresolved",
+    newValue: "resolved",
+    changedAt: new Date(),
+    paymentId,
+  });
+
+  const adminLabel = adminDisplayName ? `*${adminDisplayName}* (${userId})` : `*${userId}*`;
+  const reference = existing.providerReference ?? `payment #${paymentId}`;
+  await sendSlackAlert(
+    `:white_check_mark: Late-arrival refund failure resolved — \`${reference}\` (payment #${paymentId}, vendor ${existing.vendorId}) marked resolved by ${adminLabel}.`,
+  );
+
+  console.info(
+    `[admin] late-arrival refund failure resolved — payment=${paymentId} admin=${userId}`,
+  );
+
+  res.json({ success: true });
+});
+
 // ─── GET /admin/vendors/search ────────────────────────────────────────────────
 // Lightweight vendor search by name or email for the admin trial assignment UI.
 router.get("/admin/vendors/search", async (req, res): Promise<void> => {
