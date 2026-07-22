@@ -272,6 +272,20 @@ function ClerkProviderWithRoutes() {
       signUpUrl={`${basePath}/sign-up`}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      localization={{
+        signIn: {
+          start: {
+            title: "Sign in to Awajimaa AI Business Suite",
+            subtitle: "Welcome back! Please sign in to continue",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Create your Awajimaa AI Business Suite account",
+            subtitle: "Welcome! Please fill in the details to get started",
+          },
+        },
+      }}
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
