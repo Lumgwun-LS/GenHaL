@@ -17,6 +17,7 @@ import {
   getListVendorNotificationsQueryKey,
   useListVendorNotifications,
   useMarkVendorNotificationRead,
+  useMarkAllVendorNotificationsRead,
 } from '@workspace/api-client-react';
 import type { VendorNotification } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -191,6 +192,16 @@ export default function NotificationsScreen() {
     },
   });
 
+  const { mutate: markAllRead } = useMarkAllVendorNotificationsRead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({
+          queryKey: getListVendorNotificationsQueryKey(vendorId as number),
+        });
+      },
+    },
+  });
+
   const handleRead = useCallback(
     (n: VendorNotification) => {
       if (!vendorId) return;
@@ -200,9 +211,8 @@ export default function NotificationsScreen() {
   );
 
   const handleMarkAllRead = () => {
-    if (!vendorId || !data) return;
-    const unread = data.filter((n) => !n.readAt);
-    unread.forEach((n) => markRead({ id: vendorId, nid: n.id }));
+    if (!vendorId) return;
+    markAllRead({ id: vendorId });
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
