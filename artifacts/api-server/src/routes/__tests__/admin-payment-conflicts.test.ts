@@ -28,12 +28,46 @@ const CONFLICT_PAYMENT = {
   updatedAt: new Date("2026-07-10T00:00:00.000Z"),
 };
 
+const RESOLVED_CONFLICT_PAYMENT = {
+  id: 99,
+  vendorId: 7,
+  orderId: null,
+  provider: "paystack",
+  providerReference: "ps_ref_456",
+  amount: "75.00",
+  currency: "USD",
+  status: "paid",
+  metadata: {
+    reconciliationConflict: {
+      attemptedStatus: "paid",
+      provider: "paystack",
+      detectedAt: "2026-07-08T00:00:00.000Z",
+      resolution: "dismiss",
+      resolvedAt: "2026-07-09T12:00:00.000Z",
+      resolvedBy: "user_admin",
+      resolvedByDisplayName: "Test Admin",
+    },
+  },
+  updatedAt: new Date("2026-07-09T12:00:00.000Z"),
+};
+
 let updateCalls: Array<{ set: Record<string, unknown> }> = [];
 let syncSaleCalls: unknown[] = [];
 let notifyCalls: unknown[] = [];
 
 vi.mock("@clerk/express", () => ({
   getAuth: (req: Request) => ({ userId: (req.headers["x-test-user"] as string) ?? "user_admin" }),
+  clerkClient: {
+    users: {
+      getUser: async () => ({
+        firstName: "Test",
+        lastName: "Admin",
+        username: null,
+        primaryEmailAddress: null,
+        emailAddresses: [],
+      }),
+    },
+  },
 }));
 
 vi.mock("@workspace/db", () => ({ db: {} }));
@@ -172,6 +206,94 @@ describe("admin payment conflicts", () => {
       attemptedStatus: "paid",
       webhookProvider: "stripe",
     });
+    // Unresolved conflict must not expose resolved-only fields
+    expect(nonAdmin.body[0].resolution).toBeNull();
+    expect(nonAdmin.body[0].resolvedAt).toBeNull();
+    expect(nonAdmin.body[0].resolvedBy).toBeNull();
+  });
+
+  it("GET /admin/payment-conflicts (no param) omits resolved conflicts", async () => {
+    // DB returns the unresolved payment — resolved one is filtered out server-side via SQL.
+    // We verify the response only contains the unresolved entry and its resolution fields are null.
+    const app = await buildApp({
+      select: () => ({
+        from: () => ({
+          leftJoin: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [{ ...CONFLICT_PAYMENT, vendorName: "Shop A" }],
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const { status, body } = await callApp(app, "GET", "/admin/payment-conflicts");
+    expect(status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe(42);
+    expect(body[0].resolution).toBeNull();
+    expect(body[0].resolvedAt).toBeNull();
+    expect(body[0].resolvedBy).toBeNull();
+    expect(body[0].resolvedByDisplayName).toBeNull();
+    // The unresolved conflict still has core fields
+    expect(body[0].attemptedStatus).toBe("paid");
+    expect(body[0].detectedAt).toBe("2026-07-10T00:00:00.000Z");
+  });
+
+  it("GET /admin/payment-conflicts?resolved=true returns only resolved conflicts with populated resolution fields", async () => {
+    // DB returns the resolved payment — open one is filtered out server-side via SQL.
+    // We verify resolution/resolvedAt/resolvedBy are all populated.
+    const app = await buildApp({
+      select: () => ({
+        from: () => ({
+          leftJoin: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [{ ...RESOLVED_CONFLICT_PAYMENT, vendorName: "Shop B" }],
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const { status, body } = await callApp(app, "GET", "/admin/payment-conflicts?resolved=true");
+    expect(status).toBe(200);
+    expect(body).toHaveLength(1);
+    const row = body[0];
+    expect(row.id).toBe(99);
+    expect(row.vendorName).toBe("Shop B");
+    expect(row.currentStatus).toBe("paid");
+    expect(row.attemptedStatus).toBe("paid");
+    expect(row.webhookProvider).toBe("paystack");
+    // Resolved-only fields must be populated
+    expect(row.resolution).toBe("dismiss");
+    expect(row.resolvedAt).toBe("2026-07-09T12:00:00.000Z");
+    expect(row.resolvedBy).toBe("user_admin");
+    expect(row.resolvedByDisplayName).toBe("Test Admin");
+    expect(row.detectedAt).toBe("2026-07-08T00:00:00.000Z");
+  });
+
+  it("GET /admin/payment-conflicts?resolved=true returns empty array when no resolved conflicts exist", async () => {
+    const app = await buildApp({
+      select: () => ({
+        from: () => ({
+          leftJoin: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [],
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const { status, body } = await callApp(app, "GET", "/admin/payment-conflicts?resolved=true");
+    expect(status).toBe(200);
+    expect(body).toEqual([]);
   });
 
   it("POST resolve with dismiss keeps status and marks resolved, no side effects", async () => {
@@ -187,6 +309,7 @@ describe("admin payment conflicts", () => {
           };
         },
       }),
+      insert: () => ({ values: async () => [] }),
     });
 
     const { status, body } = await callApp(app, "POST", "/admin/payment-conflicts/42/resolve", { resolution: "dismiss" });
@@ -213,6 +336,7 @@ describe("admin payment conflicts", () => {
           };
         },
       }),
+      insert: () => ({ values: async () => [] }),
     });
 
     const { status, body } = await callApp(app, "POST", "/admin/payment-conflicts/42/resolve", { resolution: "paid" });
