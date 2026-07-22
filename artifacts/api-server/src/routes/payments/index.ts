@@ -290,10 +290,12 @@ router.post("/payments/webhook-events/:id/retry", async (req, res): Promise<void
  * List all payment transactions. Filterable by vendorId, provider, status.
  */
 router.get("/payments", async (req, res): Promise<void> => {
-  const { vendorId, provider, status } = req.query as {
+  const { vendorId, provider, status, from, to } = req.query as {
     vendorId?: string;
     provider?: string;
     status?: string;
+    from?: string;
+    to?: string;
   };
 
   let payments = await db
@@ -304,6 +306,14 @@ router.get("/payments", async (req, res): Promise<void> => {
   if (vendorId) payments = payments.filter((p) => p.vendorId === parseInt(vendorId));
   if (provider) payments = payments.filter((p) => p.provider === provider);
   if (status) payments = payments.filter((p) => p.status === status);
+  if (from) {
+    const d = new Date(from);
+    if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) >= d);
+  }
+  if (to) {
+    const d = new Date(to);
+    if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) <= d);
+  }
 
   // Compute revenue summary
   const paidPayments = payments.filter((p) => p.status === "paid");

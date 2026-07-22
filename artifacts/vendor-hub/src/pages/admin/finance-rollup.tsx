@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useGetAdminFinanceRollupAnalytics } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank, Download, ArrowLeft, ChevronRight } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Wallet, PiggyBank, Download, ArrowLeft, ChevronRight, ShoppingCart, CreditCard, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
 import { VendorFinanceOverview } from "@/components/VendorFinanceOverview";
 
@@ -41,9 +43,225 @@ const ANY = "__any__";
 
 const PIE_COLORS = ["hsl(217 91% 60%)", "hsl(24 95% 62%)", "hsl(142 71% 45%)", "hsl(0 84% 60%)", "hsl(271 81% 56%)", "hsl(48 96% 53%)", "hsl(199 89% 48%)", "hsl(340 82% 52%)", "hsl(160 84% 39%)", "hsl(280 65% 60%)"];
 
+type DrilldownView = "finance" | "orders" | "payments";
+
 interface DrilldownVendor {
   vendorId: number;
   vendorName: string;
+  /** Period context inherited from the rollup filters */
+  period: string;
+  from: string;
+  to: string;
+}
+
+// ─── Inline order / payment row types ────────────────────────────────────────
+
+interface OrderRow {
+  id: number;
+  customerName: string;
+  customerEmail: string;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+}
+
+interface PaymentRow {
+  id: number;
+  orderId: number | null;
+  provider: string;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+}
+
+// ─── Small helper: resolve the ISO date bounds for a period string ─────────────
+function periodToDateRange(period: string, from: string, to: string): { from: string; to: string } {
+  if (period === "custom") {
+    return {
+      from: from ? new Date(from).toISOString() : "",
+      to: to ? new Date(to).toISOString() : "",
+    };
+  }
+  const now = new Date();
+  const end = now.toISOString();
+  if (period === "week") return { from: new Date(now.getTime() - 7 * 86400_000).toISOString(), to: end };
+  if (period === "year") return { from: new Date(now.getTime() - 365 * 86400_000).toISOString(), to: end };
+  // default: month
+  return { from: new Date(now.getTime() - 30 * 86400_000).toISOString(), to: end };
+}
+
+// ─── Vendor orders sub-panel ──────────────────────────────────────────────────
+function VendorOrdersView({ vendorId, period, from, to }: { vendorId: number; period: string; from: string; to: string }) {
+  const { from: isoFrom, to: isoTo } = periodToDateRange(period, from, to);
+  const qs = new URLSearchParams({ vendorId: String(vendorId) });
+  if (isoFrom) qs.set("from", isoFrom);
+  if (isoTo) qs.set("to", isoTo);
+
+  const { data, isLoading, isError } = useQuery<OrderRow[]>({
+    queryKey: ["admin-vendor-orders", vendorId, isoFrom, isoTo],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/orders?${qs.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch orders");
+      return res.json() as Promise<OrderRow[]>;
+    },
+  });
+
+  const STATUS_COLORS: Record<string, string> = {
+    completed: "bg-emerald-100 text-emerald-700",
+    pending: "bg-yellow-100 text-yellow-700",
+    cancelled: "bg-red-100 text-red-700",
+    processing: "bg-blue-100 text-blue-700",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Orders</CardTitle>
+        <CardDescription>Orders placed with this vendor in the selected period.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">Loading orders…</div>
+        ) : isError ? (
+          <div className="py-8 text-center text-destructive">Failed to load orders.</div>
+        ) : !data?.length ? (
+          <div className="py-8 text-center text-muted-foreground text-sm">No orders in this period.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table data-testid="table-drilldown-orders">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.map((o) => (
+                  <TableRow key={o.id}>
+                    <TableCell className="font-mono text-xs">#{o.id}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{o.customerName}</div>
+                      <div className="text-xs text-muted-foreground">{o.customerEmail}</div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[o.status] ?? "bg-muted text-foreground"}`}>
+                        {o.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      ${(o.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(o.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="mt-3 text-xs text-muted-foreground">{data.length} order{data.length !== 1 ? "s" : ""} in period</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Vendor payments sub-panel ────────────────────────────────────────────────
+function VendorPaymentsView({ vendorId, period, from, to }: { vendorId: number; period: string; from: string; to: string }) {
+  const { from: isoFrom, to: isoTo } = periodToDateRange(period, from, to);
+  const qs = new URLSearchParams({ vendorId: String(vendorId) });
+  if (isoFrom) qs.set("from", isoFrom);
+  if (isoTo) qs.set("to", isoTo);
+
+  const { data, isLoading, isError } = useQuery<{ payments: PaymentRow[]; summary: { total: number; paid: number; totalRevenue: number } }>({
+    queryKey: ["admin-vendor-payments", vendorId, isoFrom, isoTo],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/payments?${qs.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch payments");
+      return res.json() as Promise<{ payments: PaymentRow[]; summary: { total: number; paid: number; totalRevenue: number } }>;
+    },
+  });
+
+  const STATUS_COLORS: Record<string, string> = {
+    paid: "bg-emerald-100 text-emerald-700",
+    pending: "bg-yellow-100 text-yellow-700",
+    failed: "bg-red-100 text-red-700",
+    refunded: "bg-purple-100 text-purple-700",
+    cancelled: "bg-red-100 text-red-700",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4" /> Payments</CardTitle>
+        <CardDescription>Payment transactions for this vendor in the selected period.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">Loading payments…</div>
+        ) : isError ? (
+          <div className="py-8 text-center text-destructive">Failed to load payments.</div>
+        ) : !data?.payments.length ? (
+          <div className="py-8 text-center text-muted-foreground text-sm">No payments in this period.</div>
+        ) : (
+          <>
+            <div className="flex gap-4 mb-4 flex-wrap">
+              <div className="rounded-lg border px-4 py-2 text-center">
+                <div className="text-xs text-muted-foreground">Total</div>
+                <div className="text-lg font-bold">{data.summary.total}</div>
+              </div>
+              <div className="rounded-lg border px-4 py-2 text-center">
+                <div className="text-xs text-muted-foreground">Paid</div>
+                <div className="text-lg font-bold text-emerald-600">{data.summary.paid}</div>
+              </div>
+              <div className="rounded-lg border px-4 py-2 text-center">
+                <div className="text-xs text-muted-foreground">Revenue</div>
+                <div className="text-lg font-bold text-emerald-600">
+                  ${data.summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table data-testid="table-drilldown-payments">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.payments.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono text-xs">#{p.id}{p.orderId ? ` / Order #${p.orderId}` : ""}</TableCell>
+                      <TableCell className="capitalize text-sm">{p.provider}</TableCell>
+                      <TableCell>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] ?? "bg-muted text-foreground"}`}>
+                          {p.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {p.currency?.toUpperCase() ?? "$"} {(p.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(p.createdAt).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 interface ExportFilters {
@@ -62,6 +280,7 @@ export default function AdminFinanceRollupPanel() {
   const [exportPopoverOpen, setExportPopoverOpen] = useState(false);
   const [exportFilters, setExportFilters] = useState<ExportFilters>(EMPTY_EXPORT_FILTERS);
   const [drilldown, setDrilldown] = useState<DrilldownVendor | null>(null);
+  const [drilldownView, setDrilldownView] = useState<DrilldownView>("finance");
 
   const params = {
     period,
@@ -108,15 +327,16 @@ export default function AdminFinanceRollupPanel() {
     }
   }
 
-  // Drill-down view: show a single vendor's full finance overview
+  // Drill-down view: show a single vendor's finance overview, orders, or payments
   if (drilldown) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        {/* Breadcrumb + back button */}
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setDrilldown(null)}
+            onClick={() => { setDrilldown(null); setDrilldownView("finance"); }}
             className="gap-1.5"
             data-testid="btn-finance-drilldown-back"
           >
@@ -127,17 +347,79 @@ export default function AdminFinanceRollupPanel() {
             Finance Rollup
             <ChevronRight className="inline h-3.5 w-3.5 mx-1" />
             <span className="font-medium text-foreground">{drilldown.vendorName}</span>
+            {drilldownView !== "finance" && (
+              <>
+                <ChevronRight className="inline h-3.5 w-3.5 mx-1" />
+                <span className="font-medium text-foreground capitalize">{drilldownView}</span>
+              </>
+            )}
           </div>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{drilldown.vendorName} — Finance Overview</CardTitle>
-            <CardDescription>Full revenue, P&amp;L, expenses, and investment performance for this vendor.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <VendorFinanceOverview vendorId={drilldown.vendorId} vendorName={drilldown.vendorName} />
-          </CardContent>
-        </Card>
+
+        {/* Sub-view switcher */}
+        <div className="flex gap-2" data-testid="drilldown-view-switcher">
+          <Button
+            variant={drilldownView === "finance" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDrilldownView("finance")}
+            data-testid="btn-drilldown-finance"
+          >
+            <BarChart2 className="h-3.5 w-3.5" />
+            Finance Overview
+          </Button>
+          <Button
+            variant={drilldownView === "orders" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDrilldownView("orders")}
+            data-testid="btn-drilldown-orders"
+          >
+            <ShoppingCart className="h-3.5 w-3.5" />
+            Orders
+          </Button>
+          <Button
+            variant={drilldownView === "payments" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDrilldownView("payments")}
+            data-testid="btn-drilldown-payments"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            Payments
+          </Button>
+        </div>
+
+        {/* Sub-view content */}
+        {drilldownView === "finance" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{drilldown.vendorName} — Finance Overview</CardTitle>
+              <CardDescription>Full revenue, P&amp;L, expenses, and investment performance for this vendor.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VendorFinanceOverview vendorId={drilldown.vendorId} vendorName={drilldown.vendorName} />
+            </CardContent>
+          </Card>
+        )}
+
+        {drilldownView === "orders" && (
+          <VendorOrdersView
+            vendorId={drilldown.vendorId}
+            period={drilldown.period}
+            from={drilldown.from}
+            to={drilldown.to}
+          />
+        )}
+
+        {drilldownView === "payments" && (
+          <VendorPaymentsView
+            vendorId={drilldown.vendorId}
+            period={drilldown.period}
+            from={drilldown.from}
+            to={drilldown.to}
+          />
+        )}
       </div>
     );
   }
@@ -421,7 +703,7 @@ export default function AdminFinanceRollupPanel() {
                             key={v.vendorId}
                             data-testid={`row-finance-rollup-vendor-${v.vendorId}`}
                             className="cursor-pointer hover:bg-muted/60 transition-colors"
-                            onClick={() => setDrilldown({ vendorId: v.vendorId, vendorName: v.vendorName })}
+                            onClick={() => { setDrilldown({ vendorId: v.vendorId, vendorName: v.vendorName, period, from, to }); setDrilldownView("finance"); }}
                           >
                             <TableCell className="font-medium">{v.vendorName}</TableCell>
                             <TableCell className="text-right">${v.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
