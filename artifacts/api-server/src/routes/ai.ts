@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
-import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable } from "@workspace/db";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { ai as gemini } from "@workspace/integrations-gemini-ai";
@@ -31,6 +31,12 @@ import {
   GetAiImageUploadUrlResponse,
   AnalyzeVideoCaptionResponse,
   ListAiGenerationsResponse,
+  GetDraftVideoScenesQueryParams,
+  GetDraftVideoScenesResponse,
+  SaveDraftVideoScenesBody,
+  SaveDraftVideoScenesResponse,
+  ClearDraftVideoScenesBody,
+  ClearDraftVideoScenesResponse,
 } from "@workspace/api-zod";
 
 const objectStorageService = new ObjectStorageService();
@@ -699,6 +705,67 @@ router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
   const serialized = serializeGeneration(generation);
   if (status === "failed") { res.status(502).json(AnalyzeVideoCaptionResponse.parse(serialized)); return; }
   res.json(AnalyzeVideoCaptionResponse.parse(serialized));
+});
+
+/**
+ * GET /ai/draft-video-scenes — returns the stored scene draft for a vendor, or
+ * null if no draft exists. Called on Create Post mount to restore any scenes
+ * the vendor had open when they previously left the page.
+ */
+router.get("/ai/draft-video-scenes", async (req, res): Promise<void> => {
+  const params = GetDraftVideoScenesQueryParams.safeParse(req.query);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const { vendorId } = params.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only access your own draft." }); return; }
+
+  const [row] = await db.select().from(draftVideoScenesTable).where(eq(draftVideoScenesTable.vendorId, vendorId));
+  res.json(GetDraftVideoScenesResponse.parse({ scenes: row?.scenes ?? null }));
+});
+
+/**
+ * PUT /ai/draft-video-scenes — upsert the in-progress scene draft for a vendor.
+ * Called after scene generation, after per-scene prompt edits (debounced on the
+ * frontend), and after per-scene image regeneration, so a server-side copy is
+ * always up to date.
+ */
+router.put("/ai/draft-video-scenes", async (req, res): Promise<void> => {
+  const parsed = SaveDraftVideoScenesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, scenes } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only save your own draft." }); return; }
+
+  await db.insert(draftVideoScenesTable)
+    .values({ vendorId, scenes, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: draftVideoScenesTable.vendorId,
+      set: { scenes, updatedAt: new Date() },
+    });
+
+  res.json(SaveDraftVideoScenesResponse.parse({ ok: true }));
+});
+
+/**
+ * DELETE /ai/draft-video-scenes — clear the stored draft after the vendor
+ * renders or discards their scenes, so stale data never restores on the next
+ * visit to Create Post.
+ */
+router.delete("/ai/draft-video-scenes", async (req, res): Promise<void> => {
+  const parsed = ClearDraftVideoScenesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId } = parsed.data;
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only clear your own draft." }); return; }
+
+  await db.delete(draftVideoScenesTable).where(eq(draftVideoScenesTable.vendorId, vendorId));
+  res.json(ClearDraftVideoScenesResponse.parse({ ok: true }));
 });
 
 router.get("/ai/generations", async (req, res): Promise<void> => {

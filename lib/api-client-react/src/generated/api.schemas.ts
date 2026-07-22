@@ -465,6 +465,37 @@ export interface AiVideoScenesResponse {
   scenes: AiGeneration[];
 }
 
+export interface DraftVideoScene {
+  /** The AiGeneration id for this scene's preview image. */
+  id: number;
+  /** The scene-specific prompt, including any edits the vendor has made since generation. */
+  prompt: string;
+  /** The generated scene preview image URL. */
+  imageUrl: string;
+}
+
+export interface DraftVideoScenesResponse {
+  /** The stored scene draft, or null if no draft exists for this vendor. */
+  scenes: DraftVideoScene[] | null;
+}
+
+export interface DraftVideoScenesSaveBody {
+  vendorId: number;
+  scenes: DraftVideoScene[];
+}
+
+export interface DraftVideoScenesSaved {
+  ok: boolean;
+}
+
+export interface DraftVideoScenesClearBody {
+  vendorId: number;
+}
+
+export interface DraftVideoScenesCleared {
+  ok: boolean;
+}
+
 export interface AiVideoSceneRegenerateRequest {
   vendorId: number;
   /** The scene-specific prompt to regenerate with — normally the `prompt` from the AiGeneration returned for this scene by /ai/generate-video-scenes, optionally edited by the vendor. */
@@ -2063,6 +2094,10 @@ platform?: string;
 export type PublishPost502 = {
   error: string;
   publications: PostPublication[];
+};
+
+export type GetDraftVideoScenesParams = {
+vendorId: number;
 };
 
 export type ListAiGenerationsParams = {

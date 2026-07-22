@@ -666,6 +666,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiGeneration"
 
+  /ai/draft-video-scenes:
+    get:
+      operationId: getDraftVideoScenes
+      tags: [ai]
+      summary: Get the stored scene draft for a vendor
+      description: Returns the vendor's in-progress video-scene draft (edited prompts + generated image URLs) persisted server-side so it survives a browser crash or accidental navigation.
+      parameters:
+        - in: query
+          name: vendorId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stored draft (scenes is null if no draft exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftVideoScenesResponse"
+    put:
+      operationId: saveDraftVideoScenes
+      tags: [ai]
+      summary: Save (upsert) the in-progress scene draft for a vendor
+      description: Persists the vendor's current video-scene state server-side. Called after scene generation, after any per-scene prompt edit, and after per-scene image regeneration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftVideoScenesSaveBody"
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftVideoScenesSaved"
+    delete:
+      operationId: clearDraftVideoScenes
+      tags: [ai]
+      summary: Clear the in-progress scene draft for a vendor
+      description: Deletes the stored draft after the vendor renders or discards their scenes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftVideoScenesClearBody"
+      responses:
+        "200":
+          description: Draft cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftVideoScenesCleared"
+
   /ai/generate-caption:
     post:
       operationId: generateAiCaption
@@ -4780,6 +4836,63 @@ components:
           description: One AiGeneration (type "image") per scene, in scene order. Each is swept by the same orphaned-media cleanup as any other AI image if never used in a render.
           items:
             $ref: "#/components/schemas/AiGeneration"
+
+    DraftVideoScene:
+      type: object
+      required: [id, prompt, imageUrl]
+      properties:
+        id:
+          type: integer
+          description: The AiGeneration id for this scene's preview image.
+        prompt:
+          type: string
+          description: The scene-specific prompt, including any edits the vendor has made since generation.
+        imageUrl:
+          type: string
+          description: The generated scene preview image URL.
+
+    DraftVideoScenesResponse:
+      type: object
+      required: [scenes]
+      properties:
+        scenes:
+          type: array
+          nullable: true
+          description: The stored scene draft, or null if no draft exists for this vendor.
+          items:
+            $ref: "#/components/schemas/DraftVideoScene"
+
+    DraftVideoScenesSaveBody:
+      type: object
+      required: [vendorId, scenes]
+      properties:
+        vendorId:
+          type: integer
+        scenes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftVideoScene"
+
+    DraftVideoScenesSaved:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    DraftVideoScenesClearBody:
+      type: object
+      required: [vendorId]
+      properties:
+        vendorId:
+          type: integer
+
+    DraftVideoScenesCleared:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
 
     AiVideoSceneRegenerateRequest:
       type: object

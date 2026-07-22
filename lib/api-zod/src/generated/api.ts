@@ -934,6 +934,54 @@ export const RenderAiVideoResponse = zod.object({
 
 
 /**
+ * Returns the vendor's in-progress video-scene draft (edited prompts + generated image URLs) persisted server-side so it survives a browser crash or accidental navigation.
+ * @summary Get the stored scene draft for a vendor
+ */
+export const GetDraftVideoScenesQueryParams = zod.object({
+  "vendorId": zod.coerce.number()
+})
+
+export const GetDraftVideoScenesResponse = zod.object({
+  "scenes": zod.array(zod.object({
+  "id": zod.number().describe('The AiGeneration id for this scene\'s preview image.'),
+  "prompt": zod.string().describe('The scene-specific prompt, including any edits the vendor has made since generation.'),
+  "imageUrl": zod.string().describe('The generated scene preview image URL.')
+})).nullable().describe('The stored scene draft, or null if no draft exists for this vendor.')
+})
+
+
+/**
+ * Persists the vendor's current video-scene state server-side. Called after scene generation, after any per-scene prompt edit, and after per-scene image regeneration.
+ * @summary Save (upsert) the in-progress scene draft for a vendor
+ */
+export const SaveDraftVideoScenesBody = zod.object({
+  "vendorId": zod.number(),
+  "scenes": zod.array(zod.object({
+  "id": zod.number().describe('The AiGeneration id for this scene\'s preview image.'),
+  "prompt": zod.string().describe('The scene-specific prompt, including any edits the vendor has made since generation.'),
+  "imageUrl": zod.string().describe('The generated scene preview image URL.')
+}))
+})
+
+export const SaveDraftVideoScenesResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Deletes the stored draft after the vendor renders or discards their scenes.
+ * @summary Clear the in-progress scene draft for a vendor
+ */
+export const ClearDraftVideoScenesBody = zod.object({
+  "vendorId": zod.number()
+})
+
+export const ClearDraftVideoScenesResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Generate AI caption/copy for a post
  */
 export const GenerateAiCaptionBody = zod.object({

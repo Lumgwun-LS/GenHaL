@@ -10,6 +10,7 @@ import {
   useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage,
   useGenerateAiVideoScenes, useRegenerateAiVideoScene, useRenderAiVideo,
   useGetAiVideoUploadUrl, useGetAiImageUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
+  useGetDraftVideoScenes, useSaveDraftVideoScenes, useClearDraftVideoScenes,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
@@ -90,6 +91,16 @@ export default function CreatePost() {
       return null;
     }
   });
+  // Debounce timer ref for server-side draft saves so rapid prompt edits
+  // don't fire a network request on every keystroke.
+  const serverDraftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards the server-side draft DELETE from firing before the initial restore
+  // decision has been made. Starts false; becomes true once either (a) scenes
+  // are set to a non-null value (sessionStorage restored or server restored), or
+  // (b) the server query resolves with no scenes to restore. Until this flag is
+  // true, any null videoScenes value is the initial mount state, not a
+  // user-initiated discard, and must NOT trigger a server DELETE.
+  const draftHydratedRef = useRef(false);
   const [regeneratingSceneId, setRegeneratingSceneId] = useState<number | null>(null);
   const [uploadedVideoStage, setUploadedVideoStage] = useState<"idle" | "uploading" | "analyzing">("idle");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -188,20 +199,43 @@ export default function CreatePost() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnconfirmedScenes]);
 
-  // Persist scene previews (including any edited prompts) to sessionStorage so
-  // they survive an accidental reload. Cleared automatically when videoScenes
-  // is set back to null (render complete, discard, or new image/video chosen).
+  // Persist scene previews (including any edited prompts) to sessionStorage AND
+  // server-side so they survive accidental reloads AND browser crashes / tab
+  // restores. Server saves are debounced (800 ms) so rapid prompt edits don't
+  // hammer the network.
+  //
+  // The server DELETE only fires once draftHydratedRef is true, which prevents
+  // the initial-mount null state (before the server-restore effect has run)
+  // from wiping the very draft we're trying to recover.
   useEffect(() => {
     if (videoScenes === null) {
       sessionStorage.removeItem(SCENE_STORAGE_KEY);
+      if (serverDraftSaveTimerRef.current) {
+        clearTimeout(serverDraftSaveTimerRef.current);
+        serverDraftSaveTimerRef.current = null;
+      }
+      // Only delete the server draft after hydration is complete — i.e. this
+      // null is a user-initiated discard/render, not the initial mount state.
+      if (draftHydratedRef.current) {
+        clearDraft.mutate({ data: { vendorId: 1 } });
+      }
     } else {
+      // Scenes are set (either from sessionStorage lazy init or from restore) —
+      // hydration is definitively complete from this point on.
+      draftHydratedRef.current = true;
       try {
         sessionStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(videoScenes));
       } catch {
-        // sessionStorage full or unavailable — silently skip persistence.
+        // sessionStorage full or unavailable — silently skip local persistence.
       }
+      // Debounced server save — fire and forget (errors are non-critical;
+      // sessionStorage still protects against reloads).
+      if (serverDraftSaveTimerRef.current) clearTimeout(serverDraftSaveTimerRef.current);
+      serverDraftSaveTimerRef.current = setTimeout(() => {
+        saveDraft.mutate({ data: { vendorId: 1, scenes: videoScenes } });
+      }, 800);
     }
-  // SCENE_STORAGE_KEY is a stable string defined at component level above.
+  // SCENE_STORAGE_KEY and the mutation fns are stable references.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoScenes]);
 
@@ -225,6 +259,44 @@ export default function CreatePost() {
   const analyzeVideoCaption = useAnalyzeVideoCaption();
   const submitForReviewMutation = useSubmitPostForReview();
   const queryClient = useQueryClient();
+
+  // Server-side draft persistence — survives browser crashes and cleared
+  // sessionStorage (e.g. after a tab restores from a previous session).
+  const { data: serverDraft } = useGetDraftVideoScenes({ vendorId: 1 });
+  const saveDraft = useSaveDraftVideoScenes();
+  const clearDraft = useClearDraftVideoScenes();
+
+  // Restore scenes from the server draft when sessionStorage had nothing (i.e.
+  // the initial state was null). Runs once after the server query resolves.
+  // Shows a toast so the vendor knows their previous edits were recovered.
+  //
+  // Also marks draftHydratedRef true in both branches once the server query has
+  // resolved — this lets the persistence effect safely call clearDraft after
+  // any subsequent user-initiated discard or render.
+  useEffect(() => {
+    // Still loading — wait for the query to resolve before making any decision.
+    if (serverDraft === undefined) return;
+
+    if (videoScenes !== null) {
+      // sessionStorage already restored a draft — hydration is complete.
+      draftHydratedRef.current = true;
+      return;
+    }
+
+    if (!serverDraft.scenes || serverDraft.scenes.length === 0) {
+      // Server has no draft either — mark hydrated so future discards correctly
+      // call clearDraft instead of being silently skipped.
+      draftHydratedRef.current = true;
+      return;
+    }
+
+    // Server has a draft and sessionStorage was empty — restore it.
+    setVideoScenes(serverDraft.scenes);
+    // draftHydratedRef.current will be set to true by the videoScenes effect
+    // when it fires with the newly-set non-null scenes value.
+    toast.info(`Your ${serverDraft.scenes.length} scene preview${serverDraft.scenes.length > 1 ? "s" : ""} from your last session have been restored — review and render when ready`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverDraft]);
 
   const handleGenerateCaption = async () => {
     if (!caption.trim()) {

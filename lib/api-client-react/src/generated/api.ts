@@ -63,6 +63,11 @@ import type {
   DeletionEligibility,
   DeletionRequestResult,
   DeletionVerifyInput,
+  DraftVideoScenesClearBody,
+  DraftVideoScenesCleared,
+  DraftVideoScenesResponse,
+  DraftVideoScenesSaveBody,
+  DraftVideoScenesSaved,
   EmailCampaign,
   EmailCampaignInput,
   EmailCampaignStats,
@@ -97,6 +102,7 @@ import type {
   GetAdminFinanceRollupAnalyticsParams,
   GetAdminMessageHistoryParams,
   GetAnalyticsOverviewParams,
+  GetDraftVideoScenesParams,
   GetEmailCampaignStatsParams,
   GetFinanceOverviewAnalyticsParams,
   GetInventorySummaryParams,
@@ -2433,6 +2439,233 @@ export const useRenderAiVideo = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRenderAiVideoMutationOptions(options));
+    }
+
+export const getGetDraftVideoScenesUrl = (params: GetDraftVideoScenesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ai/draft-video-scenes?${stringifiedParams}` : `/api/ai/draft-video-scenes`
+}
+
+/**
+ * Returns the vendor's in-progress video-scene draft (edited prompts + generated image URLs) persisted server-side so it survives a browser crash or accidental navigation.
+ * @summary Get the stored scene draft for a vendor
+ */
+export const getDraftVideoScenes = async (params: GetDraftVideoScenesParams, options?: RequestInit): Promise<DraftVideoScenesResponse> => {
+
+  return customFetch<DraftVideoScenesResponse>(getGetDraftVideoScenesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDraftVideoScenesQueryKey = (params?: GetDraftVideoScenesParams,) => {
+    return [
+    `/api/ai/draft-video-scenes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDraftVideoScenesQueryOptions = <TData = Awaited<ReturnType<typeof getDraftVideoScenes>>, TError = ErrorType<unknown>>(params: GetDraftVideoScenesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDraftVideoScenes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDraftVideoScenesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDraftVideoScenes>>> = ({ signal }) => getDraftVideoScenes(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDraftVideoScenes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDraftVideoScenesQueryResult = NonNullable<Awaited<ReturnType<typeof getDraftVideoScenes>>>
+export type GetDraftVideoScenesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the stored scene draft for a vendor
+ */
+
+export function useGetDraftVideoScenes<TData = Awaited<ReturnType<typeof getDraftVideoScenes>>, TError = ErrorType<unknown>>(
+ params: GetDraftVideoScenesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDraftVideoScenes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDraftVideoScenesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveDraftVideoScenesUrl = () => {
+
+
+
+
+  return `/api/ai/draft-video-scenes`
+}
+
+/**
+ * Persists the vendor's current video-scene state server-side. Called after scene generation, after any per-scene prompt edit, and after per-scene image regeneration.
+ * @summary Save (upsert) the in-progress scene draft for a vendor
+ */
+export const saveDraftVideoScenes = async (draftVideoScenesSaveBody: DraftVideoScenesSaveBody, options?: RequestInit): Promise<DraftVideoScenesSaved> => {
+
+  return customFetch<DraftVideoScenesSaved>(getSaveDraftVideoScenesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(draftVideoScenesSaveBody)
+  }
+);}
+
+
+
+
+export const getSaveDraftVideoScenesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesSaveBody>}, TContext> => {
+
+const mutationKey = ['saveDraftVideoScenes'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveDraftVideoScenes>>, {data: BodyType<DraftVideoScenesSaveBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveDraftVideoScenes(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveDraftVideoScenesMutationResult = NonNullable<Awaited<ReturnType<typeof saveDraftVideoScenes>>>
+    export type SaveDraftVideoScenesMutationBody = BodyType<DraftVideoScenesSaveBody>
+    export type SaveDraftVideoScenesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save (upsert) the in-progress scene draft for a vendor
+ */
+export const useSaveDraftVideoScenes = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveDraftVideoScenes>>,
+        TError,
+        {data: BodyType<DraftVideoScenesSaveBody>},
+        TContext
+      > => {
+      return useMutation(getSaveDraftVideoScenesMutationOptions(options));
+    }
+
+export const getClearDraftVideoScenesUrl = () => {
+
+
+
+
+  return `/api/ai/draft-video-scenes`
+}
+
+/**
+ * Deletes the stored draft after the vendor renders or discards their scenes.
+ * @summary Clear the in-progress scene draft for a vendor
+ */
+export const clearDraftVideoScenes = async (draftVideoScenesClearBody: DraftVideoScenesClearBody, options?: RequestInit): Promise<DraftVideoScenesCleared> => {
+
+  return customFetch<DraftVideoScenesCleared>(getClearDraftVideoScenesUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(draftVideoScenesClearBody)
+  }
+);}
+
+
+
+
+export const getClearDraftVideoScenesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesClearBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesClearBody>}, TContext> => {
+
+const mutationKey = ['clearDraftVideoScenes'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearDraftVideoScenes>>, {data: BodyType<DraftVideoScenesClearBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  clearDraftVideoScenes(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearDraftVideoScenesMutationResult = NonNullable<Awaited<ReturnType<typeof clearDraftVideoScenes>>>
+    export type ClearDraftVideoScenesMutationBody = BodyType<DraftVideoScenesClearBody>
+    export type ClearDraftVideoScenesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Clear the in-progress scene draft for a vendor
+ */
+export const useClearDraftVideoScenes = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearDraftVideoScenes>>, TError,{data: BodyType<DraftVideoScenesClearBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearDraftVideoScenes>>,
+        TError,
+        {data: BodyType<DraftVideoScenesClearBody>},
+        TContext
+      > => {
+      return useMutation(getClearDraftVideoScenesMutationOptions(options));
     }
 
 export const getGenerateAiCaptionUrl = () => {
