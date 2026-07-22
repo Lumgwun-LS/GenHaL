@@ -52,6 +52,8 @@ export default function ExpensesPage() {
 
   const [activeTab, setActiveTab] = useState<"all" | "recurring">("all");
   const [category, setCategory] = useState<string>("all");
+  const [recurringStatusFilter, setRecurringStatusFilter] = useState<"all" | "active" | "paused">("all");
+  const [recurringFreqFilter, setRecurringFreqFilter] = useState<"all" | RecurringFrequency>("all");
   const dateFilter = useDateRangeFilter();
   const [branchFilter, setBranchFilter] = useState("all");
   const [workerFilter, setWorkerFilter] = useState("all");
@@ -89,13 +91,19 @@ export default function ExpensesPage() {
 
   // Filter and sort recurring templates by next occurrence date (soonest first)
   const recurringTemplates = useMemo(() => {
-    const templates = (allExpenses ?? []).filter((e) => e.isRecurring);
+    const templates = (allExpenses ?? []).filter((e) => {
+      if (!e.isRecurring) return false;
+      if (recurringStatusFilter === "active" && e.recurringPaused) return false;
+      if (recurringStatusFilter === "paused" && !e.recurringPaused) return false;
+      if (recurringFreqFilter !== "all" && e.recurringFrequency !== recurringFreqFilter) return false;
+      return true;
+    });
     return [...templates].sort((a, b) => {
       const aDate = a.nextOccurrenceDate ? new Date(a.nextOccurrenceDate).getTime() : Infinity;
       const bDate = b.nextOccurrenceDate ? new Date(b.nextOccurrenceDate).getTime() : Infinity;
       return aDate - bDate;
     });
-  }, [allExpenses]);
+  }, [allExpenses, recurringStatusFilter, recurringFreqFilter]);
 
   // Projected monthly recurring cost — active (non-paused) templates only
   const projectedMonthlyTotal = useMemo(() => {
@@ -420,8 +428,29 @@ export default function ExpensesPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Status</Label>
+                <Select value={recurringStatusFilter} onValueChange={(v) => setRecurringStatusFilter(v as "all" | "active" | "paused")}>
+                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Frequency</Label>
+                <Select value={recurringFreqFilter} onValueChange={(v) => setRecurringFreqFilter(v as "all" | RecurringFrequency)}>
+                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All frequencies</SelectItem>
+                    {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <p className="text-xs text-muted-foreground self-end pb-2">
-                Showing all active recurring templates, sorted by next due date.
+                Sorted by next due date.
               </p>
             </div>
 
