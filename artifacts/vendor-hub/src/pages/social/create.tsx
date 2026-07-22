@@ -19,6 +19,9 @@ const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 type LinkMode = "none" | "interest" | "checkout";
 
+/** Mirrors MAX_PROMPT_LEN in artifacts/api-server/src/routes/ai.ts */
+const MAX_SCENE_PROMPT_LEN = 500;
+
 const PLATFORMS = [
   { id: 'facebook', label: 'Facebook', color: 'bg-blue-600' },
   { id: 'instagram', label: 'Instagram', color: 'bg-pink-600' },
@@ -659,31 +662,37 @@ export default function CreatePost() {
                     </Button>
                   </div>
                   <div className={`grid gap-3 ${videoScenes.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                    {videoScenes.map((scene, i) => (
-                      <div key={scene.id} className="flex flex-col gap-1.5">
-                        <div className="relative">
-                          <img src={scene.imageUrl} alt={`Scene ${i + 1}`} className="w-full rounded-md border aspect-video object-cover" />
-                          <Badge variant="secondary" className="absolute top-1.5 left-1.5 text-[10px]">Scene {i + 1}</Badge>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="absolute top-1.5 right-1.5 h-7 px-2"
-                            onClick={() => handleRegenerateScene(i)}
+                    {videoScenes.map((scene, i) => {
+                      const promptTooLong = scene.prompt.length > MAX_SCENE_PROMPT_LEN;
+                      return (
+                        <div key={scene.id} className="flex flex-col gap-1.5">
+                          <div className="relative">
+                            <img src={scene.imageUrl} alt={`Scene ${i + 1}`} className="w-full rounded-md border aspect-video object-cover" />
+                            <Badge variant="secondary" className="absolute top-1.5 left-1.5 text-[10px]">Scene {i + 1}</Badge>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="absolute top-1.5 right-1.5 h-7 px-2"
+                              onClick={() => handleRegenerateScene(i)}
+                              disabled={regeneratingSceneId !== null || renderVideo.isPending || promptTooLong}
+                              title={promptTooLong ? `Prompt is too long — shorten it to ${MAX_SCENE_PROMPT_LEN} characters or fewer to regenerate` : "Regenerate this scene using the prompt below"}
+                            >
+                              {regeneratingSceneId === scene.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            </Button>
+                          </div>
+                          <Textarea
+                            className="text-xs resize-none min-h-[60px] leading-snug"
+                            placeholder="Edit the prompt to steer the next regeneration…"
+                            value={scene.prompt}
+                            onChange={(e) => handleScenePromptChange(i, e.target.value)}
                             disabled={regeneratingSceneId !== null || renderVideo.isPending}
-                            title="Regenerate this scene using the prompt below"
-                          >
-                            {regeneratingSceneId === scene.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                          </Button>
+                          />
+                          <p className={`text-right text-[10px] leading-none ${promptTooLong ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                            {scene.prompt.length} / {MAX_SCENE_PROMPT_LEN}
+                          </p>
                         </div>
-                        <Textarea
-                          className="text-xs resize-none min-h-[60px] leading-snug"
-                          placeholder="Edit the prompt to steer the next regeneration…"
-                          value={scene.prompt}
-                          onChange={(e) => handleScenePromptChange(i, e.target.value)}
-                          disabled={regeneratingSceneId !== null || renderVideo.isPending}
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <Button
                     size="sm"
