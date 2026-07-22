@@ -119,6 +119,26 @@ function SignUpPage() {
 }
 
 function OnboardingRoute() {
+  const { isAdmin, isLoading: isAdminLoading } = useIsAdminStatus();
+  const { data: vendors, isLoading: isVendorsLoading } = useListVendors();
+  const { user } = useUser();
+
+  // Wait for both checks before deciding — avoids a flash-redirect on slow networks.
+  if (isAdminLoading || isVendorsLoading) {
+    return (
+      <Show when="signed-in">
+        <div className="flex h-screen items-center justify-center text-muted-foreground">Loading…</div>
+      </Show>
+    );
+  }
+
+  // Admin users never need a vendor row — send them straight to the dashboard.
+  if (isAdmin) return <Redirect to="/dashboard" />;
+
+  // Already onboarded — no need to show the form again.
+  const hasVendor = vendors?.some((v) => v.clerkUserId === user?.id) ?? false;
+  if (hasVendor) return <Redirect to="/dashboard" />;
+
   return (
     <>
       <Show when="signed-in">

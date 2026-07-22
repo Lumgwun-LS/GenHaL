@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { useLocation } from "wouter";
-import { useOnboardVendor } from "@workspace/api-client-react";
+import { useOnboardVendor, getListVendorsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ export default function Onboarding() {
   const { signOut } = useClerk();
   const [, setLocation] = useLocation();
   const onboardVendor = useOnboardVendor();
+  const queryClient = useQueryClient();
 
   const [form, setForm] = useState<FormState>({
     name: user?.fullName?.trim() || "",
@@ -76,6 +78,9 @@ export default function Onboarding() {
       {
         onSuccess: () => {
           toast.success("Welcome to VendorHub!");
+          // Invalidate the vendors list so RequireVendorProfile sees the new row
+          // before we navigate — prevents the stale-cache redirect loop back to /onboarding.
+          void queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
           setLocation("/dashboard");
         },
         onError: (err: any) => toast.error(err?.message ?? "Could not complete signup. Please try again."),
