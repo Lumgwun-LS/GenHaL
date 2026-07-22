@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   useGetAnalyticsOverview,
   useGetSalesAnalytics,
@@ -13,7 +14,7 @@ import {
 import { format } from "date-fns";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const PERIODS = [
@@ -35,6 +36,27 @@ function platformColor(name: string) {
   return PLATFORM_COLORS[name.toLowerCase()] ?? "hsl(217 91% 60%)";
 }
 
+/* ── animation variants ─────────────────────────────────────────────────── */
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+const fadeUp: import("framer-motion").Variants = {
+  hidden: { opacity: 0, y: 24 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE } },
+};
+
+const stagger: import("framer-motion").Variants = {
+  hidden: {},
+  show:   { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+};
+
+const cardStagger: import("framer-motion").Variants = {
+  hidden: {},
+  show:   { transition: { staggerChildren: 0.06, delayChildren: 0.25 } },
+};
+
+/* ── StatCard ────────────────────────────────────────────────────────────── */
+
 function StatCard({
   title, value, icon: Icon, color, subtext, trend,
 }: {
@@ -46,86 +68,133 @@ function StatCard({
   trend?: "up" | "down" | "flat";
 }) {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
-  const trendColor = trend === "up" ? "text-emerald-500" : trend === "down" ? "text-destructive" : "text-muted-foreground";
+  const trendColor =
+    trend === "up" ? "text-emerald-500" : trend === "down" ? "text-destructive" : "text-muted-foreground";
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${color}`} />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {subtext && (
-          <p className={`text-xs mt-1 flex items-center gap-1 ${trend ? trendColor : "text-muted-foreground"}`}>
-            {trend && <TrendIcon className="h-3 w-3" />}
-            {subtext}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <motion.div variants={fadeUp} className="h-full">
+      <Card className="h-full transition-shadow hover:shadow-lg hover:shadow-primary/5">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <div className={`rounded-lg p-1.5 bg-background ${color} ring-1 ring-inset ring-white/5`}>
+            <Icon className="h-3.5 w-3.5" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold tabular-nums">{value}</div>
+          {subtext && (
+            <p className={`text-xs mt-1 flex items-center gap-1 ${trend ? trendColor : "text-muted-foreground"}`}>
+              {trend && <TrendIcon className="h-3 w-3" />}
+              {subtext}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
+
+/* ── loading skeleton ────────────────────────────────────────────────────── */
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-lg bg-muted/60 ${className}`} />;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <Skeleton className="h-9 w-40" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-28" />
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-7">
+        <Skeleton className="md:col-span-4 h-72" />
+        <Skeleton className="md:col-span-3 h-72" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Skeleton className="h-64" />
+        <div className="space-y-4">
+          <Skeleton className="h-[180px]" />
+          <Skeleton className="h-[140px]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── main component ──────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("month");
 
   const { data: analytics, isLoading: overviewLoading } = useGetAnalyticsOverview();
-  const { data: salesData, isLoading: salesLoading } = useGetSalesAnalytics({ period } as any);
+  const { data: salesData, isLoading: salesLoading }   = useGetSalesAnalytics({ period } as any);
   const { data: socialData, isLoading: socialLoading } = useGetSocialAnalytics({ period } as any);
 
   const isLoading = overviewLoading || salesLoading || socialLoading;
 
-  // Revenue trend — fill zero for any missing days so the chart looks continuous
   const revenueByDay: { date: string; revenue: number }[] = useMemo(() => {
     const raw = (salesData as any)?.revenueByDay ?? [];
     return raw.map((r: any) => ({
-      date: format(new Date(r.date), "MMM d"),
+      date:    format(new Date(r.date), "MMM d"),
       revenue: typeof r.revenue === "number" ? r.revenue : parseFloat(r.revenue ?? "0"),
     }));
   }, [salesData]);
 
-  // Top products
-  const topProducts: { name: string; revenue: number; units: number }[] = useMemo(() => {
-    return ((salesData as any)?.topProducts ?? []).slice(0, 6);
-  }, [salesData]);
+  const topProducts: { name: string; revenue: number; units: number }[] = useMemo(
+    () => ((salesData as any)?.topProducts ?? []).slice(0, 6),
+    [salesData],
+  );
 
-  // Social breakdown
-  const socialByPlatform: { platform: string; count: number }[] = useMemo(() => {
-    return (socialData as any)?.postsByPlatform ?? [];
-  }, [socialData]);
+  const socialByPlatform: { platform: string; count: number }[] = useMemo(
+    () => (socialData as any)?.postsByPlatform ?? [],
+    [socialData],
+  );
 
-  const socialByStatus: { status: string; count: number }[] = useMemo(() => {
-    return (socialData as any)?.postsByStatus ?? [];
-  }, [socialData]);
+  const socialByStatus: { status: string; count: number }[] = useMemo(
+    () => (socialData as any)?.postsByStatus ?? [],
+    [socialData],
+  );
 
-  // KPI trend helpers (compare first half vs second half of the revenue window)
   const avgRevenue = useMemo(() => {
     if (!revenueByDay.length) return null;
-    const mid = Math.floor(revenueByDay.length / 2);
-    const first = revenueByDay.slice(0, mid).reduce((s, d) => s + d.revenue, 0);
-    const second = revenueByDay.slice(mid).reduce((s, d) => s + d.revenue, 0);
+    const mid    = Math.floor(revenueByDay.length / 2);
+    const first  = revenueByDay.slice(0, mid).reduce((s, d) => s + d.revenue, 0);
+    const second = revenueByDay.slice(mid).reduce((s, d)  => s + d.revenue, 0);
     return first === 0 ? null : second > first ? "up" : second < first ? "down" : "flat";
   }, [revenueByDay]) as "up" | "down" | "flat" | null;
 
-  if (isLoading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[50vh] text-muted-foreground">
-        Loading dashboard…
-      </div>
-    );
-  }
+  if (isLoading) return <DashboardSkeleton />;
 
-  const totalRevenue = (analytics?.totalRevenue ?? 0) as number;
-  const totalSales = (salesData as any)?.totalRevenue ?? 0;
-  const conversionRate = (salesData as any)?.conversionRate ?? 0;
+  const totalRevenue     = (analytics?.totalRevenue ?? 0) as number;
+  const totalSales       = (salesData as any)?.totalRevenue ?? 0;
+  const conversionRate   = (salesData as any)?.conversionRate ?? 0;
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full">
-      {/* Header + period selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <motion.div
+      className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full"
+      variants={stagger}
+      initial="hidden"
+      animate="show"
+    >
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <motion.div
+        variants={fadeUp}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-          <p className="text-muted-foreground">Your Awa Biz Suite command centre.</p>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+            Overview
+          </h1>
+          <p className="text-muted-foreground mt-0.5">Your Awa Biz Suite command centre.</p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-40">
@@ -137,10 +206,13 @@ export default function Dashboard() {
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </motion.div>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {/* ── KPI cards ──────────────────────────────────────────────── */}
+      <motion.div
+        variants={cardStagger}
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+      >
         <StatCard
           title="Total Revenue"
           value={`$${totalRevenue.toLocaleString()}`}
@@ -183,10 +255,10 @@ export default function Dashboard() {
           color="text-purple-500"
           subtext={`${(conversionRate * 100).toFixed(1)}% conversion`}
         />
-      </div>
+      </motion.div>
 
-      {/* Revenue trend + recent activity */}
-      <div className="grid gap-4 md:grid-cols-7">
+      {/* ── Revenue trend + recent activity ────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-7">
         <Card className="md:col-span-4">
           <CardHeader>
             <CardTitle>Revenue trend</CardTitle>
@@ -226,15 +298,21 @@ export default function Dashboard() {
             <div className="space-y-4">
               {analytics?.recentActivity?.length ? (
                 analytics.recentActivity.slice(0, 6).map((activity: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="mt-0.5 w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                  <motion.div
+                    key={i}
+                    className="flex items-start gap-3"
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + i * 0.06, duration: 0.35, ease: "easeOut" }}
+                  >
+                    <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 ring-2 ring-primary/20" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium leading-snug truncate">{activity.description}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {format(new Date(activity.timestamp), "MMM d, h:mm a")}
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               ) : (
                 <div className="text-sm text-muted-foreground text-center py-10">No recent activity</div>
@@ -242,10 +320,10 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
-      {/* Top products + Social breakdown */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* ── Top products + Social breakdown ────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Top products</CardTitle>
@@ -271,7 +349,6 @@ export default function Dashboard() {
         </Card>
 
         <div className="space-y-4">
-          {/* Social by platform */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Posts by platform</CardTitle>
@@ -286,18 +363,13 @@ export default function Dashboard() {
                     <XAxis dataKey="platform" tick={{ fontSize: 10 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
                     <Tooltip />
-                    <Bar
-                      dataKey="count"
-                      radius={[4, 4, 0, 0]}
-                      fill="hsl(270 70% 60%)"
-                    />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="hsl(270 70% 60%)" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
 
-          {/* Post status breakdown */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Post status</CardTitle>
@@ -307,14 +379,14 @@ export default function Dashboard() {
                 <div className="text-sm text-muted-foreground py-4 text-center">No posts yet.</div>
               ) : (
                 <div className="space-y-2">
-                  {socialByStatus.map((s: any) => {
+                  {socialByStatus.map((s: any, i: number) => {
                     const total = socialByStatus.reduce((sum: number, x: any) => sum + x.count, 0);
-                    const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                    const pct   = total > 0 ? Math.round((s.count / total) * 100) : 0;
                     const statusColor: Record<string, string> = {
                       published: "bg-emerald-500",
                       scheduled: "bg-blue-500",
-                      draft: "bg-muted-foreground",
-                      failed: "bg-destructive",
+                      draft:     "bg-muted-foreground",
+                      failed:    "bg-destructive",
                     };
                     return (
                       <div key={s.status} className="space-y-1">
@@ -323,9 +395,11 @@ export default function Dashboard() {
                           <span className="text-muted-foreground">{s.count} · {pct}%</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
+                          <motion.div
                             className={`h-full rounded-full ${statusColor[s.status] ?? "bg-primary"}`}
-                            style={{ width: `${pct}%` }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ delay: 0.7 + i * 0.08, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                           />
                         </div>
                       </div>
@@ -336,7 +410,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
