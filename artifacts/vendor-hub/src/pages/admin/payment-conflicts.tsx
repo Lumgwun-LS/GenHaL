@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -235,8 +235,14 @@ function OpenConflictsTab() {
 
 // ─── Resolved History Tab ──────────────────────────────────────────────────────
 
-function ResolvedHistoryTab() {
-  const [search, setSearch] = useState("");
+function ResolvedHistoryTab({ initialSearch = "" }: { initialSearch?: string }) {
+  const [search, setSearch] = useState(initialSearch);
+
+  // Keep local search in sync if the parent updates initialSearch (e.g. a
+  // second Audit Log click while already on this tab).
+  useEffect(() => {
+    setSearch(initialSearch);
+  }, [initialSearch]);
 
   const { data: conflicts, isLoading, error } = useQuery({
     queryKey: ["admin-payment-conflicts", "resolved"],
@@ -334,7 +340,44 @@ function ResolvedHistoryTab() {
 
 // ─── Main Export ───────────────────────────────────────────────────────────────
 
-export default function PaymentConflictsPanel() {
+type PaymentConflictsPanelProps = {
+  /** When set, the panel switches to the Resolved History tab and pre-fills
+   *  the search box so the admin lands directly on the resolved conflict that
+   *  was linked from the Audit Log. */
+  highlightPaymentId?: number | null;
+  onClearHighlight?: () => void;
+};
+
+export default function PaymentConflictsPanel({
+  highlightPaymentId,
+  onClearHighlight,
+}: PaymentConflictsPanelProps) {
+  const [activeTab, setActiveTab] = useState<"open" | "resolved">(
+    highlightPaymentId != null ? "resolved" : "open",
+  );
+  const [resolvedSearch, setResolvedSearch] = useState(
+    highlightPaymentId != null ? String(highlightPaymentId) : "",
+  );
+
+  // When the parent navigates here from the Audit Log with a specific payment
+  // ID, jump to the Resolved History tab and pre-fill the search automatically.
+  useEffect(() => {
+    if (highlightPaymentId != null) {
+      setActiveTab("resolved");
+      setResolvedSearch(String(highlightPaymentId));
+    }
+  }, [highlightPaymentId]);
+
+  function handleTabChange(value: string) {
+    setActiveTab(value as "open" | "resolved");
+    // Clear the highlight when the admin manually switches tabs so the search
+    // doesn't feel "stuck" when they come back to it later.
+    if (value !== "resolved") {
+      setResolvedSearch("");
+      onClearHighlight?.();
+    }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -345,7 +388,7 @@ export default function PaymentConflictsPanel() {
         apply the status the provider reported.
       </p>
 
-      <Tabs defaultValue="open">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="open">Open Conflicts</TabsTrigger>
           <TabsTrigger value="resolved">Resolved History</TabsTrigger>
@@ -354,7 +397,7 @@ export default function PaymentConflictsPanel() {
           <OpenConflictsTab />
         </TabsContent>
         <TabsContent value="resolved" className="mt-4">
-          <ResolvedHistoryTab />
+          <ResolvedHistoryTab initialSearch={resolvedSearch} />
         </TabsContent>
       </Tabs>
     </div>

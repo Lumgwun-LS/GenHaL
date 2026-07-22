@@ -1972,6 +1972,7 @@ export default function AdminPanel() {
   const [auditPage, setAuditPage] = useState(1);
 
   const [activeAdminTab, setActiveAdminTab] = useState("vendors");
+  const [conflictsHighlightId, setConflictsHighlightId] = useState<number | null>(null);
   const [messageVendorSearch, setMessageVendorSearch] = useState("");
   const [messageHistoryVendorFilter, setMessageHistoryVendorFilter] = useState<{ id: number; name: string } | null>(
     null,
@@ -3115,7 +3116,10 @@ export default function AdminPanel() {
                                 {entry.paymentId != null && (
                                   <button
                                     className="text-xs text-primary underline-offset-2 hover:underline"
-                                    onClick={() => setActiveAdminTab("payment-conflicts")}
+                                    onClick={() => {
+                                      setActiveAdminTab("payment-conflicts");
+                                      setConflictsHighlightId(entry.paymentId);
+                                    }}
                                   >
                                     Payment #{entry.paymentId}
                                   </button>
@@ -3508,7 +3512,10 @@ export default function AdminPanel() {
 
         {/* ── Payment Conflicts tab ────────────────────────────────────── */}
         <TabsContent value="payment-conflicts">
-          <PaymentConflictsPanel />
+          <PaymentConflictsPanel
+            highlightPaymentId={conflictsHighlightId}
+            onClearHighlight={() => setConflictsHighlightId(null)}
+          />
         </TabsContent>
 
         {/* ── Void Errors tab ──────────────────────────────────────────── */}
