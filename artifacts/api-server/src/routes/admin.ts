@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, adminExportBurstSentAlertsTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -21,20 +21,9 @@ import { syncSaleFromPayment } from "../lib/sales-sync";
 import { notifyVendorPaymentStatus, sendPushToVendor } from "../lib/push";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
+import { getExportAlertSettings, getExportBurstStatus, checkExportBurst } from "../lib/admin-export-burst";
 
-/**
- * Export-burst detection: if the same admin downloads the vendor CSV export
- * this many times within the rolling window below, we treat it as unusual
- * activity (possible mass-exfiltration of vendor PII) and surface a warning
- * — both a Slack alert and a flag the Admin Panel can display. Threshold and
- * window are editable from the Admin Panel (persisted via the site-content
- * store under "admin.exportAlertSettings"); the env vars below are only the
- * fallback default until an admin saves an override.
- */
-async function getExportAlertSettings(): Promise<{ threshold: number; windowMinutes: number }> {
-  const raw = await getSiteContentBlock("admin.exportAlertSettings");
-  return raw as { threshold: number; windowMinutes: number };
-}
+export { checkExportBurst };
 
 /**
  * Mirrors the thresholds used in routes/voice-status-callback.ts (both read
@@ -109,101 +98,6 @@ async function getVoiceSignatureFailureBurstStatus(): Promise<{
     acknowledgedAt: ack?.acknowledgedAt ?? null,
     acknowledgedBy: ack?.acknowledgedBy ?? null,
   };
-}
-
-/**
- * Counts how many exports `adminUserId` has triggered within the alert
- * window (including the export that just happened) and fires a Slack alert
- * exactly once per burst — the first time the count reaches or exceeds the
- * threshold — so a long-running spree doesn't spam a message per download.
- *
- * Concurrency safety: two simultaneous exports can cause the running count
- * to skip past the threshold value, so we use `>= threshold` rather than
- * `=== threshold`.  To guarantee exactly one alert per burst even under
- * concurrent requests, we use an atomic "claim" pattern:
- *
- *  1. Sort all in-window exports by (exportedAt ASC, id ASC) — a stable
- *     total order even when two rows share the same timestamp.
- *  2. The Nth row (threshold-th) is the deterministic "crossing record"
- *     regardless of how many concurrent exports landed together.
- *  3. We INSERT a row into `adminExportBurstSentAlertsTable` keyed by
- *     (adminUserId, crossingExportId) with ON CONFLICT DO NOTHING.
- *     Only the one request that wins the INSERT race proceeds to alert;
- *     all others silently skip because of the unique-constraint conflict.
- */
-export async function checkExportBurst(adminUserId: string): Promise<void> {
-  const { threshold, windowMinutes } = await getExportAlertSettings();
-  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
-
-  // Order by (exportedAt ASC, id ASC) — id breaks ties deterministically so
-  // the Nth row is always the same record regardless of which concurrent
-  // request queries first.
-  const recent = await db
-    .select({ id: adminExportLogsTable.id })
-    .from(adminExportLogsTable)
-    .where(and(eq(adminExportLogsTable.adminUserId, adminUserId), gte(adminExportLogsTable.exportedAt, windowStart)))
-    .orderBy(asc(adminExportLogsTable.exportedAt), asc(adminExportLogsTable.id));
-
-  const count = recent.length;
-  if (count < threshold) return;
-
-  // The threshold-th export (0-indexed: threshold - 1) is the crossing record.
-  const crossingExportId = recent[threshold - 1]!.id;
-
-  // Atomically claim the alert for this crossing record.  Only the first
-  // INSERT succeeds; concurrent requests receive a unique-constraint conflict
-  // and get an empty array back, so they skip the Slack call.
-  const claimed = await db
-    .insert(adminExportBurstSentAlertsTable)
-    .values({ adminUserId, crossingExportId })
-    .onConflictDoNothing()
-    .returning({ id: adminExportBurstSentAlertsTable.id });
-
-  if (claimed.length > 0) {
-    await sendSlackAlert(
-      `:rotating_light: Admin *${adminUserId}* has downloaded the vendor data export ${count} times in the last ${windowMinutes} minutes. Further exports from this account are paused until another admin reviews and clears it in the Admin Panel.`,
-    );
-  }
-}
-
-/**
- * Determines whether `adminUserId` is currently mid-burst and should be
- * blocked from exporting further. An admin is blocked once their export
- * count within the rolling window reaches the threshold, and stays blocked
- * until either:
- *  - another admin acknowledges the flag *after* the export that crossed
- *    the threshold (an ack that predates the crossing doesn't clear a new
- *    burst — it must be a fresh review), or
- *  - enough time passes that the crossing export ages out of the window.
- */
-async function getExportBurstStatus(
-  adminUserId: string,
-): Promise<{ blocked: boolean; count: number; threshold: number; windowMinutes: number; flaggedAt: Date | null }> {
-  const { threshold, windowMinutes } = await getExportAlertSettings();
-  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
-
-  const recent = await db
-    .select({ exportedAt: adminExportLogsTable.exportedAt })
-    .from(adminExportLogsTable)
-    .where(and(eq(adminExportLogsTable.adminUserId, adminUserId), gte(adminExportLogsTable.exportedAt, windowStart)))
-    .orderBy(desc(adminExportLogsTable.exportedAt));
-
-  const count = recent.length;
-  if (count < threshold) {
-    return { blocked: false, count, threshold, windowMinutes, flaggedAt: null };
-  }
-
-  // The export that pushed the count to `threshold` (i.e. the Nth most
-  // recent one) is the moment this burst became flagged.
-  const flaggedAt = recent[threshold - 1]!.exportedAt;
-
-  const [ack] = await db
-    .select()
-    .from(adminExportAcknowledgmentsTable)
-    .where(eq(adminExportAcknowledgmentsTable.adminUserId, adminUserId));
-
-  const cleared = Boolean(ack) && ack!.acknowledgedAt >= flaggedAt;
-  return { blocked: !cleared, count, threshold, windowMinutes, flaggedAt };
 }
 
 /** Returns true if the calling Clerk user is listed in ADMIN_USER_IDS env var. */
