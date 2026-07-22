@@ -28,6 +28,7 @@ channel = "stable-25_05"
 PAYMENT_CREDS_ENCRYPTION_KEY = "7c22693e3b2512f1852b12bdd4a2a8f5343fdb7a830046509b21be9abd62b8ac"
 AWAJIMAA_BACKEND_URL = "https://api.awajimaaapp.io"
 SUPER_ADMIN_EMAILS = "app@lumgwunsolutions.com,gwun-orene@lumgwunsolutions.com,admin@lumgwunsolutions.com,lumgwunsolutions@gmail.com,awajimaaapps@gmail.com,awajimaapp@gmail.com,lumgwuns@gmail.com"
+ADMIN_USER_IDS = "user_3GpywpmezmPNn9MBlxI4JdO7Kmj,user_3Gpyx2QaxKwXvGbKJNi3jpIs4bs,user_3GLE3QNDHfRbB4aHdQPXmzZycH2,user_3Gpyx7zWh5b1RfEyVkjRsvFeZls"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
