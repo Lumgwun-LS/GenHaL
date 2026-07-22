@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
@@ -252,13 +252,28 @@ export default function NewSocialPostScreen() {
   const { vendor } = useAuth();
   const vendorId = vendor?.id ?? 0;
 
+  // Accept a rendered AI video URL passed back from the ai-video screen.
+  const { videoUrl: videoUrlParam } = useLocalSearchParams<{ videoUrl?: string }>();
+
   const [caption, setCaption] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  /** Video URL from the AI video creation flow (ai-video.tsx). */
+  const [aiVideoUrl, setAiVideoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // When the vendor returns from the AI video screen, pick up the video URL.
+  useEffect(() => {
+    if (videoUrlParam) {
+      setAiVideoUrl(videoUrlParam);
+      // Clear any existing photo so only one media type is attached at a time.
+      setImageUri(null);
+      setImageUrl(null);
+    }
+  }, [videoUrlParam]);
 
   // ── Scheduling state ────────────────────────────────────────────────────────
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
@@ -404,7 +419,11 @@ export default function NewSocialPostScreen() {
           socialAccountIds,
           productIds: [],
           linkMode: 'none',
-          ...(imageUrl ? { mediaUrls: [imageUrl], mediaType: 'image' } : {}),
+          ...(aiVideoUrl
+            ? { mediaUrls: [aiVideoUrl], mediaType: 'video' }
+            : imageUrl
+              ? { mediaUrls: [imageUrl], mediaType: 'image' }
+              : {}),
           ...(scheduledDate ? { scheduledAt: scheduledDate.toISOString() } : {}),
         },
       });
@@ -509,11 +528,34 @@ export default function NewSocialPostScreen() {
         />
       </View>
 
-      {/* ── Photo ── */}
+      {/* ── Media ── */}
       <View style={styles.section}>
-        <Text style={[styles.label, { color: colors.primary }]}>Photo</Text>
+        <Text style={[styles.label, { color: colors.primary }]}>Media</Text>
 
-        {imageUri ? (
+        {/* AI video attached */}
+        {aiVideoUrl ? (
+          <View
+            style={[
+              styles.aiVideoCard,
+              { borderColor: colors.primary + '50', backgroundColor: colors.primary + '08' },
+            ]}
+          >
+            <Feather name="film" size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.aiVideoTitle, { color: colors.primary }]}>AI Video attached</Text>
+              <Text style={[styles.aiVideoSubtitle, { color: colors.mutedForeground }]}>
+                Your AI-generated video will be included in this post.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setAiVideoUrl(null)}
+              style={({ pressed }) => [styles.aiVideoRemoveBtn, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+        ) : imageUri ? (
+          /* Photo attached */
           <View style={styles.previewWrap}>
             <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />
             <Pressable
@@ -525,40 +567,64 @@ export default function NewSocialPostScreen() {
             </Pressable>
           </View>
         ) : (
-          <Pressable
-            onPress={showPhotoOptions}
-            disabled={uploadingPhoto}
-            style={({ pressed }) => [
-              styles.photoPickerBtn,
-              {
-                borderColor: colors.border,
-                backgroundColor: uploadingPhoto
-                  ? colors.muted
-                  : pressed
+          /* No media yet — show picker options */
+          <View style={styles.mediaPickerGroup}>
+            {/* AI Video button */}
+            <Pressable
+              onPress={() => router.push('/social/ai-video' as any)}
+              style={({ pressed }) => [
+                styles.mediaPickerBtn,
+                {
+                  borderColor: colors.primary + '60',
+                  backgroundColor: pressed ? colors.primary + '10' : colors.primary + '06',
+                },
+              ]}
+            >
+              <Feather name="film" size={20} color={colors.primary} />
+              <Text style={[styles.mediaPickerText, { color: colors.primary }]}>
+                Create AI Video
+              </Text>
+              <Text style={[styles.mediaPickerHint, { color: colors.mutedForeground }]}>
+                AI generates scenes → you review → render
+              </Text>
+            </Pressable>
+
+            {/* Photo picker */}
+            <Pressable
+              onPress={showPhotoOptions}
+              disabled={uploadingPhoto}
+              style={({ pressed }) => [
+                styles.mediaPickerBtn,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: uploadingPhoto
                     ? colors.muted
-                    : colors.card,
-              },
-            ]}
-          >
-            {uploadingPhoto ? (
-              <>
-                <Feather name="upload-cloud" size={22} color={colors.primary} />
-                <Text style={[styles.photoPickerText, { color: colors.primary }]}>
-                  Uploading…
-                </Text>
-              </>
-            ) : (
-              <>
-                <Feather name="image" size={22} color={colors.mutedForeground} />
-                <Text style={[styles.photoPickerText, { color: colors.mutedForeground }]}>
-                  Add photo from library or camera
-                </Text>
-                <Text style={[styles.photoPickerHint, { color: colors.mutedForeground }]}>
-                  Max 20 MB · JPEG, PNG, HEIC
-                </Text>
-              </>
-            )}
-          </Pressable>
+                    : pressed
+                      ? colors.muted
+                      : colors.card,
+                },
+              ]}
+            >
+              {uploadingPhoto ? (
+                <>
+                  <Feather name="upload-cloud" size={20} color={colors.primary} />
+                  <Text style={[styles.mediaPickerText, { color: colors.primary }]}>
+                    Uploading…
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Feather name="image" size={20} color={colors.mutedForeground} />
+                  <Text style={[styles.mediaPickerText, { color: colors.mutedForeground }]}>
+                    Add photo
+                  </Text>
+                  <Text style={[styles.mediaPickerHint, { color: colors.mutedForeground }]}>
+                    Max 20 MB · JPEG, PNG, HEIC
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -769,6 +835,51 @@ const styles = StyleSheet.create({
     minHeight: 140,
     lineHeight: 22,
   },
+  // ── AI video card ───────────────────────────────────────────────────────────
+  aiVideoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  aiVideoTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  aiVideoSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  aiVideoRemoveBtn: {
+    padding: 4,
+  },
+  // ── Media picker group ──────────────────────────────────────────────────────
+  mediaPickerGroup: {
+    gap: 10,
+  },
+  mediaPickerBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  mediaPickerText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  mediaPickerHint: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+  },
+  // kept for backwards compat (used nowhere now, can be removed later)
   photoPickerBtn: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
