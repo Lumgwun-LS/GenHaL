@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGetAdminFinanceRollupAnalytics } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,6 +36,9 @@ const PERIODS = [
   { value: "custom", label: "Custom range" },
 ];
 
+const TIERS = ["free", "starter", "pro", "enterprise"] as const;
+const ANY = "__any__";
+
 const PIE_COLORS = ["hsl(217 91% 60%)", "hsl(24 95% 62%)", "hsl(142 71% 45%)", "hsl(0 84% 60%)", "hsl(271 81% 56%)", "hsl(48 96% 53%)", "hsl(199 89% 48%)", "hsl(340 82% 52%)", "hsl(160 84% 39%)", "hsl(280 65% 60%)"];
 
 interface DrilldownVendor {
@@ -42,12 +46,21 @@ interface DrilldownVendor {
   vendorName: string;
 }
 
+interface ExportFilters {
+  tier: string;
+  industry: string;
+}
+
+const EMPTY_EXPORT_FILTERS: ExportFilters = { tier: ANY, industry: "" };
+
 export default function AdminFinanceRollupPanel() {
   const [period, setPeriod] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportPopoverOpen, setExportPopoverOpen] = useState(false);
+  const [exportFilters, setExportFilters] = useState<ExportFilters>(EMPTY_EXPORT_FILTERS);
   const [drilldown, setDrilldown] = useState<DrilldownVendor | null>(null);
 
   const params = {
@@ -58,12 +71,14 @@ export default function AdminFinanceRollupPanel() {
   };
   const { data, isLoading } = useGetAdminFinanceRollupAnalytics(params);
 
-  async function handleExport() {
+  async function handleExport(filters: ExportFilters) {
     setExporting(true);
     try {
       const qs = new URLSearchParams({ period });
       if (period === "custom" && from) qs.set("from", new Date(from).toISOString());
       if (period === "custom" && to) qs.set("to", new Date(to).toISOString());
+      if (filters.tier !== ANY) qs.set("tier", filters.tier);
+      if (filters.industry.trim()) qs.set("industry", filters.industry.trim());
       const url = `${BASE_URL}/api/admin/analytics/finance-rollup/export?${qs.toString()}`;
       const res = await fetch(url, { credentials: "include" });
       if (res.status === 429) {
@@ -174,17 +189,75 @@ export default function AdminFinanceRollupPanel() {
             <Label htmlFor="finance-rollup-breakdown" className="text-xs cursor-pointer">Show per-vendor breakdown</Label>
           </div>
           <div className="pb-1.5 ml-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={exporting}
-              data-testid="btn-finance-rollup-export"
-              className="gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {exporting ? "Exporting…" : "Export CSV"}
-            </Button>
+            <Popover open={exportPopoverOpen} onOpenChange={setExportPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting}
+                  data-testid="btn-finance-rollup-export"
+                  className="gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {exporting ? "Exporting…" : "Export CSV"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-4">
+                <div className="text-xs font-medium text-muted-foreground">Export filters (optional)</div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Subscription Tier</Label>
+                  <Select
+                    value={exportFilters.tier}
+                    onValueChange={(v) => setExportFilters((f) => ({ ...f, tier: v }))}
+                  >
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-finance-rollup-export-tier">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY} className="text-xs">Any tier</SelectItem>
+                      {TIERS.map((t) => (
+                        <SelectItem key={t} value={t} className="text-xs">
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Industry</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="e.g. Retail"
+                    value={exportFilters.industry}
+                    onChange={(e) => setExportFilters((f) => ({ ...f, industry: e.target.value }))}
+                    data-testid="input-finance-rollup-export-industry"
+                  />
+                </div>
+                <div className="flex justify-between gap-2 pt-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setExportFilters(EMPTY_EXPORT_FILTERS)}
+                    data-testid="btn-finance-rollup-export-clear"
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="text-xs"
+                    disabled={exporting}
+                    data-testid="btn-finance-rollup-export-confirm"
+                    onClick={() => {
+                      setExportPopoverOpen(false);
+                      void handleExport(exportFilters);
+                    }}
+                  >
+                    {exporting ? "Exporting…" : "Export CSV"}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </CardContent>
       </Card>

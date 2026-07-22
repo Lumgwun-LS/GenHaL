@@ -241,6 +241,8 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
   }
 
   const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+  const filterTier = typeof req.query.tier === "string" && req.query.tier ? req.query.tier : null;
+  const filterIndustry = typeof req.query.industry === "string" && req.query.industry ? req.query.industry.trim().toLowerCase() : null;
 
   const [allSales, allExpenses, allInvestments, allVendors] = await Promise.all([
     db.select().from(salesTable).where(and(gte(salesTable.saleDate, from), lte(salesTable.saleDate, to))),
@@ -249,9 +251,22 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
     db.select().from(vendorsTable),
   ]);
 
-  const overview = computeFinanceOverview(allSales, allExpenses, allInvestments, from, to);
+  // Apply tier / industry filters to the vendor set so both the per-vendor
+  // breakdown and the aggregate totals reflect the same filtered cohort.
+  const filteredVendors = allVendors.filter((v) => {
+    if (filterTier && v.subscriptionTier !== filterTier) return false;
+    if (filterIndustry && (v.industry ?? "").toLowerCase() !== filterIndustry) return false;
+    return true;
+  });
+  const filteredVendorIds = new Set(filteredVendors.map((v) => v.id));
+
+  const filteredSales = allSales.filter((s) => filteredVendorIds.has(s.vendorId));
+  const filteredExpenses = allExpenses.filter((e) => filteredVendorIds.has(e.vendorId));
+  const filteredInvestments = allInvestments.filter((i) => filteredVendorIds.has(i.vendorId));
+
+  const overview = computeFinanceOverview(filteredSales, filteredExpenses, filteredInvestments, from, to);
   const vendorNameById = new Map(allVendors.map((v) => [v.id, v.name]));
-  const vendorIds = Array.from(new Set<number>([...allSales.map((s) => s.vendorId), ...allExpenses.map((e) => e.vendorId), ...allInvestments.map((i) => i.vendorId)]));
+  const vendorIds = Array.from(new Set<number>([...filteredSales.map((s) => s.vendorId), ...filteredExpenses.map((e) => e.vendorId), ...filteredInvestments.map((i) => i.vendorId)]));
 
   const byVendor = vendorIds.map((vendorId) => {
     const vendorOverview = computeFinanceOverview(
@@ -337,7 +352,14 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
   const totalRows = 1 + byVendor.length + overview.revenueTrend.length + overview.expenseByCategory.length;
   await db.insert(adminExportLogsTable).values({
     adminUserId: userId,
-    filters: JSON.stringify({ type: "finance-rollup", period: req.query.period, from: from.toISOString(), to: to.toISOString() }),
+    filters: JSON.stringify({
+      type: "finance-rollup",
+      period: req.query.period,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      ...(filterTier ? { tier: filterTier } : {}),
+      ...(filterIndustry ? { industry: filterIndustry } : {}),
+    }),
     rowCount: totalRows,
   });
 
