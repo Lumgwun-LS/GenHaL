@@ -38,6 +38,10 @@ function NativeTabLayout({ features, unreadCount }: { features: string[]; unread
         <Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
         <Label>Payments</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="expenses">
+        <Icon sf={{ default: 'doc.text', selected: 'doc.text.fill' }} />
+        <Label>Expenses</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ads">
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Ads</Label>
@@ -177,6 +181,18 @@ function ClassicTabLayout({ features, unreadCount }: { features: string[]; unrea
               <SymbolView name="creditcard" tintColor={color} size={24} />
             ) : (
               <Feather name="credit-card" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="expenses"
+        options={{
+          title: 'Expenses',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="doc.text" tintColor={color} size={24} />
+            ) : (
+              <Feather name="file-text" size={22} color={color} />
             ),
         }}
       />
