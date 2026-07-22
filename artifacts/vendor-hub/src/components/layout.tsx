@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { NotificationBell } from "./notification-bell";
+import { TrialUpgradeBanner } from "./trial-upgrade-banner";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -133,6 +134,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
+        <TrialUpgradeBanner />
         {children}
       </main>
     </div>

@@ -262,4 +262,35 @@ router.patch("/vendors/:id/payment-settings", async (req, res): Promise<void> =>
   });
 });
 
+// ─── GET /vendors/trial-status ───────────────────────────────────────────────
+// Returns the active trial info for the vendor matching the given clerkUserId.
+// Used by the frontend upgrade banner; intentionally unauthenticated since it
+// only reveals the calling user's own data (keyed on Clerk user id).
+router.get("/vendors/trial-status", async (req, res): Promise<void> => {
+  const clerkUserId = typeof req.query.clerkUserId === "string" ? req.query.clerkUserId : null;
+  if (!clerkUserId) {
+    res.json({ trialEndsAt: null, trialStartedAt: null, trialDurationDays: null, vendorId: null });
+    return;
+  }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  const now = new Date();
+  if (!vendor || !vendor.trialEndsAt || vendor.subscriptionTier !== "free" || vendor.trialEndsAt <= now) {
+    res.json({ trialEndsAt: null, trialStartedAt: null, trialDurationDays: null, vendorId: null });
+    return;
+  }
+
+  res.json({
+    trialEndsAt: vendor.trialEndsAt.toISOString(),
+    trialStartedAt: vendor.trialStartedAt ? vendor.trialStartedAt.toISOString() : null,
+    trialDurationDays: vendor.trialDurationDays ?? null,
+    vendorId: vendor.id,
+  });
+});
+
 export default router;

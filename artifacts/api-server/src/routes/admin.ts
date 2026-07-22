@@ -1541,4 +1541,115 @@ router.post("/admin/payment-conflicts/:id/resolve", async (req, res): Promise<vo
   res.json({ success: true, payment: updated });
 });
 
+// ─── POST /admin/vendors/:id/trial ───────────────────────────────────────────
+// Assign a free trial of a chosen duration (7 / 14 / 21 / 30 days) to any
+// vendor. The vendor's trialEndsAt / trialStartedAt / trialDurationDays are
+// updated and an in-app notification is created immediately.
+
+function isAdminUser(userId: string): boolean {
+  return (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .includes(userId);
+}
+
+const VALID_TRIAL_DURATIONS = [7, 14, 21, 30] as const;
+type TrialDuration = (typeof VALID_TRIAL_DURATIONS)[number];
+
+router.post("/admin/vendors/:id/trial", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdminUser(userId)) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const body = req.body as { durationDays?: unknown };
+  const durationDays = Number(body.durationDays);
+  if (!VALID_TRIAL_DURATIONS.includes(durationDays as TrialDuration)) {
+    res.status(400).json({ error: "durationDays must be 7, 14, 21, or 30" });
+    return;
+  }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, id))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const now = new Date();
+  const trialEndsAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  const expiryStr = trialEndsAt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  await db
+    .update(vendorsTable)
+    .set({ trialEndsAt, trialStartedAt: now, trialDurationDays: durationDays })
+    .where(eq(vendorsTable.id, id));
+
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: id,
+    type: "trial_assigned",
+    title: `${durationDays}-Day Free Trial Activated 🎉`,
+    message: `Your ${durationDays}-day free trial has been activated by the platform admin. Enjoy full access to all premium features until ${expiryStr}. Upgrade anytime to continue after your trial ends.`,
+  });
+
+  // Send email notification
+  try {
+    const { wrapVendorEmail, escapeHtml } = await import("../lib/email-branding");
+    const { sendEmail } = await import("../lib/mailer");
+    const bodyHtml = `
+      <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#fff">
+        Your free trial is live! 🎉
+      </h2>
+      <p style="margin:0 0 10px;color:#ccc;font-size:15px">
+        Hi ${escapeHtml(vendor.name)}, great news — the Awa Biz Suite team has activated
+        your <strong>${durationDays}-day free trial</strong>.
+      </p>
+      <p style="margin:0 0 10px;color:#ccc;font-size:15px">
+        You have full access to <strong>all premium features</strong> — AI Studio, Social Hub,
+        Voice Campaigns, Analytics, and more — until <strong>${expiryStr}</strong>.
+      </p>
+      <p style="margin:0 0 10px;color:#ccc;font-size:15px">
+        To keep access after your trial, simply upgrade to a paid plan. No charge until your
+        trial ends.
+      </p>`;
+    const html = wrapVendorEmail({
+      bodyHtml,
+      action: { label: "Explore Your Dashboard", url: process.env.VITE_APP_URL ? `${process.env.VITE_APP_URL}/vendor-hub/dashboard` : "https://awajimaaai.com/vendor-hub/dashboard" },
+    });
+    await sendEmail({ to: vendor.email, subject: `Your ${durationDays}-day Awa Biz Suite free trial is now active!`, html });
+  } catch (emailErr) {
+    // Email failure is non-fatal — trial is already saved
+  }
+
+  res.json({ success: true, vendorId: id, trialEndsAt: trialEndsAt.toISOString(), durationDays });
+});
+
+// ─── GET /admin/vendors/search ────────────────────────────────────────────────
+// Lightweight vendor search by name or email for the admin trial assignment UI.
+router.get("/admin/vendors/search", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdminUser(userId)) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  if (q.length < 2) { res.json([]); return; }
+
+  const { ilike, or } = await import("drizzle-orm");
+  const rows = await db
+    .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, trialEndsAt: vendorsTable.trialEndsAt })
+    .from(vendorsTable)
+    .where(or(ilike(vendorsTable.name, `%${q}%`), ilike(vendorsTable.email, `%${q}%`)))
+    .limit(10);
+
+  res.json(rows.map(r => ({
+    ...r,
+    trialEndsAt: r.trialEndsAt ? r.trialEndsAt.toISOString() : null,
+  })));
+});
+
 export default router;

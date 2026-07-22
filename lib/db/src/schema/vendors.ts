@@ -63,9 +63,12 @@ export const vendorsTable = pgTable("vendors", {
   country: text("country"),
   state: text("state"),
   city: text("city"),
-  // Free-trial end timestamp — set when a vendor starts a Stripe trial and cleared
-  // once the trial converts to an active paid subscription. Null means no active trial.
+  // Free-trial timestamps & duration — set when an admin assigns a trial or when
+  // the vendor starts a Stripe trial. trialEndsAt is cleared once the trial converts.
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
+  // Which trial duration (days) was granted: 7 | 14 | 21 | 30
+  trialDurationDays: integer("trial_duration_days"),
   // PayPal subscription ID for platform billing — mirrors stripeSubscriptionId/paystackSubscriptionCode.
   paypalSubscriptionId: text("paypal_subscription_id"),
   // Anchor for the vendor's current metered-usage billing period (see lib/usage.ts).

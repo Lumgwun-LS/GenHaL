@@ -83,12 +83,22 @@ const checkoutInFlight = new Map<
 type PlanTier = "starter" | "pro" | "enterprise";
 const VALID_UPGRADE_TIERS: PlanTier[] = ["starter", "pro", "enterprise"];
 
-/** Reads the admin-editable trial settings from site-content. Falls back to safe defaults if not configured. */
-async function getTrialSettings(): Promise<{ enabled: boolean; durationDays: number }> {
-  const block = (await getSiteContentBlock("billing.trialSettings")) as { enabled?: boolean; durationDays?: number } | null;
+/** Reads the admin-editable trial settings from site-content. Handles both the legacy
+ *  {durationDays} shape and the new {defaultDurationDays, availableDurations} shape. */
+async function getTrialSettings(): Promise<{ enabled: boolean; defaultDurationDays: number; availableDurations: number[] }> {
+  const block = (await getSiteContentBlock("billing.trialSettings")) as Record<string, unknown> | null;
+  const defaultDurationDays =
+    typeof block?.defaultDurationDays === "number" && block.defaultDurationDays >= 1
+      ? block.defaultDurationDays
+      : typeof block?.durationDays === "number" && block.durationDays >= 1
+      ? block.durationDays
+      : 7;
+  const availableDurations =
+    Array.isArray(block?.availableDurations) ? (block.availableDurations as number[]) : [7, 14, 21, 30];
   return {
-    enabled: block?.enabled ?? true,
-    durationDays: typeof block?.durationDays === "number" && block.durationDays >= 1 ? block.durationDays : 14,
+    enabled: block?.enabled !== false,
+    defaultDurationDays,
+    availableDurations,
   };
 }
 

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2, TrendingUp, ClipboardList } from "lucide-react";
+import { Save, Image, Video, MessageSquare, Phone, Mail, Loader2, TrendingUp, ClipboardList, Gift, Search } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -45,7 +45,10 @@ interface PaymentGateways {
 
 interface TrialSettings {
   enabled: boolean;
-  durationDays: number;
+  /** Legacy field — kept for backwards compat with old site-content records */
+  durationDays?: number;
+  defaultDurationDays: number;
+  availableDurations: number[];
 }
 
 interface OverageRates {
@@ -85,7 +88,7 @@ const DEFAULT_OVERAGE_RATES: OverageRates = {
   email: 0.01,
 };
 
-const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: true, durationDays: 14 };
+const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: true, defaultDurationDays: 7, availableDurations: [7, 14, 21, 30] };
 
 async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways; overageRates: OverageRates; trialSettings: TrialSettings }> {
   const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
@@ -96,11 +99,21 @@ async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways;
     "billing.overageRates"?: OverageRates;
     "billing.trialSettings"?: TrialSettings;
   };
+  // Normalise trial settings — handles old {durationDays} shape and new {defaultDurationDays, availableDurations}
+  const rawTrial = content["billing.trialSettings"] as (Partial<TrialSettings> & { durationDays?: number }) | undefined;
+  const trialSettings: TrialSettings = rawTrial
+    ? {
+        enabled: rawTrial.enabled ?? true,
+        defaultDurationDays: rawTrial.defaultDurationDays ?? rawTrial.durationDays ?? 7,
+        availableDurations: rawTrial.availableDurations ?? [7, 14, 21, 30],
+      }
+    : DEFAULT_TRIAL_SETTINGS;
+
   return {
     plans: content["billing.subscriptionPlans"].plans,
     gateways: content["billing.paymentGateways"] ?? { stripe: true, paystack: true, paypal: false },
     overageRates: content["billing.overageRates"] ?? DEFAULT_OVERAGE_RATES,
-    trialSettings: content["billing.trialSettings"] ?? DEFAULT_TRIAL_SETTINGS,
+    trialSettings,
   };
 }
 
@@ -215,7 +228,9 @@ function formatTrialSettingsValue(raw: string): string {
   try {
     const v = JSON.parse(raw) as Partial<TrialSettings>;
     if (v.enabled === false) return "Disabled";
-    return `${v.durationDays ?? "?"} days`;
+    const def = v.defaultDurationDays ?? v.durationDays ?? "?";
+    const avail = v.availableDurations ? v.availableDurations.join(", ") + " days" : `${def} days`;
+    return `Default ${def}d — options: ${avail}`;
   } catch {
     return raw;
   }
@@ -389,6 +404,173 @@ function PlanCard({ plan, onChange }: { plan: Plan; onChange: (next: Plan) => vo
             {isFinite(marginUsd) ? `${marginUsd.toFixed(1)}x margin (USD)` : "∞ margin (no cost)"}
           </span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Assign trial to vendor ───────────────────────────────────────────────────
+
+interface VendorSearchResult {
+  id: number;
+  name: string;
+  email: string;
+  subscriptionTier: string;
+  trialEndsAt: string | null;
+}
+
+async function searchVendors(q: string): Promise<VendorSearchResult[]> {
+  if (q.length < 2) return [];
+  const res = await fetch(`${BASE_URL}/api/admin/vendors/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+  if (!res.ok) return [];
+  return res.json() as Promise<VendorSearchResult[]>;
+}
+
+async function assignTrial(vendorId: number, durationDays: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/vendors/${vendorId}/trial`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ durationDays }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to assign trial");
+  }
+}
+
+function AssignTrialCard() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<VendorSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<VendorSearchResult | null>(null);
+  const [duration, setDuration] = useState<number>(7);
+  const [assigning, setAssigning] = useState(false);
+  const qc = useQueryClient();
+
+  async function handleSearch(q: string) {
+    setQuery(q);
+    setSelected(null);
+    if (q.length < 2) { setResults([]); return; }
+    setSearching(true);
+    try {
+      setResults(await searchVendors(q));
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function handleAssign() {
+    if (!selected) return;
+    setAssigning(true);
+    try {
+      await assignTrial(selected.id, duration);
+      toast.success(`${duration}-day trial assigned to ${selected.name}. They've been emailed.`);
+      setSelected(null);
+      setQuery("");
+      setResults([]);
+      qc.invalidateQueries({ queryKey: ["trial-status"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to assign trial");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  const trialActive = selected?.trialEndsAt && new Date(selected.trialEndsAt) > new Date();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Gift className="w-4 h-4 text-violet-400" />
+          Assign Free Trial to Vendor
+        </CardTitle>
+        <CardDescription>
+          Manually grant a trial of any duration to any vendor. They receive an in-app notification and a welcome email
+          immediately. This works for vendors on any tier — existing trials are overwritten.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Search */}
+        <Field label="Search vendor (name or email)">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-8"
+              placeholder="e.g. John Doe or john@example.com"
+              value={query}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
+          {searching && <p className="text-xs text-muted-foreground mt-1">Searching…</p>}
+          {!searching && results.length > 0 && !selected && (
+            <div className="mt-1 rounded-md border bg-popover shadow-md overflow-hidden">
+              {results.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => { setSelected(v); setResults([]); setQuery(v.name); }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between gap-2"
+                >
+                  <span>
+                    <span className="font-medium">{v.name}</span>
+                    <span className="text-muted-foreground ml-2">{v.email}</span>
+                  </span>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{v.subscriptionTier}</Badge>
+                </button>
+              ))}
+            </div>
+          )}
+        </Field>
+
+        {selected && (
+          <>
+            {/* Selected vendor summary */}
+            <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-between gap-3 text-sm">
+              <div>
+                <p className="font-medium">{selected.name}</p>
+                <p className="text-xs text-muted-foreground">{selected.email} · Tier: {selected.subscriptionTier}</p>
+                {trialActive && (
+                  <p className="text-xs text-amber-500 mt-0.5">
+                    ⚠ Already has an active trial until {new Date(selected.trialEndsAt!).toLocaleDateString()}. Assigning will overwrite it.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => { setSelected(null); setQuery(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
+              >
+                Change
+              </button>
+            </div>
+
+            {/* Duration selector */}
+            <Field label="Trial duration">
+              <div className="flex gap-2 flex-wrap">
+                {[7, 14, 21, 30].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDuration(d)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      duration === d
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                    }`}
+                  >
+                    {d} days
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleAssign} disabled={assigning}>
+                {assigning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Gift className="w-3.5 h-3.5 mr-1.5" />}
+                Assign {duration}-day trial to {selected.name}
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -580,7 +762,7 @@ export default function PlansEditor() {
           <CardDescription>
             When enabled, new vendors can start a free trial by entering their card details upfront (via Stripe). The card is
             captured but not charged until the trial ends — it then converts automatically to a paid subscription unless the
-            vendor cancels first. Vendors who have already trialled or subscribed will not see the trial option.
+            vendor cancels first. You can also manually assign a trial to any vendor from the section below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -596,20 +778,30 @@ export default function PlansEditor() {
               onCheckedChange={(v) => setTrialSettings({ ...trialSettings, enabled: v })}
             />
           </div>
-          <Field label="Trial duration (days)">
-            <Input
-              type="number"
-              min={1}
-              max={365}
-              value={trialSettings.durationDays}
-              disabled={!trialSettings.enabled}
-              onChange={(e) => setTrialSettings({ ...trialSettings, durationDays: Math.max(1, Number(e.target.value)) })}
-              className="w-32"
-            />
+
+          <Field label="Default trial duration">
+            <div className="flex gap-2 flex-wrap">
+              {[7, 14, 21, 30].map((d) => (
+                <button
+                  key={d}
+                  disabled={!trialSettings.enabled}
+                  onClick={() => setTrialSettings({ ...trialSettings, defaultDurationDays: d })}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                    trialSettings.defaultDurationDays === d
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                  } disabled:opacity-40 disabled:pointer-events-none`}
+                >
+                  {d} days
+                </button>
+              ))}
+            </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Stripe passes this as <code>trial_period_days</code> on the subscription. Change takes effect for the next new trial started; existing trials are not affected.
+              The default trial length offered to new vendors via Stripe checkout. 7 days is the platform default.
+              Manually assigned trials can use any available duration regardless of this setting.
             </p>
           </Field>
+
           <div className="flex justify-end">
             <Button size="sm" onClick={saveTrial} disabled={savingTrial}>
               {savingTrial ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
@@ -626,6 +818,9 @@ export default function PlansEditor() {
         contentKey="billing.trialSettings"
         formatValue={formatTrialSettingsValue}
       />
+
+      {/* Assign trial to vendor */}
+      <AssignTrialCard />
 
       {/* Overage & add-on unit pricing */}
       <Card>

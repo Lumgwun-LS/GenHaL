@@ -1,0 +1,2 @@
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS trial_duration_days INTEGER;

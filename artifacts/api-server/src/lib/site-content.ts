@@ -164,7 +164,8 @@ export const DEFAULT_SITE_CONTENT = {
   // trial_period_days and to the UI so vendors know how long the trial runs.
   "billing.trialSettings": {
     enabled: true,
-    durationDays: 14,
+    defaultDurationDays: 7,
+    availableDurations: [7, 14, 21, 30],
   },
   // Per-unit overage & add-on pricing (USD). Applied when a paid-tier vendor
   // exhausts their included monthly quota and continues using a resource
