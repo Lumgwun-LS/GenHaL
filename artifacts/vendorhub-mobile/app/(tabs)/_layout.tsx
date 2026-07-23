@@ -7,12 +7,32 @@ import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Badge, Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
+import { useQuery } from '@tanstack/react-query';
 import {
   getListVendorNotificationsQueryKey,
   useListVendorNotifications,
 } from '@workspace/api-client-react';
+import { getAuthToken } from '@/lib/auth-token';
+
+// ─── void-error count helper ──────────────────────────────────────────────────
+
+const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/external`;
+
+async function fetchUnackedVoidErrorCount(): Promise<number> {
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE}/admin/void-errors`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  // 403 = not an admin — return 0 silently (expected for non-admin sessions).
+  if (res.status === 403) return 0;
+  // Any other non-OK status is a transient error; throw so React Query
+  // preserves the last known count via placeholderData instead of resetting to 0.
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data: Array<{ voidErrorAcknowledgedAt: string | null }> = await res.json();
+  return data.filter((p) => !p.voidErrorAcknowledgedAt).length;
+}
 
 // iOS 26 uses NativeTabs for liquid glass — brand colours applied on ClassicTabLayout only.
 function NativeTabLayout({ features, unreadCount }: { features: string[]; unreadCount: number }) {
@@ -47,6 +67,9 @@ function NativeTabLayout({ features, unreadCount }: { features: string[]; unread
         <Label>Ads</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="notifications">
+        <Badge hidden={unreadCount === 0}>
+          {unreadCount > 9 ? '9+' : String(unreadCount)}
+        </Badge>
         <Icon sf={{ default: 'bell', selected: 'bell.fill' }} />
         <Label>Alerts</Label>
       </NativeTabs.Trigger>
@@ -243,7 +266,7 @@ function ClassicTabLayout({ features, unreadCount }: { features: string[]; unrea
 }
 
 export default function TabLayout() {
-  const { isLoading, isAuthenticated, needsOnboarding, features, vendor } = useAuth();
+  const { isLoading, isAuthenticated, needsOnboarding, features, vendor, isAdmin } = useAuth();
   const vendorId = vendor?.id;
 
   const { data: notifications } = useListVendorNotifications(vendorId as number, {
@@ -254,7 +277,17 @@ export default function TabLayout() {
     },
   });
 
-  const unreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
+  const { data: voidErrorCount = 0 } = useQuery({
+    queryKey: ['admin', 'void-errors', 'unacked-count'],
+    queryFn: fetchUnackedVoidErrorCount,
+    enabled: isAdmin && isAuthenticated,
+    refetchInterval: 60_000,
+    // On transient fetch errors, keep the last known count (don't reset to 0).
+    placeholderData: (prev) => prev ?? 0,
+  });
+
+  const notificationUnreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
+  const unreadCount = notificationUnreadCount + (isAdmin ? voidErrorCount : 0);
 
   if (isLoading) return null;
 
