@@ -23,6 +23,12 @@
  *
  * Full tick():
  *   8. Records job run with aggregated counts after both passes complete.
+ *
+ * Full lifecycle (end-to-end retry cycle):
+ *   9. Tick 1: Stripe key unavailable → voidError left intact, alert sent, no expire.
+ *  10. Tick 2: Stripe key now available → session expired, metadata cleared, Slack success.
+ *  11. Session status "paid" (non-open) is handled without error — expire not called,
+ *      metadata still cleared so the payment falls off the Void Errors panel.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -155,6 +161,10 @@ vi.mock("../job-run-status", () => ({
   recordJobRun: async (jobName: string, input: unknown) => {
     recordedRuns.push({ jobName, input });
   },
+}));
+
+vi.mock("../push", () => ({
+  sendPushToAdmins: async () => {},
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -417,5 +427,178 @@ describe("void-error-check-scheduler — tick() job-run recording", () => {
       checkedCount: 0,
       affectedCount: 0,
     });
+  });
+});
+
+// ─── Full lifecycle (end-to-end retry cycle) ──────────────────────────────────
+//
+// These tests simulate the complete story the scheduler was designed to handle:
+//
+//   voidProviderSession() fails (key missing / network error)
+//     → voidError written to payment metadata
+//     → TICK 1: alert pass fires Slack warning + stamps voidErrorAlertedAt
+//               retry pass skips because key is still unavailable
+//     → TICK 2: key is now resolvable
+//               retry pass calls sessions.expire() on the still-open session
+//               voidError / voidErrorAlertedAt cleared from metadata
+//               Slack success notice fired
+//
+// This is the integration gap called out in the task: none of the isolated
+// unit tests above thread through both ticks in sequence.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("void-error-check-scheduler — full retry lifecycle", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    alertRows = [];
+    retryRows = [];
+    metadataUpdates.clear();
+    slackAlerts.length = 0;
+    recordedRuns.length = 0;
+    sessionStatus = "open";
+    stripeKeyResult = "sk_test_fake";
+    retryVendorRow = { id: 10, stripeEnabled: true, paystackEnabled: false };
+  });
+
+  it("tick 1 with unavailable key: alerts and leaves voidError intact; tick 2 with available key: expires session, clears metadata, sends success notice", async () => {
+    // ── Arrange ───────────────────────────────────────────────────────────────
+    const paymentId = 50;
+    const sessionRef = "cs_lifecycle_test_50";
+    const payment = makePayment({
+      id: paymentId,
+      providerReference: sessionRef,
+      metadata: {
+        voidError: "Network timeout during cancellation",
+        voidErrorAt: "2026-06-01T10:00:00.000Z",
+        sessionId: sessionRef,
+        source: "awajimaa",
+      },
+    });
+
+    // ── TICK 1: Stripe key unavailable ────────────────────────────────────────
+    stripeKeyResult = new Error("No Stripe key configured — admin must add one");
+    sessionStatus = "open";
+
+    // Alert pass sees the payment (no voidErrorAlertedAt yet).
+    alertRows = [payment];
+    // Retry pass also sees it (no voidErrorAcknowledgedAt).
+    retryRows = [payment];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    // Alert pass: Slack warning sent.
+    const tick1FailAlerts = slackAlerts.filter((m) => m.includes("void failed"));
+    expect(tick1FailAlerts).toHaveLength(1);
+    expect(tick1FailAlerts[0]).toContain(`payment #${paymentId}`);
+
+    // Alert pass: voidErrorAlertedAt stamped.
+    const tick1Meta = metadataUpdates.get(paymentId);
+    expect(tick1Meta).toBeDefined();
+    expect(typeof tick1Meta!.voidErrorAlertedAt).toBe("string");
+    expect(tick1Meta).toHaveProperty("voidError"); // NOT cleared yet
+
+    // Retry pass: key unavailable → expire was never called.
+    expect(expireMock).not.toHaveBeenCalled();
+
+    // No success notice yet.
+    const tick1SuccessAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
+    expect(tick1SuccessAlerts).toHaveLength(0);
+
+    // ── TICK 2: Stripe key now available ─────────────────────────────────────
+    stripeKeyResult = "sk_test_now_available";
+    sessionStatus = "open";
+
+    // Simulate the state after tick 1: alert pass has stamped voidErrorAlertedAt,
+    // so the payment no longer matches the alert-pass predicate — alertRows is empty.
+    alertRows = [];
+
+    // The retry-pass predicate only requires voidError + no voidErrorAcknowledgedAt,
+    // so the payment still appears in retryRows.
+    const paymentAfterTick1 = makePayment({
+      id: paymentId,
+      providerReference: sessionRef,
+      metadata: {
+        voidError: "Network timeout during cancellation",
+        voidErrorAt: "2026-06-01T10:00:00.000Z",
+        voidErrorAlertedAt: tick1Meta!.voidErrorAlertedAt as string,
+        sessionId: sessionRef,
+        source: "awajimaa",
+      },
+    });
+    retryRows = [paymentAfterTick1];
+
+    // Reset mutable capture state so tick 2 results are isolated.
+    metadataUpdates.clear();
+    slackAlerts.length = 0;
+    recordedRuns.length = 0;
+    expireMock.mockClear();
+
+    await tick();
+
+    // Retry pass: expire called once with the correct session reference.
+    expect(expireMock).toHaveBeenCalledOnce();
+    expect(expireMock).toHaveBeenCalledWith(sessionRef);
+
+    // Retry pass: void-error fields cleared, other metadata preserved.
+    const tick2Meta = metadataUpdates.get(paymentId);
+    expect(tick2Meta).toBeDefined();
+    expect(tick2Meta).not.toHaveProperty("voidError");
+    expect(tick2Meta).not.toHaveProperty("voidErrorAt");
+    expect(tick2Meta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(tick2Meta).toMatchObject({ sessionId: sessionRef, source: "awajimaa" });
+
+    // Retry pass: Slack success notice sent.
+    const tick2SuccessAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
+    expect(tick2SuccessAlerts).toHaveLength(1);
+    expect(tick2SuccessAlerts[0]).toContain(`payment #${paymentId}`);
+
+    // No new void-failed alert in tick 2 (alert pass found nothing).
+    const tick2FailAlerts = slackAlerts.filter((m) => m.includes("void failed"));
+    expect(tick2FailAlerts).toHaveLength(0);
+
+    // Job run recorded as successful.
+    expect(recordedRuns[0].input).toMatchObject({ success: true });
+  });
+
+  it("handles a non-open session (status: paid) gracefully — no expire call, metadata still cleared", async () => {
+    // A session that was already paid before the scheduler could expire it.
+    // The retry pass must not throw or leave voidError on the payment.
+    sessionStatus = "expired"; // covers "paid" / "complete" / "expired" — all non-open
+    stripeKeyResult = "sk_test_fake";
+
+    const paymentId = 51;
+    retryRows = [
+      makePayment({
+        id: paymentId,
+        providerReference: "cs_already_paid_51",
+        metadata: {
+          voidError: "Session was open at cancel time but is now closed",
+          voidErrorAt: "2026-06-01T11:00:00.000Z",
+          voidErrorAlertedAt: "2026-06-01T11:05:00.000Z",
+          sessionId: "cs_already_paid_51",
+          source: "awajimaa",
+        },
+      }),
+    ];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    // sessions.expire must NOT be called — the session is not open.
+    expect(expireMock).not.toHaveBeenCalled();
+
+    // Metadata must be cleared regardless — the session can't be paid again.
+    const updatedMeta = metadataUpdates.get(paymentId);
+    expect(updatedMeta).toBeDefined();
+    expect(updatedMeta).not.toHaveProperty("voidError");
+    expect(updatedMeta).not.toHaveProperty("voidErrorAt");
+    expect(updatedMeta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(updatedMeta).toMatchObject({ sessionId: "cs_already_paid_51", source: "awajimaa" });
+
+    // Success notice sent (session is resolved — no further risk).
+    const successAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
+    expect(successAlerts).toHaveLength(1);
+    expect(successAlerts[0]).toContain(`payment #${paymentId}`);
   });
 });
