@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -27,13 +27,16 @@ type VoidError = {
   amount: string;
   currency: string;
   status: string;
-  voidError: string;
+  /** Null when the payment was auto-recovered (scheduler cleared it). */
+  voidError: string | null;
   voidErrorAt: string | null;
   voidErrorAlertedAt: string | null;
   /** Set by the scheduler each time a retry attempt is made but fails. */
   voidErrorRetryAttemptedAt: string | null;
   voidErrorAcknowledgedAt: string | null;
   voidErrorAcknowledgedBy: string | null;
+  /** Set by the scheduler when a retry successfully expires the session. */
+  voidRecoveredAt: string | null;
   updatedAt: string | null;
 };
 
@@ -65,8 +68,24 @@ function formatTimestamp(iso: string | null): string {
   return new Date(iso).toLocaleString();
 }
 
-/** Returns a visual badge describing the scheduler's retry status for a row. */
+/** Returns a visual badge describing the scheduler's retry / recovery status for a row. */
 function RetryStatusBadge({ row }: { row: VoidError }) {
+  if (row.voidRecoveredAt) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <Badge
+          className="gap-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 w-fit border-emerald-500/30"
+          variant="outline"
+        >
+          <Sparkles className="w-3 h-3" />
+          Recovered automatically
+        </Badge>
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+          {formatTimestamp(row.voidRecoveredAt)}
+        </span>
+      </div>
+    );
+  }
   if (row.voidErrorRetryAttemptedAt) {
     return (
       <div className="flex flex-col gap-0.5">
@@ -130,14 +149,17 @@ export default function VoidErrorsPanel() {
   const activeErrors = errors ?? [];
   const hasErrors = activeErrors.length > 0;
 
-  // Split active (unacknowledged) errors into retrying vs new — only meaningful
-  // when showing the active list (not the acknowledged history).
+  // Segment the active list (unacknowledged) for the summary banner.
+  const recoveredCount = !showAcknowledged
+    ? activeErrors.filter((e) => e.voidRecoveredAt && !e.voidErrorAcknowledgedAt).length
+    : 0;
   const retryingCount = !showAcknowledged
-    ? activeErrors.filter((e) => e.voidErrorRetryAttemptedAt && !e.voidErrorAcknowledgedAt).length
+    ? activeErrors.filter((e) => e.voidErrorRetryAttemptedAt && !e.voidRecoveredAt && !e.voidErrorAcknowledgedAt).length
     : 0;
   const newCount = !showAcknowledged
-    ? activeErrors.filter((e) => !e.voidErrorRetryAttemptedAt && !e.voidErrorAcknowledgedAt).length
+    ? activeErrors.filter((e) => !e.voidErrorRetryAttemptedAt && !e.voidRecoveredAt && !e.voidErrorAcknowledgedAt).length
     : 0;
+  const needsAttentionCount = retryingCount + newCount;
 
   return (
     <div className="space-y-4">
@@ -145,16 +167,29 @@ export default function VoidErrorsPanel() {
         When a vendor cancels or retries a payment, the platform attempts to expire the provider&apos;s
         checkout session so the customer&apos;s original link is no longer payable. If that void call fails
         (e.g. missing or misconfigured Stripe credentials), the failure is recorded here and a Slack
-        alert is sent. The scheduler retries automatically every 10 minutes — payments it successfully
-        recovers disappear from this list. Entries still here after multiple retries need manual
-        action in the Stripe dashboard.
+        alert is sent. The scheduler retries automatically every 10 minutes. Payments it successfully
+        recovers are shown with a <span className="font-medium text-emerald-700">Recovered automatically</span> badge —
+        no action needed. Entries still showing an error after multiple retries need manual action in
+        the Stripe dashboard.
       </p>
 
-      {hasErrors && !showAcknowledged && (
+      {recoveredCount > 0 && !showAcknowledged && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 flex flex-wrap items-center gap-3">
+          <Sparkles className="w-4 h-4 shrink-0" />
+          <span className="font-medium">
+            {recoveredCount} payment{recoveredCount === 1 ? "" : "s"} auto-recovered by the scheduler
+          </span>
+          <span className="text-xs">
+            The Stripe session was successfully expired — no manual action needed.
+          </span>
+        </div>
+      )}
+
+      {needsAttentionCount > 0 && !showAcknowledged && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 flex flex-wrap items-center gap-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span className="font-medium">
-            {activeErrors.length} unacknowledged void error{activeErrors.length === 1 ? "" : "s"}
+            {needsAttentionCount} void error{needsAttentionCount === 1 ? "" : "s"} still need attention
           </span>
           {retryingCount > 0 && (
             <Badge className="bg-amber-500/20 text-amber-800 hover:bg-amber-500/20 gap-1">
@@ -174,7 +209,7 @@ export default function VoidErrorsPanel() {
           )}
           {newCount > 0 && (
             <span className="text-xs">
-              {newCount === activeErrors.length
+              {newCount === needsAttentionCount
                 ? "The scheduler has not attempted these yet — check back after the next 10-minute tick."
                 : "Some errors have not been retried yet — check back after the next 10-minute tick."}
             </span>
@@ -190,7 +225,7 @@ export default function VoidErrorsPanel() {
             </CardTitle>
             <CardDescription>
               Cancelled payments where the provider checkout session could not be expired.
-              Auto-recovered payments disappear automatically; the ones below still need attention.
+              Auto-recovered payments are shown with a green badge — no action needed for those.
             </CardDescription>
           </div>
           <Button
@@ -243,8 +278,12 @@ export default function VoidErrorsPanel() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs text-destructive max-w-[220px]">
-                      <span className="line-clamp-2" title={e.voidError}>{e.voidError}</span>
+                    <TableCell className="text-xs max-w-[220px]">
+                      {e.voidError ? (
+                        <span className="line-clamp-2 text-destructive" title={e.voidError}>{e.voidError}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">Cleared by auto-recovery</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatTimestamp(e.voidErrorAt)}
@@ -264,14 +303,18 @@ export default function VoidErrorsPanel() {
                       </TableCell>
                     )}
                     <TableCell className="text-right">
-                      {!e.voidErrorAcknowledgedAt ? (
-                        <Button size="sm" variant="outline" onClick={() => setActive(e)}>
-                          Acknowledge
-                        </Button>
-                      ) : (
+                      {e.voidErrorAcknowledgedAt ? (
                         <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15">
                           <CheckCircle2 className="w-3 h-3 mr-1" /> Done
                         </Badge>
+                      ) : e.voidRecoveredAt ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 gap-1 border-emerald-500/30" variant="outline">
+                          <Sparkles className="w-3 h-3" /> Auto-recovered
+                        </Badge>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setActive(e)}>
+                          Acknowledge
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>

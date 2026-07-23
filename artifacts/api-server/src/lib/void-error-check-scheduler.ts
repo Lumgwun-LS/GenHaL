@@ -160,6 +160,7 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
     }
 
     retriedCount++;
+    const now = new Date().toISOString();
 
     try {
       const stripe = new Stripe(stripeKey);
@@ -168,12 +169,18 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
         await stripe.checkout.sessions.expire(row.providerReference);
       }
 
-      // Success — clear the void error fields so the payment drops out of the
-      // Void Errors panel and admins know it was resolved automatically.
-      const { voidError: _ve, voidErrorAt: _vea, voidErrorAlertedAt: _veaa, ...cleanMeta } = meta as Record<string, unknown>;
+      // Success — clear the active void-error fields and stamp voidRecoveredAt
+      // so the payment stays visible in the admin panel with a "Recovered
+      // automatically" badge rather than silently disappearing.
+      const {
+        voidError: _ve,
+        voidErrorAlertedAt: _veaa,
+        voidErrorRetryAttemptedAt: _vera,
+        ...cleanMeta
+      } = meta as Record<string, unknown>;
       await db
         .update(paymentsTable)
-        .set({ metadata: cleanMeta })
+        .set({ metadata: { ...cleanMeta, voidRecoveredAt: now } })
         .where(eq(paymentsTable.id, row.id));
 
       recoveredCount++;
@@ -192,7 +199,6 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
     } catch (retryErr: unknown) {
       // Still failing — leave existing alert in place; do NOT send a new one.
       // Stamp voidErrorRetryAttemptedAt so admins can see this was tried.
-      const now = new Date().toISOString();
       await db
         .update(paymentsTable)
         .set({ metadata: { ...meta, voidErrorRetryAttemptedAt: now } })

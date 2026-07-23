@@ -50,12 +50,18 @@ router.get("/admin/void-errors", async (req, res): Promise<void> => {
 
   const showAcknowledged = req.query.showAcknowledged === "true";
 
+  // Include rows that still have an active voidError AND rows that were
+  // auto-recovered by the scheduler (voidRecoveredAt set, voidError cleared).
   const whereClause = showAcknowledged
-    ? sql`${paymentsTable.metadata} ->> 'voidError' IS NOT NULL`
-    : sql`
+    ? sql`(
         ${paymentsTable.metadata} ->> 'voidError' IS NOT NULL
-        AND (${paymentsTable.metadata} ->> 'voidErrorAcknowledgedAt') IS NULL
-      `;
+        OR ${paymentsTable.metadata} ->> 'voidRecoveredAt' IS NOT NULL
+      )`
+    : sql`(
+        ${paymentsTable.metadata} ->> 'voidError' IS NOT NULL
+        OR ${paymentsTable.metadata} ->> 'voidRecoveredAt' IS NOT NULL
+      )
+      AND (${paymentsTable.metadata} ->> 'voidErrorAcknowledgedAt') IS NULL`;
 
   const rows = await db
     .select({
@@ -89,10 +95,13 @@ router.get("/admin/void-errors", async (req, res): Promise<void> => {
       amount: r.amount,
       currency: r.currency,
       status: r.status,
-      voidError: String(meta.voidError ?? ""),
+      voidError: typeof meta.voidError === "string" ? meta.voidError : null,
       voidErrorAt: typeof meta.voidErrorAt === "string" ? meta.voidErrorAt : null,
       voidErrorAlertedAt: typeof meta.voidErrorAlertedAt === "string" ? meta.voidErrorAlertedAt : null,
+      voidErrorRetryAttemptedAt: typeof meta.voidErrorRetryAttemptedAt === "string" ? meta.voidErrorRetryAttemptedAt : null,
       voidErrorAcknowledgedAt: typeof meta.voidErrorAcknowledgedAt === "string" ? meta.voidErrorAcknowledgedAt : null,
+      voidErrorAcknowledgedBy: typeof meta.voidErrorAcknowledgedBy === "string" ? meta.voidErrorAcknowledgedBy : null,
+      voidRecoveredAt: typeof meta.voidRecoveredAt === "string" ? meta.voidRecoveredAt : null,
       updatedAt: r.updatedAt?.toISOString() ?? null,
     };
   });
@@ -137,7 +146,7 @@ router.post("/admin/void-errors/:id/acknowledge", async (req, res): Promise<void
 
   const meta = (existing.metadata ?? {}) as Record<string, unknown>;
 
-  if (!meta.voidError) {
+  if (!meta.voidError && !meta.voidRecoveredAt) {
     res.status(400).json({ error: "This payment has no recorded void error." });
     return;
   }

@@ -289,12 +289,14 @@ describe("void-error-check-scheduler — retryPass", () => {
     expect(expireMock).toHaveBeenCalledOnce();
     expect(expireMock).toHaveBeenCalledWith("cs_void_error_1");
 
-    // voidError, voidErrorAt, voidErrorAlertedAt must be gone from the metadata
+    // voidError and voidErrorAlertedAt must be gone; voidErrorAt is retained for
+    // the audit trail; voidRecoveredAt is stamped so the panel shows the badge.
     const updatedMeta = metadataUpdates.get(11);
     expect(updatedMeta).toBeDefined();
     expect(updatedMeta).not.toHaveProperty("voidError");
-    expect(updatedMeta).not.toHaveProperty("voidErrorAt");
     expect(updatedMeta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(updatedMeta).toHaveProperty("voidErrorAt"); // retained for audit trail
+    expect(typeof updatedMeta!.voidRecoveredAt).toBe("string"); // stamped by recovery
     // other metadata preserved
     expect(updatedMeta).toMatchObject({ sessionId: "cs_open_11", source: "awajimaa" });
 
@@ -322,11 +324,13 @@ describe("void-error-check-scheduler — retryPass", () => {
     // expire not called — session was not open
     expect(expireMock).not.toHaveBeenCalled();
 
-    // Metadata cleared anyway (session already not payable)
+    // Metadata cleared anyway (session already not payable); voidErrorAt kept
+    // for audit trail; voidRecoveredAt stamped so the panel shows the badge.
     const updatedMeta = metadataUpdates.get(12);
     expect(updatedMeta).toBeDefined();
     expect(updatedMeta).not.toHaveProperty("voidError");
-    expect(updatedMeta).not.toHaveProperty("voidErrorAt");
+    expect(updatedMeta).toHaveProperty("voidErrorAt"); // retained for audit trail
+    expect(typeof updatedMeta!.voidRecoveredAt).toBe("string");
   });
 
   it("skips silently when the Stripe key is still unavailable", async () => {
@@ -540,12 +544,14 @@ describe("void-error-check-scheduler — full retry lifecycle", () => {
     expect(expireMock).toHaveBeenCalledOnce();
     expect(expireMock).toHaveBeenCalledWith(sessionRef);
 
-    // Retry pass: void-error fields cleared, other metadata preserved.
+    // Retry pass: active void-error fields cleared; voidErrorAt kept so admins
+    // can see when the original error occurred; voidRecoveredAt stamped.
     const tick2Meta = metadataUpdates.get(paymentId);
     expect(tick2Meta).toBeDefined();
     expect(tick2Meta).not.toHaveProperty("voidError");
-    expect(tick2Meta).not.toHaveProperty("voidErrorAt");
     expect(tick2Meta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(tick2Meta).toHaveProperty("voidErrorAt"); // retained for audit trail
+    expect(typeof tick2Meta!.voidRecoveredAt).toBe("string"); // stamped by recovery
     expect(tick2Meta).toMatchObject({ sessionId: sessionRef, source: "awajimaa" });
 
     // Retry pass: Slack success notice sent.
@@ -588,12 +594,14 @@ describe("void-error-check-scheduler — full retry lifecycle", () => {
     // sessions.expire must NOT be called — the session is not open.
     expect(expireMock).not.toHaveBeenCalled();
 
-    // Metadata must be cleared regardless — the session can't be paid again.
+    // Active void-error fields cleared; voidErrorAt retained for audit trail;
+    // voidRecoveredAt stamped so the panel shows "Recovered automatically".
     const updatedMeta = metadataUpdates.get(paymentId);
     expect(updatedMeta).toBeDefined();
     expect(updatedMeta).not.toHaveProperty("voidError");
-    expect(updatedMeta).not.toHaveProperty("voidErrorAt");
     expect(updatedMeta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(updatedMeta).toHaveProperty("voidErrorAt"); // retained for audit trail
+    expect(typeof updatedMeta!.voidRecoveredAt).toBe("string"); // stamped by recovery
     expect(updatedMeta).toMatchObject({ sessionId: "cs_already_paid_51", source: "awajimaa" });
 
     // Success notice sent (session is resolved — no further risk).
