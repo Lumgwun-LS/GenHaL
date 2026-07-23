@@ -10,4 +10,5 @@ import type { Vendor } from './vendor';
 export interface ExternalProfileResponse {
   vendor: Vendor;
   features: string[];
+  isAdmin: boolean;
 }

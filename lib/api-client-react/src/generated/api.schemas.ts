@@ -810,6 +810,7 @@ export interface ExternalHandshakeResponse {
 export interface ExternalProfileResponse {
   vendor: Vendor;
   features: string[];
+  isAdmin: boolean;
 }
 
 export interface ExternalProfileUpdate {

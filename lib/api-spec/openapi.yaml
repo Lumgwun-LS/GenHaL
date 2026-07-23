@@ -5350,7 +5350,7 @@ components:
 
     ExternalProfileResponse:
       type: object
-      required: [vendor, features]
+      required: [vendor, features, isAdmin]
       properties:
         vendor:
           $ref: "#/components/schemas/Vendor"
@@ -5358,6 +5358,8 @@ components:
           type: array
           items:
             type: string
+        isAdmin:
+          type: boolean
 
     ExternalProfileUpdate:
       type: object

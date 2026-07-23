@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = await getExternalProfile();
     setVendor(profile.vendor);
     setFeatures(profile.features);
-    setIsAdmin((profile as any).isAdmin === true);
+    setIsAdmin(profile.isAdmin === true);
   }, []);
 
   // Restore a previously-issued VendorHub session from secure storage.
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = await getExternalProfile();
         setVendor(profile.vendor);
         setFeatures(profile.features);
-        setIsAdmin((profile as any).isAdmin === true);
+        setIsAdmin(profile.isAdmin === true);
       } catch {
         // Stored token is invalid/expired — fall back to logged-out state.
         await clearSession();
@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await getExternalProfile();
       setVendor(profile.vendor);
       setFeatures(profile.features);
-      setIsAdmin((profile as any).isAdmin === true);
+      setIsAdmin(profile.isAdmin === true);
     },
     [applyToken, getToken],
   );

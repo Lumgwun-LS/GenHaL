@@ -3124,7 +3124,8 @@ export const GetExternalProfileResponse = zod.object({
   "dateOfBirth": zod.string().nullish(),
   "voiceCallOptOut": zod.boolean().optional()
 }),
-  "features": zod.array(zod.string())
+  "features": zod.array(zod.string()),
+  "isAdmin": zod.boolean()
 })
 
 
