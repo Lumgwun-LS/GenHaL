@@ -39,6 +39,7 @@ import VoidErrorsPanel from "./void-errors";
 import BackgroundJobsPanel from "./background-jobs";
 import SocialAccountHealthPanel from "./social-account-health";
 import InfrastructureBillingPanel from "./infrastructure-billing";
+import BillingEnforcementPanel from "./billing-enforcement";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2318,7 +2319,10 @@ export default function AdminPanel() {
             <TrendingUp className="w-4 h-4" /> Revenue & Pricing
           </TabsTrigger>
           <TabsTrigger value="infrastructure-billing" className="flex items-center gap-2">
-            <Cpu className="w-4 h-4" /> Infrastructure Billing
+            <Cpu className="w-4 h-4" /> Billing Intelligence
+          </TabsTrigger>
+          <TabsTrigger value="billing-enforcement" className="flex items-center gap-2">
+            <ShieldOff className="w-4 h-4" /> Billing Enforcement
           </TabsTrigger>
         </TabsList>
 
@@ -3602,9 +3606,14 @@ export default function AdminPanel() {
           <RevenueIntelligencePanel />
         </TabsContent>
 
-        {/* ── Infrastructure Billing tab ──────────────────────────────── */}
+        {/* ── Billing Intelligence tab ────────────────────────────────── */}
         <TabsContent value="infrastructure-billing">
           <InfrastructureBillingPanel />
+        </TabsContent>
+
+        {/* ── Billing Enforcement tab ─────────────────────────────────── */}
+        <TabsContent value="billing-enforcement">
+          <BillingEnforcementPanel />
         </TabsContent>
       </Tabs>
     </div>

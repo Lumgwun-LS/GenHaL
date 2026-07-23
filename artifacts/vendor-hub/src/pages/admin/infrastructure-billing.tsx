@@ -1,11 +1,11 @@
 /**
- * Infrastructure Billing Panel
+ * Billing Intelligence Panel
  *
- * Shows:
- *  1. Replit's published rate card (what they charge us)
- *  2. Our 5× customer pricing (what we charge vendors)
- *  3. Estimated platform costs for the selected month
- *  4. Per-vendor usage table with calculated bills and margin
+ * Three clearly-separated sections:
+ *  1. Your Platform Costs — what we actually pay per provider
+ *     (Replit infrastructure, Twilio, ElevenLabs, OpenAI) with live usage-derived estimates
+ *  2. Your Customer Pricing — 500% markup table, side-by-side with provider cost
+ *  3. Per-Vendor Usage & Bills — metered consumption + calculated charges per vendor
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -14,9 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Server, Database, Cloud, Zap, TrendingUp, TrendingDown,
-  DollarSign, Users, Cpu, HardDrive, Wifi, Bot, Phone,
-  Mail, MessageSquare, ArrowUpRight, Info, RefreshCw,
+  Server, Database, Cloud, Zap, TrendingUp,
+  DollarSign, Users, HardDrive, Wifi, Bot, Phone,
+  Mail, MessageSquare, Info, RefreshCw, Cpu, Music, Mic,
+  ArrowUpRight, ArrowRight,
 } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -40,18 +41,11 @@ interface Overview {
   ourInfraRates: { objectStoragePerGibMonth: number; egressPerGib: number };
   markup: number;
   estimatedReplitCosts: {
-    fixedVm: number;
-    workspace: number;
-    database: number;
-    objectStorage: number;
-    egress: number;
-    externalApis: number;
-    total: number;
+    fixedVm: number; workspace: number; database: number;
+    objectStorage: number; egress: number; externalApis: number; total: number;
   };
   platformUsage: {
-    storageGib: number;
-    egressGib: number;
-    uploadsCount: number;
+    storageGib: number; egressGib: number; uploadsCount: number;
     usageByResource: Record<string, number>;
   };
   revenue: { subscriptions: number; overage: number; total: number };
@@ -78,51 +72,42 @@ interface VendorBillsResponse {
   bills: VendorBill[];
 }
 
+// ── Provider cost definitions (mirrors backend constants) ─────────────────────
+// Replit infra costs are derived live from replitRates + usage.
+// External provider costs are hardcoded here to match the backend PROVIDER_COST_PER_UNIT.
+const TWILIO_COSTS = [
+  { label: "Voice calls (outbound)",    unit: "/ min",  cost: 0.013,  resource: "voiceMinutes" },
+  { label: "SMS messages (outbound)",   unit: "/ SMS",  cost: 0.0075, resource: "sms" },
+];
+
+const ELEVENLABS_COSTS = [
+  { label: "Text-to-Speech (TTS)",      unit: "/ min",  cost: 0.005,  resource: "voiceMinutes" },
+  { label: "AI music generation",       unit: "/ video", cost: 0.05,  resource: "aiVideos" },
+];
+
+const OPENAI_COSTS = [
+  { label: "DALL-E 3 image generation", unit: "/ image",   cost: 0.04,  resource: "aiImages" },
+  { label: "GPT-4o-mini captions",      unit: "/ caption", cost: 0.002, resource: "aiCaptions" },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(n: number, decimals = 2) {
-  return `$${n.toFixed(decimals)}`;
-}
+function fmt(n: number, d = 2)  { return `$${Number(n).toFixed(d)}`; }
+function fmtPct(n: number)      { return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`; }
 
-function fmtN(n: number) {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-}
-
-function resourceLabel(key: string): string {
-  const map: Record<string, string> = {
-    aiImages:     "AI Images",
-    aiVideos:     "AI Videos",
-    aiCaptions:   "AI Captions",
-    voiceMinutes: "Voice Minutes",
-    sms:          "SMS Messages",
-    email:        "Emails",
-  };
-  return map[key] ?? key;
-}
-
-function resourceUnit(key: string): string {
-  const map: Record<string, string> = {
-    aiImages:     "/ image",
-    aiVideos:     "/ video",
-    aiCaptions:   "/ caption",
-    voiceMinutes: "/ min",
-    sms:          "/ SMS",
-    email:        "/ email",
-  };
-  return map[key] ?? "";
-}
-
-function resourceIcon(key: string) {
-  if (key === "aiImages" || key === "aiVideos" || key === "aiCaptions") return Bot;
-  if (key === "voiceMinutes") return Phone;
-  if (key === "sms") return MessageSquare;
-  if (key === "email") return Mail;
-  return Zap;
-}
+const RESOURCE_LABELS: Record<string, string> = {
+  aiImages: "AI Images", aiVideos: "AI Videos", aiCaptions: "AI Captions",
+  voiceMinutes: "Voice Minutes", sms: "SMS Messages", email: "Emails",
+};
+const RESOURCE_UNITS: Record<string, string> = {
+  aiImages: "/ image", aiVideos: "/ video", aiCaptions: "/ caption",
+  voiceMinutes: "/ min", sms: "/ SMS", email: "/ email",
+};
 
 function tierColor(tier: string) {
   if (tier === "enterprise") return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
   if (tier === "pro")        return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
   if (tier === "starter")    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (tier === "basic")      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
   return "bg-muted text-muted-foreground";
 }
 
@@ -138,267 +123,287 @@ function monthOptions() {
   return opts;
 }
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
+// ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  accent = "default",
+  icon: Icon, label, value, sub, accent = "default",
 }: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: "default" | "green" | "red" | "amber";
+  icon: React.ElementType; label: string; value: string; sub?: string;
+  accent?: "default" | "green" | "amber" | "blue";
 }) {
-  const colors = {
-    default: "from-primary/10 to-primary/5 border-primary/20",
-    green:   "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20",
-    red:     "from-red-500/10 to-red-500/5 border-red-500/20",
-    amber:   "from-amber-500/10 to-amber-500/5 border-amber-500/20",
-  };
-  const iconColors = {
-    default: "text-primary",
-    green:   "text-emerald-500",
-    red:     "text-red-500",
-    amber:   "text-amber-500",
-  };
+  const c = { default: "text-primary", green: "text-emerald-500", amber: "text-amber-500", blue: "text-blue-500" };
   return (
-    <Card className={`bg-gradient-to-br ${colors[accent]} border`}>
-      <CardContent className="pt-6">
+    <Card>
+      <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+            <p className={`text-2xl font-bold mt-1 ${c[accent]}`}>{value}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
-          <div className={`p-2 rounded-lg bg-background/50 ${iconColors[accent]}`}>
-            <Icon className="w-5 h-5" />
-          </div>
+          <Icon className={`w-5 h-5 ${c[accent]} mt-1`} />
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// ── Rate Comparison Table ─────────────────────────────────────────────────────
-function RateComparisonTable({ providerCosts, ourRates }: {
+// ── Provider Cost Card ────────────────────────────────────────────────────────
+function ProviderCostCard({
+  icon: Icon,
+  providerName,
+  accentClass,
+  description,
+  rows,
+  totalEstimate,
+  usageByResource,
+}: {
+  icon: React.ElementType;
+  providerName: string;
+  accentClass: string;
+  description: string;
+  rows: { label: string; unit: string; cost: number; resource?: string }[];
+  totalEstimate?: number;
+  usageByResource?: Record<string, number>;
+}) {
+  return (
+    <Card className="flex flex-col">
+      <CardHeader className="pb-3">
+        <CardTitle className={`flex items-center gap-2 text-base ${accentClass}`}>
+          <Icon className="w-4 h-4" /> {providerName}
+        </CardTitle>
+        <CardDescription className="text-xs">{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="pt-0 flex-1">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Service</TableHead>
+              <TableHead className="text-right text-xs">Our Cost</TableHead>
+              {usageByResource && <TableHead className="text-right text-xs">Used (this month)</TableHead>}
+              {usageByResource && <TableHead className="text-right text-xs">Est. Spend</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => {
+              const used = r.resource ? (usageByResource?.[r.resource] ?? 0) : null;
+              const spend = used !== null ? used * r.cost : null;
+              return (
+                <TableRow key={r.label}>
+                  <TableCell className="text-sm">{r.label}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {fmt(r.cost, 4)} <span className="text-muted-foreground text-xs">{r.unit}</span>
+                  </TableCell>
+                  {usageByResource && (
+                    <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                      {used !== null ? used.toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—"}
+                    </TableCell>
+                  )}
+                  {usageByResource && (
+                    <TableCell className="text-right font-mono text-sm">
+                      {spend !== null ? fmt(spend, 4) : "—"}
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        {totalEstimate !== undefined && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-muted/40 border flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-medium">Estimated spend this month</span>
+            <span className="font-mono font-bold text-sm">{fmt(totalEstimate)}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Our Customer Pricing Table ────────────────────────────────────────────────
+function CustomerPricingTable({
+  providerCosts,
+  ourRates,
+  markup,
+  usageByResource,
+}: {
   providerCosts: Record<string, number>;
   ourRates: Record<string, number>;
-}) {
-  const resources = Object.keys(providerCosts);
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Resource</TableHead>
-            <TableHead className="text-right">Provider / Replit Cost</TableHead>
-            <TableHead className="text-right text-primary font-semibold">Our Rate (5×)</TableHead>
-            <TableHead className="text-right">Margin per Unit</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {resources.map((key) => {
-            const costUs  = providerCosts[key]!;
-            const ourRate = ourRates[key]!;
-            const margin  = ourRate - costUs;
-            const Icon = resourceIcon(key);
-            return (
-              <TableRow key={key}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">{resourceLabel(key)}</span>
-                    <span className="text-xs text-muted-foreground">{resourceUnit(key)}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {fmt(costUs, 4)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-semibold text-primary">
-                  {fmt(ourRate, 4)}
-                </TableCell>
-                <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">
-                  +{fmt(margin, 4)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-// ── Cost Breakdown ────────────────────────────────────────────────────────────
-function CostBreakdown({ costs, markup }: {
-  costs: Overview["estimatedReplitCosts"];
   markup: number;
+  usageByResource: Record<string, number>;
 }) {
-  const rows = [
-    { label: "Reserved VMs (API + Web server)", icon: Server,    cost: costs.fixedVm,      note: "Standard $13 + Nano $7" },
-    { label: "Replit Core workspace",           icon: Cloud,      cost: costs.workspace,    note: "$25/month plan" },
-    { label: "PostgreSQL storage",              icon: Database,   cost: costs.database,     note: "~0.5 GiB estimated" },
-    { label: "Object storage",                  icon: HardDrive,  cost: costs.objectStorage,note: "Media files (images + video)" },
-    { label: "Egress / data transfer",          icon: Wifi,       cost: costs.egress,       note: "API responses out" },
-    { label: "External APIs (AI, voice, SMS)",  icon: Bot,        cost: costs.externalApis, note: "OpenAI · ElevenLabs · Twilio" },
-  ];
-
-  const totalBillable = costs.total * markup;
-
+  const resources = ["aiImages", "aiVideos", "aiCaptions", "voiceMinutes", "sms", "email"];
   return (
-    <div className="space-y-2">
-      {rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between py-2 border-b last:border-0">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 rounded bg-muted">
-              <row.icon className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{row.label}</p>
-              <p className="text-xs text-muted-foreground">{row.note}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="font-mono text-sm font-semibold">{fmt(row.cost)}</p>
-            <p className="font-mono text-xs text-primary">{fmt(row.cost * markup)} at 5×</p>
-          </div>
-        </div>
-      ))}
-      <div className="flex items-center justify-between pt-3 mt-2 border-t-2 border-dashed">
-        <div>
-          <p className="font-bold">Total Platform Cost</p>
-          <p className="text-xs text-muted-foreground">What Replit + providers charge us</p>
-        </div>
-        <div className="text-right">
-          <p className="font-mono text-lg font-bold">{fmt(costs.total)}</p>
-          <p className="font-mono text-sm font-bold text-primary">{fmt(totalBillable)} billable at 5×</p>
-        </div>
-      </div>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Resource</TableHead>
+          <TableHead className="text-right">Provider Cost</TableHead>
+          <TableHead className="text-center">
+            <span className="flex items-center justify-center gap-1">
+              <ArrowRight className="w-3 h-3" /> {markup}× Markup
+            </span>
+          </TableHead>
+          <TableHead className="text-right text-primary font-semibold">We Charge</TableHead>
+          <TableHead className="text-right">Units Used</TableHead>
+          <TableHead className="text-right">Revenue Generated</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {resources.map((r) => {
+          const provCost = providerCosts[r] ?? 0;
+          const ourRate  = ourRates[r] ?? 0;
+          const used     = usageByResource[r] ?? 0;
+          const revenue  = used * ourRate;
+          return (
+            <TableRow key={r}>
+              <TableCell className="font-medium">{RESOURCE_LABELS[r] ?? r}</TableCell>
+              <TableCell className="text-right font-mono text-muted-foreground text-sm">
+                {fmt(provCost, 4)} <span className="text-xs">{RESOURCE_UNITS[r]}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs">
+                  {markup}×
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold text-primary">
+                {fmt(ourRate, 4)} <span className="text-xs text-muted-foreground">{RESOURCE_UNITS[r]}</span>
+              </TableCell>
+              <TableCell className="text-right font-mono text-muted-foreground text-sm">
+                {used > 0 ? used.toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—"}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                {revenue > 0 ? fmt(revenue, 2) : "—"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
-// ── Vendor Bills Table ────────────────────────────────────────────────────────
+// ── Per-Vendor Bills Table ────────────────────────────────────────────────────
 function VendorBillsTable({ bills }: { bills: VendorBill[] }) {
-  const resources = ["aiImages", "aiVideos", "aiCaptions", "voiceMinutes", "sms", "email"];
-
   if (bills.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="py-12 text-center text-muted-foreground">
         No vendor usage data for this period.
       </div>
     );
   }
-
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="min-w-40">Vendor</TableHead>
-            <TableHead>Tier</TableHead>
-            <TableHead className="text-right">AI Images</TableHead>
-            <TableHead className="text-right">AI Videos</TableHead>
-            <TableHead className="text-right">Captions</TableHead>
-            <TableHead className="text-right">Voice Min</TableHead>
-            <TableHead className="text-right">SMS</TableHead>
-            <TableHead className="text-right">Email</TableHead>
-            <TableHead className="text-right border-l">Our Cost</TableHead>
-            <TableHead className="text-right text-primary">Their Bill (5×)</TableHead>
-            <TableHead className="text-right">Sub Revenue</TableHead>
-            <TableHead className="text-right">Net Margin</TableHead>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Vendor</TableHead>
+          <TableHead>Plan</TableHead>
+          <TableHead className="text-right">Our Cost to Serve</TableHead>
+          <TableHead className="text-right">Billed (5×)</TableHead>
+          <TableHead className="text-right">Sub Revenue</TableHead>
+          <TableHead className="text-right">Total Revenue</TableHead>
+          <TableHead className="text-right">Net Margin</TableHead>
+          <TableHead className="text-right">Margin %</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {bills.map((v) => (
+          <TableRow key={v.vendorId}>
+            <TableCell>
+              <p className="font-medium">{v.businessName || `Vendor #${v.vendorId}`}</p>
+              <p className="text-xs text-muted-foreground">ID {v.vendorId}</p>
+            </TableCell>
+            <TableCell>
+              <Badge className={`text-xs capitalize ${tierColor(v.tier)}`}>{v.tier}</Badge>
+            </TableCell>
+            <TableCell className="text-right font-mono text-muted-foreground text-sm">{fmt(v.ourCostToServe, 4)}</TableCell>
+            <TableCell className="text-right font-mono text-sm">{fmt(v.billableAmount)}</TableCell>
+            <TableCell className="text-right font-mono text-sm">{fmt(v.subscriptionRevenue)}</TableCell>
+            <TableCell className="text-right font-mono font-semibold">{fmt(v.totalRevenue)}</TableCell>
+            <TableCell className={`text-right font-mono font-semibold ${v.netMargin >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+              {fmt(v.netMargin)}
+            </TableCell>
+            <TableCell className={`text-right font-mono text-sm ${v.marginPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+              {fmtPct(v.marginPct)}
+            </TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {bills.map((v) => (
-            <TableRow key={v.vendorId}>
-              <TableCell className="font-medium max-w-40 truncate">{v.businessName}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${tierColor(v.tier)}`}>
-                  {v.tier}
-                </span>
-              </TableCell>
-              {resources.map((r) => (
-                <TableCell key={r} className="text-right font-mono text-sm">
-                  {(v.usage[r] ?? 0) > 0 ? fmtN(v.usage[r]!) : <span className="text-muted-foreground/40">—</span>}
-                </TableCell>
-              ))}
-              <TableCell className="text-right font-mono text-sm border-l text-muted-foreground">
-                {fmt(v.ourCostToServe, 4)}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm font-semibold text-primary">
-                {v.billableAmount > 0 ? fmt(v.billableAmount) : <span className="text-muted-foreground/40">—</span>}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {v.subscriptionRevenue > 0 ? fmt(v.subscriptionRevenue) : <span className="text-muted-foreground/40">—</span>}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                <span className={v.netMargin >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}>
-                  {v.netMargin >= 0 ? "+" : ""}{fmt(v.netMargin)}
-                </span>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
-// ── Main Panel ────────────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 export default function InfrastructureBillingPanel() {
   const months = monthOptions();
-  const [month, setMonth] = useState(months[0]!.value);
+  const [selectedMonth, setSelectedMonth] = useState(months[0]!.value);
 
-  const { data: overview, isLoading: loadingOverview } = useQuery<Overview>({
-    queryKey: ["admin-infra-billing-overview", month],
+  const { data: overview, isLoading: loadingOverview, isError: errorOverview } = useQuery<Overview>({
+    queryKey: ["admin-infra-billing-overview", selectedMonth],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/overview?month=${month}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load billing overview");
-      return res.json();
+      const r = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/overview?month=${selectedMonth}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load overview");
+      return r.json();
     },
   });
 
   const { data: vendorData, isLoading: loadingVendors } = useQuery<VendorBillsResponse>({
-    queryKey: ["admin-infra-billing-vendor-bills", month],
+    queryKey: ["admin-infra-billing-vendors", selectedMonth],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/vendor-bills?month=${month}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load vendor bills");
-      return res.json();
+      const r = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/vendor-bills?month=${selectedMonth}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load vendor bills");
+      return r.json();
     },
+    enabled: !!overview,
   });
 
-  const isLoading = loadingOverview || loadingVendors;
+  if (loadingOverview) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
+        <RefreshCw className="w-4 h-4 animate-spin" /> Loading billing intelligence…
+      </div>
+    );
+  }
+  if (errorOverview || !overview) {
+    return <div className="text-center py-12 text-destructive">Failed to load billing data.</div>;
+  }
 
-  // Summarise vendor data
-  const totalBillable  = vendorData?.bills.reduce((s, b) => s + b.billableAmount, 0) ?? 0;
-  const totalRevenue   = overview?.revenue.total ?? 0;
-  const totalCost      = overview?.estimatedReplitCosts.total ?? 0;
-  const netMargin      = totalRevenue - totalCost;
-  const vendorsWithUsage = vendorData?.bills.filter(b => b.billableAmount > 0).length ?? 0;
+  const usage = overview.platformUsage.usageByResource;
+
+  // Per-provider estimated spend this month (from usage)
+  const twilioSpend =
+    (usage["voiceMinutes"] ?? 0) * 0.013 +
+    (usage["sms"] ?? 0) * 0.0075;
+
+  const elevenLabsSpend =
+    (usage["voiceMinutes"] ?? 0) * 0.005 +
+    (usage["aiVideos"] ?? 0) * 0.05;
+
+  const openAiSpend =
+    (usage["aiImages"] ?? 0) * 0.04 +
+    (usage["aiCaptions"] ?? 0) * 0.002;
+
+  const replitInfraSpend =
+    overview.estimatedReplitCosts.fixedVm +
+    overview.estimatedReplitCosts.workspace +
+    overview.estimatedReplitCosts.database +
+    overview.estimatedReplitCosts.objectStorage +
+    overview.estimatedReplitCosts.egress;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+      {/* ── Header + month selector ───────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Cpu className="w-6 h-6 text-primary" />
-            Infrastructure Billing
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-primary" /> Billing Intelligence
           </h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Replit + provider costs, our 5× pricing, and per-vendor bills.
+          <p className="text-sm text-muted-foreground mt-0.5">
+            What we pay providers · what we charge customers · per-vendor margin
           </p>
         </div>
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="w-52">
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -409,206 +414,215 @@ export default function InfrastructureBillingPanel() {
         </Select>
       </div>
 
-      {/* Top KPIs */}
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm flex items-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin" /> Loading billing data…
+      {/* ── KPI row ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard icon={DollarSign} label="Total Platform Cost" value={fmt(overview.estimatedReplitCosts.total)} sub={overview.period.label} accent="amber" />
+        <KpiCard icon={TrendingUp} label="Projected Billable" value={fmt(overview.projectedBillableRevenue)} sub={`${overview.markup}× markup on costs`} accent="green" />
+        <KpiCard icon={DollarSign} label="Revenue Collected" value={fmt(overview.revenue.total)} sub={`${fmt(overview.revenue.subscriptions)} sub + ${fmt(overview.revenue.overage)} overage`} />
+        <KpiCard icon={Users} label="Vendors" value={String(overview.totalVendors)} sub={`${overview.paidVendors} on paid plans`} accent="blue" />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 1 — YOUR PLATFORM COSTS
+      ══════════════════════════════════════════════════════════════════ */}
+      <div>
+        <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
+          <Server className="w-4 h-4 text-muted-foreground" /> Your Platform Costs — {overview.period.label}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          What you actually pay each provider. Live estimates are derived from the resource-usage ledger.
+        </p>
+
+        {/* Replit infrastructure */}
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-blue-600 dark:text-blue-400">
+              <Cloud className="w-4 h-4" /> Replit — Infrastructure & Hosting
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Managed VMs, object storage, PostgreSQL, egress, and the Core workspace plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Line Item</TableHead>
+                  <TableHead className="text-right text-xs">Published Rate</TableHead>
+                  <TableHead className="text-right text-xs">Est. Usage</TableHead>
+                  <TableHead className="text-right text-xs">Est. Cost</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><Cpu className="w-3.5 h-3.5 text-muted-foreground" /> API Server VM (Standard 1 vCPU / 2 GiB)</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.reservedVmStandardPerMonth)} / mo</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">1 × reserved</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.reservedVmStandardPerMonth)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><Cpu className="w-3.5 h-3.5 text-muted-foreground" /> Frontend VM (Nano 0.5 vCPU / 1 GiB)</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.reservedVmNanoPerMonth)} / mo</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">1 × reserved</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.reservedVmNanoPerMonth)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-muted-foreground" /> Replit Core workspace</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.coreWorkspacePerMonth)} / mo</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">1 seat</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.coreWorkspacePerMonth)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><Database className="w-3.5 h-3.5 text-muted-foreground" /> PostgreSQL managed DB</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.postgresPerGibMonth, 3)} / GiB / mo</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">~0.5 GiB</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.estimatedReplitCosts.database, 4)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><HardDrive className="w-3.5 h-3.5 text-muted-foreground" /> Object storage</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.objectStoragePerGibMonth, 3)} / GiB / mo</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">{overview.platformUsage.storageGib.toFixed(2)} GiB</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.estimatedReplitCosts.objectStorage, 4)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="text-sm"><div className="flex items-center gap-2"><Wifi className="w-3.5 h-3.5 text-muted-foreground" /> Egress (outbound data)</div></TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.replitRates.egressPerGib, 2)} / GiB</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">{overview.platformUsage.egressGib.toFixed(3)} GiB</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(overview.estimatedReplitCosts.egress, 4)}</TableCell>
+                </TableRow>
+                <TableRow className="font-bold bg-muted/30">
+                  <TableCell colSpan={3}>Replit subtotal</TableCell>
+                  <TableCell className="text-right font-mono">{fmt(replitInfraSpend)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* External provider cards — side-by-side */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <ProviderCostCard
+            icon={Phone}
+            providerName="Twilio"
+            accentClass="text-red-600 dark:text-red-400"
+            description="Outbound voice calls (per-minute) and SMS messages. Rates are Twilio's published US outbound list prices."
+            rows={TWILIO_COSTS}
+            totalEstimate={twilioSpend}
+            usageByResource={usage}
+          />
+          <ProviderCostCard
+            icon={Mic}
+            providerName="ElevenLabs"
+            accentClass="text-violet-600 dark:text-violet-400"
+            description="Text-to-Speech synthesis for voice campaigns, and AI music generation for video scenes."
+            rows={ELEVENLABS_COSTS}
+            totalEstimate={elevenLabsSpend}
+            usageByResource={usage}
+          />
+          <ProviderCostCard
+            icon={Bot}
+            providerName="OpenAI"
+            accentClass="text-emerald-600 dark:text-emerald-400"
+            description="DALL-E 3 image generation and GPT-4o-mini for AI-generated product captions and social posts."
+            rows={OPENAI_COSTS}
+            totalEstimate={openAiSpend}
+            usageByResource={usage}
+          />
         </div>
-      ) : overview ? (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              icon={Server}
-              label="Our Replit Cost (est.)"
-              value={fmt(totalCost)}
-              sub={overview.period.label}
-              accent="amber"
-            />
-            <KpiCard
-              icon={DollarSign}
-              label="Revenue Collected"
-              value={fmt(totalRevenue)}
-              sub={`Subs ${fmt(overview.revenue.subscriptions)} + Overage ${fmt(overview.revenue.overage)}`}
-              accent="green"
-            />
-            <KpiCard
-              icon={TrendingUp}
-              label="Projected Billable (5×)"
-              value={fmt(overview.projectedBillableRevenue)}
-              sub={`${vendorsWithUsage} vendors with usage`}
-              accent="default"
-            />
-            <KpiCard
-              icon={netMargin >= 0 ? TrendingUp : TrendingDown}
-              label="Net Margin vs Cost"
-              value={`${netMargin >= 0 ? "+" : ""}${fmt(netMargin)}`}
-              sub="Revenue collected − our cost"
-              accent={netMargin >= 0 ? "green" : "red"}
-            />
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <KpiCard icon={Users}  label="Total Vendors" value={String(overview.totalVendors)} sub={`${overview.paidVendors} on paid plans`} />
-            <KpiCard icon={HardDrive} label="Object Storage" value={`${overview.platformUsage.storageGib.toFixed(2)} GiB`} sub={`${overview.platformUsage.uploadsCount} files stored`} />
+        {/* Total cost summary strip */}
+        <div className="mt-4 rounded-xl border bg-gradient-to-r from-muted/60 to-muted/30 p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-6 text-sm">
+            <span><span className="text-muted-foreground">Replit infra</span> <span className="font-mono font-semibold">{fmt(replitInfraSpend)}</span></span>
+            <span className="text-muted-foreground">+</span>
+            <span><span className="text-muted-foreground">Twilio</span> <span className="font-mono font-semibold">{fmt(twilioSpend)}</span></span>
+            <span className="text-muted-foreground">+</span>
+            <span><span className="text-muted-foreground">ElevenLabs</span> <span className="font-mono font-semibold">{fmt(elevenLabsSpend)}</span></span>
+            <span className="text-muted-foreground">+</span>
+            <span><span className="text-muted-foreground">OpenAI</span> <span className="font-mono font-semibold">{fmt(openAiSpend)}</span></span>
           </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Total estimated cost</p>
+            <p className="text-2xl font-bold font-mono">{fmt(overview.estimatedReplitCosts.total)}</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Section 1 — Replit Rate Card */}
-          <Card>
-            <CardHeader>
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 2 — YOUR CUSTOMER PRICING (500% MARKUP)
+      ══════════════════════════════════════════════════════════════════ */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
               <CardTitle className="flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-primary" /> Replit Infrastructure Rate Card
+                <ArrowUpRight className="w-5 h-5 text-primary" /> Your Customer Pricing — 500% Markup
               </CardTitle>
               <CardDescription>
-                Published 2025 pricing from replit.com/pricing. These are what Replit charges us.
+                Every unit of resource you provide to a vendor is billed at {overview.markup}× the underlying provider
+                cost. These rates activate on overages and pay-as-you-go add-ons — vendors within their plan quota pay
+                nothing extra.
               </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Replit Rate</TableHead>
-                      <TableHead>Our Usage (this month)</TableHead>
-                      <TableHead className="text-right">Estimated Cost</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Server className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">Reserved VM — Standard</p><p className="text-xs text-muted-foreground">API Server · 1 vCPU / 2 GiB RAM</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.reservedVmStandardPerMonth}/mo</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">1 instance (always-on)</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.replitRates.reservedVmStandardPerMonth)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Server className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">Reserved VM — Nano</p><p className="text-xs text-muted-foreground">Web server · 0.5 vCPU / 1 GiB RAM</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.reservedVmNanoPerMonth}/mo</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">1 instance (always-on)</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.replitRates.reservedVmNanoPerMonth)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Cloud className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">Replit Core Workspace</p><p className="text-xs text-muted-foreground">Developer plan</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.coreWorkspacePerMonth}/mo</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">1 workspace</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.replitRates.coreWorkspacePerMonth)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><HardDrive className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">Object Storage</p><p className="text-xs text-muted-foreground">AI-generated + vendor media</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.objectStoragePerGibMonth}/GiB·mo</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{overview.platformUsage.storageGib.toFixed(3)} GiB</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.estimatedReplitCosts.objectStorage, 4)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Database className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">PostgreSQL Database</p><p className="text-xs text-muted-foreground">Neon-backed managed DB</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.postgresPerGibMonth}/GiB·mo</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">~0.5 GiB estimated</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.estimatedReplitCosts.database, 4)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Wifi className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">Egress / Data Transfer</p><p className="text-xs text-muted-foreground">Outbound from Replit</p></div></div></TableCell>
-                      <TableCell className="font-mono">${overview.replitRates.egressPerGib}/GiB</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{overview.platformUsage.egressGib.toFixed(4)} GiB est.</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.estimatedReplitCosts.egress, 4)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><div className="flex items-center gap-2"><Bot className="w-4 h-4 text-muted-foreground" /><div><p className="font-medium">External APIs</p><p className="text-xs text-muted-foreground">OpenAI · ElevenLabs · Twilio</p></div></div></TableCell>
-                      <TableCell className="font-mono text-muted-foreground">per-unit (see below)</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">Based on resource_usage ledger</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(overview.estimatedReplitCosts.externalApis, 4)}</TableCell>
-                    </TableRow>
-                    <TableRow className="font-bold bg-muted/30">
-                      <TableCell colSpan={3}>Total estimated cost this month</TableCell>
-                      <TableCell className="text-right font-mono text-lg">{fmt(overview.estimatedReplitCosts.total)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                500% markup
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Section 2 — Our Pricing vs Provider Costs */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <ArrowUpRight className="w-5 h-5 text-primary" /> Our Customer Pricing — 5× Markup
-                  </CardTitle>
-                  <CardDescription>
-                    We charge vendors {overview.markup}× the underlying provider cost for each resource. These rates are applied to vendor
-                    usage tracked in the resource ledger.
-                  </CardDescription>
-                </div>
-                <div className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                  500% markup
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <RateComparisonTable
-                providerCosts={overview.providerCosts}
-                ourRates={overview.ourRatesPerUnit}
-              />
-              <div className="mt-4 rounded-lg bg-muted/40 border p-4 text-sm text-muted-foreground flex gap-2">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>
-                  These metered rates apply on top of subscription plans. Vendors within their quota pay nothing extra —
-                  these rates activate only on usage beyond included quotas (overages), or for pay-as-you-go
-                  resource add-ons. Infrastructure rates (storage, egress) are reflected in plan pricing.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Section 3 — Platform Cost Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-primary" /> Platform Cost Breakdown — {overview.period.label}
-              </CardTitle>
-              <CardDescription>Estimated spend broken down by resource category, with the 5× billable equivalent.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CostBreakdown costs={overview.estimatedReplitCosts} markup={overview.markup} />
-            </CardContent>
-          </Card>
-
-          {/* Section 4 — Per-Vendor Bills */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" /> Per-Vendor Usage & Bills — {overview.period.label}
-              </CardTitle>
-              <CardDescription>
-                Resource consumption from the metering ledger, calculated bill at our 5× rates, subscription revenue collected,
-                and net margin per vendor.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingVendors ? (
-                <div className="p-8 text-center text-muted-foreground flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Loading vendor bills…
-                </div>
-              ) : (
-                <VendorBillsTable bills={vendorData?.bills ?? []} />
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Footer note */}
-          <div className="text-xs text-muted-foreground bg-muted/30 border rounded-lg p-4 flex gap-2">
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <CustomerPricingTable
+            providerCosts={overview.providerCosts}
+            ourRates={overview.ourRatesPerUnit}
+            markup={overview.markup}
+            usageByResource={usage}
+          />
+          <div className="m-4 rounded-lg bg-muted/40 border p-4 text-sm text-muted-foreground flex gap-2">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              <strong>Estimates only.</strong> Replit costs are estimated from published rates and usage proxies (file counts,
-              resource ledger). Actual Replit invoices may differ based on autoscaling, data transfer peaks, and plan
-              inclusions. External API costs (OpenAI, Twilio, ElevenLabs) are calculated at list prices — check each
-              provider dashboard for actual spend. Storage estimates assume average file sizes of 500 KB (images) and 15 MB (videos).
-            </span>
+            <p>
+              <strong>Revenue Generated</strong> shows this month's total metered revenue at our 5× rates, based on
+              the resource-usage ledger. This is separate from subscription revenue (flat monthly fees).
+              Vendors on the free tier are hard-blocked once their quota is exhausted — no overage applies.
+            </p>
           </div>
-        </>
-      ) : (
-        <div className="text-center py-12 text-muted-foreground">Failed to load billing data.</div>
-      )}
+        </CardContent>
+      </Card>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 3 — PER-VENDOR USAGE & BILLS
+      ══════════════════════════════════════════════════════════════════ */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" /> Per-Vendor Usage & Bills — {overview.period.label}
+          </CardTitle>
+          <CardDescription>
+            Resource consumption from the metering ledger, calculated bill at our 5× rates, subscription revenue
+            collected, and net margin per vendor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loadingVendors ? (
+            <div className="p-8 text-center text-muted-foreground flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" /> Loading vendor bills…
+            </div>
+          ) : (
+            <VendorBillsTable bills={vendorData?.bills ?? []} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Estimates disclaimer */}
+      <div className="text-xs text-muted-foreground bg-muted/30 border rounded-lg p-4 flex gap-2">
+        <Info className="w-4 h-4 shrink-0 mt-0.5" />
+        <span>
+          <strong>Estimates only.</strong> Replit costs are estimated from published rates and usage proxies. Actual
+          invoices may differ based on autoscaling and data transfer peaks. Twilio, ElevenLabs, and OpenAI costs are
+          calculated at list prices — check each provider dashboard for actual spend. Storage assumes ~500 KB per image
+          and ~15 MB per video.
+        </span>
+      </div>
     </div>
   );
 }
