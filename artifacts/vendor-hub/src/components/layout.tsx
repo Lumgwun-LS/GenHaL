@@ -24,6 +24,7 @@ import {
   DollarSign,
   Building2,
   Megaphone,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,84 @@ import { Button } from "./ui/button";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { NotificationBell } from "./notification-bell";
 import { TrialUpgradeBanner } from "./trial-upgrade-banner";
+import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
+
+const SOCIAL_LINKS = [
+  { name: "Instagram", href: "https://www.instagram.com/lumgwunsolutionsgroup", icon: FaInstagram, color: "hover:text-pink-500" },
+  { name: "Facebook",  href: "https://web.facebook.com/LUMGWUNSOLUTIONS/",       icon: FaFacebook,  color: "hover:text-blue-500" },
+  { name: "X / Twitter", href: "https://x.com/awajimaaApp",                      icon: FaXTwitter,  color: "hover:text-foreground" },
+  { name: "LinkedIn",  href: "https://www.linkedin.com/company/lumgwun-solutions-group/", icon: FaLinkedin, color: "hover:text-blue-400" },
+  { name: "TikTok",   href: "https://tiktok.com/@lumgwun.solutions",              icon: FaTiktok,    color: "hover:text-teal-400" },
+  { name: "Telegram", href: "https://t.me/AwaApp",                               icon: FaTelegram,  color: "hover:text-sky-400" },
+];
+
+const PLATFORM_LINKS = [
+  { name: "Awa Biz Suite",         href: "#",                                        current: true },
+  { name: "Awajimaa App Store",    href: "https://awajimaaappstore.com" },
+  { name: "Awajimaa Schools",      href: "https://www.awajimaaschools.com" },
+  { name: "Awajimaa Hosting",      href: "https://www.awajimaahosting.com" },
+];
+
+function DashboardFooter() {
+  return (
+    <footer className="border-t border-border/50 bg-card/30 mt-auto">
+      <div className="px-6 py-5 space-y-4">
+        {/* Platforms row */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Our Platforms</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {PLATFORM_LINKS.map((p) =>
+              p.current ? (
+                <span key={p.name} className="text-xs font-medium text-primary flex items-center gap-1">
+                  {p.name}
+                  <span className="text-[9px] bg-primary/15 text-primary rounded px-1 py-0.5 font-semibold">Current</span>
+                </span>
+              ) : (
+                <a
+                  key={p.name}
+                  href={p.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5 group"
+                >
+                  {p.name}
+                  <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                </a>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Divider + social + copyright */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          {/* Social icons */}
+          <div className="flex items-center gap-3">
+            {SOCIAL_LINKS.map((s) => (
+              <a
+                key={s.name}
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={s.name}
+                className={cn("text-muted-foreground/60 transition-colors", s.color)}
+              >
+                <s.icon className="w-3.5 h-3.5" />
+              </a>
+            ))}
+          </div>
+
+          {/* Copyright + support */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[10px] text-muted-foreground/50">
+            <span>© {new Date().getFullYear()} Lumgwun Solutions Group. All rights reserved.</span>
+            <a href="mailto:support@awajimaaapp.io" className="hover:text-muted-foreground transition-colors">
+              support@awajimaaapp.io
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -135,7 +214,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
         <TrialUpgradeBanner />
-        {children}
+        <div className="flex-1">
+          {children}
+        </div>
+        <DashboardFooter />
       </main>
     </div>
   );
