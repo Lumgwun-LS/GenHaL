@@ -79,6 +79,7 @@ router.get("/admin/void-errors", async (req, res): Promise<void> => {
       voidError: String(meta.voidError ?? ""),
       voidErrorAt: typeof meta.voidErrorAt === "string" ? meta.voidErrorAt : null,
       voidErrorAlertedAt: typeof meta.voidErrorAlertedAt === "string" ? meta.voidErrorAlertedAt : null,
+      voidErrorRetryAttemptedAt: typeof meta.voidErrorRetryAttemptedAt === "string" ? meta.voidErrorRetryAttemptedAt : null,
       voidErrorAcknowledgedAt: typeof meta.voidErrorAcknowledgedAt === "string" ? meta.voidErrorAcknowledgedAt : null,
       voidErrorAcknowledgedBy: typeof meta.voidErrorAcknowledgedBy === "string" ? meta.voidErrorAcknowledgedBy : null,
       updatedAt: r.updatedAt?.toISOString() ?? null,

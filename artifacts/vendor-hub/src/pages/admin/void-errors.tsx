@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -30,6 +30,8 @@ type VoidError = {
   voidError: string;
   voidErrorAt: string | null;
   voidErrorAlertedAt: string | null;
+  /** Set by the scheduler each time a retry attempt is made but fails. */
+  voidErrorRetryAttemptedAt: string | null;
   voidErrorAcknowledgedAt: string | null;
   voidErrorAcknowledgedBy: string | null;
   updatedAt: string | null;
@@ -61,6 +63,34 @@ function formatCurrency(amount: string, currency: string): string {
 function formatTimestamp(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
+}
+
+/** Returns a visual badge describing the scheduler's retry status for a row. */
+function RetryStatusBadge({ row }: { row: VoidError }) {
+  if (row.voidErrorRetryAttemptedAt) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <Badge
+          variant="secondary"
+          className="gap-1 bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 w-fit"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Retrying
+        </Badge>
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+          Last attempt: {formatTimestamp(row.voidErrorRetryAttemptedAt)}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <Badge
+      variant="secondary"
+      className="bg-slate-100 text-slate-600 hover:bg-slate-100 w-fit"
+    >
+      Not yet retried
+    </Badge>
+  );
 }
 
 export default function VoidErrorsPanel() {
@@ -97,7 +127,17 @@ export default function VoidErrorsPanel() {
     return <div className="p-8 text-center text-destructive">Failed to load void errors.</div>;
   }
 
-  const hasErrors = (errors?.length ?? 0) > 0;
+  const activeErrors = errors ?? [];
+  const hasErrors = activeErrors.length > 0;
+
+  // Split active (unacknowledged) errors into retrying vs new — only meaningful
+  // when showing the active list (not the acknowledged history).
+  const retryingCount = !showAcknowledged
+    ? activeErrors.filter((e) => e.voidErrorRetryAttemptedAt && !e.voidErrorAcknowledgedAt).length
+    : 0;
+  const newCount = !showAcknowledged
+    ? activeErrors.filter((e) => !e.voidErrorRetryAttemptedAt && !e.voidErrorAcknowledgedAt).length
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -105,15 +145,40 @@ export default function VoidErrorsPanel() {
         When a vendor cancels or retries a payment, the platform attempts to expire the provider&apos;s
         checkout session so the customer&apos;s original link is no longer payable. If that void call fails
         (e.g. missing or misconfigured Stripe credentials), the failure is recorded here and a Slack
-        alert is sent. Review each entry and confirm via the Stripe dashboard that the session has
-        expired or is otherwise safe, then acknowledge it to clear it from this list.
+        alert is sent. The scheduler retries automatically every 10 minutes — payments it successfully
+        recovers disappear from this list. Entries still here after multiple retries need manual
+        action in the Stripe dashboard.
       </p>
 
-      {hasErrors && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 flex items-center gap-2">
+      {hasErrors && !showAcknowledged && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 flex flex-wrap items-center gap-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          {errors!.length} payment{errors!.length === 1 ? "" : "s"} with an unacknowledged void error —
-          the provider checkout session may still be live and payable.
+          <span className="font-medium">
+            {activeErrors.length} unacknowledged void error{activeErrors.length === 1 ? "" : "s"}
+          </span>
+          {retryingCount > 0 && (
+            <Badge className="bg-amber-500/20 text-amber-800 hover:bg-amber-500/20 gap-1">
+              <RefreshCw className="w-3 h-3" />
+              {retryingCount} actively retrying
+            </Badge>
+          )}
+          {newCount > 0 && (
+            <Badge className="bg-red-500/20 text-red-700 hover:bg-red-500/20">
+              {newCount} not yet retried
+            </Badge>
+          )}
+          {retryingCount > 0 && newCount === 0 && (
+            <span className="text-xs">
+              The scheduler is retrying all of these — only intervene manually if retries keep failing.
+            </span>
+          )}
+          {newCount > 0 && (
+            <span className="text-xs">
+              {newCount === activeErrors.length
+                ? "The scheduler has not attempted these yet — check back after the next 10-minute tick."
+                : "Some errors have not been retried yet — check back after the next 10-minute tick."}
+            </span>
+          )}
         </div>
       )}
 
@@ -125,6 +190,7 @@ export default function VoidErrorsPanel() {
             </CardTitle>
             <CardDescription>
               Cancelled payments where the provider checkout session could not be expired.
+              Auto-recovered payments disappear automatically; the ones below still need attention.
             </CardDescription>
           </div>
           <Button
@@ -153,13 +219,13 @@ export default function VoidErrorsPanel() {
                   <TableHead>Provider</TableHead>
                   <TableHead>Error</TableHead>
                   <TableHead>Occurred</TableHead>
-                  <TableHead>Alerted</TableHead>
+                  <TableHead>Scheduler</TableHead>
                   {showAcknowledged && <TableHead>Acknowledged</TableHead>}
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {errors!.map((e) => (
+                {activeErrors.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="font-medium">
                       #{e.id}
@@ -183,11 +249,13 @@ export default function VoidErrorsPanel() {
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatTimestamp(e.voidErrorAt)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {e.voidErrorAlertedAt ? (
-                        <span className="text-emerald-600">✓ {formatTimestamp(e.voidErrorAlertedAt)}</span>
+                    <TableCell className="text-xs">
+                      {e.voidErrorAcknowledgedAt ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Acknowledged
+                        </Badge>
                       ) : (
-                        <span className="text-amber-600">Pending</span>
+                        <RetryStatusBadge row={e} />
                       )}
                     </TableCell>
                     {showAcknowledged && (
@@ -225,9 +293,23 @@ export default function VoidErrorsPanel() {
                   {active.vendorName ?? `vendor ${active.vendorId}`} —{" "}
                   {formatCurrency(active.amount, active.currency)}.
                   <br /><br />
-                  Acknowledging confirms you have verified this checkout session is no longer
-                  payable (e.g. it has expired naturally or was voided manually in the Stripe
-                  dashboard). The payment will be removed from this list.
+                  {active.voidErrorRetryAttemptedAt ? (
+                    <>
+                      The scheduler has retried this{" "}
+                      (last attempt: {formatTimestamp(active.voidErrorRetryAttemptedAt)}) but it
+                      is still failing. Acknowledging confirms you have verified this checkout session
+                      is no longer payable — e.g. it expired naturally or was voided manually in the
+                      Stripe dashboard.
+                    </>
+                  ) : (
+                    <>
+                      The scheduler has not retried this yet. Only acknowledge if you have manually
+                      confirmed via the Stripe dashboard that this checkout session is no longer
+                      payable.
+                    </>
+                  )}
+                  <br /><br />
+                  The payment will be removed from this list once acknowledged.
                 </>
               )}
             </DialogDescription>

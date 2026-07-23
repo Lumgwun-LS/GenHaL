@@ -191,6 +191,12 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
       );
     } catch (retryErr: unknown) {
       // Still failing — leave existing alert in place; do NOT send a new one.
+      // Stamp voidErrorRetryAttemptedAt so admins can see this was tried.
+      const now = new Date().toISOString();
+      await db
+        .update(paymentsTable)
+        .set({ metadata: { ...meta, voidErrorRetryAttemptedAt: now } })
+        .where(eq(paymentsTable.id, row.id));
       logger.warn(
         { paymentId: row.id, err: retryErr },
         "[void-error-check] Retry void failed again, leaving existing alert",
