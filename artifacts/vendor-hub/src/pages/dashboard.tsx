@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { motion, useMotionValue, useSpring, AnimatePresence, useInView } from "framer-motion";
+import { useUser } from "@clerk/react";
 import {
   useGetAnalyticsOverview,
   useGetSalesAnalytics,
@@ -7,13 +8,14 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import {
   DollarSign, Users, ShoppingCart, Target, Share2, Package,
-  TrendingUp, TrendingDown, Minus,
+  TrendingUp, TrendingDown, Minus, Zap, ArrowRight, Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, AreaChart, Area,
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
@@ -25,7 +27,7 @@ const PERIODS = [
 
 const PLATFORM_COLORS: Record<string, string> = {
   twitter: "#1DA1F2",
-  x: "#000",
+  x: "#60a5fa",
   linkedin: "#0A66C2",
   facebook: "#1877F2",
   instagram: "#E1306C",
@@ -36,94 +38,227 @@ function platformColor(name: string) {
   return PLATFORM_COLORS[name.toLowerCase()] ?? "hsl(217 91% 60%)";
 }
 
-/* ── animation variants ─────────────────────────────────────────────────── */
-
+/* ── animation config ───────────────────────────────────────────────────────── */
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const fadeUp: import("framer-motion").Variants = {
-  hidden: { opacity: 0, y: 24 },
-  show:   { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE } },
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
 };
 
-const stagger: import("framer-motion").Variants = {
+const stagger = {
   hidden: {},
-  show:   { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+  show:   { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
 };
 
-const cardStagger: import("framer-motion").Variants = {
+const cardStagger = {
   hidden: {},
-  show:   { transition: { staggerChildren: 0.06, delayChildren: 0.25 } },
+  show:   { transition: { staggerChildren: 0.07, delayChildren: 0.3 } },
 };
 
-/* ── StatCard ────────────────────────────────────────────────────────────── */
+/* ── animated counter ────────────────────────────────────────────────────── */
+function useCountUp(target: number, duration = 1.2, delay = 0.3) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        const elapsed = (now - start) / 1000;
+        const progress = Math.min(elapsed / duration, 1);
+        // ease out expo
+        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+        setCount(Math.round(eased * target));
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, delay * 1000);
+    return () => clearTimeout(timeout);
+  }, [target, duration, delay]);
+
+  return count;
+}
+
+/* ── aurora background ───────────────────────────────────────────────────── */
+function AuroraBackground() {
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <motion.div
+        className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-primary/8 blur-[140px]"
+        animate={{ x: [0, 60, 0], y: [0, 80, 0], scale: [1, 1.08, 1] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute top-1/3 -right-60 w-[600px] h-[600px] rounded-full bg-violet-500/6 blur-[120px]"
+        animate={{ x: [0, -70, 0], y: [0, -50, 0] }}
+        transition={{ duration: 28, repeat: Infinity, ease: "easeInOut", delay: 4 }}
+      />
+      <motion.div
+        className="absolute -bottom-20 left-1/4 w-[400px] h-[400px] rounded-full bg-cyan-500/5 blur-[100px]"
+        animate={{ x: [0, 40, 0], y: [0, -40, 0] }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 8 }}
+      />
+    </div>
+  );
+}
+
+/* ── floating particles ──────────────────────────────────────────────────── */
+function Particles() {
+  const items = Array.from({ length: 14 }, (_, i) => ({ id: i, x: Math.random() * 100, delay: Math.random() * 8 }));
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      {items.map((p) => (
+        <motion.div
+          key={p.id}
+          className="absolute w-1 h-1 rounded-full bg-primary/25"
+          style={{ left: `${p.x}%`, top: `${10 + Math.random() * 80}%` }}
+          animate={{ y: [0, -40, 0], opacity: [0, 0.7, 0] }}
+          transition={{ duration: 5 + Math.random() * 4, repeat: Infinity, delay: p.delay, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── custom chart tooltip ────────────────────────────────────────────────── */
+function ChartTooltip({ active, payload, label, prefix = "$" }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/95 backdrop-blur-sm px-3 py-2 shadow-xl shadow-black/20 text-sm">
+      <p className="text-muted-foreground text-xs mb-1">{label}</p>
+      <p className="font-bold text-foreground">
+        {prefix}{typeof payload[0]?.value === "number" ? payload[0].value.toLocaleString() : payload[0]?.value}
+      </p>
+    </div>
+  );
+}
+
+/* ── stat card ───────────────────────────────────────────────────────────── */
 function StatCard({
-  title, value, icon: Icon, color, subtext, trend,
+  title, value, rawValue, icon: Icon, gradient, subtext, trend, delay = 0,
 }: {
   title: string;
-  value: string | number;
+  value: string;
+  rawValue: number;
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
+  gradient: string;
   subtext?: string;
   trend?: "up" | "down" | "flat";
+  delay?: number;
 }) {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
-  const trendColor =
-    trend === "up" ? "text-emerald-500" : trend === "down" ? "text-destructive" : "text-muted-foreground";
+  const trendColor = trend === "up" ? "text-emerald-400" : trend === "down" ? "text-red-400" : "text-muted-foreground";
+  const count = useCountUp(rawValue, 1.1, delay + 0.4);
+  const displayValue = value.startsWith("$") ? `$${count.toLocaleString()}` : String(count);
 
   return (
-    <motion.div variants={fadeUp} className="h-full">
-      <Card className="h-full transition-shadow hover:shadow-lg hover:shadow-primary/5">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-          <div className={`rounded-lg p-1.5 bg-background ${color} ring-1 ring-inset ring-white/5`}>
-            <Icon className="h-3.5 w-3.5" />
+    <motion.div
+      variants={fadeUp}
+      className="group h-full"
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+    >
+      <div className="relative h-full rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden transition-all duration-300 group-hover:border-white/10 group-hover:shadow-2xl group-hover:shadow-black/30">
+        {/* gradient shimmer on hover */}
+        <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br ${gradient} to-transparent`} />
+
+        {/* glowing orb behind icon */}
+        <motion.div
+          className={`absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl opacity-0 group-hover:opacity-60 transition-opacity duration-500 bg-gradient-to-br ${gradient}`}
+        />
+
+        <div className="relative p-5 h-full flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">{title}</p>
+            <div className={`p-2 rounded-xl bg-gradient-to-br ${gradient} ring-1 ring-white/10 shadow-lg`}>
+              <Icon className="h-3.5 w-3.5 text-white" />
+            </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold tabular-nums">{value}</div>
-          {subtext && (
-            <p className={`text-xs mt-1 flex items-center gap-1 ${trend ? trendColor : "text-muted-foreground"}`}>
-              {trend && <TrendIcon className="h-3 w-3" />}
-              {subtext}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+
+          <div>
+            <motion.div
+              className="text-2xl font-black tabular-nums tracking-tight"
+              key={count}
+            >
+              {displayValue}
+            </motion.div>
+
+            {subtext && (
+              <p className={`text-xs mt-1.5 flex items-center gap-1 ${trend ? trendColor : "text-muted-foreground/60"}`}>
+                {trend && <TrendIcon className="h-3 w-3" />}
+                {subtext}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── activity item ───────────────────────────────────────────────────────── */
+function ActivityItem({ activity, index }: { activity: any; index: number }) {
+  const colors = ["bg-primary", "bg-emerald-500", "bg-amber-500", "bg-purple-500", "bg-cyan-500", "bg-rose-500"];
+  const color = colors[index % colors.length];
+
+  return (
+    <motion.div
+      className="flex items-start gap-3 group"
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.5 + index * 0.07, duration: 0.4, ease: "easeOut" }}
+    >
+      {/* timeline dot */}
+      <div className="relative mt-1.5 flex-shrink-0">
+        <motion.div
+          className={`w-2 h-2 rounded-full ${color}`}
+          animate={{ scale: [1, 1.3, 1] }}
+          transition={{ duration: 2, repeat: Infinity, delay: index * 0.3 }}
+        />
+        <div className={`absolute inset-0 rounded-full ${color} opacity-30 animate-ping`} style={{ animationDelay: `${index * 0.3}s` }} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium leading-snug truncate group-hover:text-foreground transition-colors">{activity.description}</p>
+        <p className="text-xs text-muted-foreground/60 mt-0.5">
+          {format(new Date(activity.timestamp), "MMM d, h:mm a")}
+        </p>
+      </div>
     </motion.div>
   );
 }
 
 /* ── loading skeleton ────────────────────────────────────────────────────── */
-
 function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-muted/60 ${className}`} />;
+  return <div className={`relative overflow-hidden rounded-xl bg-muted/40 ${className}`}>
+    <motion.div
+      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
+      animate={{ x: ["-100%", "100%"] }}
+      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+    />
+  </div>;
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full">
+    <div className="relative p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full">
+      <AuroraBackground />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-4 w-56" />
-        </div>
-        <Skeleton className="h-9 w-40" />
+        <div className="space-y-2"><Skeleton className="h-10 w-52" /><Skeleton className="h-4 w-64" /></div>
+        <Skeleton className="h-10 w-40" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-28" />
-        ))}
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
       </div>
       <div className="grid gap-4 md:grid-cols-7">
-        <Skeleton className="md:col-span-4 h-72" />
-        <Skeleton className="md:col-span-3 h-72" />
+        <Skeleton className="md:col-span-4 h-80" />
+        <Skeleton className="md:col-span-3 h-80" />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <Skeleton className="h-64" />
         <div className="space-y-4">
-          <Skeleton className="h-[180px]" />
-          <Skeleton className="h-[140px]" />
+          <Skeleton className="h-44" />
+          <Skeleton className="h-44" />
         </div>
       </div>
     </div>
@@ -131,13 +266,14 @@ function DashboardSkeleton() {
 }
 
 /* ── main component ──────────────────────────────────────────────────────── */
-
 export default function Dashboard() {
   const [period, setPeriod] = useState("month");
+  const { user } = useUser();
+  const firstName = user?.firstName ?? "there";
 
   const { data: analytics, isLoading: overviewLoading } = useGetAnalyticsOverview();
-  const { data: salesData, isLoading: salesLoading }   = useGetSalesAnalytics({ period } as any);
-  const { data: socialData, isLoading: socialLoading } = useGetSocialAnalytics({ period } as any);
+  const { data: salesData,  isLoading: salesLoading }   = useGetSalesAnalytics({ period } as any);
+  const { data: socialData, isLoading: socialLoading }  = useGetSocialAnalytics({ period } as any);
 
   const isLoading = overviewLoading || salesLoading || socialLoading;
 
@@ -174,243 +310,346 @@ export default function Dashboard() {
 
   if (isLoading) return <DashboardSkeleton />;
 
-  const totalRevenue     = (analytics?.totalRevenue ?? 0) as number;
-  const totalSales       = (salesData as any)?.totalRevenue ?? 0;
-  const conversionRate   = (salesData as any)?.conversionRate ?? 0;
+  const totalRevenue   = (analytics?.totalRevenue ?? 0) as number;
+  const totalSales     = (salesData as any)?.totalRevenue ?? 0;
+  const conversionRate = (salesData as any)?.conversionRate ?? 0;
+  const totalSalesNum  = typeof totalSales === "number" ? totalSales : parseFloat(totalSales ?? "0");
+
+  const STAT_CARDS = [
+    {
+      title: "Total Revenue",
+      value: `$${totalRevenue.toLocaleString()}`,
+      rawValue: totalRevenue,
+      icon: DollarSign,
+      gradient: "from-emerald-500/30 via-emerald-500/10",
+      subtext: `$${totalSalesNum.toLocaleString()} this period`,
+      trend: avgRevenue ?? undefined,
+    },
+    {
+      title: "Pending Orders",
+      value: String(analytics?.pendingOrders ?? 0),
+      rawValue: analytics?.pendingOrders ?? 0,
+      icon: ShoppingCart,
+      gradient: "from-amber-500/30 via-amber-500/10",
+      subtext: "Needs fulfilment",
+    },
+    {
+      title: "Total Leads",
+      value: String(analytics?.totalLeads ?? 0),
+      rawValue: analytics?.totalLeads ?? 0,
+      icon: Target,
+      gradient: "from-blue-500/30 via-blue-500/10",
+    },
+    {
+      title: "Total Vendors",
+      value: String(analytics?.totalVendors ?? 0),
+      rawValue: analytics?.totalVendors ?? 0,
+      icon: Users,
+      gradient: "from-violet-500/30 via-violet-500/10",
+    },
+    {
+      title: "Low Stock",
+      value: String(analytics?.lowStockAlerts ?? 0),
+      rawValue: analytics?.lowStockAlerts ?? 0,
+      icon: Package,
+      gradient: "from-rose-500/30 via-rose-500/10",
+      subtext: analytics?.lowStockAlerts ? "Items need restocking" : "All stocked",
+      trend: (analytics?.lowStockAlerts ? "down" : undefined) as "down" | undefined,
+    },
+    {
+      title: "Social Posts",
+      value: String(analytics?.totalPosts ?? 0),
+      rawValue: analytics?.totalPosts ?? 0,
+      icon: Share2,
+      gradient: "from-purple-500/30 via-purple-500/10",
+      subtext: `${(conversionRate * 100).toFixed(1)}% conversion`,
+    },
+  ] as const;
 
   return (
-    <motion.div
-      className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full"
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-    >
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-            Overview
-          </h1>
-          <p className="text-muted-foreground mt-0.5">Your Awa Biz Suite command centre.</p>
-        </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIODS.map((p) => (
-              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </motion.div>
+    <div className="relative w-full">
+      <AuroraBackground />
+      <Particles />
 
-      {/* ── KPI cards ──────────────────────────────────────────────── */}
       <motion.div
-        variants={cardStagger}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+        className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 w-full"
+        variants={stagger}
+        initial="hidden"
+        animate="show"
       >
-        <StatCard
-          title="Total Revenue"
-          value={`$${totalRevenue.toLocaleString()}`}
-          icon={DollarSign}
-          color="text-emerald-500"
-          subtext={`$${(typeof totalSales === "number" ? totalSales : parseFloat(totalSales)).toLocaleString()} this period`}
-          trend={avgRevenue ?? undefined}
-        />
-        <StatCard
-          title="Pending Orders"
-          value={analytics?.pendingOrders ?? 0}
-          icon={ShoppingCart}
-          color="text-amber-500"
-          subtext="Needs fulfilment"
-        />
-        <StatCard
-          title="Total Leads"
-          value={analytics?.totalLeads ?? 0}
-          icon={Target}
-          color="text-blue-500"
-        />
-        <StatCard
-          title="Total Vendors"
-          value={analytics?.totalVendors ?? 0}
-          icon={Users}
-          color="text-primary"
-        />
-        <StatCard
-          title="Low Stock"
-          value={analytics?.lowStockAlerts ?? 0}
-          icon={Package}
-          color="text-destructive"
-          subtext={analytics?.lowStockAlerts ? "Items need restocking" : "All stocked"}
-          trend={analytics?.lowStockAlerts ? "down" : undefined}
-        />
-        <StatCard
-          title="Social Posts"
-          value={analytics?.totalPosts ?? 0}
-          icon={Share2}
-          color="text-purple-500"
-          subtext={`${(conversionRate * 100).toFixed(1)}% conversion`}
-        />
-      </motion.div>
 
-      {/* ── Revenue trend + recent activity ────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-7">
-        <Card className="md:col-span-4">
-          <CardHeader>
-            <CardTitle>Revenue trend</CardTitle>
-            <CardDescription>Daily revenue in the selected period.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {revenueByDay.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
-                No revenue data for this period yet.
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
+        >
+          <div>
+            {/* live indicator */}
+            <div className="flex items-center gap-2 mb-3">
+              <motion.div
+                className="w-2 h-2 rounded-full bg-emerald-500"
+                animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <span className="text-xs font-semibold text-emerald-500/80 uppercase tracking-widest">Live</span>
+            </div>
+
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none">
+              <span className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/60 bg-clip-text text-transparent">
+                Hey, {firstName} 👋
+              </span>
+            </h1>
+            <p className="text-muted-foreground mt-2 text-base">
+              Here's how your business is performing — your command centre.
+            </p>
+
+            {/* period badge */}
+            <div className="flex items-center gap-2 mt-3">
+              <Badge variant="outline" className="text-xs border-primary/30 text-primary/80 bg-primary/5">
+                <Activity className="w-3 h-3 mr-1" />
+                {PERIODS.find(p => p.value === period)?.label}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-3">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="w-40 border-border/50 bg-card/50 backdrop-blur-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIODS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* quick actions */}
+            <div className="flex gap-2">
+              {[
+                { label: "New post", href: "/social/create" },
+                { label: "Add product", href: "/products" },
+              ].map((a) => (
+                <motion.a
+                  key={a.label}
+                  href={a.href}
+                  className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-all"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  {a.label}
+                  <ArrowRight className="w-3 h-3" />
+                </motion.a>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── KPI Cards ────────────────────────────────────────────────── */}
+        <motion.div
+          variants={cardStagger}
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+        >
+          {STAT_CARDS.map((card, i) => (
+            <StatCard key={card.title} {...card} delay={i * 0.06} />
+          ))}
+        </motion.div>
+
+        {/* ── Revenue trend + Activity ──────────────────────────────────── */}
+        <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-7">
+
+          {/* Revenue area chart */}
+          <div className="md:col-span-4 group relative rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden hover:border-white/10 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/3 via-transparent to-cyan-500/3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-base">Revenue Trend</h3>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">Daily revenue in the selected period</p>
+                </div>
+                {avgRevenue && (
+                  <Badge variant="outline" className={`text-xs ${avgRevenue === "up" ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/5" : avgRevenue === "down" ? "border-red-500/30 text-red-400 bg-red-500/5" : "border-border/50"}`}>
+                    {avgRevenue === "up" ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                    {avgRevenue === "up" ? "Trending up" : "Trending down"}
+                  </Badge>
+                )}
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={revenueByDay}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v.toLocaleString()}`} width={60} />
-                  <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]} />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(142 72% 45%)"
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="md:col-span-3">
-          <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {analytics?.recentActivity?.length ? (
-                analytics.recentActivity.slice(0, 6).map((activity: any, i: number) => (
-                  <motion.div
-                    key={i}
-                    className="flex items-start gap-3"
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.06, duration: 0.35, ease: "easeOut" }}
-                  >
-                    <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 ring-2 ring-primary/20" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-snug truncate">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {format(new Date(activity.timestamp), "MMM d, h:mm a")}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))
+              {revenueByDay.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-52 gap-3">
+                  <Zap className="w-8 h-8 text-muted-foreground/20" />
+                  <p className="text-sm text-muted-foreground/50 text-center">No revenue data for this period yet.<br/>Start selling to see your trend.</p>
+                </div>
               ) : (
-                <div className="text-sm text-muted-foreground text-center py-10">No recent activity</div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={revenueByDay}>
+                    <defs>
+                      <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="hsl(142 72% 45%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(142 72% 45%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border)/0.3)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} axisLine={false} tickLine={false} width={55} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="hsl(142 72% 45%)"
+                      strokeWidth={2.5}
+                      fill="url(#revenueGrad)"
+                      dot={false}
+                      activeDot={{ r: 5, fill: "hsl(142 72% 45%)", strokeWidth: 2, stroke: "hsl(var(--background))" }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          </div>
 
-      {/* ── Top products + Social breakdown ────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Top products</CardTitle>
-            <CardDescription>By revenue in the selected period.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topProducts.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-                No product sales in this period.
+          {/* Recent activity */}
+          <div className="md:col-span-3 group relative rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden hover:border-white/10 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-transparent to-purple-500/3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative p-6 h-full flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-base">Recent Activity</h3>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">Latest business events</p>
+                </div>
+                <motion.div
+                  className="w-2 h-2 rounded-full bg-primary"
+                  animate={{ scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
+                  transition={{ duration: 2.5, repeat: Infinity }}
+                />
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={topProducts} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
-                  <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]} />
-                  <Bar dataKey="revenue" fill="hsl(217 91% 60%)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Posts by platform</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {socialByPlatform.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-4 text-center">No posts yet.</div>
+              <div className="flex-1 space-y-4 overflow-hidden">
+                {analytics?.recentActivity?.length ? (
+                  analytics.recentActivity.slice(0, 6).map((activity: any, i: number) => (
+                    <ActivityItem key={i} activity={activity} index={i} />
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-40 gap-3">
+                    <Activity className="w-8 h-8 text-muted-foreground/20" />
+                    <p className="text-sm text-muted-foreground/50 text-center">No recent activity.<br/>Events will appear here as things happen.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── Top Products + Social ────────────────────────────────────── */}
+        <motion.div variants={fadeUp} className="grid gap-4 md:grid-cols-2">
+
+          {/* Top products */}
+          <div className="group relative rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden hover:border-white/10 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/3 via-transparent to-indigo-500/3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative p-6">
+              <h3 className="font-bold text-base">Top Products</h3>
+              <p className="text-xs text-muted-foreground/60 mt-0.5 mb-6">By revenue in the selected period</p>
+              {topProducts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 gap-3">
+                  <Package className="w-8 h-8 text-muted-foreground/20" />
+                  <p className="text-sm text-muted-foreground/50 text-center">No product sales yet.</p>
+                </div>
               ) : (
-                <ResponsiveContainer width="100%" height={140}>
-                  <BarChart data={socialByPlatform}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="platform" tick={{ fontSize: 10 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="hsl(270 70% 60%)" />
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={topProducts} layout="vertical">
+                    <defs>
+                      <linearGradient id="productGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%"   stopColor="hsl(217 91% 60%)" />
+                        <stop offset="100%" stopColor="hsl(270 70% 60%)" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border)/0.3)" />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="revenue" fill="url(#productGrad)" radius={[0, 6, 6, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Post status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {socialByStatus.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-4 text-center">No posts yet.</div>
-              ) : (
-                <div className="space-y-2">
-                  {socialByStatus.map((s: any, i: number) => {
-                    const total = socialByStatus.reduce((sum: number, x: any) => sum + x.count, 0);
-                    const pct   = total > 0 ? Math.round((s.count / total) * 100) : 0;
-                    const statusColor: Record<string, string> = {
-                      published: "bg-emerald-500",
-                      scheduled: "bg-blue-500",
-                      draft:     "bg-muted-foreground",
-                      failed:    "bg-destructive",
-                    };
-                    return (
-                      <div key={s.status} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="capitalize">{s.status}</span>
-                          <span className="text-muted-foreground">{s.count} · {pct}%</span>
+          {/* Social breakdown */}
+          <div className="space-y-4">
+            {/* Posts by platform */}
+            <div className="group relative rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden hover:border-white/10 transition-all duration-300">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/3 via-transparent to-pink-500/3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="relative p-6">
+                <h3 className="font-bold text-sm mb-4">Posts by Platform</h3>
+                {socialByPlatform.length === 0 ? (
+                  <div className="flex items-center justify-center h-24 text-sm text-muted-foreground/50">No posts yet.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={socialByPlatform}>
+                      <defs>
+                        {socialByPlatform.map((s, i) => (
+                          <linearGradient key={s.platform} id={`plat-${i}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%"   stopColor={platformColor(s.platform)} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor={platformColor(s.platform)} stopOpacity={0.4} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border)/0.3)" />
+                      <XAxis dataKey="platform" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTooltip prefix="" />} />
+                      <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="hsl(270 70% 60%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Post status */}
+            <div className="group relative rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden hover:border-white/10 transition-all duration-300">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/3 via-transparent to-teal-500/3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="relative p-6">
+                <h3 className="font-bold text-sm mb-4">Post Status</h3>
+                {socialByStatus.length === 0 ? (
+                  <div className="flex items-center justify-center h-20 text-sm text-muted-foreground/50">No posts yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {socialByStatus.map((s: any, i: number) => {
+                      const total = socialByStatus.reduce((sum: number, x: any) => sum + x.count, 0);
+                      const pct   = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                      const cfg: Record<string, { bar: string; text: string }> = {
+                        published: { bar: "bg-gradient-to-r from-emerald-500 to-emerald-400", text: "text-emerald-400" },
+                        scheduled: { bar: "bg-gradient-to-r from-blue-500 to-blue-400",    text: "text-blue-400" },
+                        draft:     { bar: "bg-gradient-to-r from-muted-foreground/50 to-muted-foreground/30", text: "text-muted-foreground" },
+                        failed:    { bar: "bg-gradient-to-r from-red-500 to-rose-400",     text: "text-red-400" },
+                      };
+                      const c = cfg[s.status] ?? { bar: "bg-primary", text: "text-primary" };
+                      return (
+                        <div key={s.status} className="space-y-1.5">
+                          <div className="flex justify-between text-xs">
+                            <span className={`capitalize font-medium ${c.text}`}>{s.status}</span>
+                            <span className="text-muted-foreground/60 tabular-nums">{s.count} · {pct}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
+                            <motion.div
+                              className={`h-full rounded-full ${c.bar}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${pct}%` }}
+                              transition={{ delay: 0.8 + i * 0.1, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <motion.div
-                            className={`h-full rounded-full ${statusColor[s.status] ?? "bg-primary"}`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${pct}%` }}
-                            transition={{ delay: 0.7 + i * 0.08, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── bottom padding ───────────────────────────────────────────── */}
+        <div className="h-4" />
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
