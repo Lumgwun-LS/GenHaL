@@ -16,6 +16,7 @@ import { startMediaCleanupScheduler } from "./lib/media-cleanup";
 import { startRecurringExpenseScheduler } from "./lib/recurring-expenses";
 import { startVoidErrorCheckScheduler } from "./lib/void-error-check-scheduler";
 import { startTrialReminderScheduler } from "./lib/trial-reminder-scheduler";
+import { startBillingThresholdScheduler } from "./lib/billing-threshold-scheduler";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 
 const rawPort = process.env["PORT"];
@@ -56,4 +57,5 @@ app.listen(port, (err) => {
   startRecurringExpenseScheduler();
   startVoidErrorCheckScheduler();
   startTrialReminderScheduler();
+  startBillingThresholdScheduler();
 });

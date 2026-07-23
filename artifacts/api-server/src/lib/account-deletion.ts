@@ -8,8 +8,8 @@
  * everything cascading from it) is permanently deleted.
  */
 import { createHash, randomInt } from "node:crypto";
-import { db, vendorsTable, ordersTable } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { db, vendorsTable, ordersTable, vendorOverageChargesTable } from "@workspace/db";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export const DELETION_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const MAX_VERIFY_ATTEMPTS = 5;
@@ -53,6 +53,24 @@ export async function checkDeletionEligibility(vendorId: number): Promise<Deleti
   const hasActiveSubscription = vendor.subscriptionTier !== "free" || Boolean(vendor.stripeSubscriptionId);
   if (hasActiveSubscription) {
     reasons.push("An active paid subscription must be cancelled first");
+  }
+
+  // Vendor has an outstanding balance that could not be charged — must be resolved first.
+  if (vendor.billingBlocked) {
+    reasons.push("An outstanding unpaid balance must be settled before deleting your account");
+  }
+
+  // Check for any unsettled overage charges (billed but not yet collected).
+  const [overageRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${vendorOverageChargesTable.totalUsd}),0)::float` })
+    .from(vendorOverageChargesTable)
+    .where(and(
+      eq(vendorOverageChargesTable.vendorId, vendorId),
+      isNull(vendorOverageChargesTable.settledAt),
+    ));
+  if ((overageRow?.total ?? 0) > 0) {
+    const owedStr = `$${(overageRow?.total ?? 0).toFixed(2)}`;
+    reasons.push(`You have ${owedStr} in unsettled resource charges. Please settle your balance before deleting your account`);
   }
 
   return { eligible: reasons.length === 0, reasons };

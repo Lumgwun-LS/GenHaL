@@ -103,6 +103,21 @@ export const DEFAULT_SITE_CONTENT = {
   "billing.subscriptionPlans": {
     plans: [
       {
+        tier: "basic",
+        name: "Basic",
+        pricing: { usd: 20, ngn: 31000 },
+        description: "A simple monthly subscription to get started",
+        features: [
+          "Recurring $20/month subscription",
+          "Up to 50 orders / month",
+          "Email support",
+          "Basic analytics",
+          "Pay-as-you-go resource billing",
+        ],
+        highlight: false,
+        quotas: { aiImages: 3, aiVideos: 1, aiCaptions: 15, voiceMinutes: 5, sms: 10, email: 75 },
+      },
+      {
         tier: "starter",
         name: "Starter",
         pricing: { usd: 29, ngn: 45000 },
@@ -287,7 +302,7 @@ const subscriptionPlanPricingSchema = z.object({
 const subscriptionPlansSchema = z.object({
   plans: z.array(
     z.object({
-      tier: z.enum(["starter", "pro", "enterprise"]),
+      tier: z.enum(["basic", "starter", "pro", "enterprise"]),
       name: z.string().min(1).max(100),
       pricing: subscriptionPlanPricingSchema,
       description: z.string().max(500),

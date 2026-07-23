@@ -77,6 +77,13 @@ export const vendorsTable = pgTable("vendors", {
   // downgrade, cancellation) via subscription-sync.ts so quotas roll over on the
   // vendor's actual subscription lifecycle events rather than a fixed calendar day.
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true }).notNull().defaultNow(),
+  // Billing enforcement — set true when a Stripe invoice payment fails (insufficient funds
+  // or card declined). Blocks all metered-resource consumption until the next invoice is
+  // successfully paid. Cleared automatically by the invoice.paid Stripe webhook.
+  billingBlocked: boolean("billing_blocked").notNull().default(false),
+  // Set when a vendor account is permanently deleted — used to prevent the same
+  // email/phone from registering a new account on this platform.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

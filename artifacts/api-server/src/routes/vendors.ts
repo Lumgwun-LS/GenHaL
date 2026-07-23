@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, sql, desc } from "drizzle-orm";
-import { db, vendorsTable } from "@workspace/db";
+import { eq, ilike, sql, desc, or } from "drizzle-orm";
+import { db, vendorsTable, bannedIdentifiersTable } from "@workspace/db";
 import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
@@ -142,6 +142,20 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
   const clerkUser = await clerkClient.users.getUser(userId);
   const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
   if (!email) { res.status(400).json({ error: "Your Clerk account has no verified email address." }); return; }
+
+  // Reject email/phone that was permanently banned when a previous account was deleted.
+  const [banned] = await db
+    .select({ id: bannedIdentifiersTable.id })
+    .from(bannedIdentifiersTable)
+    .where(or(
+      sql`lower(${bannedIdentifiersTable.email}) = lower(${email})`,
+      eq(bannedIdentifiersTable.phone, parsed.data.phone),
+    ))
+    .limit(1);
+  if (banned) {
+    res.status(403).json({ error: "This email address or phone number is no longer eligible to register on this platform." });
+    return;
+  }
 
   // A unique index on clerk_user_id (where not null) guards against a duplicate row if this
   // request races with another onboarding submission for the same user (e.g. double-click).

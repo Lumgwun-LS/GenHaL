@@ -58,4 +58,5 @@ export * from "./vendor-addon-credits";
 export * from "./ads";
 export * from "./social-account-reconnect-log";
 export * from "./store-ai-launch-sessions";
+export * from "./banned-identifiers";
 export * from "./draft-video-scenes";

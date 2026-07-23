@@ -245,6 +245,13 @@ export interface QuotaCheckResult {
  * For gates that must actually record usage use `consumeQuota` instead.
  */
 export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: number): Promise<QuotaCheckResult> {
+  // Hard block: payment card failed — all metered resources suspended until invoice is paid.
+  if (vendor.billingBlocked) {
+    const periodStart = getBillingPeriodStart(vendor);
+    const periodEnd   = getBillingPeriodEnd(periodStart);
+    return { allowed: false, isOverage: false, isAddon: false, resource, used: 0, quota: 0, remaining: 0, addonRemaining: 0, addonAllocations: [], overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+  }
+
   const quotas = await getVendorQuotas(vendor);
   const quota = quotas[resource];
   const periodStart = getBillingPeriodStart(vendor);
@@ -382,6 +389,13 @@ export async function consumeQuotaTx(
   resource: ResourceKey,
   amount: number,
 ): Promise<QuotaCheckResult> {
+  // Hard block: payment card failed — all metered resources suspended until invoice is paid.
+  if (vendor.billingBlocked) {
+    const periodStart = getBillingPeriodStart(vendor);
+    const periodEnd   = getBillingPeriodEnd(periodStart);
+    return { allowed: false, isOverage: false, isAddon: false, resource, used: 0, quota: 0, remaining: 0, addonRemaining: 0, addonAllocations: [], overageUnits: 0, overageUsd: 0, periodStart, periodEnd };
+  }
+
   const quotas = await getVendorQuotas(vendor);
   const quota = quotas[resource];
   const periodStart = getBillingPeriodStart(vendor);

@@ -42,7 +42,7 @@ export interface SubscriptionPlanPricing {
 }
 
 export interface SubscriptionPlan {
-  tier: "starter" | "pro" | "enterprise";
+  tier: "basic" | "starter" | "pro" | "enterprise";
   name: string;
   pricing: SubscriptionPlanPricing;
   description: string;

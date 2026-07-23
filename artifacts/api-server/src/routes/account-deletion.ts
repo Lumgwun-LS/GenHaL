@@ -7,7 +7,7 @@
  */
 import { Router, type Request, type Response } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, accountDeletionRequestsTable } from "@workspace/db";
+import { db, vendorsTable, accountDeletionRequestsTable, bannedIdentifiersTable } from "@workspace/db";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
@@ -183,6 +183,21 @@ router.post("/vendors/:id/deletion-requests/verify", async (req, res): Promise<v
     .update(accountDeletionRequestsTable)
     .set({ emailVerifiedAt: new Date(), phoneVerifiedAt: new Date(), consumedAt: new Date() })
     .where(eq(accountDeletionRequestsTable.id, request.id));
+
+  // Read the vendor's identifiers before cascade-deleting them, then blacklist them
+  // so the same email / phone can never be used to create a new account.
+  const [vendor] = await db
+    .select({ email: vendorsTable.email, phone: vendorsTable.phone })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, ctx.vendorId));
+
+  if (vendor?.email || vendor?.phone) {
+    await db.insert(bannedIdentifiersTable).values({
+      email: vendor.email ? vendor.email.toLowerCase() : null,
+      phone: vendor.phone ?? null,
+      reason: "account_deleted",
+    }).onConflictDoNothing();
+  }
 
   // Cascading foreign keys remove all data linked to this vendor (orders, products,
   // leads, posts, payments, etc.) — see onDelete: "cascade" on each schema.

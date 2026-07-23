@@ -719,6 +719,97 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
     return { matched: true };
   }
 
+  // ── Invoice payment failed (card declined / insufficient funds) ───────
+  // Stripe retries automatically according to the dunning schedule, but we
+  // immediately suspend all metered-resource access by setting billingBlocked.
+  // The vendor must update their payment method and let Stripe retry.
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+    if (customerId) {
+      const [vendor] = await db
+        .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, billingBlocked: vendorsTable.billingBlocked })
+        .from(vendorsTable)
+        .where(eq(vendorsTable.stripeCustomerId, customerId));
+
+      if (vendor) {
+        await db.update(vendorsTable)
+          .set({ billingBlocked: true, updatedAt: new Date() })
+          .where(eq(vendorsTable.id, vendor.id));
+
+        await db.insert(vendorNotificationsTable).values({
+          vendorId: vendor.id,
+          type: "subscription",
+          message: "Your payment failed and resource access has been suspended. Please update your payment method in the billing portal to restore access.",
+        });
+
+        if (vendor.email) {
+          const bodyHtml = `
+            <h1 style="text-align:center;font-size:20px;color:#c0392b;margin:0 0 16px;">Payment Failed — Action Required</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Hi ${escapeHtml(vendor.name)}, we were unable to charge your card on file.
+              Your access to metered platform resources (AI, voice, SMS) has been temporarily suspended.
+            </p>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Please update your payment method in the billing portal to restore full access.
+              Stripe will automatically retry the payment — once it succeeds, access will be restored immediately.
+            </p>`;
+          await sendEmail({
+            to: vendor.email,
+            subject: "Payment failed — resource access suspended",
+            html: wrapVendorEmail({ bodyHtml }),
+          }).catch(() => {});
+        }
+
+        console.info(`[stripe webhook] invoice.payment_failed — vendor=${vendor.id} customer=${customerId} billingBlocked=true`);
+      }
+    }
+    return { matched: true };
+  }
+
+  // ── Invoice paid (payment success — restore access if was blocked) ─────
+  // Fired when any invoice is paid, including retried invoices after a
+  // previous failure. Clear billingBlocked so resource access is restored.
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+    if (customerId) {
+      const [vendor] = await db
+        .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, billingBlocked: vendorsTable.billingBlocked })
+        .from(vendorsTable)
+        .where(eq(vendorsTable.stripeCustomerId, customerId));
+
+      if (vendor && vendor.billingBlocked) {
+        await db.update(vendorsTable)
+          .set({ billingBlocked: false, updatedAt: new Date() })
+          .where(eq(vendorsTable.id, vendor.id));
+
+        await db.insert(vendorNotificationsTable).values({
+          vendorId: vendor.id,
+          type: "subscription",
+          message: "Your payment was successfully processed and full resource access has been restored.",
+        });
+
+        if (vendor.email) {
+          const bodyHtml = `
+            <h1 style="text-align:center;font-size:20px;color:#27ae60;margin:0 0 16px;">Payment Successful — Access Restored</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Hi ${escapeHtml(vendor.name)}, your payment was successfully processed.
+              Full resource access has been restored to your account.
+            </p>`;
+          await sendEmail({
+            to: vendor.email,
+            subject: "Payment successful — access restored",
+            html: wrapVendorEmail({ bodyHtml }),
+          }).catch(() => {});
+        }
+
+        console.info(`[stripe webhook] invoice.paid — vendor=${vendor.id} customer=${customerId} billingBlocked cleared`);
+      }
+    }
+    return { matched: true };
+  }
+
   // ── Refunded charge ────────────────────────────────────────────────────
   // Fired when a charge is refunded (fully or partially), including disputed
   // charges that get reversed. If the charge belongs to a vendor's paid
