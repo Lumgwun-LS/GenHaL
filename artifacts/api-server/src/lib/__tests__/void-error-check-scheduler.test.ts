@@ -163,8 +163,10 @@ vi.mock("../job-run-status", () => ({
   },
 }));
 
+const sendPushToAdminsMock = vi.fn(async () => {});
+
 vi.mock("../push", () => ({
-  sendPushToAdmins: async () => {},
+  sendPushToAdmins: (...args: unknown[]) => sendPushToAdminsMock(...args as Parameters<typeof sendPushToAdminsMock>),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -731,5 +733,126 @@ describe("void-error-check-scheduler — full retry lifecycle", () => {
     const successAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
     expect(successAlerts).toHaveLength(1);
     expect(successAlerts[0]).toContain(`payment #${paymentId}`);
+  });
+});
+
+// ─── Push notification exactly-once guarantee ─────────────────────────────────
+//
+// The voidErrorAlertedAt sentinel that prevents re-sending Slack alerts also
+// gates the admin push notification. These tests verify:
+//
+//   1. Alert pass calls sendPushToAdmins exactly once per newly-flagged payment.
+//   2. A second scheduler tick on the same payment (already alerted, so it no
+//      longer appears in the alert-pass query) sends zero pushes.
+//   3. Retry-pass recovery sends a Slack "recovered" notice but no extra push.
+//
+// The same guarantee survives a scheduler restart because the sentinel is
+// persisted to the DB — after a restart the alert-pass query excludes rows
+// that already have voidErrorAlertedAt, so the push is never re-sent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("void-error-check-scheduler — push notifications (exactly-once guarantee)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    alertRows = [];
+    retryRows = [];
+    metadataUpdates.clear();
+    slackAlerts.length = 0;
+    recordedRuns.length = 0;
+    sessionStatus = "open";
+    stripeKeyResult = "sk_test_fake";
+    retryVendorRow = { id: 10, stripeEnabled: true, paystackEnabled: false };
+  });
+
+  it("calls sendPushToAdmins exactly once per newly-flagged payment on the first tick", async () => {
+    // Two payments are newly flagged — both should receive exactly one push each.
+    const payment60 = makePayment({ id: 60, vendorId: 10, vendorName: "Alpha Corp" });
+    const payment61 = makePayment({ id: 61, vendorId: 11, vendorName: "Beta LLC" });
+    alertRows = [payment60, payment61];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    // One push call per payment — two total.
+    expect(sendPushToAdminsMock).toHaveBeenCalledTimes(2);
+
+    // Each call carries the correct title and a body that identifies the payment.
+    const calls = sendPushToAdminsMock.mock.calls;
+    const titles = calls.map((c) => c[0] as string);
+    const bodies = calls.map((c) => c[1] as string);
+
+    expect(titles.every((t) => t.includes("Void Error"))).toBe(true);
+    expect(bodies.some((b) => b.includes("60"))).toBe(true);
+    expect(bodies.some((b) => b.includes("61"))).toBe(true);
+  });
+
+  it("does not call sendPushToAdmins on a second tick when the payment was already alerted", async () => {
+    // Tick 1: payment is newly flagged — alert pass picks it up.
+    const payment = makePayment({ id: 62 });
+    alertRows = [payment];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    expect(sendPushToAdminsMock).toHaveBeenCalledTimes(1);
+
+    // Tick 2: the alert pass stamped voidErrorAlertedAt, so the payment no
+    // longer matches the alert-pass predicate.  alertRows is empty.
+    // retryRows may still contain the payment (key still unavailable).
+    sendPushToAdminsMock.mockClear();
+    alertRows = [];
+    retryRows = [
+      makePayment({
+        id: 62,
+        metadata: {
+          voidError: "Network timeout",
+          voidErrorAt: "2026-01-01T00:00:00.000Z",
+          voidErrorAlertedAt: new Date().toISOString(), // already alerted
+        },
+      }),
+    ];
+    // Key still unavailable so the retry pass can't recover it.
+    stripeKeyResult = new Error("No Stripe key");
+
+    await tick();
+
+    // No additional push on the second tick — the sentinel prevents it.
+    expect(sendPushToAdminsMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call sendPushToAdmins when the retry pass successfully recovers a payment", async () => {
+    // The payment was already alerted in a prior tick (voidErrorAlertedAt is
+    // set), so it no longer appears in the alert-pass query.  The retry pass
+    // finds it and successfully expires the Stripe session.  Only a Slack
+    // "recovered" notice should be sent — no extra push.
+    sessionStatus = "open";
+    stripeKeyResult = "sk_test_recovered";
+
+    alertRows = []; // alert pass finds nothing — payment already alerted
+    retryRows = [
+      makePayment({
+        id: 63,
+        providerReference: "cs_recovering_63",
+        metadata: {
+          voidError: "Prior timeout",
+          voidErrorAt: "2026-01-01T00:00:00.000Z",
+          voidErrorAlertedAt: "2026-01-01T01:00:00.000Z", // already alerted
+          sessionId: "cs_recovering_63",
+        },
+      }),
+    ];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    // Stripe session was expired.
+    expect(expireMock).toHaveBeenCalledOnce();
+
+    // Slack success notice was sent.
+    const recoveryAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
+    expect(recoveryAlerts).toHaveLength(1);
+
+    // No push notification during the retry/recovery pass.
+    expect(sendPushToAdminsMock).not.toHaveBeenCalled();
   });
 });
