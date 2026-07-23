@@ -1248,6 +1248,15 @@ router.get("/admin/voice-status", (req, res): void => {
   res.json({ configured: isTwilioConfigured() });
 });
 
+// ─── GET /voice-status (non-admin — any authenticated user) ───────────────────
+// Used by the vendor Voice Campaigns page to conditionally show the setup banner.
+
+router.get("/voice-status", (req, res): void => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  res.json({ configured: isTwilioConfigured() });
+});
+
 // ─── GET /admin/payment-conflicts ──────────────────────────────────────────────
 // Payments where applyPaymentStatusTransition (payments/webhooks.ts) refused to
 // resurrect a vendor-cancelled payment because a late webhook reported it as

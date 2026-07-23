@@ -68,6 +68,15 @@ export default function VoiceCampaignsPage() {
     enabled: Boolean(vendorId),
   });
 
+  const { data: voiceStatus } = useQuery<{ configured: boolean }>({
+    queryKey: ["voice-status"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/voice-status`, { credentials: "include" });
+      if (!res.ok) return { configured: false };
+      return res.json();
+    },
+  });
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [script, setScript] = useState("Hello {{name}}! This is a call from [Your Business Name]. We wanted to reach out to share some exciting news with you. Please visit our website or call us back for more details. Have a great day!");
@@ -183,14 +192,22 @@ export default function VoiceCampaignsPage() {
         </Button>
       </div>
 
-      {/* Info callout */}
-      <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 text-sm text-amber-700 dark:text-amber-400 flex gap-3">
-        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-        <div>
-          <p className="font-medium">Voice calls require a phone number</p>
-          <p className="text-xs mt-0.5 opacity-80">The Twilio integration is already connected. An admin just needs to add <code className="bg-black/10 px-1 rounded">TWILIO_PHONE_NUMBER</code> to Replit Secrets. Campaigns can be created and queued in the meantime.</p>
+      {/* Twilio status callout — only shown when not configured */}
+      {voiceStatus && !voiceStatus.configured && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 text-sm text-amber-700 dark:text-amber-400 flex gap-3">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Voice calls require a phone number</p>
+            <p className="text-xs mt-0.5 opacity-80">The Twilio integration is already connected. An admin just needs to add <code className="bg-black/10 px-1 rounded">TWILIO_PHONE_NUMBER</code> to Replit Secrets. Campaigns can be created and queued in the meantime.</p>
+          </div>
         </div>
-      </div>
+      )}
+      {voiceStatus?.configured && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-4 text-sm text-emerald-700 dark:text-emerald-400 flex gap-3">
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+          <p><strong>Twilio connected.</strong> Voice campaigns are active and ready to launch.</p>
+        </div>
+      )}
 
       {/* Campaign list */}
       <Card>
