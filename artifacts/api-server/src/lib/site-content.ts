@@ -182,6 +182,14 @@ export const DEFAULT_SITE_CONTENT = {
     sms:          0.05,   // platform cost ≈ $0.01
     email:        0.01,   // platform cost ≈ $0.001
   },
+  // Admin-configurable monthly operating costs shown in the Revenue &
+  // Pricing Intelligence panel. Replit hosting cost is the main entry;
+  // admins can add other recurring costs separately.
+  "admin.platformCosts": {
+    replitMonthlyCostUsd: 25,
+    otherMonthlyCostUsd: 0,
+    notes: "",
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -315,6 +323,12 @@ const overageRatesSchema = z.object({
   email:        overageRateValue,
 });
 
+const platformCostsSchema = z.object({
+  replitMonthlyCostUsd: z.number().min(0).max(100000),
+  otherMonthlyCostUsd:  z.number().min(0).max(100000),
+  notes: z.string().max(500),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -330,6 +344,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "billing.paymentGateways": paymentGatewaysSchema,
   "billing.trialSettings": trialSettingsSchema,
   "billing.overageRates": overageRatesSchema,
+  "admin.platformCosts": platformCostsSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

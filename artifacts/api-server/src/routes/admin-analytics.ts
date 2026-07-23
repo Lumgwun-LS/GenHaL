@@ -7,11 +7,12 @@
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable } from "@workspace/db";
+import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable, vendorOverageChargesTable } from "@workspace/db";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { resolveDateRange } from "../lib/date-range";
 import { computeFinanceOverview } from "../lib/finance-overview";
 import { getExportBurstStatus, checkExportBurst } from "../lib/admin-export-burst";
+import { getSiteContentBlock } from "../lib/site-content";
 
 function isAdmin(userId: string): boolean {
   return (process.env.ADMIN_USER_IDS ?? "")
@@ -364,6 +365,203 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
   });
 
   await checkExportBurst(userId);
+});
+
+/**
+ * GET /admin/analytics/revenue-intelligence?period=week|month|year
+ *
+ * Platform-level revenue, cost, and profit breakdown for the admin.
+ * Returns subscription revenue, overage revenue, gateway splits, country
+ * splits, tier splits, daily trend, plus MRR/ARR estimates and net profit
+ * after admin-configured operating costs (Replit + other).
+ */
+router.get("/admin/analytics/revenue-intelligence", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+
+  const [payments, vendors, overageCharges, platformCostsRaw, plansRaw] = await Promise.all([
+    db.select().from(paymentsTable).where(and(gte(paymentsTable.createdAt, from), lte(paymentsTable.createdAt, to))),
+    db.select().from(vendorsTable),
+    db.select().from(vendorOverageChargesTable).where(and(gte(vendorOverageChargesTable.createdAt, from), lte(vendorOverageChargesTable.createdAt, to))),
+    getSiteContentBlock("admin.platformCosts"),
+    getSiteContentBlock("billing.subscriptionPlans"),
+  ]);
+
+  const platformCosts = platformCostsRaw as { replitMonthlyCostUsd: number; otherMonthlyCostUsd: number; notes: string };
+  const plans = (plansRaw as { plans: { tier: string; pricing: { usd: number; ngn: number }; name: string }[] }).plans ?? [];
+
+  const planPriceByTier: Record<string, { usd: number; ngn: number }> = {};
+  for (const p of plans) planPriceByTier[p.tier] = p.pricing;
+
+  const paidPayments = payments.filter((p) => p.status === "paid");
+  const vendorById = new Map(vendors.map((v) => [v.id, v]));
+
+  // ── Revenue helpers ───────────────────────────────────────────────────────
+  const totalSubscriptionRevenue = paidPayments.reduce((s, p) => s + parseFloat(p.amount), 0);
+  const totalOverageRevenue = overageCharges.reduce((s, o) => s + parseFloat(o.totalUsd), 0);
+  const totalGrossRevenue = totalSubscriptionRevenue + totalOverageRevenue;
+
+  // Operating costs: scale monthly cost to the selected period
+  const msInRange = to.getTime() - from.getTime();
+  const monthsInRange = msInRange / (1000 * 60 * 60 * 24 * 30.44);
+  const totalCosts = (platformCosts.replitMonthlyCostUsd + platformCosts.otherMonthlyCostUsd) * monthsInRange;
+  const netProfit = totalGrossRevenue - totalCosts;
+  const profitMargin = totalGrossRevenue > 0 ? (netProfit / totalGrossRevenue) * 100 : 0;
+
+  // ── MRR estimate from currently active subscriptions ─────────────────────
+  const payingVendors = vendors.filter((v) => v.subscriptionTier !== "free");
+  let mrrUsd = 0;
+  for (const v of payingVendors) {
+    const price = planPriceByTier[v.subscriptionTier];
+    if (price) mrrUsd += price.usd;
+  }
+  const arrUsd = mrrUsd * 12;
+
+  // ── Revenue by gateway ────────────────────────────────────────────────────
+  const gatewayMap: Record<string, { revenue: number; count: number }> = {};
+  for (const p of paidPayments) {
+    const key = p.provider ?? "unknown";
+    if (!gatewayMap[key]) gatewayMap[key] = { revenue: 0, count: 0 };
+    gatewayMap[key]!.revenue += parseFloat(p.amount);
+    gatewayMap[key]!.count += 1;
+  }
+  const byGateway = Object.entries(gatewayMap)
+    .map(([gateway, { revenue, count }]) => ({ gateway, revenue, count }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // ── Revenue by tier ───────────────────────────────────────────────────────
+  const tierMap: Record<string, { revenue: number; count: number }> = {};
+  for (const p of paidPayments) {
+    const vendor = vendorById.get(p.vendorId);
+    const tier = vendor?.subscriptionTier ?? "unknown";
+    if (!tierMap[tier]) tierMap[tier] = { revenue: 0, count: 0 };
+    tierMap[tier]!.revenue += parseFloat(p.amount);
+    tierMap[tier]!.count += 1;
+  }
+  const byTier = Object.entries(tierMap)
+    .map(([tier, { revenue, count }]) => ({
+      tier,
+      revenue,
+      count,
+      priceUsd: planPriceByTier[tier]?.usd ?? 0,
+      priceNgn: planPriceByTier[tier]?.ngn ?? 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // ── Revenue by country ────────────────────────────────────────────────────
+  const countryMap: Record<string, { revenue: number; count: number; vendors: number }> = {};
+  for (const p of paidPayments) {
+    const vendor = vendorById.get(p.vendorId);
+    const country = vendor?.country ?? "Unknown";
+    if (!countryMap[country]) countryMap[country] = { revenue: 0, count: 0, vendors: 0 };
+    countryMap[country]!.revenue += parseFloat(p.amount);
+    countryMap[country]!.count += 1;
+  }
+  // Add vendor counts per country
+  for (const v of vendors) {
+    const country = v.country ?? "Unknown";
+    if (!countryMap[country]) countryMap[country] = { revenue: 0, count: 0, vendors: 0 };
+    countryMap[country]!.vendors += 1;
+  }
+  const byCountry = Object.entries(countryMap)
+    .map(([country, { revenue, count, vendors: vendorCount }]) => ({ country, revenue, count, vendorCount }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 15);
+
+  // ── Revenue by currency ───────────────────────────────────────────────────
+  const currencyMap: Record<string, number> = {};
+  for (const p of paidPayments) {
+    const cur = (p.currency ?? "USD").toUpperCase();
+    currencyMap[cur] = (currencyMap[cur] ?? 0) + parseFloat(p.amount);
+  }
+  const byCurrency = Object.entries(currencyMap)
+    .map(([currency, revenue]) => ({ currency, revenue }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // ── Daily revenue trend ───────────────────────────────────────────────────
+  const trendMap: Record<string, number> = {};
+  for (const p of paidPayments) {
+    const key = dayKey(new Date(p.createdAt));
+    trendMap[key] = (trendMap[key] ?? 0) + parseFloat(p.amount);
+  }
+  const trend = Object.entries(trendMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, revenue]) => ({ date, revenue }));
+
+  // ── Weekly / Monthly / Yearly rollup buckets ──────────────────────────────
+  function weekKey(d: Date): string {
+    const day = d.getDay();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((day + 6) % 7));
+    return monday.toISOString().split("T")[0]!;
+  }
+  function monthKeyFn(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  function yearKey(d: Date): string {
+    return String(d.getFullYear());
+  }
+
+  function rollup(keyFn: (d: Date) => string): { label: string; revenue: number }[] {
+    const map: Record<string, number> = {};
+    for (const p of paidPayments) {
+      const k = keyFn(new Date(p.createdAt));
+      map[k] = (map[k] ?? 0) + parseFloat(p.amount);
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([label, revenue]) => ({ label, revenue }));
+  }
+
+  const weeklyTotals  = rollup(weekKey);
+  const monthlyTotals = rollup(monthKeyFn);
+  const yearlyTotals  = rollup(yearKey);
+
+  // ── Tier distribution (all vendors, not just in range) ───────────────────
+  const tierDistMap: Record<string, number> = {};
+  for (const v of vendors) {
+    const t = v.subscriptionTier ?? "free";
+    tierDistMap[t] = (tierDistMap[t] ?? 0) + 1;
+  }
+  const tierDistribution = Object.entries(tierDistMap)
+    .map(([tier, count]) => ({
+      tier,
+      count,
+      priceUsd: planPriceByTier[tier]?.usd ?? 0,
+      priceNgn: planPriceByTier[tier]?.ngn ?? 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  res.json({
+    range: { from: from.toISOString(), to: to.toISOString(), period },
+    summary: {
+      totalSubscriptionRevenue,
+      totalOverageRevenue,
+      totalGrossRevenue,
+      totalCosts,
+      netProfit,
+      profitMarginPct: profitMargin,
+      mrrUsd,
+      arrUsd,
+      totalVendors: vendors.length,
+      payingVendors: payingVendors.length,
+      freeVendors: vendors.filter((v) => v.subscriptionTier === "free").length,
+      replitMonthlyCostUsd: platformCosts.replitMonthlyCostUsd,
+      otherMonthlyCostUsd:  platformCosts.otherMonthlyCostUsd,
+      platformCostNotes:    platformCosts.notes,
+    },
+    byGateway,
+    byTier,
+    byCountry,
+    byCurrency,
+    tierDistribution,
+    trend,
+    weeklyTotals,
+    monthlyTotals,
+    yearlyTotals,
+    plans: plans.map((p) => ({ tier: p.tier, name: p.name, priceUsd: p.pricing.usd, priceNgn: p.pricing.ngn })),
+  });
 });
 
 export default router;

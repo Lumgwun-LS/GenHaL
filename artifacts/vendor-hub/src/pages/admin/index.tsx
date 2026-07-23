@@ -32,6 +32,7 @@ import PaymentGatewaysPanel from "./payment-gateways";
 import BillingSyncPanel from "./billing-sync";
 import AdminAnalyticsPanel from "./analytics";
 import AdminFinanceRollupPanel from "./finance-rollup";
+import RevenueIntelligencePanel from "./revenue-intelligence";
 import PaymentConflictsPanel from "./payment-conflicts";
 import LateArrivalRefundsPanel from "./late-arrival-refunds";
 import VoidErrorsPanel from "./void-errors";
@@ -2312,6 +2313,9 @@ export default function AdminPanel() {
           <TabsTrigger value="finance-rollup" className="flex items-center gap-2">
             <DollarSign className="w-4 h-4" /> Finance Rollup
           </TabsTrigger>
+          <TabsTrigger value="revenue-intelligence" className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" /> Revenue & Pricing
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -3587,6 +3591,11 @@ export default function AdminPanel() {
         {/* ── Finance Rollup tab ─────────────────────────────────────── */}
         <TabsContent value="finance-rollup">
           <AdminFinanceRollupPanel />
+        </TabsContent>
+
+        {/* ── Revenue & Pricing Intelligence tab ─────────────────────── */}
+        <TabsContent value="revenue-intelligence">
+          <RevenueIntelligencePanel />
         </TabsContent>
       </Tabs>
     </div>
