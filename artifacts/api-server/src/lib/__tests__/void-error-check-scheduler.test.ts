@@ -333,7 +333,7 @@ describe("void-error-check-scheduler — retryPass", () => {
     expect(typeof updatedMeta!.voidRecoveredAt).toBe("string");
   });
 
-  it("skips silently when the Stripe key is still unavailable", async () => {
+  it("skips silently when the Stripe key is still unavailable (below exhaustion threshold)", async () => {
     stripeKeyResult = new Error("No Stripe key configured for vendor");
     retryRows = [
       makePayment({
@@ -342,16 +342,136 @@ describe("void-error-check-scheduler — retryPass", () => {
       }),
     ];
 
-    const { tick } = await import("../void-error-check-scheduler");
-    await tick();
+    const { tick, VOID_RETRY_EXHAUSTION_THRESHOLD } = await import("../void-error-check-scheduler");
+
+    // Run ticks up to (but not including) the threshold
+    for (let i = 0; i < VOID_RETRY_EXHAUSTION_THRESHOLD - 1; i++) {
+      slackAlerts.length = 0;
+      await tick();
+      // Retry count incremented each tick
+      const meta = metadataUpdates.get(13);
+      expect(meta?.voidErrorRetryCount).toBe(i + 1);
+      // No exhaustion alert yet
+      const exhaustionAlerts = slackAlerts.filter((m) => m.includes("consecutive"));
+      expect(exhaustionAlerts).toHaveLength(0);
+      // Not yet marked exhausted
+      expect(meta?.voidRetryExhausted).toBeUndefined();
+      // Keep the metadata in sync for the next tick
+      retryRows[0].metadata = meta as Record<string, unknown>;
+    }
 
     // No expire attempted
     expect(expireMock).not.toHaveBeenCalled();
-    // No metadata update (skipped)
-    expect(metadataUpdates.has(13)).toBe(false);
-    // No NEW Slack alert (existing alert left in place)
-    const failAlerts = slackAlerts.filter((m) => m.includes("void failed"));
-    expect(failAlerts).toHaveLength(0);
+  });
+
+  it("fires a Slack exhaustion alert and sets voidRetryExhausted:true once the threshold is reached", async () => {
+    stripeKeyResult = new Error("No Stripe key configured for vendor");
+    const { tick, VOID_RETRY_EXHAUSTION_THRESHOLD } = await import("../void-error-check-scheduler");
+
+    // Seed the payment as if it has already failed THRESHOLD-1 times
+    retryRows = [
+      makePayment({
+        id: 15,
+        metadata: {
+          voidError: "Key was missing",
+          voidErrorAt: "2026-01-01T00:00:00.000Z",
+          voidErrorRetryCount: VOID_RETRY_EXHAUSTION_THRESHOLD - 1,
+        },
+      }),
+    ];
+
+    await tick();
+
+    // voidErrorRetryCount bumped to threshold
+    const meta = metadataUpdates.get(15);
+    expect(meta?.voidErrorRetryCount).toBe(VOID_RETRY_EXHAUSTION_THRESHOLD);
+    // Exhaustion flag set
+    expect(meta?.voidRetryExhausted).toBe(true);
+    // No expire attempted
+    expect(expireMock).not.toHaveBeenCalled();
+    // Exhaustion Slack alert fired
+    const exhaustionAlerts = slackAlerts.filter((m) => m.includes("consecutive"));
+    expect(exhaustionAlerts).toHaveLength(1);
+    expect(exhaustionAlerts[0]).toContain("payment #15");
+    expect(exhaustionAlerts[0]).toContain("Manual review needed");
+  });
+
+  it("fires a repeat exhaustion alert every THRESHOLD ticks after the initial crossing", async () => {
+    stripeKeyResult = new Error("No Stripe key configured for vendor");
+    const { tick, VOID_RETRY_EXHAUSTION_THRESHOLD } = await import("../void-error-check-scheduler");
+
+    // Seed as if already at exactly the threshold (exhausted once)
+    retryRows = [
+      makePayment({
+        id: 16,
+        metadata: {
+          voidError: "Key was missing",
+          voidErrorAt: "2026-01-01T00:00:00.000Z",
+          voidErrorRetryCount: VOID_RETRY_EXHAUSTION_THRESHOLD,
+          voidRetryExhausted: true,
+        },
+      }),
+    ];
+
+    // Run THRESHOLD-1 more ticks — no new alert expected
+    for (let i = 0; i < VOID_RETRY_EXHAUSTION_THRESHOLD - 1; i++) {
+      slackAlerts.length = 0;
+      await tick();
+      const exhaustionAlerts = slackAlerts.filter((m) => m.includes("consecutive"));
+      expect(exhaustionAlerts).toHaveLength(0);
+      retryRows[0].metadata = metadataUpdates.get(16) as Record<string, unknown>;
+    }
+
+    // One more tick pushes count to 2 * THRESHOLD — alert fires again
+    slackAlerts.length = 0;
+    await tick();
+    const exhaustionAlerts = slackAlerts.filter((m) => m.includes("consecutive"));
+    expect(exhaustionAlerts).toHaveLength(1);
+    expect(exhaustionAlerts[0]).toContain("payment #16");
+  });
+
+  it("clears voidRetryExhausted and voidErrorRetryCount when a subsequent retry succeeds", async () => {
+    sessionStatus = "open";
+    stripeKeyResult = "sk_test_fake";
+
+    retryRows = [
+      makePayment({
+        id: 17,
+        metadata: {
+          voidError: "Key was missing",
+          voidErrorAt: "2026-01-01T00:00:00.000Z",
+          voidErrorAlertedAt: "2026-01-01T01:00:00.000Z",
+          voidErrorRetryCount: 5,
+          voidRetryExhausted: true,
+          sessionId: "cs_exhausted_17",
+          source: "awajimaa",
+        },
+      }),
+    ];
+
+    const { tick } = await import("../void-error-check-scheduler");
+    await tick();
+
+    // Session expired
+    expect(expireMock).toHaveBeenCalledOnce();
+
+    const meta = metadataUpdates.get(17);
+    expect(meta).toBeDefined();
+    // Active void-error and exhaustion fields cleared
+    expect(meta).not.toHaveProperty("voidError");
+    expect(meta).not.toHaveProperty("voidErrorAlertedAt");
+    expect(meta).not.toHaveProperty("voidErrorRetryCount");
+    expect(meta).not.toHaveProperty("voidRetryExhausted");
+    // Audit fields retained
+    expect(meta).toHaveProperty("voidErrorAt");
+    expect(typeof meta!.voidRecoveredAt).toBe("string");
+    // Other metadata preserved
+    expect(meta).toMatchObject({ sessionId: "cs_exhausted_17", source: "awajimaa" });
+
+    // Success Slack notice sent
+    const successAlerts = slackAlerts.filter((m) => m.includes("automatically expired"));
+    expect(successAlerts).toHaveLength(1);
+    expect(successAlerts[0]).toContain("payment #17");
   });
 
   it("does not attempt a retry for an acknowledged payment", async () => {
@@ -496,11 +616,14 @@ describe("void-error-check-scheduler — full retry lifecycle", () => {
     expect(tick1FailAlerts).toHaveLength(1);
     expect(tick1FailAlerts[0]).toContain(`payment #${paymentId}`);
 
-    // Alert pass: voidErrorAlertedAt stamped.
+    // The alert pass stamps voidErrorAlertedAt (verified via the Slack alert above).
+    // The retry pass then also writes metadata (voidErrorRetryCount), so the last
+    // update stored in the mock map is the retry pass's write.
     const tick1Meta = metadataUpdates.get(paymentId);
     expect(tick1Meta).toBeDefined();
-    expect(typeof tick1Meta!.voidErrorAlertedAt).toBe("string");
     expect(tick1Meta).toHaveProperty("voidError"); // NOT cleared yet
+    // Retry count incremented to 1 (below exhaustion threshold — no exhaustion alert)
+    expect(tick1Meta?.voidErrorRetryCount).toBe(1);
 
     // Retry pass: key unavailable → expire was never called.
     expect(expireMock).not.toHaveBeenCalled();

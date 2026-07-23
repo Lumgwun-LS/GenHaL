@@ -17,11 +17,16 @@
  *      voidErrorAcknowledgedAt not set), regardless of voidErrorAlertedAt.
  *   2. For each, tries to resolve a Stripe key. If one is now available, it
  *      attempts checkout.sessions.expire again.
- *   3. On success: clears voidError / voidErrorAlertedAt from metadata and
- *      sends a Slack success notice so the team knows the session was
- *      eventually expired without manual intervention.
- *   4. On continued failure: leaves existing state intact — no new alert is
- *      sent so admins are not double-notified.
+ *   3. On success: clears voidError / voidErrorAlertedAt / voidErrorRetryCount /
+ *      voidRetryExhausted from metadata and sends a Slack success notice so
+ *      the team knows the session was eventually expired without manual
+ *      intervention.
+ *   4. On continued failure (key still missing): increments voidErrorRetryCount
+ *      in metadata. Once that count reaches VOID_RETRY_EXHAUSTION_THRESHOLD a
+ *      follow-up Slack alert is fired and voidRetryExhausted is set to true so
+ *      the admin panel can surface the payment distinctly. Subsequent ticks only
+ *      re-alert when the count is exactly a multiple of the threshold (i.e.
+ *      every THRESHOLD ticks after exhaustion) to avoid flooding.
  *
  * Admins acknowledge individual errors via POST /admin/void-errors/:id/acknowledge,
  * which sets voidErrorAcknowledgedAt and removes them from the live list.
@@ -37,6 +42,17 @@ import { sendPushToAdmins } from "./push";
 import { resolveStripeKey } from "./vendor-keys";
 
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
+
+/**
+ * Number of consecutive failed key-resolution attempts before the scheduler
+ * fires a follow-up Slack alert and marks the payment as `voidRetryExhausted`.
+ * Configurable via environment variable VOID_RETRY_EXHAUSTION_THRESHOLD.
+ */
+export const VOID_RETRY_EXHAUSTION_THRESHOLD = (() => {
+  const raw = process.env.VOID_RETRY_EXHAUSTION_THRESHOLD;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+})();
 
 export const VOID_ERROR_JOB_NAME = "void-error-check";
 
@@ -139,8 +155,7 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
 
     const meta = (row.metadata ?? {}) as Record<string, unknown>;
 
-    // Try to resolve a Stripe key for this vendor. If none is available yet,
-    // skip silently — no new alert, we'll try again on the next tick.
+    // Try to resolve a Stripe key for this vendor.
     let stripeKey: string;
     try {
       const [vendor] = await db
@@ -151,11 +166,47 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
 
       stripeKey = await resolveStripeKey(row.vendorId, vendor);
     } catch {
-      // Key still not available — leave existing alert in place, try again later.
-      logger.debug(
-        { paymentId: row.id },
-        "[void-error-check] Stripe key still unavailable for retry, skipping",
-      );
+      // Key still not available — increment the retry counter and check whether
+      // we have hit the exhaustion threshold.
+      const prevCount = typeof meta.voidErrorRetryCount === "number" ? meta.voidErrorRetryCount : 0;
+      const newCount = prevCount + 1;
+      const exhausted = newCount >= VOID_RETRY_EXHAUSTION_THRESHOLD;
+
+      // Only fire a new Slack alert at the threshold crossing and then every
+      // THRESHOLD ticks after that (to avoid flooding the channel).
+      const shouldAlert = newCount % VOID_RETRY_EXHAUSTION_THRESHOLD === 0;
+
+      await db
+        .update(paymentsTable)
+        .set({
+          metadata: {
+            ...meta,
+            voidErrorRetryCount: newCount,
+            ...(exhausted ? { voidRetryExhausted: true } : {}),
+          },
+        })
+        .where(eq(paymentsTable.id, row.id));
+
+      if (shouldAlert) {
+        await sendSlackAlert(
+          `:rotating_light: Void-error retry for *payment #${row.id}* ` +
+            `(${row.provider}, ref: \`${row.providerReference}\`) ` +
+            `for vendor *${row.vendorName ?? `#${row.vendorId}`}* ` +
+            `(${row.currency} ${Number(row.amount).toFixed(2)}) ` +
+            `has failed *${newCount} consecutive time${newCount === 1 ? "" : "s"}* — ` +
+            `the Stripe key may have been rotated or permanently removed. ` +
+            `Manual review needed in the admin *Void Errors* panel.`,
+        );
+        logger.warn(
+          { paymentId: row.id, retryCount: newCount },
+          "[void-error-check] Retry exhaustion alert sent",
+        );
+      } else {
+        logger.debug(
+          { paymentId: row.id, retryCount: newCount },
+          "[void-error-check] Stripe key still unavailable for retry, skipping",
+        );
+      }
       continue;
     }
 
@@ -169,13 +220,16 @@ async function retryPass(): Promise<{ retriedCount: number; recoveredCount: numb
         await stripe.checkout.sessions.expire(row.providerReference);
       }
 
-      // Success — clear the active void-error fields and stamp voidRecoveredAt
-      // so the payment stays visible in the admin panel with a "Recovered
-      // automatically" badge rather than silently disappearing.
+      // Success — clear the active void-error fields (including exhaustion
+      // tracking) and stamp voidRecoveredAt so the payment stays visible in
+      // the admin panel with a "Recovered automatically" badge rather than
+      // silently disappearing.
       const {
         voidError: _ve,
         voidErrorAlertedAt: _veaa,
         voidErrorRetryAttemptedAt: _vera,
+        voidErrorRetryCount: _verc,
+        voidRetryExhausted: _vre,
         ...cleanMeta
       } = meta as Record<string, unknown>;
       await db
