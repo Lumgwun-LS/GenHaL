@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useUser, SignInButton, UserButton } from "@clerk/react";
+import { useUser, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 
 export default function Nav() {
   const { isSignedIn } = useUser();
@@ -81,7 +81,6 @@ export default function Nav() {
           {[
             { href: "/", label: "Browse" },
             { href: "/developer", label: "Publish" },
-            { href: "/admin", label: "Admin" },
           ].map(({ href, label }) => (
             <motion.div key={label} whileHover={{ y: -1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
               <Link
@@ -125,15 +124,31 @@ export default function Nav() {
               <UserButton afterSignOutUrl="/app-store/" />
             </motion.div>
           ) : (
-            <SignInButton mode="modal">
-              <motion.button
-                className="btn-green"
-                style={{ fontSize: 13, padding: "6px 18px" }}
-                whileHover={{ scale: 1.07, y: -1 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 420, damping: 22 }}
-              >Sign in</motion.button>
-            </SignInButton>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <SignInButton mode="modal">
+                <motion.button
+                  style={{
+                    fontSize: 13, padding: "6px 16px",
+                    background: "transparent",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    borderRadius: 20, color: "#c0c8d8",
+                    cursor: "pointer", fontWeight: 500,
+                  }}
+                  whileHover={{ scale: 1.05, borderColor: "rgba(255,255,255,0.4)", color: "#fff" }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                >Sign In</motion.button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <motion.button
+                  className="btn-green"
+                  style={{ fontSize: 13, padding: "6px 18px" }}
+                  whileHover={{ scale: 1.07, y: -1 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                >Create Account</motion.button>
+              </SignUpButton>
+            </div>
           )}
         </div>
       </div>

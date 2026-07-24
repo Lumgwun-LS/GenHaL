@@ -4,6 +4,7 @@ import {
   motion, useInView, AnimatePresence,
   useMotionValue, useTransform, useSpring,
 } from "framer-motion";
+import { useUser, SignUpButton } from "@clerk/react";
 import AppCard from "../components/app-card";
 import { apiFetch } from "../lib/api";
 import type { AppSummary, Category } from "../lib/types";
@@ -105,6 +106,7 @@ function SectionHeader({ title, icon, href }: { title: string; icon: string; hre
 /* ── hero ───────────────────────────────────── */
 function HeroSection() {
   const [, navigate] = useLocation();
+  const { isSignedIn } = useUser();
   const statsRef = useRef<HTMLDivElement>(null);
   const statsInView = useInView(statsRef, { once: true, margin: "-80px" });
   const cnt54  = useCountUp(54,  1300, statsInView);
@@ -210,25 +212,38 @@ function HeroSection() {
           transition={{ duration: 0.6, delay: 1.22, ease: EASE_OUT_EXPO }}
           style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginBottom: 60 }}
         >
+          {!isSignedIn && (
+            <SignUpButton mode="modal">
+              <motion.button
+                className="btn-green btn-glow"
+                style={{ fontSize: 16, padding: "14px 36px" }}
+                whileHover={{ scale: 1.07, y: -3 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 420, damping: 22 }}
+              >
+                ✨ Create Free Account
+              </motion.button>
+            </SignUpButton>
+          )}
           <motion.button
-            className="btn-green btn-glow"
-            style={{ fontSize: 16, padding: "14px 36px" }}
-            onClick={() => navigate("/developer")}
-            whileHover={{ scale: 1.07, y: -3 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 420, damping: 22 }}
-          >
-            🚀 Publish Your App
-          </motion.button>
-          <motion.button
-            className="btn-outline"
+            className={isSignedIn ? "btn-green btn-glow" : "btn-outline"}
             style={{ fontSize: 16, padding: "14px 36px" }}
             onClick={() => navigate("/search")}
-            whileHover={{ scale: 1.06, y: -3, backgroundColor: "rgba(0,200,83,0.1)" }}
+            whileHover={{ scale: 1.06, y: -3, backgroundColor: isSignedIn ? undefined : "rgba(0,200,83,0.1)" }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 420, damping: 22 }}
           >
             Browse All Apps
+          </motion.button>
+          <motion.button
+            className="btn-outline"
+            style={{ fontSize: 16, padding: "14px 36px" }}
+            onClick={() => navigate("/developer")}
+            whileHover={{ scale: 1.06, y: -3, backgroundColor: "rgba(0,200,83,0.1)" }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 420, damping: 22 }}
+          >
+            🚀 Publish Your App
           </motion.button>
         </motion.div>
 
