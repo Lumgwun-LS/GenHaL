@@ -205,6 +205,13 @@ export const DEFAULT_SITE_CONTENT = {
     otherMonthlyCostUsd: 0,
     notes: "",
   },
+  // Social account health check settings. repeatOffenderThreshold controls
+  // how many active → needs_reconnect transitions within a 30-day window
+  // triggers the escalation Slack alert ("needs direct follow-up"). Defaults
+  // to 3 — the alert fires at exactly the Nth break, not every subsequent one.
+  "admin.socialHealthSettings": {
+    repeatOffenderThreshold: 3,
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -344,6 +351,10 @@ const platformCostsSchema = z.object({
   notes: z.string().max(500),
 });
 
+const socialHealthSettingsSchema = z.object({
+  repeatOffenderThreshold: z.number().int().min(2).max(100),
+});
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -360,6 +371,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "billing.trialSettings": trialSettingsSchema,
   "billing.overageRates": overageRatesSchema,
   "admin.platformCosts": platformCostsSchema,
+  "admin.socialHealthSettings": socialHealthSettingsSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 export default function EmailCampaignEditor() {
   const params = useParams();
   const isNew = !params.id || params.id === "new";
-  const id = isNew ? 0 : parseInt(params.id);
+  const id = isNew ? 0 : parseInt(params.id ?? "0");
   const [, setLocation] = useLocation();
 
   const { data: campaign, isLoading } = useGetEmailCampaign(id, { 

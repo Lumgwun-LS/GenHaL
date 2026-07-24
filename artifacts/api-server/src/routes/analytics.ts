@@ -26,21 +26,32 @@ function isAdmin(userId: string): boolean {
 const router: IRouter = Router();
 
 router.get("/analytics/overview", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const admin = isAdmin(userId);
   const params = GetAnalyticsOverviewQueryParams.safeParse(req.query);
-  const vendorId = params.success ? params.data.vendorId ?? null : null;
+  const requestedVendorId = params.success ? params.data.vendorId ?? null : null;
+
+  // Non-admins: resolve their own vendor and scope everything to it.
+  let effectiveVendorId = requestedVendorId;
+  if (!admin) {
+    const [myVendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+    effectiveVendorId = myVendor?.id ?? null;
+  }
 
   const [allVendors, allOrders, allLeads, allPosts, allProducts] = await Promise.all([
-    db.select().from(vendorsTable),
+    admin ? db.select().from(vendorsTable) : Promise.resolve([]),
     db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)),
     db.select().from(leadsTable).orderBy(desc(leadsTable.createdAt)),
     db.select().from(postsTable).orderBy(desc(postsTable.createdAt)),
     db.select().from(productsTable),
   ]);
 
-  const orders = vendorId ? allOrders.filter((o) => o.vendorId === vendorId) : allOrders;
-  const leads = vendorId ? allLeads.filter((l) => l.vendorId === vendorId) : allLeads;
-  const posts = vendorId ? allPosts.filter((p) => p.vendorId === vendorId) : allPosts;
-  const products = vendorId ? allProducts.filter((p) => p.vendorId === vendorId) : allProducts;
+  const orders = effectiveVendorId ? allOrders.filter((o) => o.vendorId === effectiveVendorId) : allOrders;
+  const leads = effectiveVendorId ? allLeads.filter((l) => l.vendorId === effectiveVendorId) : allLeads;
+  const posts = effectiveVendorId ? allPosts.filter((p) => p.vendorId === effectiveVendorId) : allPosts;
+  const products = effectiveVendorId ? allProducts.filter((p) => p.vendorId === effectiveVendorId) : allProducts;
 
   const totalRevenue = orders.filter(o => o.status !== "cancelled").reduce((s, o) => s + parseFloat(o.totalAmount), 0);
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
@@ -77,10 +88,23 @@ router.get("/analytics/overview", async (req, res): Promise<void> => {
 });
 
 router.get("/analytics/sales", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const admin = isAdmin(userId);
   const params = GetSalesAnalyticsQueryParams.safeParse(req.query);
+  const requestedVendorId = params.success ? params.data.vendorId ?? null : null;
+
+  // Non-admins always see only their own vendor's data.
+  let effectiveVendorId = requestedVendorId;
+  if (!admin) {
+    const [myVendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+    effectiveVendorId = myVendor?.id ?? null;
+  }
+
   let orders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
-  if (params.success && params.data.vendorId) {
-    orders = orders.filter((o) => o.vendorId === params.data.vendorId);
+  if (effectiveVendorId) {
+    orders = orders.filter((o) => o.vendorId === effectiveVendorId);
   }
 
   // Revenue by day (last 30 days)
@@ -103,9 +127,12 @@ router.get("/analytics/sales", async (req, res): Promise<void> => {
   for (const o of orders.filter(o => o.status !== "cancelled")) {
     if (vendorMap[o.vendorId]) vendorMap[o.vendorId]!.revenue += parseFloat(o.totalAmount);
   }
-  const revenueByVendor = Object.entries(vendorMap)
-    .map(([vendorId, { vendorName, revenue }]) => ({ vendorId: parseInt(vendorId), vendorName, revenue }))
-    .filter((v) => v.revenue > 0);
+  // Cross-vendor breakdown is admin-only.
+  const revenueByVendor = admin
+    ? Object.entries(vendorMap)
+        .map(([vendorId, { vendorName, revenue }]) => ({ vendorId: parseInt(vendorId), vendorName, revenue }))
+        .filter((v) => v.revenue > 0)
+    : [];
 
   // Top products (simulated since we'd need joins)
   const allItems = await db.select().from(orderItemsTable);
@@ -129,10 +156,23 @@ router.get("/analytics/sales", async (req, res): Promise<void> => {
 });
 
 router.get("/analytics/social", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const admin = isAdmin(userId);
   const params = GetSocialAnalyticsQueryParams.safeParse(req.query);
+  const requestedVendorId = params.success ? params.data.vendorId ?? null : null;
+
+  // Non-admins always see only their own vendor's posts.
+  let effectiveVendorId = requestedVendorId;
+  if (!admin) {
+    const [myVendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+    effectiveVendorId = myVendor?.id ?? null;
+  }
+
   let posts = await db.select().from(postsTable).orderBy(desc(postsTable.createdAt));
-  if (params.success && params.data.vendorId) {
-    posts = posts.filter((p) => p.vendorId === params.data.vendorId);
+  if (effectiveVendorId) {
+    posts = posts.filter((p) => p.vendorId === effectiveVendorId);
   }
 
   const platformMap: Record<string, number> = {};

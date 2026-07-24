@@ -1,8 +1,10 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { db, paymentsTable, vendorsTable } from "@workspace/db";
+import { db, paymentsTable, vendorsTable, ordersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { resolveGatewayField } from "../../lib/platform-gateways";
+import { getAuth } from "@clerk/express";
+import { findActivePendingPayment } from "../../lib/payment-guard";
 
 const router = Router();
 
@@ -102,9 +104,53 @@ export async function createFlutterwaveCheckout(input: FlutterwaveCheckoutInput)
  * env-var fallback — same resolution path used by refunds/webhooks.
  *
  * Body: { orderId, vendorId, amount, currency, email, redirectUrl }
+ *
+ * Security: vendorId is derived from the authenticated session, not the
+ * request body. When orderId is present the authoritative amount comes from
+ * the stored order row — callers cannot inflate/deflate prices.
  */
 router.post("/payments/flutterwave/checkout", async (req, res): Promise<void> => {
-  const result = await createFlutterwaveCheckout(req.body ?? {});
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [authedVendor] = await db
+    .select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId));
+  if (!authedVendor) { res.status(403).json({ error: "No vendor account found" }); return; }
+
+  const body = req.body ?? {};
+  const orderId = body.orderId != null ? Number(body.orderId) : null;
+
+  // ── Order ownership + authoritative amount ────────────────────────────────
+  let amount: number = Number(body.amount);
+  if (orderId) {
+    // Dedup: return an existing pending checkout session if one was opened recently.
+    const existing = await findActivePendingPayment(orderId);
+    if (existing?.checkoutUrl) {
+      res.json({ paymentId: existing.id, reference: existing.providerReference, url: existing.checkoutUrl });
+      return;
+    }
+
+    const [order] = await db
+      .select({ vendorId: ordersTable.vendorId, totalAmount: ordersTable.totalAmount })
+      .from(ordersTable)
+      .where(eq(ordersTable.id, orderId));
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (order.vendorId !== authedVendor.id) {
+      res.status(403).json({ error: "You do not own this order" }); return;
+    }
+    // Always use the server-stored total — never trust the client-supplied amount.
+    amount = parseFloat(order.totalAmount);
+  }
+
+  const result = await createFlutterwaveCheckout({
+    ...body,
+    vendorId: authedVendor.id,
+    orderId,
+    amount,
+  });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });

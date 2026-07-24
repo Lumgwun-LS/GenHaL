@@ -28,6 +28,11 @@ function formatTimestamp(iso: string | null): string {
   return new Date(iso).toLocaleString();
 }
 
+function formatCount(n: number | null): string {
+  if (n === null || n === undefined) return "—";
+  return n.toLocaleString();
+}
+
 /** Human-friendly label for the raw job_run_status.job_name key. */
 function jobLabel(jobName: string): string {
   return jobName
@@ -86,7 +91,9 @@ export default function BackgroundJobsPanel() {
         <CardHeader>
           <CardTitle className="text-base">Background Jobs</CardTitle>
           <CardDescription>
-            Last run outcome for every scheduled job that reports its health.
+            Last run outcome for every scheduled job that reports its health. "Checked" is the number
+            of records examined; "Affected" is how many were actually changed — both are from the most
+            recent tick.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -102,6 +109,8 @@ export default function BackgroundJobsPanel() {
                   <TableHead>Status</TableHead>
                   <TableHead>Last run</TableHead>
                   <TableHead>Last success</TableHead>
+                  <TableHead className="text-right">Checked</TableHead>
+                  <TableHead className="text-right">Affected</TableHead>
                   <TableHead>Consecutive failures</TableHead>
                   <TableHead>Last error</TableHead>
                 </TableRow>
@@ -123,6 +132,16 @@ export default function BackgroundJobsPanel() {
                     </TableCell>
                     <TableCell className="text-sm">{formatTimestamp(s.lastRunAt)}</TableCell>
                     <TableCell className="text-sm">{formatTimestamp(s.lastSuccessAt)}</TableCell>
+                    <TableCell className="text-sm text-right text-muted-foreground">
+                      {formatCount(s.lastCheckedCount)}
+                    </TableCell>
+                    <TableCell className="text-sm text-right">
+                      {s.lastAffectedCount !== null && s.lastAffectedCount > 0 ? (
+                        <span className="text-emerald-700 font-medium">{formatCount(s.lastAffectedCount)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{formatCount(s.lastAffectedCount)}</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">{s.consecutiveFailures}</TableCell>
                     <TableCell className="text-sm text-red-600 max-w-xs truncate" title={s.lastError ?? ""}>
                       {s.lastError ?? "—"}

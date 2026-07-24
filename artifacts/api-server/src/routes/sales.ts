@@ -108,8 +108,10 @@ router.get("/sales/export", async (req, res): Promise<void> => {
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
     const s = v instanceof Date ? v.toISOString() : String(v);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-    return s;
+    // Prevent CSV formula injection: prefix formula-starting chars with a single quote
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) return `"${safe.replace(/"/g, '""')}"`;
+    return safe;
   }
   const filename = `sales-export-${new Date().toISOString().slice(0, 10)}.csv`;
   res.setHeader("Content-Type", "text/csv; charset=utf-8");

@@ -1,9 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, Settings, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -30,6 +35,10 @@ type FrequentBreakerAccount = {
   reconnectCount30d: number;
 };
 
+type SocialHealthSettings = {
+  repeatOffenderThreshold: number;
+};
+
 async function fetchNeedsReconnect(): Promise<NeedsReconnectAccount[]> {
   const res = await fetch(`${BASE_URL}/api/admin/social-account-health/needs-reconnect`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load social account health list");
@@ -40,6 +49,27 @@ async function fetchFrequentBreakers(): Promise<FrequentBreakerAccount[]> {
   const res = await fetch(`${BASE_URL}/api/admin/social-account-health/frequent-breakers`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load frequent breakers list");
   return (await res.json()) as FrequentBreakerAccount[];
+}
+
+async function fetchSocialHealthSettings(): Promise<SocialHealthSettings> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load settings");
+  const all = (await res.json()) as Record<string, unknown>;
+  const s = all["admin.socialHealthSettings"] as SocialHealthSettings | undefined;
+  return s ?? { repeatOffenderThreshold: 3 };
+}
+
+async function saveSocialHealthSettings(value: SocialHealthSettings): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.socialHealthSettings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+    throw new Error(err.error ?? "Failed to save settings");
+  }
 }
 
 function formatTimestamp(iso: string | null): string {
@@ -61,9 +91,9 @@ function formatDuration(iso: string | null): string {
 }
 
 /** Badge shown when an account has broken more than once in 30 days. */
-function ReconnectCountBadge({ count }: { count: number }) {
+function ReconnectCountBadge({ count, threshold }: { count: number; threshold: number }) {
   if (count <= 1) return null;
-  const isHighFrequency = count >= 3;
+  const isHighFrequency = count >= threshold;
   return (
     <Badge
       className={
@@ -78,7 +108,72 @@ function ReconnectCountBadge({ count }: { count: number }) {
   );
 }
 
+function ThresholdSettings({ current, onSaved }: { current: SocialHealthSettings; onSaved: () => void }) {
+  const [threshold, setThreshold] = useState(String(current.repeatOffenderThreshold));
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const n = parseInt(threshold, 10);
+    if (isNaN(n) || n < 2 || n > 100) {
+      toast.error("Threshold must be a whole number between 2 and 100.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveSocialHealthSettings({ repeatOffenderThreshold: n });
+      toast.success(`Repeat-offender threshold updated to ${n}.`);
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Settings className="w-4 h-4" /> Repeat-Offender Threshold
+        </CardTitle>
+        <CardDescription>
+          When a social account breaks this many times in a rolling 30-day window, an escalation
+          Slack alert fires ("needs direct follow-up"). The alert fires only at the exact crossing —
+          not on every subsequent break. Changes take effect on the next health-check tick.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-end gap-3 max-w-xs">
+          <div className="flex-1">
+            <Label htmlFor="repeat-threshold" className="text-xs mb-1.5 block">
+              Breaks in 30 days before escalation
+            </Label>
+            <Input
+              id="repeat-threshold"
+              type="number"
+              min={2}
+              max={100}
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              className="w-28"
+            />
+          </div>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Current value: <span className="font-medium">{current.repeatOffenderThreshold}</span> breaks.
+          Min 2, max 100.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SocialAccountHealthPanel() {
+  const qc = useQueryClient();
+
   const { data: accounts, isLoading: loadingReconnect, error: errorReconnect } = useQuery({
     queryKey: ["admin-social-account-needs-reconnect"],
     queryFn: fetchNeedsReconnect,
@@ -91,6 +186,11 @@ export default function SocialAccountHealthPanel() {
     refetchInterval: 60_000,
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ["admin-social-health-settings"],
+    queryFn: fetchSocialHealthSettings,
+  });
+
   if (loadingReconnect || loadingBreakers) {
     return <div className="p-8 text-center text-muted-foreground">Loading social account health…</div>;
   }
@@ -98,14 +198,15 @@ export default function SocialAccountHealthPanel() {
     return <div className="p-8 text-center text-destructive">Failed to load social account health.</div>;
   }
 
+  const threshold = settings?.repeatOffenderThreshold ?? 3;
   const list = accounts ?? [];
   const breakers = frequentBreakers ?? [];
-  const repeatOffenders = list.filter((a) => a.reconnectCount30d >= 3);
+  const repeatOffenders = list.filter((a) => a.reconnectCount30d >= threshold);
 
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Facebook/Instagram accounts are re-checked periodically (see Background Jobs). When a
+        Facebook/Instagram, LinkedIn, and X accounts are re-checked periodically (see Background Jobs). When a
         vendor's connection stops validating — expired or revoked — it shows up here so admins
         don't have to rely on Slack history or a vendor complaint to find out.
       </p>
@@ -119,7 +220,7 @@ export default function SocialAccountHealthPanel() {
                 {list.length} account{list.length > 1 ? "s" : ""} currently need{list.length > 1 ? "" : "s"} reconnecting.
                 {repeatOffenders.length > 0 && (
                   <span className="ml-1 font-medium text-orange-700">
-                    {repeatOffenders.length} {repeatOffenders.length > 1 ? "are" : "is"} repeat offender{repeatOffenders.length > 1 ? "s" : ""} (3+ breaks in 30 days).
+                    {repeatOffenders.length} {repeatOffenders.length > 1 ? "are" : "is"} repeat offender{repeatOffenders.length > 1 ? "s" : ""} ({threshold}+ breaks in 30 days).
                   </span>
                 )}
               </div>
@@ -177,7 +278,7 @@ export default function SocialAccountHealthPanel() {
                     </TableCell>
                     <TableCell className="text-sm">
                       {a.accountName}
-                      <ReconnectCountBadge count={a.reconnectCount30d} />
+                      <ReconnectCountBadge count={a.reconnectCount30d} threshold={threshold} />
                     </TableCell>
                     <TableCell className="text-sm">
                       <Badge className="gap-1 bg-red-500/15 text-red-600 hover:bg-red-500/15">
@@ -240,7 +341,7 @@ export default function SocialAccountHealthPanel() {
                     <TableCell className="text-sm">
                       <Badge
                         className={
-                          a.reconnectCount30d >= 3
+                          a.reconnectCount30d >= threshold
                             ? "gap-1 bg-orange-500/15 text-orange-700 hover:bg-orange-500/15 border-orange-400/30"
                             : "gap-1 bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/10 border-yellow-400/30"
                         }
@@ -258,6 +359,14 @@ export default function SocialAccountHealthPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Section 3: Admin-configurable threshold */}
+      {settings && (
+        <ThresholdSettings
+          current={settings}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["admin-social-health-settings"] })}
+        />
+      )}
     </div>
   );
 }

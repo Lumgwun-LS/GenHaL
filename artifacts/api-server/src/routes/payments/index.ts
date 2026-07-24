@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, paymentsTable, ordersTable, webhookEventsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, paymentsTable, ordersTable, orderItemsTable, productsTable, webhookEventsTable } from "@workspace/db";
+import { eq, desc, and, sql } from "drizzle-orm";
+import { sendEmail } from "../../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../../lib/email-branding";
 import stripeRouter from "./stripe";
 import paystackRouter from "./paystack";
 import paypalRouter from "./paypal";
@@ -45,14 +47,41 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     return;
   }
 
-  const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
-  if (!payment) {
-    res.status(404).json({ error: "Payment not found" });
+  // Atomic claim: flip status to "refunding" only if currently "paid".
+  // This prevents two concurrent refund requests from both reaching the gateway.
+  const claimed = await db
+    .update(paymentsTable)
+    .set({ status: "refunding" as string, updatedAt: new Date() })
+    .where(and(eq(paymentsTable.id, paymentId), sql`${paymentsTable.status} = 'paid'`))
+    .returning();
+
+  if (claimed.length === 0) {
+    // Either not found or not in a refundable state — fetch to give a precise error.
+    const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
+    if (!payment) {
+      res.status(404).json({ error: "Payment not found" });
+    } else {
+      res.status(409).json({ error: `Cannot refund a payment with status '${payment.status}'` });
+    }
     return;
   }
-  if (payment.status !== "paid") {
-    res.status(409).json({ error: `Cannot refund a payment with status '${payment.status}'` });
-    return;
+
+  const payment = claimed[0];
+
+  // Ownership guard: only the owning vendor or a platform admin may issue refunds.
+  const { userId } = getAuth(req);
+  if (userId) {
+    const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!adminIds.includes(userId)) {
+      const { vendorsTable } = await import("@workspace/db");
+      const [caller] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+      if (!caller || caller.id !== payment.vendorId) {
+        // Revert the claim before rejecting.
+        await db.update(paymentsTable).set({ status: "paid", updatedAt: new Date() }).where(eq(paymentsTable.id, paymentId)).catch(() => null);
+        res.status(403).json({ error: "You are not authorised to refund this payment" });
+        return;
+      }
+    }
   }
 
   if (payment.provider === "stripe") {
@@ -208,13 +237,15 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     }
   } else if (payment.provider === "remita") {
     // Remita has no generic refund API — reversals must be requested directly
-    // with Remita/the bank and reconciled manually. Tell the admin clearly
-    // instead of pretending this succeeded or calling it "unknown provider".
+    // with Remita/the bank and reconciled manually. Revert the "refunding" claim
+    // so the admin can retry after manual reconciliation.
+    await db.update(paymentsTable).set({ status: "paid", updatedAt: new Date() }).where(eq(paymentsTable.id, paymentId)).catch(() => null);
     res.status(501).json({
       error: "Remita does not support refunds via API. Contact Remita support to reverse this transaction, then update the payment status manually.",
     });
     return;
   } else {
+    await db.update(paymentsTable).set({ status: "paid", updatedAt: new Date() }).where(eq(paymentsTable.id, paymentId)).catch(() => null);
     res.status(400).json({ error: `Unknown provider '${payment.provider}'` });
     return;
   }
@@ -226,18 +257,66 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     .where(eq(paymentsTable.id, paymentId));
 
   // Mark associated order as refunded if present
+  let customerEmail: string | null = null;
+  let customerName: string | null = null;
   if (payment.orderId) {
-    await db
-      .update(ordersTable)
-      .set({ paymentStatus: "refunded", updatedAt: new Date() })
+    const [order] = await db
+      .select({ paymentStatus: ordersTable.paymentStatus, customerEmail: ordersTable.customerEmail, customerName: ordersTable.customerName })
+      .from(ordersTable)
       .where(eq(ordersTable.id, payment.orderId));
+    if (order) {
+      customerEmail = order.customerEmail ?? null;
+      customerName = order.customerName ?? null;
+      await db
+        .update(ordersTable)
+        .set({ paymentStatus: "refunded", updatedAt: new Date() })
+        .where(eq(ordersTable.id, payment.orderId));
+
+      // Restore stock for each item in the refunded order.
+      try {
+        const items = await db
+          .select({ productId: orderItemsTable.productId, quantity: orderItemsTable.quantity })
+          .from(orderItemsTable)
+          .where(eq(orderItemsTable.orderId, payment.orderId));
+        for (const item of items) {
+          await db
+            .update(productsTable)
+            .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${item.quantity}` })
+            .where(eq(productsTable.id, item.productId));
+        }
+      } catch (stockErr) {
+        // Non-fatal — refund already succeeded; admin can reconcile stock manually.
+        console.error("[payments] refund stock restore failed:", stockErr);
+      }
+    }
   }
 
   await notifyVendorPaymentStatus(payment.vendorId, "refunded", payment.amount, payment.currency);
 
+  // Notify the customer by email (best-effort — don't fail the refund if email fails).
+  if (customerEmail) {
+    const amountStr = `${parseFloat(payment.amount).toFixed(2)} ${(payment.currency ?? "USD").toUpperCase()}`;
+    const bodyHtml = `
+      <p>Hello${customerName ? ` ${escapeHtml(customerName)}` : ""},</p>
+      <p>Your refund of <strong>${escapeHtml(amountStr)}</strong> for order #${escapeHtml(String(payment.orderId))} has been processed and is on its way back to your original payment method.</p>
+      <p>Depending on your bank, it may take 3–10 business days to appear.</p>
+      <p>If you have any questions, please contact the seller directly.</p>
+    `;
+    sendEmail({ to: customerEmail, subject: "Your refund has been processed", html: wrapVendorEmail({ bodyHtml }) }).catch((e) => {
+      console.warn("[payments] customer refund email failed:", e);
+    });
+  }
+
   console.info(`[payments] refund issued — id=${paymentId} provider=${payment.provider} reference=${payment.providerReference}`);
   res.json({ success: true, paymentId, status: "refunded" });
   } catch (err) {
+    // If the gateway call failed after we claimed the "refunding" status,
+    // revert back to "paid" so the admin can retry.
+    await db
+      .update(paymentsTable)
+      .set({ status: "paid", updatedAt: new Date() })
+      .where(and(eq(paymentsTable.id, paymentId), sql`${paymentsTable.status} = 'refunding'`))
+      .catch(() => { /* best-effort revert */ });
     const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
     const message = err instanceof Error ? err.message : "Refund failed";
     console.error("POST /payments/:id/refund error:", err);
@@ -250,6 +329,12 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
  * List recent webhook events for debugging. Supports ?provider=&limit= query params.
  */
 router.get("/payments/webhook-events", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdmin(userId)) {
+    res.status(403).json({ error: "Admin access required." });
+    return;
+  }
+
   const { provider, limit } = req.query as { provider?: string; limit?: string };
   const take = Math.min(parseInt(limit ?? "100") || 100, 500);
 

@@ -16,6 +16,9 @@
  */
 
 import { logger } from "./logger";
+import { recordJobRun } from "./job-run-status";
+
+const WEBHOOK_BUFFER_JOB_NAME = "webhook-buffer-drainer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,6 +141,17 @@ async function drain(): Promise<void> {
     logger.info({ drainedCount, stillPending: remaining.length }, "[webhook-buffer] Drain complete");
     slack(msg);
   }
+
+  // Record the drain outcome in the admin Background Jobs panel so admins can
+  // see that the drainer is alive and whether it is successfully clearing events.
+  await recordJobRun(WEBHOOK_BUFFER_JOB_NAME, {
+    success: remaining.length === 0 || drainedCount > 0,
+    checkedCount: batchSize,
+    affectedCount: drainedCount,
+    error: remaining.length > 0 && drainedCount === 0
+      ? `${remaining.length} event(s) stuck — DB may still be degraded`
+      : undefined,
+  }).catch(() => {}); // never let recordJobRun failure interrupt the drain cycle
 }
 
 /**

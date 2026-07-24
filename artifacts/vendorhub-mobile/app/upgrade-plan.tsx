@@ -344,7 +344,7 @@ export default function UpgradePlanScreen() {
                       : `Upgrade to ${plan.name}`
                   }
                   loading={!!thisGatewayBusy}
-                  disabled={anyInFlight || availableGateways.length === 0}
+                  disabled={anyInFlight}
                   style={styles.upgradeButtonWrap}
                 />
               ) : availableGateways.length === 0 ? (

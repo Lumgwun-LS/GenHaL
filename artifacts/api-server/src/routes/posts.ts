@@ -78,10 +78,21 @@ router.get("/posts", async (req, res): Promise<void> => {
     return;
   }
 
-  let posts = await db.select().from(postsTable).orderBy(desc(postsTable.createdAt));
-  if (!authed.isAdmin) posts = posts.filter((p) => p.vendorId === authed.vendorId);
+  // Push the mandatory vendor scope into the DB query so we never do a full
+  // table scan and pull another vendor's posts into memory.
+  const dbVendorId: number | null =
+    !authed.isAdmin
+      ? authed.vendorId                                  // always scoped to own vendor
+      : (params.success && params.data.vendorId) ? params.data.vendorId : null; // admin: use filter if provided
+
+  let posts = await db
+    .select()
+    .from(postsTable)
+    .where(dbVendorId !== null ? eq(postsTable.vendorId, dbVendorId) : undefined)
+    .orderBy(desc(postsTable.createdAt));
+
+  // Remaining in-memory filters (status, platform array contains) not expressible in a simple WHERE.
   if (params.success) {
-    if (params.data.vendorId) posts = posts.filter((p) => p.vendorId === params.data.vendorId);
     if (params.data.status) posts = posts.filter((p) => p.status === params.data.status);
     if (params.data.platform) posts = posts.filter((p) => p.platforms.includes(params.data.platform!));
   }
@@ -814,6 +825,8 @@ function serializePost(post: typeof postsTable.$inferSelect) {
     ...post,
     scheduledAt: post.scheduledAt ? post.scheduledAt.toISOString() : null,
     publishedAt: post.publishedAt ? post.publishedAt.toISOString() : null,
+    reminderSentAt: post.reminderSentAt ? post.reminderSentAt.toISOString() : null,
+    autoPublishFailedAt: post.autoPublishFailedAt ? post.autoPublishFailedAt.toISOString() : null,
     createdAt: post.createdAt.toISOString(),
   };
 }

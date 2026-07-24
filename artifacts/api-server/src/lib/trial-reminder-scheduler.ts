@@ -56,7 +56,7 @@ async function sendReminderEmail(vendor: { email: string; name: string }, subjec
   await sendEmail({ to: vendor.email, subject, html });
 }
 
-async function tickTrialReminders(): Promise<void> {
+async function tickTrialReminders(): Promise<{ checked: number; reminded: number }> {
   const now = new Date();
 
   // Vendors with an active future trial
@@ -189,6 +189,7 @@ async function tickTrialReminders(): Promise<void> {
   }
 
   logger.info({ vendorsChecked: vendors.length, reminded }, "[trial-reminders] Tick complete");
+  return { checked: vendors.length, reminded };
 }
 
 export function startTrialReminderScheduler(): void {
@@ -196,8 +197,8 @@ export function startTrialReminderScheduler(): void {
 
   const run = async () => {
     try {
-      await tickTrialReminders();
-      await recordJobRun(JOB_NAME, { success: true });
+      const counts = await tickTrialReminders();
+      await recordJobRun(JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.reminded });
     } catch (err) {
       logger.error({ err }, "[trial-reminders] Scheduler error");
       await recordJobRun(JOB_NAME, { success: false, error: err instanceof Error ? err.message : String(err) });

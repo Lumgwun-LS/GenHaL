@@ -394,6 +394,10 @@ export default function CreatePost() {
       toast.error("Write a caption first so the video matches your post");
       return;
     }
+    if (caption.length > MAX_SCENE_PROMPT_LEN) {
+      toast.error(`Caption is too long (${caption.length}/${MAX_SCENE_PROMPT_LEN} characters) — shorten it before generating scenes`);
+      return;
+    }
     try {
       const result = await generateVideoScenes.mutateAsync({ data: { vendorId: 1, prompt: caption, sceneCount } });
       const failed = result.scenes.find((s) => s.status === "failed");

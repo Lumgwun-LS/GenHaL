@@ -63,6 +63,11 @@ function serializeVendor<T extends { createdAt: Date }>(vendor: T): Omit<T, "cre
 }
 
 router.get("/vendors/stats", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
   const vendors = await db.select().from(vendorsTable);
   const total = vendors.length;
   const active = vendors.filter((v) => v.status === "active").length;
@@ -81,6 +86,11 @@ router.get("/vendors/stats", async (req, res): Promise<void> => {
 });
 
 router.get("/vendors", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
   const params = ListVendorsQueryParams.safeParse(req.query);
   let query = db.select().from(vendorsTable).orderBy(desc(vendorsTable.createdAt)).$dynamic();
   if (params.success && params.data.status) {
@@ -97,7 +107,15 @@ router.get("/vendors", async (req, res): Promise<void> => {
   res.json(ListVendorsResponse.parse(filtered.map(serializeVendor)));
 });
 
+// Admin-only raw vendor creation. The standard signup path for end-users is
+// POST /vendors/onboarding, which derives identity from the Clerk session.
+// This route is preserved for admin-side provisioning only.
 router.post("/vendors", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) { res.status(403).json({ error: "Admin only" }); return; }
+
   const parsed = CreateVendorBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -195,6 +213,18 @@ router.get("/vendors/:id", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, params.data.id));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  // Vendor profiles contain sensitive data (billing status, tier, contact info).
+  // Only the owner or a platform admin may read their own vendor record.
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+  if (vendor.clerkUserId !== userId && !isAdmin) {
+    res.status(403).json({ error: "You do not have permission to view this vendor." });
+    return;
+  }
+
   res.json(GetVendorResponse.parse(serializeVendor(vendor)));
 });
 
@@ -228,6 +258,14 @@ router.patch("/vendors/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/vendors/:id", async (req, res): Promise<void> => {
+  // Admin-only: vendor-initiated self-deletion goes through account-deletion.ts
+  // which runs billing/balance checks, archives banned identifiers, and removes
+  // the Clerk user. This route is a raw cascade delete reserved for admins only.
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) { res.status(403).json({ error: "Admin only" }); return; }
+
   const params = DeleteVendorParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [vendor] = await db.delete(vendorsTable).where(eq(vendorsTable.id, params.data.id)).returning();

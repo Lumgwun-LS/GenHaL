@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getPlatformCredentials, resolveGatewayField } from "../../lib/platform-gateways";
 import { getPayPalAccessToken, paypalBaseUrl } from "../../lib/paypal-catalog";
+import { findActivePendingPayment } from "../../lib/payment-guard";
 
 const router = Router();
 
@@ -18,17 +20,32 @@ const router = Router();
  * Body: { orderId?, vendorId, amount, currency, returnUrl, cancelUrl, description? }
  */
 router.post("/payments/paypal/checkout", async (req, res): Promise<void> => {
+  // Require Clerk auth — vendor-initiated checkout only.
+  // Public customer-side PayPal flows go through public-post-links.ts chargeProvider().
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+
+  // Resolve the vendor from the Clerk session (not from the request body) for non-admins.
+  const [authedVendor] = await db.select({ id: vendorsTable.id })
+    .from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  if (!authedVendor && !isAdmin) {
+    res.status(403).json({ error: "No vendor account associated with this user" });
+    return;
+  }
+
   const {
     orderId,
-    vendorId,
-    amount,
+    vendorId: bodyVendorId,
+    amount: bodyAmount,
     currency = "USD",
     returnUrl,
     cancelUrl,
     description,
   } = req.body as {
     orderId?: number;
-    vendorId: number;
+    vendorId?: number;
     amount: number;
     currency?: string;
     returnUrl: string;
@@ -36,14 +53,44 @@ router.post("/payments/paypal/checkout", async (req, res): Promise<void> => {
     description?: string;
   };
 
-  if (!vendorId || !amount || !returnUrl || !cancelUrl) {
-    res.status(400).json({ error: "vendorId, amount, returnUrl and cancelUrl are required" });
+  // Non-admins always use their own vendorId — ignore any vendorId in the body.
+  const vendorId: number = isAdmin ? (bodyVendorId ?? authedVendor!.id) : authedVendor!.id;
+
+  if (!bodyAmount || !returnUrl || !cancelUrl) {
+    res.status(400).json({ error: "amount, returnUrl and cancelUrl are required" });
     return;
   }
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
   if (!vendor.paypalEnabled) { res.status(403).json({ error: "PayPal is not enabled for this vendor" }); return; }
+
+  // Guard: if tied to a specific order, ensure it still exists and is payable.
+  // Also use the server-stored total — never trust the client-supplied amount for
+  // order-linked checkouts (prevents underpayment attacks).
+  let amount = bodyAmount;
+  if (orderId) {
+    // Dedup: return an existing pending checkout session if one was opened recently.
+    const existing = await findActivePendingPayment(orderId);
+    if (existing?.checkoutUrl) {
+      res.json({ paymentId: existing.id, reference: existing.providerReference, url: existing.checkoutUrl });
+      return;
+    }
+
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    // Verify the order belongs to this vendor (admins may access any order).
+    if (!isAdmin && order.vendorId !== vendorId) {
+      res.status(403).json({ error: "You do not have permission to pay for this order" });
+      return;
+    }
+    if (order.status !== "pending") {
+      res.status(409).json({ error: "This order is no longer available for payment." });
+      return;
+    }
+    // Override with the authoritative amount from the DB.
+    amount = parseFloat(order.totalAmount);
+  }
 
   const creds = await getPlatformCredentials("paypal");
   if (!creds?.clientId || !creds?.clientSecret) {

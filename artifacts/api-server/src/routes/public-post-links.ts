@@ -14,7 +14,7 @@
  * Prices are always re-read from the DB — never trusted from the client.
  */
 import { Router, type IRouter } from "express";
-import { and, eq, inArray, desc } from "drizzle-orm";
+import { and, eq, gte, inArray, desc, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import {
   db,
@@ -537,6 +537,38 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
     })),
   );
 
+  // Atomically decrement stock for every item in a transaction.
+  // The WHERE stock_quantity >= quantity guard means two concurrent checkouts
+  // can't both succeed for the last unit — one will get 0 rows returned and
+  // we cancel the order before it ever reaches the payment gateway.
+  try {
+    await db.transaction(async (tx) => {
+      for (const item of orderItems) {
+        if (item.quantity <= 0) continue; // non-stock items
+        const [dec] = await tx
+          .update(productsTable)
+          .set({ stockQuantity: sql`${productsTable.stockQuantity} - ${item.quantity}` })
+          .where(and(eq(productsTable.id, item.productId), gte(productsTable.stockQuantity, item.quantity)))
+          .returning({ id: productsTable.id });
+        if (!dec) {
+          // Another concurrent request took the remaining stock between our
+          // initial read and this atomic UPDATE — surface a clear error.
+          throw new Error(`STOCK_DEPLETED:${item.productName}`);
+        }
+      }
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("STOCK_DEPLETED:")) {
+      const productName = err.message.slice("STOCK_DEPLETED:".length);
+      // Clean up the order we already created
+      await db.delete(orderItemsTable).where(eq(orderItemsTable.orderId, order!.id)).catch(() => null);
+      await db.delete(ordersTable).where(eq(ordersTable.id, order!.id)).catch(() => null);
+      res.status(409).json({ error: `${productName} just sold out — please try again or choose a different quantity.` });
+      return;
+    }
+    throw err;
+  }
+
   const redirectUrl = shopLinkUrl(req.params.token, order!.id);
   if (!redirectUrl) {
     res.status(503).json({ error: "Checkout is temporarily unavailable." });
@@ -852,6 +884,27 @@ router.post("/public/post-links/:token/orders/:orderId/cancel", async (req, res)
     .update(ordersTable)
     .set({ status: "cancelled", paymentStatus: "cancelled" })
     .where(eq(ordersTable.id, order.id));
+
+  // Restore stock for every item in the cancelled order — stock was decremented
+  // at checkout time (before the payment attempt) so a failed or abandoned
+  // checkout doesn't permanently consume inventory.
+  try {
+    const items = await db
+      .select({ productId: orderItemsTable.productId, quantity: orderItemsTable.quantity })
+      .from(orderItemsTable)
+      .where(eq(orderItemsTable.orderId, order.id));
+
+    for (const item of items) {
+      await db
+        .update(productsTable)
+        .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${item.quantity}` })
+        .where(eq(productsTable.id, item.productId));
+    }
+  } catch (restoreErr) {
+    // Log but don't fail the cancel — the order is already cancelled; stock
+    // reconciliation can be done manually if this ever fires.
+    console.error("[post-links cancel] Failed to restore stock for cancelled order:", restoreErr);
+  }
 
   res.json({ success: true, orderId: order.id });
 });

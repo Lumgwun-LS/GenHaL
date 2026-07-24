@@ -43,13 +43,14 @@ async function reserveReminder(itemType: "post" | "payment", itemId: number, ven
   return Boolean(reserved);
 }
 
-async function remindPendingPosts(): Promise<void> {
+async function remindPendingPosts(): Promise<{ checked: number; sent: number }> {
   const overdue = await db
     .select({ post: postsTable, vendor: vendorsTable })
     .from(postsTable)
     .innerJoin(vendorsTable, eq(postsTable.vendorId, vendorsTable.id))
     .where(and(eq(postsTable.status, "scheduled"), lt(postsTable.scheduledAt, sql`now()`)));
 
+  let sent = 0;
   for (const { post, vendor } of overdue) {
     if (!vendor.email) continue;
     try {
@@ -68,16 +69,16 @@ async function remindPendingPosts(): Promise<void> {
       });
 
       const result = await sendEmail({ to: vendor.email, subject: "A scheduled post is waiting on you", html });
-      if (result.status !== "sent") {
-        logger.warn({ vendorId: vendor.id, postId: post.id, reason: result.error }, "[pending-reminders] Post reminder email did not send");
-      }
+      if (result.status === "sent") sent++;
+      else logger.warn({ vendorId: vendor.id, postId: post.id, reason: result.error }, "[pending-reminders] Post reminder email did not send");
     } catch (err) {
       logger.error({ err, postId: post.id }, "[pending-reminders] Failed to process pending post reminder");
     }
   }
+  return { checked: overdue.length, sent };
 }
 
-async function remindPendingPayments(): Promise<void> {
+async function remindPendingPayments(): Promise<{ checked: number; sent: number }> {
   const cutoff = new Date(Date.now() - PAYMENT_PENDING_THRESHOLD_MS);
   const stale = await db
     .select({ payment: paymentsTable, vendor: vendorsTable })
@@ -85,6 +86,7 @@ async function remindPendingPayments(): Promise<void> {
     .innerJoin(vendorsTable, eq(paymentsTable.vendorId, vendorsTable.id))
     .where(and(eq(paymentsTable.status, "pending"), lt(paymentsTable.createdAt, cutoff)));
 
+  let sent = 0;
   for (const { payment, vendor } of stale) {
     if (!vendor.email) continue;
     try {
@@ -103,13 +105,13 @@ async function remindPendingPayments(): Promise<void> {
       });
 
       const result = await sendEmail({ to: vendor.email, subject: "Your pending payment needs attention", html });
-      if (result.status !== "sent") {
-        logger.warn({ vendorId: vendor.id, paymentId: payment.id, reason: result.error }, "[pending-reminders] Payment reminder email did not send");
-      }
+      if (result.status === "sent") sent++;
+      else logger.warn({ vendorId: vendor.id, paymentId: payment.id, reason: result.error }, "[pending-reminders] Payment reminder email did not send");
     } catch (err) {
       logger.error({ err, paymentId: payment.id }, "[pending-reminders] Failed to process pending payment reminder");
     }
   }
+  return { checked: stale.length, sent };
 }
 
 function truncate(s: string, max: number): string {
@@ -119,15 +121,21 @@ function truncate(s: string, max: number): string {
 /** One tick: check both reminder passes and record the outcome. Exported for unit tests. */
 export async function tick(): Promise<void> {
   const errors: string[] = [];
+  let totalChecked = 0;
+  let totalSent = 0;
   try {
-    await remindPendingPosts();
+    const r = await remindPendingPosts();
+    totalChecked += r.checked;
+    totalSent += r.sent;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     errors.push(`post reminder pass: ${message}`);
     logger.error({ err }, "[pending-reminders] Unhandled error in post reminder pass");
   }
   try {
-    await remindPendingPayments();
+    const r = await remindPendingPayments();
+    totalChecked += r.checked;
+    totalSent += r.sent;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     errors.push(`payment reminder pass: ${message}`);
@@ -141,6 +149,8 @@ export async function tick(): Promise<void> {
   await recordJobRun(PENDING_REMINDERS_JOB_NAME, {
     success: errors.length === 0,
     error: errors.length > 0 ? errors.join("; ") : undefined,
+    checkedCount: totalChecked,
+    affectedCount: totalSent,
   });
 }
 

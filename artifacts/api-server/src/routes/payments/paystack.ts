@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import crypto from "crypto";
 import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { resolvePaystackKey } from "../../lib/vendor-keys";
+import { findActivePendingPayment } from "../../lib/payment-guard";
 
 const router = Router();
 
@@ -17,17 +19,31 @@ const PAYSTACK_BASE = "https://api.paystack.co";
  * Body: { orderId, vendorId, amount, currency, email, callbackUrl }
  */
 router.post("/payments/paystack/initialize", async (req, res): Promise<void> => {
+  // Require Clerk auth — vendor-initiated checkout only.
+  // Public customer-side Paystack flows go through public-post-links.ts chargeProvider().
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+
+  const [authedVendor] = await db.select({ id: vendorsTable.id })
+    .from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  if (!authedVendor && !isAdmin) {
+    res.status(403).json({ error: "No vendor account associated with this user" });
+    return;
+  }
+
   const {
     orderId,
-    vendorId,
-    amount,
+    vendorId: bodyVendorId,
+    amount: bodyAmount,
     currency = "NGN",
     email,
     callbackUrl,
     description,
   } = req.body as {
     orderId?: number;
-    vendorId: number;
+    vendorId?: number;
     amount: number;
     currency?: string;
     email: string;
@@ -35,9 +51,38 @@ router.post("/payments/paystack/initialize", async (req, res): Promise<void> => 
     description?: string;
   };
 
-  if (!vendorId || !amount || !email) {
-    res.status(400).json({ error: "vendorId, amount and email are required" });
+  // Non-admins always use their own vendorId — ignore any vendorId in the body.
+  const vendorId: number = isAdmin ? (bodyVendorId ?? authedVendor!.id) : authedVendor!.id;
+
+  // If tied to an order, verify ownership and use the DB-authoritative amount.
+  let amount = bodyAmount;
+  if (orderId) {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (!isAdmin && order.vendorId !== vendorId) {
+      res.status(403).json({ error: "You do not have permission to pay for this order" });
+      return;
+    }
+    if (order.status !== "pending") {
+      res.status(409).json({ error: "This order is no longer available for payment." });
+      return;
+    }
+    amount = parseFloat(order.totalAmount);
+  }
+
+  if (!amount || !email) {
+    res.status(400).json({ error: "amount and email are required" });
     return;
+  }
+
+  // Guard: if this order already has a recent pending payment, return it
+  // immediately instead of creating a duplicate checkout session.
+  if (orderId) {
+    const existing = await findActivePendingPayment(orderId);
+    if (existing?.checkoutUrl) {
+      res.json({ paymentId: existing.id, reference: existing.providerReference, url: existing.checkoutUrl });
+      return;
+    }
   }
 
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));

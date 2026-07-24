@@ -38,7 +38,7 @@ export const POST_SCHEDULER_JOB_NAME = "post-scheduler";
  * so tests can exercise the DB-exception fallback / revert-and-notify path
  * directly, without needing to fake setInterval or wait for the boot-time run.
  */
-export async function publishDuePosts(): Promise<void> {
+export async function publishDuePosts(): Promise<{ checked: number; published: number }> {
   const due = await db
     .select({ id: postsTable.id, vendorId: postsTable.vendorId, caption: postsTable.caption })
     .from(postsTable)
@@ -50,10 +50,11 @@ export async function publishDuePosts(): Promise<void> {
       ),
     );
 
-  if (due.length === 0) return;
+  if (due.length === 0) return { checked: 0, published: 0 };
 
   logger.info({ count: due.length }, "[post-scheduler] Found due scheduled posts to auto-publish");
 
+  let published = 0;
   for (const { id, vendorId, caption } of due) {
     try {
       // Atomic claim — only succeeds if still 'scheduled' at the moment we act.
@@ -73,6 +74,7 @@ export async function publishDuePosts(): Promise<void> {
       const { anySucceeded } = await executeClaimedPublish(claimed, { auto: true });
       if (anySucceeded) {
         logger.info({ postId: id }, "[post-scheduler] Auto-published scheduled post");
+        published++;
       } else {
         // executeClaimedPublish already reverted the post to "approved" (with
         // autoPublishFailed set) and notified the vendor in-app + by email.
@@ -84,7 +86,7 @@ export async function publishDuePosts(): Promise<void> {
       // row itself (e.g. a transient DB error). Without this, the post would be
       // stuck in "publishing" forever, since the query above only ever looks for
       // status = 'scheduled'. Guard the revert on status still being "publishing"
-      // so we don't clobber a state some other path already moved it to.
+      // so we don't clobber a state some other path already moved it out of.
       const [reverted] = await db
         .update(postsTable)
         .set({ status: "approved", autoPublishFailed: true })
@@ -103,12 +105,13 @@ export async function publishDuePosts(): Promise<void> {
       }
     }
   }
+  return { checked: due.length, published };
 }
 
 export async function tick(): Promise<void> {
   try {
-    await publishDuePosts();
-    await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: true });
+    const counts = await publishDuePosts();
+    await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.published });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordJobRun(POST_SCHEDULER_JOB_NAME, { success: false, error: message });

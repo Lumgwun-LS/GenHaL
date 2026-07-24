@@ -408,6 +408,11 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
           .set({
             subscriptionTier: upgradeTier,
             ...(subscriptionId && { stripeSubscriptionId: subscriptionId }),
+            // Clear any billing block set by a prior failed invoice so the
+            // vendor gets immediate access after a successful upgrade checkout.
+            // invoice.paid normally clears this too, but for trial subscriptions
+            // (0 immediate charge) that event may be delayed or absent.
+            billingBlocked: false,
             updatedAt: new Date(),
           })
           .where(eq(vendorsTable.id, upgradeVendorId))
@@ -479,7 +484,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
         `[stripe webhook] addon credits activated — addonCreditId=${addonCreditId} vendor=${addon.vendorId} resource=${addon.resource} units=${addon.unitsGranted} session=${session.id}`,
       );
 
-      // Send in-app notification to vendor
+      // Send in-app notification and email to vendor
       try {
         await db.insert(vendorNotificationsTable).values({
           vendorId: addon.vendorId,
@@ -488,6 +493,35 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
         });
       } catch (notifyErr) {
         console.warn("[stripe webhook] Failed to insert addon notification:", notifyErr);
+      }
+      try {
+        const [addonVendor] = await db
+          .select({ email: vendorsTable.email, name: vendorsTable.name })
+          .from(vendorsTable)
+          .where(eq(vendorsTable.id, addon.vendorId))
+          .limit(1);
+        if (addonVendor?.email) {
+          const bodyHtml = `
+            <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Add-on credits activated</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Hi ${escapeHtml(addonVendor.name ?? "there")}, your add-on purchase of
+              <strong>${escapeHtml(String(addon.unitsGranted))} extra ${escapeHtml(addon.resource)} credits</strong>
+              has been confirmed and is now active.
+            </p>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              The credits have been added to your balance and are ready to use immediately from your dashboard.
+            </p>`;
+          const emailResult = await sendEmail({
+            to: addonVendor.email,
+            subject: "Your add-on credits are active",
+            html: wrapVendorEmail({ bodyHtml }),
+          });
+          if (emailResult.status !== "sent") {
+            console.warn(`[stripe webhook] addon activation email did not send — reason=${emailResult.error}`);
+          }
+        }
+      } catch (emailErr) {
+        console.warn("[stripe webhook] Failed to send addon activation email:", emailErr);
       }
     } else {
       // ── Regular order checkout path ─────────────────────────────────
@@ -1131,7 +1165,7 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
         `[paystack webhook] addon credits activated — addonCreditId=${addonCreditId} vendor=${addon.vendorId} resource=${addon.resource} units=${addon.unitsGranted} reference=${reference}`,
       );
 
-      // Send in-app notification to vendor
+      // Send in-app notification and email to vendor
       try {
         await db.insert(vendorNotificationsTable).values({
           vendorId: addon.vendorId,
@@ -1140,6 +1174,35 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
         });
       } catch (notifyErr) {
         console.warn("[paystack webhook] Failed to insert addon notification:", notifyErr);
+      }
+      try {
+        const [addonVendor] = await db
+          .select({ email: vendorsTable.email, name: vendorsTable.name })
+          .from(vendorsTable)
+          .where(eq(vendorsTable.id, addon.vendorId))
+          .limit(1);
+        if (addonVendor?.email) {
+          const bodyHtml = `
+            <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Add-on credits activated</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Hi ${escapeHtml(addonVendor.name ?? "there")}, your add-on purchase of
+              <strong>${escapeHtml(String(addon.unitsGranted))} extra ${escapeHtml(addon.resource)} credits</strong>
+              has been confirmed and is now active.
+            </p>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              The credits have been added to your balance and are ready to use immediately from your dashboard.
+            </p>`;
+          const emailResult = await sendEmail({
+            to: addonVendor.email,
+            subject: "Your add-on credits are active",
+            html: wrapVendorEmail({ bodyHtml }),
+          });
+          if (emailResult.status !== "sent") {
+            console.warn(`[paystack webhook] addon activation email did not send — reason=${emailResult.error}`);
+          }
+        }
+      } catch (emailErr) {
+        console.warn("[paystack webhook] Failed to send addon activation email:", emailErr);
       }
 
       return { matched: true };

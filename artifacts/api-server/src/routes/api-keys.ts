@@ -8,13 +8,26 @@
  */
 import { Router } from "express";
 import { randomBytes, createHash } from "node:crypto";
+import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { externalApiKeysTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 const router = Router();
 
+function isAdmin(userId: string): boolean {
+  return (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean).includes(userId);
+}
+
+function requireAdmin(req: import("express").Request, res: import("express").Response): string | null {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return null; }
+  return userId;
+}
+
 router.post("/api-keys", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const { name, source = "awajimaa" } = req.body as { name?: string; source?: string };
   if (!name) return res.status(400).json({ error: "name is required" });
 
@@ -36,7 +49,8 @@ router.post("/api-keys", async (req, res) => {
   });
 });
 
-router.get("/api-keys", async (_req, res) => {
+router.get("/api-keys", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const keys = await db
     .select({
       id: externalApiKeysTable.id,
@@ -52,6 +66,7 @@ router.get("/api-keys", async (_req, res) => {
 });
 
 router.delete("/api-keys/:id", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const id = Number(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
 

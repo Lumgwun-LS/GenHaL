@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -211,11 +211,14 @@ type AuditLogPage = {
 
 const AUDIT_LOG_PAGE_SIZE = 50;
 
-async function fetchAuditLog(page: number, adminSearch?: string): Promise<AuditLogPage> {
+async function fetchAuditLog(page: number, adminSearch?: string, vendorId?: number): Promise<AuditLogPage> {
   const offset = (page - 1) * AUDIT_LOG_PAGE_SIZE;
   const qs = new URLSearchParams({ limit: String(AUDIT_LOG_PAGE_SIZE), offset: String(offset) });
   if (adminSearch && adminSearch.trim()) {
     qs.set("adminSearch", adminSearch.trim());
+  }
+  if (vendorId !== undefined) {
+    qs.set("vendorId", String(vendorId));
   }
   const res = await fetch(`${BASE_URL}/api/admin/audit-log?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load audit log");
@@ -1980,6 +1983,8 @@ export default function AdminPanel() {
   const [auditAfter, setAuditAfter] = useState("");
   const [auditBefore, setAuditBefore] = useState("");
   const [auditPage, setAuditPage] = useState(1);
+  // Server-side vendor filter — set via viewVendorAuditLog() from the vendor table.
+  const [auditVendorFilter, setAuditVendorFilter] = useState<{ id: number; name: string } | null>(null);
 
   // Support deep-linking: /admin?tab=infrastructure-billing opens that tab directly.
   const [activeAdminTab, setActiveAdminTab] = useState(() => {
@@ -2045,8 +2050,8 @@ export default function AdminPanel() {
   });
 
   const { data: auditLogPage, isLoading: auditLoading } = useQuery({
-    queryKey: ["admin-audit-log", auditPage, auditAdminSearch],
-    queryFn: () => fetchAuditLog(auditPage, auditAdminSearch),
+    queryKey: ["admin-audit-log", auditPage, auditAdminSearch, auditVendorFilter?.id],
+    queryFn: () => fetchAuditLog(auditPage, auditAdminSearch, auditVendorFilter?.id),
     enabled: isAdmin,
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
@@ -2134,13 +2139,17 @@ export default function AdminPanel() {
 
   const filteredAuditLog = useMemo(() => {
     if (!auditLog) return auditLog;
-    const search = auditVendorSearch.trim().toLowerCase();
     const afterDate = auditAfter ? new Date(auditAfter) : null;
     const beforeDate = auditBefore ? new Date(new Date(auditBefore).getTime() + 24 * 60 * 60 * 1000 - 1) : null;
     return auditLog.filter((entry) => {
-      if (search) {
-        const name = (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase();
-        if (!name.includes(search)) return false;
+      // When auditVendorFilter is active, the server already filtered by exact vendorId —
+      // don't re-apply the free-text name filter on top of it.
+      if (!auditVendorFilter) {
+        const search = auditVendorSearch.trim().toLowerCase();
+        if (search) {
+          const name = (entry.vendorName ?? `Vendor #${entry.vendorId}`).toLowerCase();
+          if (!name.includes(search)) return false;
+        }
       }
       if (auditFieldFilter !== AUDIT_FIELD_ANY && entry.field !== auditFieldFilter) return false;
       const changedAt = new Date(entry.changedAt);
@@ -2148,10 +2157,10 @@ export default function AdminPanel() {
       if (beforeDate && !isNaN(beforeDate.getTime()) && changedAt > beforeDate) return false;
       return true;
     });
-  }, [auditLog, auditVendorSearch, auditFieldFilter, auditAfter, auditBefore]);
+  }, [auditLog, auditVendorSearch, auditVendorFilter, auditFieldFilter, auditAfter, auditBefore]);
 
   const auditFiltersActive =
-    auditVendorSearch.trim() !== "" || auditAdminSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
+    auditVendorFilter !== null || auditVendorSearch.trim() !== "" || auditAdminSearch.trim() !== "" || auditFieldFilter !== AUDIT_FIELD_ANY || auditAfter !== "" || auditBefore !== "";
 
   const filteredMessageHistory = useMemo(() => {
     if (!messageHistory) return messageHistory;
@@ -2169,6 +2178,13 @@ export default function AdminPanel() {
     setMessageHistoryVendorFilter({ id: vendor.id, name: vendor.name });
     setMessageVendorSearch("");
     setActiveAdminTab("messages");
+  }
+
+  function viewVendorAuditLog(vendor: { id: number; name: string }) {
+    setAuditVendorFilter({ id: vendor.id, name: vendor.name });
+    setAuditVendorSearch("");
+    setAuditPage(1);
+    setActiveAdminTab("audit");
   }
 
   const filteredPlanChangeHistory = useMemo(() => {
@@ -2513,6 +2529,15 @@ export default function AdminPanel() {
                                 data-testid={`button-view-message-history-${vendor.id}`}
                               >
                                 <ClipboardList className="w-3.5 h-3.5" /> History
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                onClick={() => viewVendorAuditLog(vendor)}
+                                data-testid={`button-view-audit-log-${vendor.id}`}
+                              >
+                                <ClipboardList className="w-3.5 h-3.5" /> Audit
                               </Button>
                             </div>
                           </TableCell>
@@ -3073,12 +3098,33 @@ export default function AdminPanel() {
                     onChange={(e) => setAuditBefore(e.target.value)}
                   />
                 </div>
+                {auditVendorFilter && (
+                  <>
+                    <Badge
+                      variant="secondary"
+                      className="h-8 flex items-center gap-1.5 px-3 text-xs"
+                      data-testid="badge-audit-vendor-filter"
+                    >
+                      Vendor: {auditVendorFilter.name} (ID {auditVendorFilter.id})
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8"
+                      onClick={() => { setAuditVendorFilter(null); setAuditPage(1); }}
+                      data-testid="button-clear-audit-vendor-filter"
+                    >
+                      View all vendors
+                    </Button>
+                  </>
+                )}
                 {auditFiltersActive && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-xs h-8"
                     onClick={() => {
+                      setAuditVendorFilter(null);
                       setAuditVendorSearch("");
                       setAuditAdminSearch("");
                       setAuditFieldFilter(AUDIT_FIELD_ANY);

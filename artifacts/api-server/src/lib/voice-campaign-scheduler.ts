@@ -29,7 +29,7 @@ const E164_RE = /^\+[1-9]\d{1,14}$/;
 // Name this job's state is recorded under in job_run_status, for the admin panel.
 export const VOICE_CAMPAIGN_SCHEDULER_JOB_NAME = "voice-campaign-scheduler";
 
-async function launchDueCampaigns(): Promise<void> {
+async function launchDueCampaigns(): Promise<{ checked: number; launched: number }> {
   const due = await db
     .select()
     .from(voiceCampaignsTable)
@@ -41,10 +41,11 @@ async function launchDueCampaigns(): Promise<void> {
       ),
     );
 
-  if (due.length === 0) return;
+  if (due.length === 0) return { checked: 0, launched: 0 };
 
   logger.info({ count: due.length }, "[voice-scheduler] Found due campaigns to auto-launch");
 
+  let launched = 0;
   for (const campaign of due) {
     try {
       // Atomic transition — only succeeds if still 'scheduled' at the moment we act.
@@ -72,16 +73,18 @@ async function launchDueCampaigns(): Promise<void> {
 
       logger.info({ campaignId: campaign.id, vendorId: campaign.vendorId, count: callable.length }, "[voice-scheduler] Auto-launching campaign");
       await runCampaignCalls(transitioned, campaign.vendorId, callable);
+      launched++;
     } catch (err) {
       logger.error({ err, campaignId: campaign.id }, "[voice-scheduler] Error auto-launching campaign — will retry next tick");
     }
   }
+  return { checked: due.length, launched };
 }
 
 export async function tick(): Promise<void> {
   try {
-    await launchDueCampaigns();
-    await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: true });
+    const counts = await launchDueCampaigns();
+    await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.launched });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordJobRun(VOICE_CAMPAIGN_SCHEDULER_JOB_NAME, { success: false, error: message });
@@ -89,8 +92,35 @@ export async function tick(): Promise<void> {
   }
 }
 
+/**
+ * On startup, recover any campaigns that were left in "running" status because
+ * the server crashed or restarted mid-campaign. Those campaigns will never be
+ * auto-launched again (the scheduler only picks up "scheduled"), so we
+ * transition them to "failed" so vendors and admins can see what happened.
+ * Individual call rows (voice_campaign_calls) retain their pre-crash statuses;
+ * the voice-backfill scheduler will reconcile any stuck "ringing" entries.
+ */
+async function recoverZombieCampaigns(): Promise<void> {
+  try {
+    const zombies = await db
+      .update(voiceCampaignsTable)
+      .set({ status: "failed" })
+      .where(eq(voiceCampaignsTable.status, "running"))
+      .returning({ id: voiceCampaignsTable.id });
+    if (zombies.length > 0) {
+      logger.warn(
+        { count: zombies.length, ids: zombies.map((z) => z.id) },
+        "[voice-scheduler] Recovered zombie campaigns stuck in 'running' — marked as 'failed'",
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, "[voice-scheduler] Failed to recover zombie campaigns on startup");
+  }
+}
+
 /** Starts the scheduled-campaign launcher: checks every 5 minutes for due campaigns. */
 export function startVoiceCampaignScheduler(): void {
+  recoverZombieCampaigns(); // fix any campaigns left running by a prior crash
   setInterval(() => { tick().catch(() => {}); }, 5 * 60 * 1000);
   tick().catch(() => {}); // run once on boot too, in case a campaign was already due
   logger.info("[voice-scheduler] Scheduled campaign launcher started — checks every 5 minutes");

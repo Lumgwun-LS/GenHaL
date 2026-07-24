@@ -17,6 +17,8 @@ import { startRecurringExpenseScheduler } from "./lib/recurring-expenses";
 import { startVoidErrorCheckScheduler } from "./lib/void-error-check-scheduler";
 import { startTrialReminderScheduler } from "./lib/trial-reminder-scheduler";
 import { startBillingThresholdScheduler } from "./lib/billing-threshold-scheduler";
+import { startOrderExpiryScheduler } from "./lib/order-expiry-scheduler";
+import { startWebhookEventsCleanup } from "./lib/webhook-events-cleanup";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 
 const rawPort = process.env["PORT"];
@@ -58,4 +60,6 @@ app.listen(port, (err) => {
   startVoidErrorCheckScheduler();
   startTrialReminderScheduler();
   startBillingThresholdScheduler();
+  startOrderExpiryScheduler();
+  startWebhookEventsCleanup();
 });

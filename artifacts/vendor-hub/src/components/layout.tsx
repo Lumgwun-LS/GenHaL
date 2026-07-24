@@ -259,7 +259,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-4 border-t flex items-center gap-3">
-          <UserButton afterSignOutUrl="/" appearance={{ elements: { userButtonAvatarBox: "w-8 h-8" } }} />
+          <UserButton {...{ afterSignOutUrl: "/" } as object} appearance={{ elements: { userButtonAvatarBox: "w-8 h-8" } }} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">My Account</p>
           </div>

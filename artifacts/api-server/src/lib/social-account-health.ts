@@ -27,6 +27,7 @@
  */
 import { eq, inArray, and, gte, count } from "drizzle-orm";
 import { db, socialAccountsTable, vendorsTable, vendorNotificationsTable, socialAccountReconnectLogTable } from "@workspace/db";
+import { getSiteContentBlock } from "./site-content";
 import { decrypt, encrypt } from "./encryption";
 import { validateMetaAccessToken } from "./meta";
 import { fetchLinkedInProfile, refreshLinkedInAccessToken, isLinkedInAuthError } from "./linkedin";
@@ -41,12 +42,17 @@ import { logger } from "./logger";
 const OAUTH_CONNECTED_VIA = ["oauth_meta", "oauth_linkedin", "oauth_twitter"] as const;
 
 /**
- * Number of active → needs_reconnect transitions within the rolling 30-day
- * window that triggers the repeat-offender escalation Slack alert.
- * Fires only at the threshold crossing (exactly the Nth break), not on every
- * subsequent one.
+ * Reads the admin-configured repeat-offender threshold from site-content,
+ * falling back to 3 if the setting has never been stored or can't be read.
  */
-const REPEAT_OFFENDER_THRESHOLD = 3;
+async function getRepeatOffenderThreshold(): Promise<number> {
+  try {
+    const settings = (await getSiteContentBlock("admin.socialHealthSettings")) as { repeatOffenderThreshold?: number } | null;
+    return typeof settings?.repeatOffenderThreshold === "number" ? settings.repeatOffenderThreshold : 3;
+  } catch {
+    return 3;
+  }
+}
 
 export interface SocialAccountRecheckResult {
   accountId: number;
@@ -169,7 +175,8 @@ async function markInvalid(account: SocialAccountRow, wasActive: boolean, messag
 
     // Fire an escalation alert only at the threshold crossing — the Nth break,
     // not every subsequent one — so admins know this vendor needs direct follow-up.
-    if (recentBreakCount === REPEAT_OFFENDER_THRESHOLD) {
+    const repeatOffenderThreshold = await getRepeatOffenderThreshold();
+    if (recentBreakCount === repeatOffenderThreshold) {
       await sendSlackAlert(
         `:rotating_light::rotating_light: *Repeat offender – direct follow-up needed*\n` +
           `*${account.platform}* account "${account.accountName}" (vendor ${account.vendorId}) has broken ` +
@@ -220,6 +227,19 @@ async function tryRenewAndRevalidate(account: SocialAccountRow, validationError:
   }
 }
 
+/**
+ * Returns true when `error` looks like a transient network failure rather than
+ * a real auth problem. We never flip an account to needs_reconnect on these —
+ * that would suppress legitimate expiry warnings and spam vendors with false
+ * "reconnect" notices every time a health-check tick races a momentary outage.
+ */
+function isTransientNetworkError(error: string): boolean {
+  const msg = error.toLowerCase();
+  // Node.js network codes that appear in the message string when fetch/https throws
+  const TRANSIENT_CODES = ["econnreset", "econnrefused", "etimedout", "enotfound", "epipe", "ehostunreach", "socket hang up", "network error", "failed to fetch", "fetch failed"];
+  return TRANSIENT_CODES.some((code) => msg.includes(code));
+}
+
 /** Re-validates a single OAuth-connected Meta/LinkedIn/X social account and updates its status on a transition. */
 export async function recheckSocialAccount(accountId: number): Promise<SocialAccountRecheckResult> {
   const [account] = await db.select().from(socialAccountsTable).where(eq(socialAccountsTable.id, accountId));
@@ -242,6 +262,20 @@ export async function recheckSocialAccount(accountId: number): Promise<SocialAcc
     return { accountId, checked: true, valid: true, becameInvalid: false, recovered };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
+    // A transient network failure (timeout, reset, DNS miss) is not evidence
+    // that the token is invalid. Skip the status flip entirely — the next tick
+    // will re-check. This preserves expiry warnings for accounts whose token
+    // is legitimately approaching expiry but whose health-check fetch happened
+    // to time out (losing the warning by flipping to needs_reconnect would be
+    // worse than a brief false-positive "healthy" reading).
+    if (isTransientNetworkError(message)) {
+      logger.warn(
+        { accountId, platform: account.platform, error: message },
+        "[social-account-health] Skipping status flip — looks like a transient network error, not a token problem",
+      );
+      return { accountId, checked: true, valid: false, becameInvalid: false, recovered: false, error: message };
+    }
 
     if (await tryRenewAndRevalidate(account, message)) {
       const recovered = await markValid(account);

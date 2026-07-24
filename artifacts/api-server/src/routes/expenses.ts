@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, desc, asc, gt } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, gt, isNull } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, expensesTable, vendorsTable } from "@workspace/db";
 import { computeNextOccurrenceDate } from "../lib/recurring-expenses";
@@ -62,7 +62,19 @@ router.get("/expenses", async (req, res): Promise<void> => {
     if (!isNaN(d.getTime())) conditions.push(lte(expensesTable.expenseDate, d));
   }
 
-  const expenses = await db.select().from(expensesTable).where(and(...conditions)).orderBy(desc(expensesTable.expenseDate));
+  // Pagination is opt-in — only apply a limit when the caller explicitly requests one.
+  // This preserves backward compatibility: clients that don't pass ?limit= still receive all results.
+  const MAX_LIMIT = 500;
+  const hasLimit = req.query.limit !== undefined;
+  const rawLimit = Number(req.query.limit ?? MAX_LIMIT);
+  const rawOffset = Number(req.query.offset ?? 0);
+  const limit = hasLimit && Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : undefined;
+  const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
+  const baseQuery = db.select().from(expensesTable)
+    .where(and(...conditions))
+    .orderBy(desc(expensesTable.expenseDate));
+  const expenses = await (limit !== undefined ? baseQuery.limit(limit).offset(offset) : baseQuery.offset(offset));
   res.json(ListExpensesResponse.parse(expenses.map(serializeExpense)));
 });
 
@@ -120,8 +132,11 @@ router.get("/expenses/export", async (req, res): Promise<void> => {
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
     const s = v instanceof Date ? v.toISOString() : String(v);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-    return s;
+    // Prevent CSV formula injection: prefix formula-starting chars with a single quote
+    // so spreadsheet software treats the cell as literal text, not a formula.
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) return `"${safe.replace(/"/g, '""')}"`;
+    return safe;
   }
   const filename = `expenses-export-${new Date().toISOString().slice(0, 10)}.csv`;
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -177,11 +192,16 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "recurringFrequency is required when isRecurring is true" });
     return;
   }
-  // Resuming a paused template: advance nextOccurrenceDate to "now" so the job
-  // picks it up on the next tick from the current date rather than trying to
-  // back-fill all the periods that elapsed while it was paused.
   const isResuming = recurringPaused === false && existing.recurringPaused === true;
   const resolvedExpenseDate = expenseDate !== undefined ? new Date(expenseDate) : existing.expenseDate;
+
+  // When resuming without a date/frequency change, keep nextOccurrenceDate at the
+  // last-scheduled value (the first missed period) so the scheduler's catch-up loop
+  // picks up every period that elapsed while the template was paused.
+  // Only when frequency or base-date also changes do we recompute — and we use the
+  // existing nextOccurrenceDate as the anchor (not "now") so catch-up still starts
+  // from the correct point rather than from the moment of resumption.
+  const isPureResume = isResuming && recurringFrequency === undefined && expenseDate === undefined;
 
   const updateData = {
     ...rest,
@@ -191,11 +211,19 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     ...(recurringFrequency !== undefined ? { recurringFrequency } : {}),
     ...(recurringPaused !== undefined ? { recurringPaused } : {}),
     ...(willBeRecurring
-      ? // Turning recurring on, or changing its frequency/date, or resuming from
-        // pause — (re)compute when the next occurrence is due.
-        (isRecurring === true || recurringFrequency !== undefined || expenseDate !== undefined || isResuming) && effectiveFrequency
-        ? { nextOccurrenceDate: computeNextOccurrenceDate(isResuming ? new Date() : resolvedExpenseDate, effectiveFrequency as "weekly" | "monthly" | "yearly") }
-        : {}
+      ? // Turning recurring on, or changing its frequency/date, or resuming from pause:
+        isPureResume
+        ? {} // Keep nextOccurrenceDate unchanged — scheduler catches up from there
+        : (isRecurring === true || recurringFrequency !== undefined || expenseDate !== undefined || isResuming) && effectiveFrequency
+          ? {
+              // Recompute from existing nextOccurrenceDate (or resolvedExpenseDate for
+              // new templates) — not from "now" — so we don't silently skip missed periods.
+              nextOccurrenceDate: computeNextOccurrenceDate(
+                isResuming && existing.nextOccurrenceDate ? existing.nextOccurrenceDate : resolvedExpenseDate,
+                effectiveFrequency as "weekly" | "monthly" | "yearly",
+              ),
+            }
+          : {}
       : // Turning recurring off — no more occurrences should be generated.
         { nextOccurrenceDate: null }),
   };
@@ -211,6 +239,15 @@ router.delete("/expenses/:id", async (req, res): Promise<void> => {
   if (!existing) { res.status(404).json({ error: "Expense not found" }); return; }
   const check = await resolveOwnedVendorId(req, existing.vendorId);
   if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+
+  // If this is a recurring template (isRecurring=true, no parent), detach any
+  // auto-generated occurrence rows so they don't carry a dangling reference.
+  if (existing.isRecurring && !existing.recurringParentId) {
+    await db
+      .update(expensesTable)
+      .set({ recurringParentId: null })
+      .where(eq(expensesTable.recurringParentId, params.data.id));
+  }
 
   await db.delete(expensesTable).where(eq(expensesTable.id, params.data.id));
   res.sendStatus(204);

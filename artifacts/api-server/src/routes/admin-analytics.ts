@@ -303,10 +303,12 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
     const s = v instanceof Date ? v.toISOString() : String(v);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return `"${s.replace(/"/g, '""')}"`;
+    // Prevent CSV formula injection: prefix formula-starting chars with a single quote
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+      return `"${safe.replace(/"/g, '""')}"`;
     }
-    return s;
+    return safe;
   }
 
   const rangeLabel = `${from.toISOString().slice(0, 10)}_to_${to.toISOString().slice(0, 10)}`;

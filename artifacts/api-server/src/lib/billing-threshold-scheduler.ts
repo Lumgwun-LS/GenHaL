@@ -23,7 +23,7 @@ const JOB_NAME = "billing-threshold-check";
 const CHARGE_THRESHOLD_USD = 60;
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-async function tick(): Promise<void> {
+async function tick(): Promise<{ checked: number; charged: number }> {
   // Sum unsettled overage charges per vendor
   const rows = await db
     .select({
@@ -35,17 +35,20 @@ async function tick(): Promise<void> {
     .groupBy(vendorOverageChargesTable.vendorId)
     .having(sql`sum(${vendorOverageChargesTable.totalUsd}) >= ${CHARGE_THRESHOLD_USD}`);
 
-  if (rows.length === 0) return;
+  if (rows.length === 0) return { checked: 0, charged: 0 };
 
   logger.info({ count: rows.length, thresholdUsd: CHARGE_THRESHOLD_USD }, "[billing-threshold] Vendors crossing charge threshold");
 
+  let charged = 0;
   for (const row of rows) {
     try {
       await chargeVendor(row.vendorId, row.totalUnsettled);
+      charged++;
     } catch (err) {
       logger.error({ err, vendorId: row.vendorId }, "[billing-threshold] Failed to process charge for vendor");
     }
   }
+  return { checked: rows.length, charged };
 }
 
 async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
@@ -181,8 +184,8 @@ export function startBillingThresholdScheduler(): void {
 
   setInterval(async () => {
     try {
-      await tick();
-      await recordJobRun(JOB_NAME, { success: true });
+      const counts = await tick();
+      await recordJobRun(JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.charged });
     } catch (err) {
       logger.error({ err }, "[billing-threshold] Tick failed");
       await recordJobRun(JOB_NAME, { success: false, error: String(err) }).catch(() => {});

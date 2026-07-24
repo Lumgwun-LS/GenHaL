@@ -42,7 +42,7 @@ export async function storeGeneratedMedia(buffer: Buffer, contentType: string): 
   const putRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": contentType },
-    body: buffer,
+    body: buffer as unknown as BodyInit,
   });
   if (!putRes.ok) {
     throw new Error(`Failed to store generated media (object storage returned ${putRes.status})`);

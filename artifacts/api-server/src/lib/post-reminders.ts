@@ -76,7 +76,7 @@ export const POST_REMINDERS_JOB_NAME = "post-reminders";
  * Exported (in addition to being used internally by tick/startPostReminderScheduler)
  * so tests can exercise it directly without waiting for setInterval.
  */
-export async function sendDuePostReminders(): Promise<void> {
+export async function sendDuePostReminders(): Promise<{ checked: number; sent: number }> {
   const now = new Date();
   // Outer window: fetch everything that could be due for *any* vendor lead time.
   const outerCutoff = new Date(now.getTime() + MAX_REMINDER_LEAD_MINUTES * 60_000);
@@ -111,10 +111,11 @@ export async function sendDuePostReminders(): Promise<void> {
     return scheduledAt! <= vendorCutoff;
   });
 
-  if (due.length === 0) return;
+  if (due.length === 0) return { checked: candidates.length, sent: 0 };
 
   logger.info({ count: due.length }, "[post-reminders] Found scheduled posts due for a pre-publish reminder");
 
+  let sent = 0;
   for (const { id, vendorId, caption, scheduledAt, leadMinutes } of due) {
     try {
       // Atomic claim — only succeeds if still 'scheduled' and un-reminded at
@@ -133,17 +134,19 @@ export async function sendDuePostReminders(): Promise<void> {
       }
 
       await notifyPostReminderDue(vendorId, id, caption, scheduledAt!);
+      sent++;
       logger.info({ postId: id, leadMinutes: leadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES }, "[post-reminders] Sent pre-publish reminder");
     } catch (err) {
       logger.error({ err, postId: id }, "[post-reminders] Failed to send pre-publish reminder");
     }
   }
+  return { checked: candidates.length, sent };
 }
 
 async function tick(): Promise<void> {
   try {
-    await sendDuePostReminders();
-    await recordJobRun(POST_REMINDERS_JOB_NAME, { success: true });
+    const counts = await sendDuePostReminders();
+    await recordJobRun(POST_REMINDERS_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.sent });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordJobRun(POST_REMINDERS_JOB_NAME, { success: false, error: message });

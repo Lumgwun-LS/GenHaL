@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, ne, and } from "drizzle-orm";
-import { db, smsCampaignsTable } from "@workspace/db";
+import { getAuth } from "@clerk/express";
+import { db, smsCampaignsTable, vendorsTable } from "@workspace/db";
 import { consumeQuotaTx, getVendorForUsage, quotaExceededMessage } from "../lib/usage";
 import {
   ListSmsCampaignsQueryParams,
@@ -18,38 +19,94 @@ import {
 
 const router: IRouter = Router();
 
+/** Resolve the authenticated vendor; admins may act on any vendorId. */
+async function resolveAuthedVendor(req: import("express").Request): Promise<{ vendorId: number | null; isAdmin: boolean }> {
+  const { userId } = getAuth(req);
+  if (!userId) return { vendorId: null, isAdmin: false };
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+  const [vendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  return { vendorId: vendor?.id ?? null, isAdmin };
+}
+
 router.get("/sms-campaigns", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = ListSmsCampaignsQueryParams.safeParse(req.query);
-  let campaigns = await db.select().from(smsCampaignsTable).orderBy(desc(smsCampaignsTable.createdAt));
-  if (params.success) {
-    if (params.data.vendorId) campaigns = campaigns.filter((c) => c.vendorId === params.data.vendorId);
-    if (params.data.status) campaigns = campaigns.filter((c) => c.status === params.data.status);
+  const requestedVendorId = params.success && params.data.vendorId ? params.data.vendorId : null;
+  // Non-admins always see only their own vendor's campaigns.
+  const effectiveVendorId = authed.isAdmin ? (requestedVendorId ?? authed.vendorId) : authed.vendorId;
+
+  let query = db.select().from(smsCampaignsTable).orderBy(desc(smsCampaignsTable.createdAt)).$dynamic();
+  if (effectiveVendorId !== null) {
+    query = query.where(eq(smsCampaignsTable.vendorId, effectiveVendorId));
+  }
+  let campaigns = await query;
+
+  // Status filter (safe to apply in-memory — already vendor-scoped above).
+  if (params.success && params.data.status) {
+    campaigns = campaigns.filter((c) => c.status === params.data.status);
   }
   res.json(ListSmsCampaignsResponse.parse(campaigns.map(serializeCampaign)));
 });
 
 router.post("/sms-campaigns", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const parsed = CreateSmsCampaignBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  // Non-admins can only create campaigns for their own vendor.
+  const vendorId = authed.isAdmin ? (parsed.data.vendorId ?? authed.vendorId) : authed.vendorId;
+  if (!vendorId) { res.status(400).json({ error: "vendorId is required" }); return; }
+  if (!authed.isAdmin && parsed.data.vendorId && parsed.data.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "You can only create SMS campaigns for your own vendor." });
+    return;
+  }
+
   const { scheduledAt, ...rest } = parsed.data;
-  const insertData = { ...rest, scheduledAt: scheduledAt ? new Date(scheduledAt) : null };
+  const insertData = { ...rest, vendorId, scheduledAt: scheduledAt ? new Date(scheduledAt) : null };
   const [campaign] = await db.insert(smsCampaignsTable).values(insertData).returning();
   res.status(201).json(CreateSmsCampaignResponse.parse(serializeCampaign(campaign)));
 });
 
 router.get("/sms-campaigns/:id", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = GetSmsCampaignParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
   const [campaign] = await db.select().from(smsCampaignsTable).where(eq(smsCampaignsTable.id, params.data.id));
   if (!campaign) { res.status(404).json({ error: "SMS campaign not found" }); return; }
+
+  if (!authed.isAdmin && campaign.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "You do not have permission to view this campaign." });
+    return;
+  }
+
   res.json(GetSmsCampaignResponse.parse(serializeCampaign(campaign)));
 });
 
 router.patch("/sms-campaigns/:id", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = UpdateSmsCampaignParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateSmsCampaignBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  // Verify ownership before updating.
+  const [existing] = await db.select({ vendorId: smsCampaignsTable.vendorId }).from(smsCampaignsTable).where(eq(smsCampaignsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "SMS campaign not found" }); return; }
+  if (!authed.isAdmin && existing.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "You do not have permission to update this campaign." });
+    return;
+  }
+
   const { scheduledAt: sa, ...restUpdate } = parsed.data;
   const updateData = { ...restUpdate, ...(sa !== undefined ? { scheduledAt: sa ? new Date(sa) : null } : {}) };
   const [campaign] = await db.update(smsCampaignsTable).set(updateData).where(eq(smsCampaignsTable.id, params.data.id)).returning();
@@ -58,10 +115,19 @@ router.patch("/sms-campaigns/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/sms-campaigns/:id/send", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
   const params = SendSmsCampaignParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
   const [campaign] = await db.select().from(smsCampaignsTable).where(eq(smsCampaignsTable.id, params.data.id));
   if (!campaign) { res.status(404).json({ error: "SMS campaign not found" }); return; }
+
+  if (!authed.isAdmin && campaign.vendorId !== authed.vendorId) {
+    res.status(403).json({ error: "You do not have permission to send this campaign." });
+    return;
+  }
 
   // Already sent — a duplicate/retried request (e.g. a client double-submit)
   // must not re-send or re-charge quota. Report the prior result as a no-op

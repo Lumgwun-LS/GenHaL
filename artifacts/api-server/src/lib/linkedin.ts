@@ -177,7 +177,7 @@ export async function publishLinkedInImagePost(memberId: string, accessToken: st
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: imageBuffer,
+    body: imageBuffer as unknown as BodyInit,
   });
   if (!uploadRes.ok) throw new Error(`LinkedIn image upload failed (${uploadRes.status})`);
 
@@ -248,7 +248,7 @@ export async function publishLinkedInVideoPost(memberId: string, accessToken: st
     const partRes = await fetch(part.uploadUrl, {
       method: "PUT",
       headers: { Authorization: `Bearer ${accessToken}` },
-      body: videoBuffer.subarray(part.firstByte, part.lastByte + 1),
+      body: videoBuffer.subarray(part.firstByte, part.lastByte + 1) as unknown as BodyInit,
     });
     if (!partRes.ok) throw new Error(`LinkedIn video part upload failed (${partRes.status})`);
     const etag = partRes.headers.get("etag") ?? "";

@@ -222,10 +222,12 @@ router.get("/admin/vendors/export", async (req, res): Promise<void> => {
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
     const s = v instanceof Date ? v.toISOString() : String(v);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return `"${s.replace(/"/g, '""')}"`;
+    // Prevent CSV formula injection: prefix formula-starting chars with a single quote
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+      return `"${safe.replace(/"/g, '""')}"`;
     }
-    return s;
+    return safe;
   }
 
   const filename = `vendors-export-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -831,8 +833,15 @@ router.get("/admin/audit-log", async (req, res): Promise<void> => {
   const adminSearchFilter = typeof req.query.adminSearch === "string" && req.query.adminSearch.trim()
     ? req.query.adminSearch.trim()
     : null;
+  // Optional vendor filter — lets admins see all changes made to a specific vendor's account.
+  const vendorIdFilter = typeof req.query.vendorId === "string" && /^\d+$/.test(req.query.vendorId)
+    ? parseInt(req.query.vendorId, 10)
+    : null;
 
   const conditions: SQL[] = [];
+  if (vendorIdFilter) {
+    conditions.push(eq(adminAuditLogTable.vendorId, vendorIdFilter));
+  }
   if (adminUserIdFilter) {
     conditions.push(eq(adminAuditLogTable.adminUserId, adminUserIdFilter));
   } else if (adminSearchFilter) {
@@ -1018,10 +1027,12 @@ router.get("/admin/tier-change-history/export", async (req, res): Promise<void> 
   function csvCell(v: unknown): string {
     if (v === null || v === undefined) return "";
     const s = v instanceof Date ? v.toISOString() : String(v);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return `"${s.replace(/"/g, '""')}"`;
+    // Prevent CSV formula injection: prefix formula-starting chars with a single quote
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+      return `"${safe.replace(/"/g, '""')}"`;
     }
-    return s;
+    return safe;
   }
 
   const vendorSuffix = vendorId !== null ? `-vendor${vendorId}` : "";

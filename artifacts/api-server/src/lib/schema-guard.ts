@@ -86,6 +86,19 @@ export interface SchemaDriftResult {
 export async function checkSchemaDrift(): Promise<SchemaDriftResult> {
   const { expectedTables, expectedColumns } = deriveExpectedFromDrizzleSchema();
 
+  // Sanity check: if drizzle-orm ever changes its internal class hierarchy so
+  // that `instanceof PgTable` stops matching exported tables, deriveExpected*
+  // would silently return an empty set and report "no drift" even against an
+  // empty database. Treat zero expected tables as a guard malfunction rather
+  // than a valid state — the schema has dozens of tables, so this can't be right.
+  if (expectedTables.size === 0) {
+    throw new Error(
+      "[schema-guard] deriveExpectedFromDrizzleSchema found 0 tables — " +
+      "drizzle-orm may have changed its PgTable class identity (e.g. after an upgrade). " +
+      "The drift guard is non-functional until this is resolved.",
+    );
+  }
+
   const rows = await db.execute<{ table_name: string; column_name: string }>(
     sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
   );

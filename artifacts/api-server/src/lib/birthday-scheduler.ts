@@ -68,7 +68,7 @@ async function alreadyLoggedToday(vendorId: number, channel: string, utcDateStr:
 }
 
 /** 06:00 UTC — place birthday calls to opted-in vendors who have a phone number. */
-async function runBirthdayCallJob(utcDateStr: string): Promise<void> {
+async function runBirthdayCallJob(utcDateStr: string): Promise<{ checked: number; called: number }> {
   const [, monthStr, dayStr] = utcDateStr.split("-");
   const month = Number(monthStr);
   const day   = Number(dayStr);
@@ -89,11 +89,12 @@ async function runBirthdayCallJob(utcDateStr: string): Promise<void> {
 
   if (todaysBirthdays.length === 0) {
     logger.info("[voice-birthday] No birthday calls to place today.");
-    return;
+    return { checked: 0, called: 0 };
   }
 
   logger.info({ count: todaysBirthdays.length }, "[voice-birthday] Placing birthday calls");
 
+  let called = 0;
   for (const vendor of todaysBirthdays) {
     try {
       // Reserve a log row FIRST (conflict = already called today → skip).
@@ -137,15 +138,17 @@ async function runBirthdayCallJob(utcDateStr: string): Promise<void> {
         })
         .where(eq(voiceCallLogsTable.id, reserved.id));
 
+      called++;
       logger.info({ vendorId: vendor.id, name: vendor.name, result: result.status }, "[voice-birthday] Call result");
       await new Promise((r) => setTimeout(r, 300));
     } catch (err) {
       logger.error({ err, vendorId: vendor.id }, "[voice-birthday] Error processing birthday call");
     }
   }
+  return { checked: todaysBirthdays.length, called };
 }
 
-async function runBirthdayJob(utcDateStr: string): Promise<void> {
+async function runBirthdayJob(utcDateStr: string): Promise<{ checked: number; notified: number }> {
   const [, monthStr, dayStr] = utcDateStr.split("-");
   const month = Number(monthStr);
   const day   = Number(dayStr);
@@ -163,11 +166,12 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
 
   if (todaysBirthdays.length === 0) {
     logger.info("[birthday] No birthdays today.");
-    return;
+    return { checked: 0, notified: 0 };
   }
 
   logger.info({ count: todaysBirthdays.length }, "[birthday] Processing birthday vendors");
 
+  let notified = 0;
   for (const vendor of todaysBirthdays) {
     try {
       // ── Pre-check (application layer) ───────────────────────────────────
@@ -239,11 +243,13 @@ async function runBirthdayJob(utcDateStr: string): Promise<void> {
         }
       }
 
+      notified++;
       logger.info({ vendorId: vendor.id, name: vendor.name }, "[birthday] Messages dispatched");
     } catch (err) {
       logger.error({ err, vendorId: vendor.id }, "[birthday] Failed to send birthday message");
     }
   }
+  return { checked: todaysBirthdays.length, notified };
 }
 
 /**
@@ -411,9 +417,9 @@ export async function tick(): Promise<void> {
   // 06:00 UTC — voice birthday calls
   if (utcHour === 6 && lastCallDate !== utcDateStr) {
     try {
-      await runBirthdayCallJob(utcDateStr);
+      const counts = await runBirthdayCallJob(utcDateStr);
       lastCallDate = utcDateStr;
-      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true });
+      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.called });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: false, error: message });
@@ -424,9 +430,9 @@ export async function tick(): Promise<void> {
   // 08:00 UTC — in-app notifications + email queuing
   if (utcHour === 8 && lastNotifDate !== utcDateStr) {
     try {
-      await runBirthdayJob(utcDateStr);
+      const counts = await runBirthdayJob(utcDateStr);
       lastNotifDate = utcDateStr;
-      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true });
+      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.notified });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: false, error: message });

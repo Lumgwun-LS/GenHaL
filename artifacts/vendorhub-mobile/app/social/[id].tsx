@@ -254,6 +254,144 @@ function MetaRow({
   );
 }
 
+// ── Available platforms ───────────────────────────────────────────────────────
+
+const PLATFORM_OPTIONS = [
+  { id: 'facebook', label: 'Facebook' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'twitter', label: 'X / Twitter' },
+  { id: 'linkedin', label: 'LinkedIn' },
+] as const;
+
+// ── Edit caption + platforms section ─────────────────────────────────────────
+
+function EditPostSection({ postId, initialCaption, initialPlatforms }: {
+  postId: number;
+  initialCaption: string;
+  initialPlatforms: string[];
+}) {
+  const colors = useColors();
+  const queryClient = useQueryClient();
+
+  const [caption, setCaption] = useState(initialCaption);
+  const [platforms, setPlatforms] = useState<string[]>(initialPlatforms);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const { mutateAsync: updatePost } = useUpdatePost();
+
+  const togglePlatform = (id: string) => {
+    setPlatforms((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+    setSuccess(false);
+  };
+
+  const handleSave = async () => {
+    setError(null);
+    setSuccess(false);
+    if (!caption.trim()) {
+      setError('Caption cannot be empty.');
+      return;
+    }
+    if (platforms.length === 0) {
+      setError('Select at least one platform.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updatePost({ id: postId, data: { caption, platforms } });
+      await queryClient.invalidateQueries({ queryKey: getGetPostQueryKey(postId) });
+      await queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
+      setSuccess(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not save changes. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Animated.View entering={FadeInDown.delay(210).springify().damping(18)} style={styles.section}>
+      <Text style={[styles.sectionLabel, { color: colors.primary }]}>Edit Post</Text>
+      <Card style={styles.editCard}>
+        {/* Caption */}
+        <Text style={[styles.editFieldLabel, { color: colors.mutedForeground }]}>Caption</Text>
+        <TextInput
+          style={[
+            styles.editCaptionInput,
+            { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+          ]}
+          value={caption}
+          onChangeText={(v) => { setCaption(v); setSuccess(false); }}
+          multiline
+          placeholder="Write your caption…"
+          placeholderTextColor={colors.mutedForeground}
+        />
+
+        {/* Platforms */}
+        <Text style={[styles.editFieldLabel, { color: colors.mutedForeground, marginTop: 12 }]}>Platforms</Text>
+        <View style={styles.platformsRow}>
+          {PLATFORM_OPTIONS.map((p) => {
+            const selected = platforms.includes(p.id);
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => togglePlatform(p.id)}
+                style={({ pressed }) => [
+                  styles.platformChip,
+                  {
+                    backgroundColor: selected ? colors.primary : colors.card,
+                    borderColor: selected ? colors.primary : colors.border,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.platformChipText, { color: selected ? '#fff' : colors.foreground }]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Success banner */}
+        {success && (
+          <View style={[styles.warningBanner, { backgroundColor: '#16A34A12', borderColor: '#16A34A35' }]}>
+            <Feather name="check-circle" size={14} color="#16A34A" />
+            <Text style={[styles.warningBannerText, { color: '#16A34A' }]}>Changes saved successfully.</Text>
+          </View>
+        )}
+
+        {/* Error */}
+        {error ? (
+          <View style={[styles.warningBanner, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '35' }]}>
+            <Feather name="alert-circle" size={14} color={colors.destructive} />
+            <Text style={[styles.warningBannerText, { color: colors.destructive }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        {/* Save */}
+        <Pressable
+          onPress={handleSave}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.saveBtn,
+            { backgroundColor: colors.primary, opacity: pressed || submitting ? 0.7 : 1 },
+          ]}
+        >
+          {submitting ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save changes</Text>
+          )}
+        </Pressable>
+      </Card>
+    </Animated.View>
+  );
+}
+
 // ── Reschedule section ────────────────────────────────────────────────────────
 
 interface RescheduleWarning {
@@ -574,6 +712,15 @@ export default function PostDetailScreen() {
         </Card>
       </Animated.View>
 
+      {/* ── Edit caption + platforms (scheduled posts only) ── */}
+      {post.status === 'scheduled' && (
+        <EditPostSection
+          postId={postId}
+          initialCaption={post.caption ?? ''}
+          initialPlatforms={post.platforms ?? []}
+        />
+      )}
+
       {/* ── Reschedule (scheduled posts only) ── */}
       {post.status === 'scheduled' && <RescheduleSection postId={postId} />}
 
@@ -737,6 +884,43 @@ const styles = StyleSheet.create({
   pubDate: {
     fontSize: 11,
     fontFamily: 'Inter_400Regular',
+  },
+
+  // ── Edit post styles ─────────────────────────────────────────────────────────
+  editCard: {
+    padding: 14,
+    gap: 10,
+  },
+  editFieldLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  editCaptionInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  platformsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  platformChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  platformChipText: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
   },
 
   // ── Reschedule styles ────────────────────────────────────────────────────────

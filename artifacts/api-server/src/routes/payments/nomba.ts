@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import crypto from "crypto";
-import { db, paymentsTable, vendorsTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { resolveGatewayField } from "../../lib/platform-gateways";
 
@@ -146,10 +147,57 @@ export async function createNombaCheckout(input: NombaCheckoutInput): Promise<No
  * Credentials come from the admin-configured platform gateway (DB), with an
  * env-var fallback — same resolution path used by refunds/webhooks.
  *
- * Body: { orderId, vendorId, amount, currency, email, callbackUrl }
+ * Auth-required: vendor-initiated checkout only.
+ * Customer-facing shop-link flows go through public-post-links.ts chargeProvider()
+ * which calls createNombaCheckout() directly (no auth required on that path).
+ *
+ * Body: { orderId?, amount, currency, email, callbackUrl }
  */
 router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
-  const result = await createNombaCheckout(req.body ?? {});
+  // Require Clerk auth — derive vendorId from session, never from body.
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+
+  const [authedVendor] = await db.select({ id: vendorsTable.id })
+    .from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  if (!authedVendor && !isAdmin) {
+    res.status(403).json({ error: "No vendor account associated with this user" });
+    return;
+  }
+
+  const body = req.body ?? {};
+  const { orderId, amount: bodyAmount, ...rest } = body as {
+    orderId?: number;
+    amount?: number;
+    email?: string;
+    callbackUrl?: string;
+    description?: string;
+    currency?: string;
+  };
+
+  const vendorId: number = isAdmin ? (body.vendorId ?? authedVendor!.id) : authedVendor!.id;
+
+  // If tied to an order, verify ownership and use the DB-authoritative amount.
+  let amount = bodyAmount;
+  if (orderId) {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (!isAdmin && order.vendorId !== vendorId) {
+      res.status(403).json({ error: "You do not have permission to pay for this order" });
+      return;
+    }
+    if (order.status !== "pending") {
+      res.status(409).json({ error: "This order is no longer available for payment." });
+      return;
+    }
+    amount = parseFloat(order.totalAmount);
+  }
+
+  if (!amount) { res.status(400).json({ error: "amount is required" }); return; }
+
+  const result = await createNombaCheckout({ ...rest, orderId, vendorId, amount });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });

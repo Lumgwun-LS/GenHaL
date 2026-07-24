@@ -689,6 +689,15 @@ router.put("/ai/draft-video-scenes", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { vendorId, scenes } = parsed.data;
 
+  // Server-side prompt length guard — mirrors the MAX_PROMPT_LEN check on all
+  // generation endpoints so a direct API call can't bypass the client guard.
+  for (const scene of scenes) {
+    if (typeof scene.prompt === "string" && scene.prompt.length > MAX_PROMPT_LEN) {
+      res.status(400).json({ error: `Scene prompt must be ${MAX_PROMPT_LEN} characters or fewer.` });
+      return;
+    }
+  }
+
   const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
   if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only save your own draft." }); return; }

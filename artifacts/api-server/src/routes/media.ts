@@ -27,7 +27,8 @@ router.get("/media/:objectId", async (req: Request, res: Response) => {
     response.headers.forEach((value, key) => res.setHeader(key, value));
 
     if (response.body) {
-      Readable.fromWeb(response.body as ReadableStream<Uint8Array>).pipe(res);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      Readable.fromWeb(response.body as any).pipe(res);
     } else {
       res.end();
     }

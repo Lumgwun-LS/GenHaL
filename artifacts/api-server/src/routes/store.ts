@@ -15,6 +15,8 @@ import {
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
+import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
 /** Best-effort country extraction from request headers (Cloudflare / Replit proxy). */
 function extractCountry(req: import("express").Request): string | null {
@@ -1138,13 +1140,51 @@ router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
+    const appId = parseInt(String(req.params.id));
+
+    // Fetch the app + developer email before updating so we have contact info.
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq(storeAppsTable.id, appId),
+      with: { developer: true },
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+
     await db.update(storeAppsTable).set({
       status: "approved",
       reviewedByClerkId: userId,
       reviewedAt: new Date(),
       rejectionReason: null,
       updatedAt: new Date(),
-    } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
+    } as any).where(eq(storeAppsTable.id, appId));
+
+    // Notify the developer — best-effort, never blocks the admin response.
+    const developer = (app as any).developer as { email: string; displayName: string } | null;
+    if (developer?.email) {
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">
+            Your app has been approved 🎉
+          </h1>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Hi ${escapeHtml(developer.displayName)},
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            We're pleased to let you know that <strong>${escapeHtml(app.name)}</strong>
+            has been reviewed and is now <strong>approved</strong> on the Awajimaa App Store.
+            It is now publicly visible and available for download.
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Thank you for contributing to the Awajimaa ecosystem.
+          </p>
+        `,
+      });
+      sendEmail({
+        to: developer.email,
+        subject: `Your app "${app.name}" has been approved`,
+        html,
+      }).catch(() => {/* best-effort */});
+    }
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "approveApp error");
@@ -1157,14 +1197,58 @@ router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
+    const appId = parseInt(String(req.params.id));
     const { reason } = req.body;
+    const rejectionReason = (typeof reason === "string" && reason.trim())
+      ? reason.trim()
+      : "Did not meet store guidelines";
+
+    // Fetch the app + developer email before updating.
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq(storeAppsTable.id, appId),
+      with: { developer: true },
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+
     await db.update(storeAppsTable).set({
       status: "rejected",
       reviewedByClerkId: userId,
       reviewedAt: new Date(),
-      rejectionReason: reason ?? "Did not meet store guidelines",
+      rejectionReason,
       updatedAt: new Date(),
-    } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
+    } as any).where(eq(storeAppsTable.id, appId));
+
+    // Notify the developer — best-effort.
+    const developer = (app as any).developer as { email: string; displayName: string } | null;
+    if (developer?.email) {
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">
+            Update on your app submission
+          </h1>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Hi ${escapeHtml(developer.displayName)},
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Thank you for submitting <strong>${escapeHtml(app.name)}</strong> to the Awajimaa App Store.
+            After review, we were unable to approve this submission at this time.
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            <strong>Reason:</strong> ${escapeHtml(rejectionReason)}
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Please address the feedback above and resubmit when ready.
+            If you have questions, reply to this email or contact our support team.
+          </p>
+        `,
+      });
+      sendEmail({
+        to: developer.email,
+        subject: `Update on your "${app.name}" submission`,
+        html,
+      }).catch(() => {/* best-effort */});
+    }
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "rejectApp error");

@@ -46,11 +46,16 @@ router.get("/social-accounts", async (req, res): Promise<void> => {
     return;
   }
 
-  let accounts = await db.select().from(socialAccountsTable);
-  if (!isAdmin) accounts = accounts.filter((a) => a.vendorId === authedVendorId);
-  if (params.success && params.data.vendorId) {
-    accounts = accounts.filter((a) => a.vendorId === params.data.vendorId);
-  }
+  // For admins: honour an optional ?vendorId filter; fall back to all accounts.
+  // For regular vendors: always scope to their own vendor at the DB level.
+  const filterVendorId = isAdmin
+    ? (params.success && params.data.vendorId ? params.data.vendorId : null)
+    : authedVendorId;
+
+  const accounts = filterVendorId !== null
+    ? await db.select().from(socialAccountsTable).where(eq(socialAccountsTable.vendorId, filterVendorId))
+    : await db.select().from(socialAccountsTable);
+
   res.json(ListSocialAccountsResponse.parse(accounts.map(serializeAccount)));
 });
 
