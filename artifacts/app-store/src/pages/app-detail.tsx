@@ -14,8 +14,9 @@ function getSessionId(): string {
 
 /** Fire-and-forget event beacon. */
 function fireEvent(slug: string, eventType: "view" | "uninstall") {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   navigator.sendBeacon
-    ? navigator.sendBeacon(`${import.meta.env.BASE_URL}api/store/apps/${slug}/event`, new Blob([JSON.stringify({ eventType, sessionId: getSessionId() })], { type: "application/json" }))
+    ? navigator.sendBeacon(`${base}/api/store/apps/${slug}/event`, new Blob([JSON.stringify({ eventType, sessionId: getSessionId() })], { type: "application/json" }))
     : apiFetch(`/apps/${slug}/event`, { method: "POST", body: JSON.stringify({ eventType, sessionId: getSessionId() }) }).catch(() => {});
 }
 

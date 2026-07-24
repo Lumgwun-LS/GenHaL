@@ -1525,8 +1525,7 @@ router.post("/admin/vendors/:id/trial", async (req, res): Promise<void> => {
   await db.insert(vendorNotificationsTable).values({
     vendorId: id,
     type: "trial_assigned",
-    title: `${durationDays}-Day Free Trial Activated 🎉`,
-    message: `Your ${durationDays}-day free trial has been activated by the platform admin. Enjoy full access to all premium features until ${expiryStr}. Upgrade anytime to continue after your trial ends.`,
+    message: `${durationDays}-Day Free Trial Activated 🎉 — Your trial has been activated by the platform admin. Enjoy full access to all premium features until ${expiryStr}. Upgrade anytime to continue after your trial ends.`,
   });
 
   // Send email notification

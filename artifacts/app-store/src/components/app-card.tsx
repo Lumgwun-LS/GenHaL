@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import type { AppSummary } from "../lib/types";
 
@@ -75,6 +75,7 @@ function TiltCard({ children, style }: { children: React.ReactNode; style?: Reac
 
 /* ── row layout ── */
 function RowCard({ app }: { app: AppSummary }) {
+  const [, navigate] = useLocation();
   return (
     <TiltCard style={{ borderRadius: 12 }}>
       <Link
@@ -110,7 +111,7 @@ function RowCard({ app }: { app: AppSummary }) {
           style={{ flexShrink: 0, background: "rgba(0,200,83,0.1)", color: "#00c853", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
           whileHover={{ scale: 1.12, background: "rgba(0,200,83,0.2)" }}
           whileTap={{ scale: 0.92 }}
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/app-store/apps/${app.slug}`; }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/apps/${app.slug}`); }}
         >GET</motion.button>
       </Link>
     </TiltCard>

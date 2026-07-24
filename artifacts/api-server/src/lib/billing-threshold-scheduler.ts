@@ -182,10 +182,10 @@ export function startBillingThresholdScheduler(): void {
   setInterval(async () => {
     try {
       await tick();
-      await recordJobRun(JOB_NAME, "ok");
+      await recordJobRun(JOB_NAME, { success: true });
     } catch (err) {
       logger.error({ err }, "[billing-threshold] Tick failed");
-      await recordJobRun(JOB_NAME, "error", String(err)).catch(() => {});
+      await recordJobRun(JOB_NAME, { success: false, error: String(err) }).catch(() => {});
     }
   }, INTERVAL_MS);
 }

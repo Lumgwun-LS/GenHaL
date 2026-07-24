@@ -63,7 +63,6 @@ router.get("/admin/billing-enforcement/overview", async (req, res): Promise<void
       totalUsd:   vendorOverageChargesTable.totalUsd,
       settledAt:  vendorOverageChargesTable.settledAt,
       periodStart: vendorOverageChargesTable.periodStart,
-      periodEnd:   vendorOverageChargesTable.periodEnd,
     })
     .from(vendorOverageChargesTable)
     .leftJoin(vendorsTable, eq(vendorOverageChargesTable.vendorId, vendorsTable.id))
@@ -87,7 +86,6 @@ router.get("/admin/billing-enforcement/overview", async (req, res): Promise<void
       ...c,
       settledAt:   c.settledAt?.toISOString() ?? null,
       periodStart: c.periodStart?.toISOString() ?? null,
-      periodEnd:   c.periodEnd?.toISOString() ?? null,
     })),
     summary: {
       blockedCount:      blocked.length,

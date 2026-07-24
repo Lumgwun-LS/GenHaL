@@ -12,6 +12,7 @@ import DeveloperPortal from "./pages/developer-portal";
 import DeveloperSignup from "./pages/developer-signup";
 import Admin from "./pages/admin";
 import AppPublicLanding from "./pages/app-public-landing";
+import NotFound from "./pages/not-found";
 
 function PageViewTracker() {
   const [location] = useLocation();
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/developer/signup" component={DeveloperSignup} />
             <Route path="/developer" component={DeveloperPortal} />
             <Route path="/admin" component={Admin} />
+            <Route component={NotFound} />
           </Switch>
         </div>
       </WouterRouter>

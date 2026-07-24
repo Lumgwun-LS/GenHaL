@@ -147,6 +147,7 @@ router.get("/analytics/social", async (req, res): Promise<void> => {
   const postsByStatus = Object.entries(statusMap).map(([status, count]) => ({ status, count }));
   const recentPosts = posts.slice(0, 5).map((p) => ({
     ...p,
+    createdAt: p.createdAt.toISOString(),
     scheduledAt: p.scheduledAt ? p.scheduledAt.toISOString() : null,
     publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
   }));

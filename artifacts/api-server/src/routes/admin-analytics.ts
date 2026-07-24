@@ -53,6 +53,7 @@ function dayKey(d: Date): string {
 }
 
 router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
+  try {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
@@ -143,6 +144,10 @@ router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
       uniqueSessions: uniqueSessionsByDay[date]?.size ?? 0,
     })),
   });
+  } catch (err) {
+    console.error("GET /admin/analytics/demographics error:", err);
+    res.status(500).json({ error: "Failed to load demographics analytics" });
+  }
 });
 
 /**
@@ -155,6 +160,7 @@ router.get("/admin/analytics/demographics", async (req, res): Promise<void> => {
  * Pass breakdown=true to also include a per-vendor summary table.
  */
 router.get("/admin/analytics/finance-rollup", async (req, res): Promise<void> => {
+  try {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
@@ -213,6 +219,10 @@ router.get("/admin/analytics/finance-rollup", async (req, res): Promise<void> =>
     ...overview,
     ...(byVendor ? { byVendor } : {}),
   });
+  } catch (err) {
+    console.error("GET /admin/analytics/finance-rollup error:", err);
+    res.status(500).json({ error: "Failed to load finance rollup" });
+  }
 });
 
 /**
@@ -225,6 +235,7 @@ router.get("/admin/analytics/finance-rollup", async (req, res): Promise<void> =>
  * rate-limit window.
  */
 router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<void> => {
+  try {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
@@ -365,6 +376,10 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
   });
 
   await checkExportBurst(userId);
+  } catch (err) {
+    console.error("GET /admin/analytics/finance-rollup/export error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to export finance rollup" });
+  }
 });
 
 /**
@@ -376,6 +391,7 @@ router.get("/admin/analytics/finance-rollup/export", async (req, res): Promise<v
  * after admin-configured operating costs (Replit + other).
  */
 router.get("/admin/analytics/revenue-intelligence", async (req, res): Promise<void> => {
+  try {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
@@ -562,6 +578,10 @@ router.get("/admin/analytics/revenue-intelligence", async (req, res): Promise<vo
     yearlyTotals,
     plans: plans.map((p) => ({ tier: p.tier, name: p.name, priceUsd: p.pricing.usd, priceNgn: p.pricing.ngn })),
   });
+  } catch (err) {
+    console.error("GET /admin/analytics/revenue-intelligence error:", err);
+    res.status(500).json({ error: "Failed to load revenue intelligence" });
+  }
 });
 
 export default router;

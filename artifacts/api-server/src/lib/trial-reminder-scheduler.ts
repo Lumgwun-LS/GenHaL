@@ -169,8 +169,7 @@ async function tickTrialReminders(): Promise<void> {
       await db.insert(vendorNotificationsTable).values({
         vendorId: vendor.id,
         type: notifType,
-        title: subject,
-        message: `Your trial ends on ${expiryStr}. Upgrade to keep full access.`,
+        message: `${subject} — Your trial ends on ${expiryStr}. Upgrade to keep full access.`,
       });
 
       // Email
@@ -198,10 +197,10 @@ export function startTrialReminderScheduler(): void {
   const run = async () => {
     try {
       await tickTrialReminders();
-      await recordJobRun(JOB_NAME, "success");
+      await recordJobRun(JOB_NAME, { success: true });
     } catch (err) {
       logger.error({ err }, "[trial-reminders] Scheduler error");
-      await recordJobRun(JOB_NAME, "failure", err instanceof Error ? err.message : String(err));
+      await recordJobRun(JOB_NAME, { success: false, error: err instanceof Error ? err.message : String(err) });
     }
   };
 

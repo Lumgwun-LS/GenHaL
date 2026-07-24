@@ -247,12 +247,12 @@ router.get("/admin/infrastructure-billing/vendor-bills", async (req, res): Promi
   const vendors = await db
     .select({
       id:               vendorsTable.id,
-      businessName:     vendorsTable.businessName,
+      businessName:     vendorsTable.name,
       subscriptionTier: vendorsTable.subscriptionTier,
       currentPeriodStart: vendorsTable.currentPeriodStart,
     })
     .from(vendorsTable)
-    .orderBy(vendorsTable.businessName);
+    .orderBy(vendorsTable.name);
 
   // Resource usage this month, grouped by vendor + resource
   const usageRows = await db

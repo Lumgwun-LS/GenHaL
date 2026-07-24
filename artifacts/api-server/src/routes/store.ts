@@ -402,7 +402,7 @@ router.get("/apps/categories", async (_req, res) => {
 router.get("/apps/:slug", async (req, res) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
+      where: and(eq(storeAppsTable.slug, String(req.params.slug)), eq(storeAppsTable.status, "approved")),
       with: { developer: true },
     });
     if (!app) return void res.status(404).json({ error: "App not found" });
@@ -417,7 +417,7 @@ router.get("/apps/:slug", async (req, res) => {
 router.post("/apps/:slug/download", async (req, res) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
+      where: and(eq(storeAppsTable.slug, String(req.params.slug)), eq(storeAppsTable.status, "approved")),
     });
     if (!app) return void res.status(404).json({ error: "App not found" });
     await db.update(storeAppsTable).set({ totalDownloads: app.totalDownloads + 1 }).where(eq(storeAppsTable.id, app.id));
@@ -436,7 +436,7 @@ router.post("/apps/:slug/event", async (req, res) => {
     const { eventType, sessionId } = req.body ?? {};
     if (!["view", "uninstall"].includes(eventType)) return void res.status(400).json({ error: "eventType must be view or uninstall" });
     const app = await db.query.storeAppsTable.findFirst({
-      where: and(eq(storeAppsTable.slug, req.params.slug), eq(storeAppsTable.status, "approved")),
+      where: and(eq(storeAppsTable.slug, String(req.params.slug)), eq(storeAppsTable.status, "approved")),
     });
     if (!app) return void res.status(404).json({ error: "App not found" });
     const authData = getAuth(req);
@@ -473,7 +473,7 @@ router.post("/users/track", requireAuth(), async (req, res) => {
 router.get("/apps/:slug/stats", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
     if (!dev || (dev.id !== app.developerId && !isAdmin(req))) return void res.status(403).json({ error: "Forbidden" });
@@ -580,7 +580,7 @@ router.get("/admin/event-analytics", requireAuth(), async (req, res) => {
 // GET /store/apps/:slug/reviews
 router.get("/apps/:slug/reviews", async (req, res) => {
   try {
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const reviews = await db.query.storeAppReviewsTable.findMany({
       where: and(eq(storeAppReviewsTable.appId, app.id), eq(storeAppReviewsTable.isFlagged, false)),
@@ -600,7 +600,7 @@ router.post("/apps/:slug/reviews", requireAuth(), async (req, res) => {
     const { userId } = getAuth(req);
     const { rating, comment, reviewerName } = req.body;
     if (!rating || rating < 1 || rating > 5) return void res.status(400).json({ error: "Rating 1–5 required" });
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const existing = await db.query.storeAppReviewsTable.findFirst({
       where: and(eq(storeAppReviewsTable.appId, app.id), eq(storeAppReviewsTable.reviewerClerkId, userId!)),
@@ -630,7 +630,7 @@ router.post("/apps/:slug/reviews", requireAuth(), async (req, res) => {
 // GET /store/apps/:slug/versions
 router.get("/apps/:slug/versions", async (req, res) => {
   try {
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, req.params.slug) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const versions = await db.query.storeAppVersionsTable.findMany({
       where: eq(storeAppVersionsTable.appId, app.id),
@@ -812,7 +812,7 @@ router.patch("/developers/me/apps/:id", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const { tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
@@ -840,7 +840,7 @@ router.delete("/developers/me/apps/:id", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     await db.delete(storeAppsTable).where(eq(storeAppsTable.id, appId));
@@ -856,7 +856,7 @@ router.post("/developers/me/apps/:id/versions", requireAuth(), async (req, res) 
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const { version, releaseNotes, downloadUrl } = req.body;
@@ -865,7 +865,7 @@ router.post("/developers/me/apps/:id/versions", requireAuth(), async (req, res) 
       appId,
       version,
       releaseNotes: releaseNotes ?? null,
-      downloadUrl: downloadUrl ?? null,
+      fileUrl: downloadUrl ?? null,
     }).returning();
     if (downloadUrl) await db.update(storeAppsTable).set({ currentVersion: version, downloadUrl, updatedAt: new Date() }).where(eq(storeAppsTable.id, appId));
     res.status(201).json({ ...v, createdAt: v.createdAt.toISOString() });
@@ -1080,7 +1080,7 @@ router.get("/admin/apps", requireAuth(), async (req, res) => {
 router.post("/admin/apps/:id/ai-review", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(req.params.id)) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(String(req.params.id))) });
     if (!app) return void res.status(404).json({ error: "Not found" });
 
     const prompt = `You are an AI reviewer for Africa App Store. Review this app and respond ONLY with a JSON object.
@@ -1144,7 +1144,7 @@ router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
       reviewedAt: new Date(),
       rejectionReason: null,
       updatedAt: new Date(),
-    } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "approveApp error");
@@ -1164,7 +1164,7 @@ router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
       reviewedAt: new Date(),
       rejectionReason: reason ?? "Did not meet store guidelines",
       updatedAt: new Date(),
-    } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "rejectApp error");
@@ -1176,7 +1176,7 @@ router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
 router.post("/admin/apps/:id/feature", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(req.params.id)) });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(String(req.params.id))) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     await db.update(storeAppsTable).set({ isFeatured: !app.isFeatured, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, app.id));
     res.json({ isFeatured: !app.isFeatured });
@@ -1202,7 +1202,7 @@ router.get("/admin/developers", requireAuth(), async (req, res) => {
 router.post("/admin/developers/:id/suspend", requireAuth(), async (req, res) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, parseInt(req.params.id)) });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, parseInt(String(req.params.id))) });
     if (!dev) return void res.status(404).json({ error: "Not found" });
     const newStatus = dev.status === "active" ? "suspended" : "active";
     await db.update(storeDeveloperAccountsTable).set({ status: newStatus, suspensionReason: req.body.reason ?? null, updatedAt: new Date() } as any).where(eq(storeDeveloperAccountsTable.id, dev.id));
@@ -1219,7 +1219,7 @@ router.post("/admin/apps/:id/assign-download", requireAuth(), async (req, res) =
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { downloadUrl } = req.body;
     if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl required" });
-    await db.update(storeAppsTable).set({ downloadUrl, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, parseInt(req.params.id)));
+    await db.update(storeAppsTable).set({ downloadUrl, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "assignDownload error");
@@ -1555,7 +1555,7 @@ router.post("/apps/:id/repo-link", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const { linkedAccountId, repoPath, branch, deploymentUrl } = req.body;
@@ -1584,7 +1584,7 @@ router.delete("/apps/:id/repo-link", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     await db.delete(storeAppRepoLinksTable).where(eq(storeAppRepoLinksTable.appId, appId));
@@ -1600,7 +1600,7 @@ router.post("/apps/:id/request-update", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
 
@@ -1662,7 +1662,7 @@ router.get("/apps/:id/update-requests", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const appId = parseInt(req.params.id);
+    const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const requests = await db.query.storeAppUpdateRequestsTable.findMany({
@@ -1711,7 +1711,7 @@ router.post("/admin/update-requests/:id/approve", requireAuth(), async (req, res
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
-    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(req.params.id)) });
+    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(String(req.params.id))) });
     if (!request) return void res.status(404).json({ error: "Not found" });
     if (request.status !== "pending") return void res.status(400).json({ error: "Request is not pending" });
 
@@ -1730,7 +1730,7 @@ router.post("/admin/update-requests/:id/approve", requireAuth(), async (req, res
         await db.insert(storeAppVersionsTable).values({
           appId: request.appId, version: request.newVersion,
           releaseNotes: request.commitMessage ?? null,
-          downloadUrl: request.newDownloadUrl ?? null,
+          fileUrl: request.newDownloadUrl ?? null,
         });
       }
     }
@@ -1751,7 +1751,7 @@ router.post("/admin/update-requests/:id/reject", requireAuth(), async (req, res)
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
-    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(req.params.id)) });
+    const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(String(req.params.id))) });
     if (!request) return void res.status(404).json({ error: "Not found" });
     if (request.status !== "pending") return void res.status(400).json({ error: "Request is not pending" });
     await db.update(storeAppUpdateRequestsTable).set({
@@ -1874,7 +1874,7 @@ router.post("/admin/offline-payments/:id/admin-approve", requireAuth(), async (r
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
-    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(String(req.params.id))) });
     if (!op) return void res.status(404).json({ error: "Not found" });
     if (op.status !== "submitted") return void res.status(400).json({ error: "Payment is not in submitted state" });
     await db.update(storeOfflinePaymentsTable).set({
@@ -1896,7 +1896,7 @@ router.post("/admin/offline-payments/:id/super-approve", requireAuth(), async (r
   try {
     if (!(await isSuperAdmin(req))) return void res.status(403).json({ error: "Super admin only" });
     const { userId } = getAuth(req);
-    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(String(req.params.id))) });
     if (!op) return void res.status(404).json({ error: "Not found" });
     if (op.status !== "admin_approved") return void res.status(400).json({ error: "Payment must be admin-approved before super approval" });
 
@@ -1932,7 +1932,7 @@ router.post("/admin/offline-payments/:id/reject", requireAuth(), async (req, res
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
-    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(req.params.id)) });
+    const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(String(req.params.id))) });
     if (!op) return void res.status(404).json({ error: "Not found" });
     if (!["submitted", "admin_approved"].includes(op.status)) return void res.status(400).json({ error: "Cannot reject in current state" });
     await db.update(storeOfflinePaymentsTable).set({
@@ -2015,7 +2015,7 @@ router.post(
 router.get("/download/:publicId", async (req: any, res: any) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
-      where: eq((storeAppsTable as any).publicId, req.params.publicId),
+      where: eq((storeAppsTable as any).publicId, String(req.params.publicId)),
     });
     if (!app || app.status !== "approved") {
       return void res.status(404).json({ error: "App not found" });
@@ -2041,7 +2041,7 @@ router.get("/download/:publicId", async (req: any, res: any) => {
 router.get("/p/:publicId", async (req: any, res: any) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
-      where: eq((storeAppsTable as any).publicId, req.params.publicId),
+      where: eq((storeAppsTable as any).publicId, String(req.params.publicId)),
     });
     if (!app || app.status !== "approved") {
       return void res.status(404).json({ error: "App not found" });
@@ -2120,7 +2120,7 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
 router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
     if (!app || !(app as any).isPlatformApp) return void res.status(404).json({ error: "Platform app not found" });
@@ -2142,7 +2142,7 @@ router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: an
 router.delete("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
   try {
     if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
     if (!app || !(app as any).isPlatformApp) return void res.status(404).json({ error: "Platform app not found" });

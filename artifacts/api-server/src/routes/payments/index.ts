@@ -38,6 +38,7 @@ router.use(remitaRouter);
  * Initiates a full refund for a paid payment via the original gateway.
  */
 router.post("/payments/:id/refund", async (req, res): Promise<void> => {
+  try {
   const paymentId = parseInt(req.params.id);
   if (isNaN(paymentId)) {
     res.status(400).json({ error: "Invalid payment id" });
@@ -236,6 +237,12 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
 
   console.info(`[payments] refund issued — id=${paymentId} provider=${payment.provider} reference=${payment.providerReference}`);
   res.json({ success: true, paymentId, status: "refunded" });
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
+    const message = err instanceof Error ? err.message : "Refund failed";
+    console.error("POST /payments/:id/refund error:", err);
+    res.status(statusCode).json({ error: message });
+  }
 });
 
 /**
@@ -287,54 +294,64 @@ router.post("/payments/webhook-events/:id/retry", async (req, res): Promise<void
 
 /**
  * GET /payments
- * List all payment transactions. Filterable by vendorId, provider, status.
+ * List all payment transactions. Admin only. Filterable by vendorId, provider, status.
  */
 router.get("/payments", async (req, res): Promise<void> => {
-  const { vendorId, provider, status, from, to } = req.query as {
-    vendorId?: string;
-    provider?: string;
-    status?: string;
-    from?: string;
-    to?: string;
-  };
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required" }); return; }
 
-  let payments = await db
-    .select()
-    .from(paymentsTable)
-    .orderBy(desc(paymentsTable.createdAt));
+    const { vendorId, provider, status, from, to } = req.query as {
+      vendorId?: string;
+      provider?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    };
 
-  if (vendorId) payments = payments.filter((p) => p.vendorId === parseInt(vendorId));
-  if (provider) payments = payments.filter((p) => p.provider === provider);
-  if (status) payments = payments.filter((p) => p.status === status);
-  if (from) {
-    const d = new Date(from);
-    if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) >= d);
+    let payments = await db
+      .select()
+      .from(paymentsTable)
+      .orderBy(desc(paymentsTable.createdAt));
+
+    if (vendorId) payments = payments.filter((p) => p.vendorId === parseInt(vendorId));
+    if (provider) payments = payments.filter((p) => p.provider === provider);
+    if (status) payments = payments.filter((p) => p.status === status);
+    if (from) {
+      const d = new Date(from);
+      if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) >= d);
+    }
+    if (to) {
+      const d = new Date(to);
+      if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) <= d);
+    }
+
+    // Compute revenue summary — all supported providers
+    const paidPayments = payments.filter((p) => p.status === "paid");
+    const providers = ["stripe", "paystack", "paypal", "flutterwave", "nomba", "remita"] as const;
+    const revenueByProvider = Object.fromEntries(
+      providers.map((prov) => [
+        prov,
+        paidPayments
+          .filter((p) => p.provider === prov)
+          .reduce((s, p) => s + parseFloat(p.amount), 0),
+      ])
+    );
+
+    res.json({
+      payments: payments.map((p) => ({ ...p, amount: parseFloat(p.amount) })),
+      summary: {
+        total: payments.length,
+        paid: paidPayments.length,
+        totalRevenue: paidPayments.reduce((s, p) => s + parseFloat(p.amount), 0),
+        revenueByProvider,
+      },
+    });
+  } catch (err) {
+    console.error("GET /payments error:", err);
+    res.status(500).json({ error: "Failed to fetch payments" });
   }
-  if (to) {
-    const d = new Date(to);
-    if (!isNaN(d.getTime())) payments = payments.filter((p) => new Date(p.createdAt) <= d);
-  }
-
-  // Compute revenue summary
-  const paidPayments = payments.filter((p) => p.status === "paid");
-  const revenueByProvider = {
-    stripe: paidPayments
-      .filter((p) => p.provider === "stripe")
-      .reduce((s, p) => s + parseFloat(p.amount), 0),
-    paystack: paidPayments
-      .filter((p) => p.provider === "paystack")
-      .reduce((s, p) => s + parseFloat(p.amount), 0),
-  };
-
-  res.json({
-    payments: payments.map((p) => ({ ...p, amount: parseFloat(p.amount) })),
-    summary: {
-      total: payments.length,
-      paid: paidPayments.length,
-      totalRevenue: paidPayments.reduce((s, p) => s + parseFloat(p.amount), 0),
-      revenueByProvider,
-    },
-  });
 });
 
 export default router;

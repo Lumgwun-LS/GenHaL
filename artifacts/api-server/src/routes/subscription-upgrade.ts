@@ -165,7 +165,7 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
       vendor.subscriptionTier === "free" &&
       !vendor.stripeSubscriptionId &&
       !vendor.trialEndsAt,
-    trialPeriodDays: trialSettings.durationDays,
+    trialPeriodDays: trialSettings.defaultDurationDays,
     plans,
     enabledGateways,
   });
@@ -264,7 +264,7 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
       res.status(400).json({ error: "Free trials are not currently available." });
       return;
     }
-    trialDurationDays = trialSettings.durationDays;
+    trialDurationDays = trialSettings.defaultDurationDays;
     if (gatewayProvider !== "stripe") {
       res.status(400).json({ error: "Free trials are only available via Stripe (card payment)." });
       return;
@@ -501,7 +501,7 @@ router.post("/vendors/:id/subscription/portal", async (req, res): Promise<void> 
     const catalog = await ensureStripeCatalog(stripe, stripeKey, plans);
     const configurationId = await ensurePortalConfiguration(stripe, stripeKey, catalog);
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: vendor.stripeCustomerId,
+      customer: vendor.stripeCustomerId ?? undefined,
       return_url: returnUrl,
       configuration: configurationId,
     });
