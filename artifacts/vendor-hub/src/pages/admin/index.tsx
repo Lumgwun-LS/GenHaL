@@ -1981,7 +1981,11 @@ export default function AdminPanel() {
   const [auditBefore, setAuditBefore] = useState("");
   const [auditPage, setAuditPage] = useState(1);
 
-  const [activeAdminTab, setActiveAdminTab] = useState("vendors");
+  // Support deep-linking: /admin?tab=infrastructure-billing opens that tab directly.
+  const [activeAdminTab, setActiveAdminTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") ?? "vendors";
+  });
   const [conflictsHighlightId, setConflictsHighlightId] = useState<number | null>(null);
   const [messageVendorSearch, setMessageVendorSearch] = useState("");
   const [messageHistoryVendorFilter, setMessageHistoryVendorFilter] = useState<{ id: number; name: string } | null>(

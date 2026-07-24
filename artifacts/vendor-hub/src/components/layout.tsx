@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { UserButton } from "@clerk/react";
 import { 
   LayoutDashboard, 
@@ -25,6 +25,8 @@ import {
   Building2,
   Megaphone,
   ExternalLink,
+  Cpu,
+  ShieldOff,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -142,6 +144,7 @@ const NAV_ITEMS = [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const search = useSearch();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const isAdmin = useIsAdmin();
 
@@ -188,13 +191,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {isAdmin && (
             <>
               <div className="px-3 pt-4 pb-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Platform</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Platform Admin</p>
               </div>
               <Link
                 href="/admin"
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  location === "/admin"
+                  location === "/admin" && !search.includes("tab=")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
@@ -202,6 +205,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <ShieldCheck className="w-4 h-4" />
                 Admin Panel
+              </Link>
+              <Link
+                href="/admin?tab=infrastructure-billing"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  location === "/admin" && search.includes("tab=infrastructure-billing")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                onClick={() => setIsMobileOpen(false)}
+              >
+                <Cpu className="w-4 h-4" />
+                Billing Intelligence
+              </Link>
+              <Link
+                href="/admin?tab=billing-enforcement"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  location === "/admin" && search.includes("tab=billing-enforcement")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                onClick={() => setIsMobileOpen(false)}
+              >
+                <ShieldOff className="w-4 h-4" />
+                Billing Enforcement
               </Link>
             </>
           )}
