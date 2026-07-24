@@ -28,7 +28,9 @@ import {
   Cpu,
   ShieldOff,
   Tag,
+  Store,
 } from "lucide-react";
+import { CrossAppBanner } from "./cross-app-banner";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -190,6 +192,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          {/* Cross-app link to App Store */}
+          <div className="px-3 pt-4 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Switch To</p>
+          </div>
+          <a
+            href="/app-store/?ref=vendor-hub"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            style={{
+              background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(168,85,247,0.04))",
+              border: "1px solid rgba(124,58,237,0.18)",
+            }}
+            onClick={() => setIsMobileOpen(false)}
+          >
+            <Store className="w-4 h-4 text-violet-400" />
+            <span>Awajimaa App Store</span>
+            <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-60 transition-opacity" />
+          </a>
+
           {isAdmin && (
             <>
               <div className="px-3 pt-4 pb-1">
@@ -249,6 +269,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
+        <CrossAppBanner />
         <TrialUpgradeBanner />
         <div className="flex-1">
           {children}

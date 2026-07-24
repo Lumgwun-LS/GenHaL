@@ -4,6 +4,7 @@ import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser } from "@clerk/react";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
+import { CrossAppBanner } from "./components/cross-app-banner";
 import Home from "./pages/home";
 import Search from "./pages/search";
 import AppDetail from "./pages/app-detail";
@@ -45,6 +46,7 @@ export default function App() {
     <ClerkProvider publishableKey={CLERK_KEY}>
       <WouterRouter base={basePath}>
         <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
+          <CrossAppBanner />
           <PageViewTracker />
           <UserTracker />
           <Nav />

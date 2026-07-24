@@ -93,6 +93,33 @@ export default function Nav() {
 
           <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.1)", margin: "0 10px" }} />
 
+          {/* Cross-app link to Awa Biz Suite */}
+          <motion.a
+            href="/vendor-hub/?ref=app-store"
+            whileHover={{ scale: 1.05, y: -1 }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 24 }}
+            title="Switch to Awa Biz Suite"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(168,85,247,0.1))",
+              border: "1px solid rgba(124,58,237,0.35)",
+              borderRadius: 20, padding: "5px 13px",
+              color: "#c4b5fd", fontSize: 13, fontWeight: 600,
+              textDecoration: "none", whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>🏢</span>
+            <span>Biz Suite</span>
+            <motion.span
+              animate={{ x: [0, 2, 0] }}
+              transition={{ repeat: Infinity, repeatDelay: 3, duration: 0.4, ease: "easeInOut" }}
+              style={{ fontSize: 10, opacity: 0.7 }}
+            >↗</motion.span>
+          </motion.a>
+
+          <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.1)", margin: "0 10px" }} />
+
           {isSignedIn ? (
             <motion.div whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
               <UserButton afterSignOutUrl="/app-store/" />
