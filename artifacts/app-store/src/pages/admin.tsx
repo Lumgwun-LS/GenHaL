@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
 import { apiFetch } from "../lib/api";
@@ -25,7 +25,7 @@ const PLATFORM_ICON: Record<string, string> = {
   heroku: "🚂", netlify: "🌐", vercel: "▲", render: "🎨",
 };
 
-type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "offline";
+type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "offline" | "our-apps";
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 
@@ -516,6 +516,435 @@ function OfflinePaymentsTab() {
   );
 }
 
+// ── OurAppsTab ────────────────────────────────────────────────────────────────
+
+interface PlatformApp {
+  id: number;
+  name: string;
+  tagline: string;
+  description: string;
+  category: string;
+  platform: string;
+  iconUrl: string;
+  screenshots: string[];
+  downloadUrl: string;
+  webUrl?: string | null;
+  currentVersion?: string | null;
+  packageName?: string | null;
+  isFeatured: boolean;
+  totalDownloads: number;
+  status: string;
+  createdAt: string;
+}
+
+const AFRICA_CATS = [
+  "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine",
+  "Education & E-Learning","Logistics & Delivery","Food & Restaurant",
+  "Entertainment & Music","Social & Community","Business & Commerce",
+  "Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
+  "Fashion & Beauty","Real Estate","Productivity & Tools",
+];
+
+const PLATFORMS = [
+  { value: "android", label: "🤖 Android" },
+  { value: "ios",     label: "🍎 iOS" },
+  { value: "web",     label: "🌐 Web" },
+  { value: "all",     label: "📱 All" },
+];
+
+const PLATFORM_STORE_LABEL: Record<string, string> = {
+  android: "Download APK",
+  ios: "Download on App Store",
+  web: "Open App",
+  all: "Download / Open",
+};
+
+function emptyForm() {
+  return {
+    name: "", tagline: "", description: "", category: AFRICA_CATS[0],
+    platform: "android", webUrl: "", currentVersion: "", packageName: "",
+    iconUrl: "", downloadUrl: "", screenshots: [] as string[],
+    isFeatured: false,
+  };
+}
+
+async function uploadFile(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/store/admin/platform-apps/upload-file", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Upload failed (${res.status})`);
+  }
+  const { url } = await res.json();
+  return url;
+}
+
+function OurAppsTab() {
+  const [apps, setApps]       = useState<PlatformApp[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing]   = useState<PlatformApp | null>(null);
+  const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [copied, setCopied]     = useState<number | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  // form fields
+  const [form, setForm] = useState(emptyForm());
+  const [iconFile,        setIconFile]        = useState<File | null>(null);
+  const [apkFile,         setApkFile]         = useState<File | null>(null);
+  const [screenshotFiles, setScreenshotFiles] = useState<File[]>([]);
+
+  function load() {
+    setLoading(true);
+    apiFetch<PlatformApp[]>("/admin/platform-apps")
+      .then(r => setApps(r ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm());
+    setIconFile(null); setApkFile(null); setScreenshotFiles([]);
+    setUploadStatus(null);
+    setShowForm(true);
+  }
+
+  function openEdit(app: PlatformApp) {
+    setEditing(app);
+    setForm({
+      name: app.name, tagline: app.tagline, description: app.description,
+      category: app.category, platform: app.platform,
+      webUrl: app.webUrl ?? "", currentVersion: app.currentVersion ?? "",
+      packageName: app.packageName ?? "",
+      iconUrl: app.iconUrl, downloadUrl: app.downloadUrl,
+      screenshots: app.screenshots ?? [],
+      isFeatured: app.isFeatured,
+    });
+    setIconFile(null); setApkFile(null); setScreenshotFiles([]);
+    setUploadStatus(null);
+    setShowForm(true);
+  }
+
+  function copyLink(app: PlatformApp) {
+    navigator.clipboard.writeText(app.downloadUrl).catch(() => {});
+    setCopied(app.id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function save() {
+    if (!form.name || !form.tagline || !form.description || !form.category) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+    setSaving(true);
+    try {
+      let iconUrl    = form.iconUrl;
+      let downloadUrl = form.downloadUrl;
+      let screenshots = [...form.screenshots];
+
+      // Upload icon if a new file was selected
+      if (iconFile) {
+        setUploadStatus("Uploading icon…");
+        iconUrl = await uploadFile(iconFile);
+      }
+
+      // Upload APK / binary if provided
+      if (apkFile) {
+        setUploadStatus(`Uploading ${apkFile.name} (${(apkFile.size / 1024 / 1024).toFixed(1)} MB)…`);
+        downloadUrl = await uploadFile(apkFile);
+      }
+
+      // Upload any new screenshots
+      if (screenshotFiles.length > 0) {
+        setUploadStatus("Uploading screenshots…");
+        const urls = await Promise.all(screenshotFiles.map(uploadFile));
+        screenshots = [...screenshots, ...urls];
+      }
+
+      if (!iconUrl) { alert("An app icon is required."); setSaving(false); return; }
+      if (!downloadUrl) { alert("A download file or URL is required."); setSaving(false); return; }
+
+      setUploadStatus("Saving…");
+
+      const payload = {
+        ...form,
+        iconUrl, downloadUrl, screenshots,
+        webUrl: form.webUrl || null,
+        currentVersion: form.currentVersion || null,
+        packageName: form.packageName || null,
+      };
+
+      if (editing) {
+        await apiFetch(`/admin/platform-apps/${editing.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiFetch("/admin/platform-apps", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      setShowForm(false);
+      load();
+    } catch (e: any) {
+      alert(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+      setUploadStatus(null);
+    }
+  }
+
+  async function remove(app: PlatformApp) {
+    if (!confirm(`Remove "${app.name}"? It will no longer appear in the store.`)) return;
+    setDeleting(app.id);
+    try {
+      await apiFetch(`/admin/platform-apps/${app.id}`, { method: "DELETE" });
+      load();
+    } catch { alert("Failed to remove"); } finally { setDeleting(null); }
+  }
+
+  async function toggleFeatured(app: PlatformApp) {
+    try {
+      await apiFetch(`/admin/platform-apps/${app.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isFeatured: !app.isFeatured }),
+      });
+      load();
+    } catch { alert("Failed to update"); }
+  }
+
+  const field = (label: string, node: React.ReactNode, required = false) => (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8892a4", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+        {label}{required && <span style={{ color: "#ff5252" }}> *</span>}
+      </label>
+      {node}
+    </div>
+  );
+
+  const inp = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} className="input" />
+  );
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>🚀 Our Apps</div>
+          <div style={{ fontSize: 12, color: "#8892a4", marginTop: 2 }}>
+            First-party Awajimaa apps — published instantly, no fee, no review queue.
+          </div>
+        </div>
+        <button onClick={openCreate}
+          style={{ padding: "10px 22px", borderRadius: 20, background: "#00c853", color: "#000", fontWeight: 800, fontSize: 13, border: "none", cursor: "pointer" }}>
+          + Publish New App
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>
+      ) : apps.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#8892a4" }}>
+          <div style={{ fontSize: 52, marginBottom: 14 }}>📦</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>No apps published yet</div>
+          <div style={{ fontSize: 13 }}>Click "Publish New App" to upload your first APK or app.</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+          {apps.map(app => (
+            <div key={app.id} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* App header */}
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <img src={app.iconUrl} alt={app.name}
+                  style={{ width: 56, height: 56, borderRadius: 14, objectFit: "cover", background: "#161b22", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 800, fontSize: 15 }}>{app.name}</span>
+                    {app.isFeatured && <span style={{ fontSize: 10, background: "rgba(255,179,0,0.15)", color: "#ffb300", padding: "1px 7px", borderRadius: 8, fontWeight: 700 }}>★ Featured</span>}
+                    <span style={{ fontSize: 10, background: app.status === "approved" ? "rgba(0,200,83,0.1)" : "rgba(255,82,82,0.1)", color: app.status === "approved" ? "#00c853" : "#ff5252", padding: "1px 7px", borderRadius: 8, fontWeight: 700 }}>{app.status}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#8892a4", marginTop: 2 }}>{app.tagline}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                    {app.currentVersion && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#c0c8d8", padding: "2px 7px", borderRadius: 6 }}>v{app.currentVersion}</span>}
+                    <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#c0c8d8", padding: "2px 7px", borderRadius: 6 }}>{app.platform}</span>
+                    <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#c0c8d8", padding: "2px 7px", borderRadius: 6 }}>{app.totalDownloads.toLocaleString()} DLs</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Download link */}
+              <div style={{ background: "rgba(0,200,83,0.05)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 10, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "#8892a4", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Direct Download Link</div>
+                <div style={{ fontSize: 11, color: "#00c853", wordBreak: "break-all", marginBottom: 8 }}>{app.downloadUrl}</div>
+                <button onClick={() => copyLink(app)}
+                  style={{ fontSize: 11, background: copied === app.id ? "rgba(0,200,83,0.2)" : "rgba(0,200,83,0.08)", color: "#00c853", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontWeight: 700 }}>
+                  {copied === app.id ? "✅ Copied!" : "📋 Copy Link"}
+                </button>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => openEdit(app)}
+                  style={{ flex: 1, fontSize: 12, background: "rgba(124,77,255,0.1)", color: "#a78bfa", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
+                  ✏️ Edit
+                </button>
+                <button onClick={() => toggleFeatured(app)}
+                  style={{ flex: 1, fontSize: 12, background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
+                  {app.isFeatured ? "Unfeature" : "★ Feature"}
+                </button>
+                <button onClick={() => remove(app)} disabled={deleting === app.id}
+                  style={{ flex: 1, fontSize: 12, background: "rgba(255,82,82,0.08)", color: "#ff5252", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
+                  {deleting === app.id ? "…" : "🗑 Remove"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create / Edit modal */}
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "40px 16px" }}>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 600 }}>
+
+            <h3 style={{ fontWeight: 900, fontSize: 20, marginBottom: 4 }}>
+              {editing ? "✏️ Edit App" : "🚀 Publish New App"}
+            </h3>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 24 }}>
+              {editing
+                ? "Update the app metadata or upload a new APK."
+                : "Upload your APK (or any install file) and fill in the app details. The upload URL becomes the direct download link."}
+            </p>
+
+            {/* App Info */}
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#a78bfa", marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 8 }}>App Info</div>
+
+            {field("App Name", inp({ value: form.name, placeholder: "e.g. Awajimaa App", onChange: e => setForm(f => ({ ...f, name: e.target.value })) }), true)}
+            {field("Tagline", inp({ value: form.tagline, placeholder: "One-line description shown in search", onChange: e => setForm(f => ({ ...f, tagline: e.target.value })) }), true)}
+            {field("Description", (
+              <textarea className="input" value={form.description} placeholder="Full app description…" rows={4}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            ), true)}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {field("Category", (
+                <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                  {AFRICA_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              ), true)}
+              {field("Platform", (
+                <select className="input" value={form.platform} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}>
+                  {PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {field("Version", inp({ value: form.currentVersion, placeholder: "1.0.0", onChange: e => setForm(f => ({ ...f, currentVersion: e.target.value })) }))}
+              {field("Package Name", inp({ value: form.packageName, placeholder: "io.awajimaaapp.android", onChange: e => setForm(f => ({ ...f, packageName: e.target.value })) }))}
+            </div>
+
+            {/* File Uploads */}
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#a78bfa", margin: "20px 0 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 8 }}>Files & Assets</div>
+
+            {field("App Icon", (
+              <div>
+                <input type="file" accept="image/*" style={{ display: "none" }} id="iconInput"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setIconFile(f); setForm(ff => ({ ...ff, iconUrl: URL.createObjectURL(f) })); } }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {form.iconUrl && <img src={form.iconUrl} alt="icon" style={{ width: 48, height: 48, borderRadius: 12, objectFit: "cover" }} />}
+                  <label htmlFor="iconInput" style={{ padding: "8px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c0c8d8" }}>
+                    {iconFile ? iconFile.name : (form.iconUrl ? "Change Icon" : "Upload Icon")}
+                  </label>
+                </div>
+              </div>
+            ), true)}
+
+            {field(`APK / Install File (${PLATFORM_STORE_LABEL[form.platform] ?? "Download"})`, (
+              <div>
+                <input type="file" accept=".apk,.aab,.ipa,.zip,.exe,.dmg,*" style={{ display: "none" }} id="apkInput"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setApkFile(f); }} />
+                <label htmlFor="apkInput" style={{ display: "inline-block", padding: "8px 16px", background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#00c853", fontWeight: 700 }}>
+                  {apkFile ? `✅ ${apkFile.name} (${(apkFile.size / 1024 / 1024).toFixed(1)} MB)` : "📁 Choose File…"}
+                </label>
+                <div style={{ fontSize: 11, color: "#8892a4", marginTop: 6 }}>
+                  {editing && !apkFile && form.downloadUrl ? (
+                    <>Current: <a href={form.downloadUrl} target="_blank" rel="noreferrer" style={{ color: "#00c853" }}>View file →</a></>
+                  ) : "The file will be stored and its public URL becomes the direct download link."}
+                </div>
+              </div>
+            ))}
+
+            {field("Or paste a download URL", (
+              <div>
+                <input className="input" type="url" value={!apkFile ? form.downloadUrl : ""} disabled={!!apkFile}
+                  placeholder="https://example.com/app.apk (leave empty if uploading a file above)"
+                  onChange={e => setForm(f => ({ ...f, downloadUrl: e.target.value }))} />
+                {apkFile && <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>URL will be set automatically from the uploaded file.</div>}
+              </div>
+            ))}
+
+            {field("Screenshots", (
+              <div>
+                <input type="file" accept="image/*" multiple style={{ display: "none" }} id="ssInput"
+                  onChange={e => { const fs = Array.from(e.target.files ?? []); setScreenshotFiles(fs); }} />
+                <label htmlFor="ssInput" style={{ display: "inline-block", padding: "8px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c0c8d8" }}>
+                  {screenshotFiles.length > 0 ? `${screenshotFiles.length} file(s) selected` : "Add Screenshots"}
+                </label>
+                {form.screenshots.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    {form.screenshots.map((s, i) => (
+                      <div key={i} style={{ position: "relative" }}>
+                        <img src={s} alt="" style={{ width: 60, height: 100, objectFit: "cover", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }} />
+                        <button onClick={() => setForm(f => ({ ...f, screenshots: f.screenshots.filter((_, j) => j !== i) }))}
+                          style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "#ff5252", color: "#fff", border: "none", cursor: "pointer", fontSize: 10, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {field("Web URL (optional)", inp({ value: form.webUrl, type: "url", placeholder: "https://awajimaaapp.io", onChange: e => setForm(f => ({ ...f, webUrl: e.target.value })) }))}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <input type="checkbox" id="featuredChk" checked={form.isFeatured} onChange={e => setForm(f => ({ ...f, isFeatured: e.target.checked }))} />
+              <label htmlFor="featuredChk" style={{ fontSize: 13, color: "#c0c8d8", cursor: "pointer" }}>Feature this app on the store homepage</label>
+            </div>
+
+            {uploadStatus && (
+              <div style={{ background: "rgba(0,200,83,0.07)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#00c853", marginBottom: 16 }}>
+                ⏳ {uploadStatus}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowForm(false)} disabled={saving}
+                style={{ flex: 1, background: "rgba(255,255,255,0.06)", color: "#c0c8d8", border: "none", borderRadius: 14, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={save} disabled={saving}
+                style={{ flex: 2, background: "#00c853", color: "#000", border: "none", borderRadius: 14, padding: "12px 0", fontSize: 14, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                {saving ? "Publishing…" : editing ? "Save Changes" : "🚀 Publish App"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Admin ────────────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -592,6 +1021,7 @@ export default function Admin() {
   if (!isSignedIn) return <div style={{ textAlign: "center", padding: 80, color: "#8892a4" }}>Please sign in.</div>;
 
   const TABS: { id: Tab; label: string }[] = [
+    { id: "our-apps",   label: "🚀 Our Apps" },
     { id: "overview",   label: "📊 Overview" },
     { id: "analytics",  label: "📈 Analytics" },
     { id: "pending",    label: `🔍 Pending (${pending.length})` },
@@ -632,6 +1062,9 @@ export default function Admin() {
           <StatCard icon="📥" label="Total Downloads" value={(stats.totalDownloads ?? 0).toLocaleString()} />
         </div>
       )}
+
+      {/* Our Apps (first-party) */}
+      {tab === "our-apps" && <OurAppsTab />}
 
       {/* Analytics */}
       {tab === "analytics" && <AnalyticsTab />}

@@ -42,6 +42,9 @@ export const storeAppsTable = pgTable("store_apps", {
   aiPolicyFlags: text("ai_policy_flags"),
   aiReviewScore: real("ai_review_score"),
   aiReviewedAt: timestamp("ai_reviewed_at"),
+  // First-party flag: set to true for apps published by Awajimaa itself.
+  // These bypass the publishing fee and review queue and are auto-approved.
+  isPlatformApp: boolean("is_platform_app").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

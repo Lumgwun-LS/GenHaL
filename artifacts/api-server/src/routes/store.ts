@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { db } from "@workspace/db";
 import {
   storeAppsTable,
@@ -13,6 +14,7 @@ import {
   storeOfflinePaymentsTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
+import { storeGeneratedMedia } from "../lib/generated-media-storage";
 
 /** Best-effort country extraction from request headers (Cloudflare / Replit proxy). */
 function extractCountry(req: import("express").Request): string | null {
@@ -1915,6 +1917,160 @@ router.post("/admin/offline-payments/:id/reject", requireAuth(), async (req, res
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "rejectOfflinePayment error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── PLATFORM APPS (first-party Awajimaa apps) ────────────────────────────────
+//
+// Platform apps are published by Awajimaa itself — no publishing fee, no review
+// queue. Admins upload APKs (or any binary) directly; the file is stored in
+// object storage and the public URL becomes the download link, exactly like a
+// Google Play / App Store direct link.
+
+const _apkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB max
+});
+
+const PLATFORM_DEV_CLERK_ID = "platform:awajimaa";
+
+async function getOrCreatePlatformDeveloper() {
+  const existing = await db.query.storeDeveloperAccountsTable.findFirst({
+    where: eq(storeDeveloperAccountsTable.clerkUserId, PLATFORM_DEV_CLERK_ID),
+  });
+  if (existing) return existing;
+  const [dev] = await db.insert(storeDeveloperAccountsTable).values({
+    clerkUserId: PLATFORM_DEV_CLERK_ID,
+    displayName: "Awajimaa",
+    email: "apps@awajimaaapp.io",
+    company: "Lumgwun Solutions Group",
+    country: "Nigeria",
+    status: "active",
+  } as any).returning();
+  return dev;
+}
+
+function _slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+/**
+ * POST /store/admin/platform-apps/upload-file
+ * Upload any file (APK, image, screenshot) to object storage.
+ * Returns { url, fileName, fileSize, mimeType }.
+ */
+router.post(
+  "/admin/platform-apps/upload-file",
+  requireAuth(),
+  _apkUpload.single("file"),
+  async (req: any, res: any) => {
+    try {
+      if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+      if (!req.file) return void res.status(400).json({ error: "No file provided" });
+      const { buffer, mimetype, originalname, size } = req.file;
+      const { publicUrl } = await storeGeneratedMedia(buffer, mimetype);
+      res.json({ url: publicUrl, fileName: originalname, fileSize: size, mimeType: mimetype });
+    } catch (err) {
+      logger.error({ err }, "platform-apps: upload-file error");
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+/**
+ * GET /store/admin/platform-apps
+ * List all first-party platform apps (including removed ones).
+ */
+router.get("/admin/platform-apps", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const apps = await db
+      .select()
+      .from(storeAppsTable)
+      .where(eq((storeAppsTable as any).isPlatformApp, true))
+      .orderBy(desc(storeAppsTable.createdAt));
+    res.json(apps);
+  } catch (err) {
+    logger.error({ err }, "platform-apps: list error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /store/admin/platform-apps
+ * Create a new first-party app — auto-approved, fee-exempt.
+ */
+router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
+    if (!name || !tagline || !description || !category || !iconUrl || !downloadUrl) {
+      return void res.status(400).json({ error: "name, tagline, description, category, iconUrl, and downloadUrl are required" });
+    }
+    const dev = await getOrCreatePlatformDeveloper();
+    let slug = _slugify(name);
+    const clash = await db.select({ id: storeAppsTable.id }).from(storeAppsTable).where(eq(storeAppsTable.slug, slug));
+    if (clash.length) slug = `${slug}-${Date.now()}`;
+    const [app] = await db.insert(storeAppsTable).values({
+      developerId: dev.id,
+      name, slug, tagline, description, category,
+      platform: platform ?? "android",
+      iconUrl,
+      screenshots: screenshots ?? [],
+      downloadUrl,
+      webUrl: webUrl ?? null,
+      currentVersion: currentVersion ?? null,
+      packageName: packageName ?? null,
+      status: "approved",
+      publishingFeePaid: true,
+      isPlatformApp: true,
+      isFeatured: false,
+    } as any).returning();
+    res.status(201).json(app);
+  } catch (err) {
+    logger.error({ err }, "platform-apps: create error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /store/admin/platform-apps/:id
+ * Update a platform app's metadata or URLs.
+ */
+router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
+    if (!app || !(app as any).isPlatformApp) return void res.status(404).json({ error: "Platform app not found" });
+    const allowed = ["name","tagline","description","category","platform","iconUrl","screenshots","downloadUrl","webUrl","currentVersion","packageName","isFeatured","status"] as const;
+    const updates: any = { updatedAt: new Date() };
+    for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
+    const [updated] = await db.update(storeAppsTable).set(updates).where(eq(storeAppsTable.id, id)).returning();
+    res.json(updated);
+  } catch (err) {
+    logger.error({ err }, "platform-apps: update error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * DELETE /store/admin/platform-apps/:id
+ * Remove a platform app (sets status = "removed").
+ */
+router.delete("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
+    if (!app || !(app as any).isPlatformApp) return void res.status(404).json({ error: "Platform app not found" });
+    await db.update(storeAppsTable).set({ status: "removed", updatedAt: new Date() } as any).where(eq(storeAppsTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "platform-apps: delete error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
