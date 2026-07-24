@@ -45,6 +45,7 @@ import Branches from "@/pages/branches/index";
 import Workers from "@/pages/workers/index";
 import AdsPage from "@/pages/ads/index";
 import ContactPage from "@/pages/contact";
+import PricingPage from "@/pages/pricing";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -297,6 +298,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/contact" component={ContactPage} />
+          <Route path="/pricing" component={PricingPage} />
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
 

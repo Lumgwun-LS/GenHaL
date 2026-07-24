@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Cpu,
   ShieldOff,
+  Tag,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -140,6 +141,7 @@ const NAV_ITEMS = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
   { href: "/account", label: "Account", icon: UserCircle },
+  { href: "/pricing", label: "Pricing", icon: Tag },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

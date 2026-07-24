@@ -101,6 +101,9 @@ export default function LandingPage() {
             <span className="font-extrabold text-lg tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
           </div>
           <div className="flex items-center gap-6">
+            <Link href="/pricing" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
+              Pricing
+            </Link>
             <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
               Sign In
             </Link>
