@@ -535,6 +535,8 @@ interface PlatformApp {
   totalDownloads: number;
   status: string;
   createdAt: string;
+  publicId?: string | null;
+  publicUrl?: string | null;
 }
 
 const AFRICA_CATS = [
@@ -632,8 +634,14 @@ function OurAppsTab() {
     setShowForm(true);
   }
 
+  function appStoreUrl(app: PlatformApp): string {
+    if (app.publicUrl) return app.publicUrl;
+    if (app.publicId) return `https://awajimaaappstore.com/app/${app.publicId}`;
+    return app.downloadUrl; // fallback for any legacy row without publicId yet
+  }
+
   function copyLink(app: PlatformApp) {
-    navigator.clipboard.writeText(app.downloadUrl).catch(() => {});
+    navigator.clipboard.writeText(appStoreUrl(app)).catch(() => {});
     setCopied(app.id);
     setTimeout(() => setCopied(null), 2000);
   }
@@ -783,8 +791,8 @@ function OurAppsTab() {
 
               {/* Download link */}
               <div style={{ background: "rgba(0,200,83,0.05)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 10, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, color: "#8892a4", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Direct Download Link</div>
-                <div style={{ fontSize: 11, color: "#00c853", wordBreak: "break-all", marginBottom: 8 }}>{app.downloadUrl}</div>
+                <div style={{ fontSize: 10, color: "#8892a4", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>App Store URL</div>
+                <div style={{ fontSize: 11, color: "#a78bfa", wordBreak: "break-all", marginBottom: 8 }}>{appStoreUrl(app)}</div>
                 <button onClick={() => copyLink(app)}
                   style={{ fontSize: 11, background: copied === app.id ? "rgba(0,200,83,0.2)" : "rgba(0,200,83,0.08)", color: "#00c853", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontWeight: 700 }}>
                   {copied === app.id ? "✅ Copied!" : "📋 Copy Link"}

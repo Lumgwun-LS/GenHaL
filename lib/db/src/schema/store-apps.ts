@@ -45,6 +45,9 @@ export const storeAppsTable = pgTable("store_apps", {
   // First-party flag: set to true for apps published by Awajimaa itself.
   // These bypass the publishing fee and review queue and are auto-approved.
   isPlatformApp: boolean("is_platform_app").notNull().default(false),
+  // Canonical public ID — encoded as {base36_timestamp}{owner_fingerprint}{random}
+  // Maps to https://awajimaaappstore.com/app/{publicId}
+  publicId: text("public_id").unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

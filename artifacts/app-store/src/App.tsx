@@ -10,6 +10,7 @@ import AppDetail from "./pages/app-detail";
 import DeveloperPortal from "./pages/developer-portal";
 import DeveloperSignup from "./pages/developer-signup";
 import Admin from "./pages/admin";
+import AppPublicLanding from "./pages/app-public-landing";
 
 function PageViewTracker() {
   const [location] = useLocation();
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/" component={Home} />
             <Route path="/search" component={Search} />
             <Route path="/apps/:slug" component={AppDetail} />
+            <Route path="/app/:publicId" component={AppPublicLanding} />
             <Route path="/developer/signup" component={DeveloperSignup} />
             <Route path="/developer" component={DeveloperPortal} />
             <Route path="/admin" component={Admin} />

@@ -79,8 +79,32 @@ export const AFRICA_CATEGORIES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const STORE_DOMAIN = "https://awajimaaappstore.com";
+
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+/**
+ * Generate a structured, URL-safe public app ID.
+ *
+ * Format (19 chars): {ts_base36(8)}{owner(4)}{rand(7)}
+ *   ts_base36  — base-36 encoding of Date.now() in ms, chronologically sortable
+ *   owner      — first 4 alphanum chars of the developer's clerkUserId (lowercase)
+ *   rand       — 7 random base-36 chars (36^7 ≈ 78 billion combos)
+ *
+ * Comfortably unique across 500 billion+ apps and sortable by creation time.
+ * Example: "lz7k8x4aaws4r2mk9p"
+ */
+function generatePublicId(clerkUserId?: string): string {
+  const ts   = Date.now().toString(36).padStart(8, "0");
+  const owner = (clerkUserId ?? "plat").replace(/[^a-z0-9]/gi, "").toLowerCase().padEnd(4, "0").slice(0, 4);
+  const rand  = Math.random().toString(36).slice(2, 9).padEnd(7, "0");
+  return `${ts}${owner}${rand}`;
+}
+
+function publicAppUrl(publicId: string | null | undefined): string | null {
+  return publicId ? `${STORE_DOMAIN}/app/${publicId}` : null;
 }
 
 function serializeApp(app: any, developer?: any) {
@@ -113,6 +137,8 @@ function serializeApp(app: any, developer?: any) {
     aiPolicyFlags: app.aiPolicyFlags ?? null,
     aiReviewScore: app.aiReviewScore ?? null,
     rejectionReason: app.rejectionReason ?? null,
+    publicId: app.publicId ?? null,
+    publicUrl: publicAppUrl(app.publicId),
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
   };
@@ -759,6 +785,7 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
     if (existing) slug = `${slug}-${Date.now()}`;
 
     const isFeeExempt = (dev as any).feeExempt === true;
+    const clerkUserId = (req as any).auth?.userId;
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
       name, slug, tagline, description, category, platform, iconUrl,
@@ -767,6 +794,7 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       webUrl: webUrl ?? null,
       currentVersion: currentVersion ?? null,
       packageName: packageName ?? null,
+      publicId: generatePublicId(clerkUserId),
       // Fee-exempt developers (e.g. super admin) skip the payment step entirely
       status: isFeeExempt ? "pending_review" : "pending_payment",
       publishingFeePaid: isFeeExempt,
@@ -1979,6 +2007,56 @@ router.post(
 );
 
 /**
+/**
+ * GET /store/download/:publicId  — PUBLIC, no auth.
+ * Increments totalDownloads atomically then 302-redirects to the real file URL.
+ * The raw storage URL is never exposed to the client.
+ */
+router.get("/download/:publicId", async (req: any, res: any) => {
+  try {
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq((storeAppsTable as any).publicId, req.params.publicId),
+    });
+    if (!app || app.status !== "approved") {
+      return void res.status(404).json({ error: "App not found" });
+    }
+    // Atomic download counter increment
+    await db
+      .update(storeAppsTable)
+      .set({ totalDownloads: sql`${storeAppsTable.totalDownloads} + 1` })
+      .where(eq(storeAppsTable.id, app.id));
+    // Fire-and-forget event log
+    logAppEvent(app.id, "download", req);
+    res.redirect(302, app.downloadUrl);
+  } catch (err) {
+    logger.error({ err }, "store: download redirect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /store/p/:publicId  — PUBLIC, no auth.
+ * Returns full app detail by publicId for the canonical landing page.
+ */
+router.get("/p/:publicId", async (req: any, res: any) => {
+  try {
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq((storeAppsTable as any).publicId, req.params.publicId),
+    });
+    if (!app || app.status !== "approved") {
+      return void res.status(404).json({ error: "App not found" });
+    }
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.id, app.developerId),
+    });
+    res.json(serializeApp(app, dev));
+  } catch (err) {
+    logger.error({ err }, "store: app by publicId error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * GET /store/admin/platform-apps
  * List all first-party platform apps (including removed ones).
  */
@@ -1990,7 +2068,7 @@ router.get("/admin/platform-apps", requireAuth(), async (req: any, res: any) => 
       .from(storeAppsTable)
       .where(eq((storeAppsTable as any).isPlatformApp, true))
       .orderBy(desc(storeAppsTable.createdAt));
-    res.json(apps);
+    res.json(apps.map(a => ({ ...a, publicUrl: publicAppUrl((a as any).publicId) })));
   } catch (err) {
     logger.error({ err }, "platform-apps: list error");
     res.status(500).json({ error: "Internal server error" });
@@ -2026,8 +2104,9 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
       publishingFeePaid: true,
       isPlatformApp: true,
       isFeatured: false,
+      publicId: generatePublicId("platform"),
     } as any).returning();
-    res.status(201).json(app);
+    res.status(201).json({ ...app, publicUrl: publicAppUrl((app as any).publicId) });
   } catch (err) {
     logger.error({ err }, "platform-apps: create error");
     res.status(500).json({ error: "Internal server error" });
