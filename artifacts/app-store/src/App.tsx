@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useEffect, useRef } from "react";
 import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser } from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
 import { CrossAppBanner } from "./components/cross-app-banner";
@@ -39,12 +40,21 @@ function UserTracker() {
   return null;
 }
 
-const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const CLERK_KEY = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function App() {
   return (
-    <ClerkProvider publishableKey={CLERK_KEY}>
+    <ClerkProvider
+      publishableKey={CLERK_KEY}
+      proxyUrl={clerkProxyUrl}
+      signInFallbackRedirectUrl={`${basePath}/`}
+      signUpFallbackRedirectUrl={`${basePath}/`}
+    >
       <WouterRouter base={basePath}>
         <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
           <CrossAppBanner />

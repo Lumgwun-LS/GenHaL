@@ -1415,7 +1415,8 @@ export default function DeveloperPortal() {
 
   const searchParams = new URLSearchParams(searchString);
   const paymentGateway = searchParams.get("payment");
-  const paymentRef = searchParams.get("ref");
+  // Paystack appends "reference" (and "trxref") to the callback URL.
+  const paymentRef = searchParams.get("reference") ?? searchParams.get("trxref") ?? searchParams.get("ref");
   const paymentStatus = searchParams.get("status");
   const justRegistered = searchParams.get("registered") === "1";
 

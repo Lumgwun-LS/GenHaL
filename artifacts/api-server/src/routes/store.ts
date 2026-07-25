@@ -55,9 +55,14 @@ const IS_SECRET_KEY = process.env.INTERSWITCH_SECRET_KEY ?? "";
 const IS_CLIENT_ID = process.env.INTERSWITCH_CLIENT_ID ?? "";
 
 function getBaseUrl(req: any): string {
-  const dev = process.env.REPLIT_DEV_DOMAIN;
-  if (dev) return `https://${dev}`;
-  return `${req.protocol}://${req.get("host")}`;
+  // Always derive from the incoming request so that custom domains
+  // (awajimaaappstore.com, awajimaaai.com) produce the correct callback URL.
+  // REPLIT_DEV_DOMAIN is the *dev-tunnel* hostname and must not be used in
+  // production request handlers — it stays available only for tooling that
+  // explicitly needs it (e.g. the Expo packager).
+  const proto = (req.get("x-forwarded-proto") as string | undefined) ?? req.protocol ?? "https";
+  const host  = req.get("host") as string;
+  return `${proto}://${host}`;
 }
 
 // ─── Africa Categories ────────────────────────────────────────────────────────
