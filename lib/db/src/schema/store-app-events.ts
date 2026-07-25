@@ -12,6 +12,8 @@ export const storeAppEventsTable = pgTable("store_app_events", {
   sessionId:    text("session_id"),
   clerkUserId:  text("clerk_user_id"),
   country:      text("country"),               // ISO-3166 alpha-2, e.g. "NG"
+  region:       text("region"),               // state / province, e.g. "Lagos"
+  city:         text("city"),                 // city, e.g. "Ikeja"
   userAgent:    text("user_agent"),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 });

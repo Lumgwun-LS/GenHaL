@@ -35,12 +35,22 @@ interface EventAnalytics {
   totalInstalls: number;
   totalUninstalls: number;
   totalNewUsers: number;
+  totalReviews: number;
+  avgRating: number;
   conversionRate: number;
   viewsByCountry: { country: string; count: number }[];
   installsByCountry: { country: string; count: number }[];
+  uninstallsByCountry: { country: string; count: number }[];
   newUsersByCountry: { country: string; count: number }[];
+  viewsByRegion: { region: string; count: number }[];
+  installsByRegion: { region: string; count: number }[];
+  viewsByCity: { city: string; count: number }[];
+  installsByCity: { city: string; count: number }[];
   topAppsByInstalls: { name: string; count: number }[];
   topAppsByViews: { name: string; count: number }[];
+  topAppsByUninstalls: { name: string; count: number }[];
+  topReviewedApps: { name: string; count: number; avgRating: number }[];
+  ratingDistribution: { stars: number; count: number }[];
   daily: { date: string; views: number; installs: number; uninstalls: number; newUsers: number }[];
 }
 
@@ -145,12 +155,15 @@ function AnalyticsTab() {
         </ResponsiveContainer>
       </div>
 
-      {/* Countries */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 28 }}>
+      {/* Countries — 2 column grid */}
+      {section("🌍 Geo Breakdown — Country")}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
         {[
-          { title: "📥 Installs by Country", items: data.installsByCountry },
-          { title: "🙋 New Users by Country", items: data.newUsersByCountry },
-        ].map(({ title, items }) => (
+          { title: "📥 Installs by Country", items: data.installsByCountry, key: "country" as const, bar: "#00c853" },
+          { title: "🗑️ Uninstalls by Country", items: data.uninstallsByCountry, key: "country" as const, bar: "#ff5252" },
+          { title: "👁️ Views by Country", items: data.viewsByCountry, key: "country" as const, bar: "#a78bfa" },
+          { title: "🙋 New Users by Country", items: data.newUsersByCountry, key: "country" as const, bar: "#ffb300" },
+        ].map(({ title, items, bar }) => (
           <div key={title} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>{title}</div>
             {items.length === 0 ? (
@@ -164,13 +177,101 @@ function AnalyticsTab() {
                     <span style={{ color: "#8892a4" }}>{count}</span>
                   </div>
                   <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 5 }}>
-                    <div style={{ background: "#00c853", borderRadius: 4, height: 5, width: `${(count / max) * 100}%` }} />
+                    <div style={{ background: bar, borderRadius: 4, height: 5, width: `${(count / max) * 100}%` }} />
                   </div>
                 </div>
               );
             })}
           </div>
         ))}
+      </div>
+
+      {/* Region / State */}
+      {(data.installsByRegion.length > 0 || data.viewsByRegion.length > 0) && (
+        <>
+          {section("📍 Geo Breakdown — State / Region")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {[
+              { title: "📥 Installs by Region", items: data.installsByRegion, bar: "#00c853" },
+              { title: "👁️ Views by Region", items: data.viewsByRegion, bar: "#a78bfa" },
+            ].map(({ title, items, bar }) => (
+              <div key={title} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>{title}</div>
+                {items.length === 0 ? <div style={{ color: "#8892a4", fontSize: 13 }}>No data yet</div>
+                  : items.slice(0, 10).map(({ region, count }) => {
+                    const max = items[0]!.count;
+                    return (
+                      <div key={region} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                          <span>📍 {region}</span><span style={{ color: "#8892a4" }}>{count}</span>
+                        </div>
+                        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 5 }}>
+                          <div style={{ background: bar, borderRadius: 4, height: 5, width: `${(count / max) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ))}
+          </div>
+          {/* City breakdown */}
+          {data.installsByCity.length > 0 && (
+            <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18, marginTop: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>🏙️ Installs by City</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {data.installsByCity.slice(0, 20).map(({ city, count }) => (
+                  <div key={city} style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 20, padding: "4px 12px", fontSize: 12 }}>
+                    {city} <span style={{ color: "#8892a4", marginLeft: 4 }}>{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {(data.installsByRegion.length === 0 && data.viewsByRegion.length === 0) && (
+        <div style={{ marginTop: 16, background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: "14px 18px", fontSize: 13, color: "#8892a4", border: "1px solid rgba(255,255,255,0.06)" }}>
+          📍 <strong style={{ color: "#c0c8d8" }}>State / Region tracking</strong> — data will appear here once users visit from a Cloudflare-proxied request. Region is extracted from CF-IPRegion headers automatically.
+        </div>
+      )}
+
+      {/* Review stats */}
+      {section("⭐ Review Analytics")}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+        <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>⭐ Rating Distribution</div>
+          {data.ratingDistribution.every(r => r.count === 0) ? (
+            <div style={{ color: "#8892a4", fontSize: 13 }}>No reviews yet</div>
+          ) : [...data.ratingDistribution].reverse().map(({ stars, count }) => {
+            const total = data.ratingDistribution.reduce((s, r) => s + r.count, 0);
+            return (
+              <div key={stars} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: "#ffb300", width: 20 }}>{stars}★</span>
+                <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 8 }}>
+                  <div style={{ background: "#ffb300", borderRadius: 4, height: 8, width: total > 0 ? `${(count / total) * 100}%` : "0%" }} />
+                </div>
+                <span style={{ fontSize: 11, color: "#8892a4", width: 28 }}>{count}</span>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 12, fontSize: 12, color: "#8892a4" }}>
+            Avg rating: <strong style={{ color: "#ffb300" }}>{data.avgRating > 0 ? `${data.avgRating}★` : "—"}</strong> · {data.totalReviews} reviews
+          </div>
+        </div>
+        <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>🏆 Most Reviewed Apps</div>
+          {data.topReviewedApps.length === 0 ? (
+            <div style={{ color: "#8892a4", fontSize: 13 }}>No reviews yet</div>
+          ) : data.topReviewedApps.map((app, i) => (
+            <div key={app.name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: i === 0 ? "#ffb300" : "#8892a4", width: 18 }}>#{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.name}</div>
+                <div style={{ fontSize: 11, color: "#8892a4" }}>{app.count} reviews · {app.avgRating}★ avg</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -594,6 +695,8 @@ function OurAppsTab() {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [copied, setCopied]     = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [uploadedApkUrl, setUploadedApkUrl] = useState<string | null>(null);
+  const [copiedApkUrl, setCopiedApkUrl] = useState(false);
 
   // form fields
   const [form, setForm] = useState(emptyForm());
@@ -614,7 +717,7 @@ function OurAppsTab() {
     setEditing(null);
     setForm(emptyForm());
     setIconFile(null); setApkFile(null); setScreenshotFiles([]);
-    setUploadStatus(null);
+    setUploadStatus(null); setUploadedApkUrl(null); setCopiedApkUrl(false);
     setShowForm(true);
   }
 
@@ -630,7 +733,7 @@ function OurAppsTab() {
       isFeatured: app.isFeatured,
     });
     setIconFile(null); setApkFile(null); setScreenshotFiles([]);
-    setUploadStatus(null);
+    setUploadStatus(null); setUploadedApkUrl(null); setCopiedApkUrl(false);
     setShowForm(true);
   }
 
@@ -667,6 +770,7 @@ function OurAppsTab() {
       if (apkFile) {
         setUploadStatus(`Uploading ${apkFile.name} (${(apkFile.size / 1024 / 1024).toFixed(1)} MB)…`);
         downloadUrl = await uploadFile(apkFile);
+        setUploadedApkUrl(downloadUrl);
       }
 
       // Upload any new screenshots
@@ -936,6 +1040,17 @@ function OurAppsTab() {
               </div>
             )}
 
+            {uploadedApkUrl && !uploadStatus && (
+              <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#00c853", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>✅ File Uploaded — Download Link Generated</div>
+                <div style={{ fontSize: 11, color: "#a78bfa", wordBreak: "break-all", marginBottom: 8, fontFamily: "monospace" }}>{uploadedApkUrl}</div>
+                <button onClick={() => { navigator.clipboard.writeText(uploadedApkUrl); setCopiedApkUrl(true); setTimeout(() => setCopiedApkUrl(false), 2000); }}
+                  style={{ fontSize: 11, background: copiedApkUrl ? "rgba(0,200,83,0.3)" : "rgba(0,200,83,0.12)", color: "#00c853", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontWeight: 700 }}>
+                  {copiedApkUrl ? "✅ Copied!" : "📋 Copy Download Link"}
+                </button>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setShowForm(false)} disabled={saving}
                 style={{ flex: 1, background: "rgba(255,255,255,0.06)", color: "#c0c8d8", border: "none", borderRadius: 14, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
@@ -1018,6 +1133,17 @@ export default function Admin() {
     setActionLoading(dev.id);
     try { await apiFetch(`/admin/developers/${dev.id}/suspend`, { method: "POST" }); loadDevelopers(); }
     catch { alert("Failed"); } finally { setActionLoading(null); }
+  }
+  async function toggleFeeExempt(dev: Developer) {
+    setActionLoading(dev.id);
+    try { await apiFetch(`/admin/developers/${dev.id}/toggle-fee-exempt`, { method: "POST" }); loadDevelopers(); }
+    catch { alert("Failed"); } finally { setActionLoading(null); }
+  }
+  async function directApprove(app: App) {
+    if (!confirm(`Directly approve "${app.name}" and waive the publishing fee?`)) return;
+    setActionLoading(app.id);
+    try { await apiFetch(`/admin/apps/${app.id}/direct-approve`, { method: "POST" }); loadPending(); loadAll(); }
+    catch (e: any) { alert(e.message ?? "Failed"); } finally { setActionLoading(null); }
   }
   async function assignDownload() {
     if (!downloadModal || !downloadUrl) return;
@@ -1104,6 +1230,7 @@ export default function Admin() {
                     <button onClick={() => aiReview(app)} disabled={aiLoading === app.id} style={{ background: "rgba(124,77,255,0.1)", color: "#a78bfa", border: "1px solid rgba(124,77,255,0.2)", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{aiLoading === app.id ? "Analyzing..." : "🤖 AI Review"}</button>
                     <button onClick={() => approve(app)} disabled={actionLoading === app.id} className="btn-green" style={{ fontSize: 12, padding: "6px 12px" }}>✅ Approve</button>
                     <button onClick={() => { setRejectModal(app); setRejectReason(""); }} style={{ background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>❌ Reject</button>
+                    <button onClick={() => directApprove(app)} disabled={actionLoading === app.id} title="Bypass fee & immediately approve" style={{ background: "rgba(0,200,83,0.08)", color: "#00c853", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>⚡ Direct Launch</button>
                     <button onClick={() => { setDownloadModal(app); setDownloadUrl(app.downloadUrl ?? ""); }} style={{ background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>🔗 Set URL</button>
                   </div>
                 </div>
@@ -1139,6 +1266,7 @@ export default function Admin() {
                       <div style={{ display: "flex", gap: 6 }}>
                         {app.status === "pending_review" && <button onClick={() => approve(app)} disabled={actionLoading === app.id} style={{ fontSize: 11, background: "rgba(0,200,83,0.1)", color: "#00c853", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Approve</button>}
                         {app.status === "pending_review" && <button onClick={() => { setRejectModal(app); setRejectReason(""); }} style={{ fontSize: 11, background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reject</button>}
+                        {["pending_payment","draft"].includes(app.status) && <button onClick={() => directApprove(app)} disabled={actionLoading === app.id} title="Bypass fee — approve directly" style={{ fontSize: 11, background: "rgba(0,200,83,0.12)", color: "#00c853", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>⚡ Launch</button>}
                         <button onClick={() => toggleFeature(app)} disabled={actionLoading === app.id} style={{ fontSize: 11, background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>{app.isFeatured ? "Unfeature" : "Feature"}</button>
                         <button onClick={() => { setDownloadModal(app); setDownloadUrl(app.downloadUrl ?? ""); }} style={{ fontSize: 11, background: "rgba(124,77,255,0.1)", color: "#a78bfa", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>URL</button>
                       </div>
@@ -1158,7 +1286,7 @@ export default function Admin() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                  {["Developer","Email","Country","Status","NGN Account","Joined","Actions"].map(h => (
+                  {["Developer","Email","Country","Status","Fee Exempt","NGN Account","Joined","Actions"].map(h => (
                     <th key={h} style={{ ...cell(), color: "#8892a4", fontWeight: 600, textAlign: "left" }}>{h}</th>
                   ))}
                 </tr>
@@ -1170,12 +1298,20 @@ export default function Admin() {
                     <td style={{ ...cell(), color: "#8892a4" }}>{dev.email}</td>
                     <td style={{ ...cell(), color: "#8892a4" }}>{dev.country}</td>
                     <td style={cell()}><span style={{ fontSize: 11, color: dev.status === "active" ? "#00c853" : "#ff5252", background: dev.status === "active" ? "rgba(0,200,83,0.1)" : "rgba(255,82,82,0.1)", padding: "2px 8px", borderRadius: 10 }}>{dev.status}</span></td>
+                    <td style={{ ...cell(), textAlign: "center" }}>
+                      <span title={dev.feeExempt ? "Fee waived — no publishing fee required" : "Normal — publishing fee applies"} style={{ fontSize: 14 }}>{dev.feeExempt ? "✅" : "—"}</span>
+                    </td>
                     <td style={{ ...cell(), fontFamily: "monospace", fontSize: 12 }}>{dev.dedicatedNgnAccount?.accountNumber ?? "—"}</td>
                     <td style={{ ...cell(), color: "#8892a4", fontSize: 11 }}>{new Date(dev.createdAt).toLocaleDateString()}</td>
                     <td style={cell()}>
-                      <button onClick={() => toggleSuspend(dev)} disabled={actionLoading === dev.id} style={{ fontSize: 11, background: dev.status === "active" ? "rgba(255,82,82,0.1)" : "rgba(0,200,83,0.1)", color: dev.status === "active" ? "#ff5252" : "#00c853", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
-                        {actionLoading === dev.id ? "..." : dev.status === "active" ? "Suspend" : "Unsuspend"}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button onClick={() => toggleSuspend(dev)} disabled={actionLoading === dev.id} style={{ fontSize: 11, background: dev.status === "active" ? "rgba(255,82,82,0.1)" : "rgba(0,200,83,0.1)", color: dev.status === "active" ? "#ff5252" : "#00c853", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                          {actionLoading === dev.id ? "..." : dev.status === "active" ? "Suspend" : "Unsuspend"}
+                        </button>
+                        <button onClick={() => toggleFeeExempt(dev)} disabled={actionLoading === dev.id} title={dev.feeExempt ? "Remove fee exemption" : "Grant fee exemption (waive publishing fee)"} style={{ fontSize: 11, background: dev.feeExempt ? "rgba(255,179,0,0.1)" : "rgba(0,200,83,0.08)", color: dev.feeExempt ? "#ffb300" : "#00c853", border: `1px solid ${dev.feeExempt ? "rgba(255,179,0,0.25)" : "rgba(0,200,83,0.2)"}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                          {dev.feeExempt ? "⚡ Exempt" : "Waive Fee"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -27,6 +27,24 @@ function extractCountry(req: import("express").Request): string | null {
   );
 }
 
+/** Extract region (state/province) from Cloudflare or forwarded headers. */
+function extractRegion(req: import("express").Request): string | null {
+  return (
+    (req.headers["cf-ipregion"] as string | undefined) ??
+    (req.headers["x-region"] as string | undefined) ??
+    null
+  );
+}
+
+/** Extract city from Cloudflare or forwarded headers. */
+function extractCity(req: import("express").Request): string | null {
+  return (
+    (req.headers["cf-ipcity"] as string | undefined) ??
+    (req.headers["x-city"] as string | undefined) ??
+    null
+  );
+}
+
 /** Fire-and-forget event insert — never blocks the response. */
 function logAppEvent(appId: number, eventType: string, req: import("express").Request, extra?: { clerkUserId?: string; sessionId?: string }) {
   db.insert(storeAppEventsTable).values({
@@ -35,6 +53,8 @@ function logAppEvent(appId: number, eventType: string, req: import("express").Re
     sessionId: extra?.sessionId ?? null,
     clerkUserId: extra?.clerkUserId ?? null,
     country: extractCountry(req),
+    region: extractRegion(req),
+    city: extractCity(req),
     userAgent: (req.headers["user-agent"] ?? "").slice(0, 512) || null,
   }).catch(() => {});
 }
@@ -200,14 +220,31 @@ function isAdmin(req: any): boolean {
 
 const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
-async function isSuperAdmin(req: any): Promise<boolean> {
+/**
+ * Unified admin check: accepts both ADMIN_USER_IDS (by Clerk userId) and
+ * SUPER_ADMIN_EMAILS (by primary email — works with any login method, including Google/Gmail).
+ * All admin routes must call this instead of isAdmin().
+ */
+async function checkIsAdmin(req: any): Promise<boolean> {
+  if (isAdmin(req)) return true;   // fast path: userId in ADMIN_USER_IDS
+  if (SUPER_ADMIN_EMAILS.length === 0) return false;
   const { userId } = getAuth(req);
   if (!userId) return false;
-  // Super admins are always admins too
-  if (!isAdmin(req) && SUPER_ADMIN_EMAILS.length > 0) {
-    // Allow super admins even if not in ADMIN_USER_IDS
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    const email = (user.primaryEmailAddress?.emailAddress ?? "").toLowerCase();
+    return SUPER_ADMIN_EMAILS.includes(email);
+  } catch {
+    return false;
   }
+}
+
+async function isSuperAdmin(req: any): Promise<boolean> {
+  // Super admins must pass the general admin check first, then match SUPER_ADMIN_EMAILS
+  if (!(await checkIsAdmin(req))) return false;
   if (SUPER_ADMIN_EMAILS.length === 0) return isAdmin(req);
+  const { userId } = getAuth(req);
+  if (!userId) return false;
   try {
     const user = await clerkClient.users.getUser(userId);
     const email = (user.primaryEmailAddress?.emailAddress ?? "").toLowerCase();
@@ -483,7 +520,7 @@ router.get("/apps/:slug/stats", requireAuth(), async (req, res) => {
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.clerkUserId, userId!) });
-    if (!dev || (dev.id !== app.developerId && !isAdmin(req))) return void res.status(403).json({ error: "Forbidden" });
+    if (!dev || (dev.id !== app.developerId && !(await checkIsAdmin(req)))) return void res.status(403).json({ error: "Forbidden" });
 
     const events = await db.select().from(storeAppEventsTable).where(eq(storeAppEventsTable.appId, app.id));
     const byType = (t: string) => events.filter(e => e.eventType === t);
@@ -525,7 +562,7 @@ router.get("/apps/:slug/stats", requireAuth(), async (req, res) => {
 // GET /store/admin/event-analytics — admin overview of all store events
 router.get("/admin/event-analytics", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const days = parseInt(String(req.query.days ?? "30"), 10) || 30;
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
 
@@ -563,6 +600,42 @@ router.get("/admin/event-analytics", requireAuth(), async (req, res) => {
     installs.forEach(e => { const n = appIdMap[e.appId] ?? "Unknown"; installsByApp[n] = (installsByApp[n] ?? 0) + 1; });
     const viewsByApp: Record<string, number> = {};
     views.forEach(e => { const n = appIdMap[e.appId] ?? "Unknown"; viewsByApp[n] = (viewsByApp[n] ?? 0) + 1; });
+    const uninstallsByApp: Record<string, number> = {};
+    uninstalls.forEach(e => { const n = appIdMap[e.appId] ?? "Unknown"; uninstallsByApp[n] = (uninstallsByApp[n] ?? 0) + 1; });
+
+    // Region (state/province) breakdown — only available when CF headers are present
+    const countByRegion = (evts: typeof events) => {
+      const m: Record<string, number> = {};
+      evts.forEach(e => {
+        const r = (e as any).region as string | null | undefined;
+        if (r) { m[r] = (m[r] ?? 0) + 1; }
+      });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([region, count]) => ({ region, count }));
+    };
+    const countByCity = (evts: typeof events) => {
+      const m: Record<string, number> = {};
+      evts.forEach(e => {
+        const c = (e as any).city as string | null | undefined;
+        if (c) { m[c] = (m[c] ?? 0) + 1; }
+      });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([city, count]) => ({ city, count }));
+    };
+
+    // Review stats across all apps
+    const reviews = await db.select().from(storeAppReviewsTable).where(gte(storeAppReviewsTable.createdAt, cutoff));
+    const ratingDist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) ratingDist[r.rating] = (ratingDist[r.rating] ?? 0) + 1; });
+    const avgRating = reviews.length > 0 ? +(reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(2) : 0;
+    const reviewsByApp: Record<string, { count: number; avgRating: number; total: number }> = {};
+    reviews.forEach(r => {
+      const n = appIdMap[r.appId] ?? "Unknown";
+      const e = reviewsByApp[n] ?? { count: 0, avgRating: 0, total: 0 };
+      e.count++; e.total += r.rating;
+      reviewsByApp[n] = e;
+    });
+    const topReviewedApps = Object.entries(reviewsByApp)
+      .map(([name, d]) => ({ name, count: d.count, avgRating: +(d.total / d.count).toFixed(2) }))
+      .sort((a, b) => b.count - a.count).slice(0, 10);
 
     res.json({
       period: days,
@@ -570,12 +643,22 @@ router.get("/admin/event-analytics", requireAuth(), async (req, res) => {
       totalInstalls: installs.length,
       totalUninstalls: uninstalls.length,
       totalNewUsers: newUsers.length,
+      totalReviews: reviews.length,
+      avgRating,
       conversionRate: views.length > 0 ? +(installs.length / views.length * 100).toFixed(1) : 0,
       viewsByCountry: countByCountry(views),
       installsByCountry: countByCountry(installs),
-      newUsersByCountry: countByCountry(newUsers.map(u => ({ ...u, eventType: "signup", appId: 0, sessionId: null, clerkUserId: u.clerkUserId, userAgent: null }))),
+      uninstallsByCountry: countByCountry(uninstalls),
+      newUsersByCountry: countByCountry(newUsers.map(u => ({ id: 0, appId: 0, eventType: "signup", sessionId: null, clerkUserId: u.clerkUserId, country: u.country, region: null, city: null, userAgent: null, createdAt: u.createdAt }))),
+      viewsByRegion: countByRegion(views),
+      installsByRegion: countByRegion(installs),
+      viewsByCity: countByCity(views),
+      installsByCity: countByCity(installs),
       topAppsByInstalls: Object.entries(installsByApp).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
       topAppsByViews: Object.entries(viewsByApp).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      topAppsByUninstalls: Object.entries(uninstallsByApp).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      topReviewedApps,
+      ratingDistribution: Object.entries(ratingDist).map(([stars, count]) => ({ stars: Number(stars), count })),
       daily: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d })),
     });
   } catch (err) {
@@ -1027,7 +1110,7 @@ router.post("/webhooks/paystack", async (req, res) => {
 // GET /store/admin/stats
 router.get("/admin/stats", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const [totalApps] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable);
     const [pending] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "pending_review"));
     const [approved] = await db.select({ count: sql<number>`count(*)::int` }).from(storeAppsTable).where(eq(storeAppsTable.status, "approved"));
@@ -1051,7 +1134,7 @@ router.get("/admin/stats", requireAuth(), async (req, res) => {
 // GET /store/admin/apps/pending
 router.get("/admin/apps/pending", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const apps = await db.query.storeAppsTable.findMany({
       where: eq(storeAppsTable.status, "pending_review"),
       orderBy: asc(storeAppsTable.createdAt),
@@ -1067,7 +1150,7 @@ router.get("/admin/apps/pending", requireAuth(), async (req, res) => {
 // GET /store/admin/apps
 router.get("/admin/apps", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { status } = req.query as Record<string, string>;
     const where = status ? eq(storeAppsTable.status, status) : undefined;
     const apps = await db.query.storeAppsTable.findMany({
@@ -1086,7 +1169,7 @@ router.get("/admin/apps", requireAuth(), async (req, res) => {
 // POST /store/admin/apps/:id/ai-review
 router.post("/admin/apps/:id/ai-review", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(String(req.params.id))) });
     if (!app) return void res.status(404).json({ error: "Not found" });
 
@@ -1143,7 +1226,7 @@ recommendation must be: approve, review, or reject`;
 // POST /store/admin/apps/:id/approve
 router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const appId = parseInt(String(req.params.id));
 
@@ -1200,7 +1283,7 @@ router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
 // POST /store/admin/apps/:id/reject
 router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const appId = parseInt(String(req.params.id));
     const { reason } = req.body;
@@ -1264,7 +1347,7 @@ router.post("/admin/apps/:id/reject", requireAuth(), async (req, res) => {
 // POST /store/admin/apps/:id/feature
 router.post("/admin/apps/:id/feature", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, parseInt(String(req.params.id))) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     await db.update(storeAppsTable).set({ isFeatured: !app.isFeatured, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, app.id));
@@ -1278,7 +1361,7 @@ router.post("/admin/apps/:id/feature", requireAuth(), async (req, res) => {
 // GET /store/admin/developers
 router.get("/admin/developers", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const devs = await db.query.storeDeveloperAccountsTable.findMany({ orderBy: desc(storeDeveloperAccountsTable.createdAt) });
     res.json(devs.map(serializeDev));
   } catch (err) {
@@ -1290,7 +1373,7 @@ router.get("/admin/developers", requireAuth(), async (req, res) => {
 // POST /store/admin/developers/:id/suspend
 router.post("/admin/developers/:id/suspend", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, parseInt(String(req.params.id))) });
     if (!dev) return void res.status(404).json({ error: "Not found" });
     const newStatus = dev.status === "active" ? "suspended" : "active";
@@ -1302,10 +1385,63 @@ router.post("/admin/developers/:id/suspend", requireAuth(), async (req, res) => 
   }
 });
 
+// POST /store/admin/developers/:id/toggle-fee-exempt — waive or restore publishing fee
+router.post("/admin/developers/:id/toggle-fee-exempt", requireAuth(), async (req, res) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, parseInt(String(req.params.id))) });
+    if (!dev) return void res.status(404).json({ error: "Not found" });
+    const newVal = !dev.feeExempt;
+    await db.update(storeDeveloperAccountsTable).set({ feeExempt: newVal, updatedAt: new Date() } as any).where(eq(storeDeveloperAccountsTable.id, dev.id));
+    res.json({ feeExempt: newVal });
+  } catch (err) {
+    logger.error({ err }, "toggleFeeExempt error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/apps/:id/direct-approve — admin bypasses fee and immediately approves
+router.post("/admin/apps/:id/direct-approve", requireAuth(), async (req, res) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const appId = parseInt(String(req.params.id));
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq(storeAppsTable.id, appId),
+      with: { developer: true },
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+
+    await db.update(storeAppsTable).set({
+      status: "approved",
+      publishingFeePaid: true,
+      publishingFeeGateway: "admin_waived",
+      reviewedByClerkId: userId,
+      reviewedAt: new Date(),
+      rejectionReason: null,
+      updatedAt: new Date(),
+    } as any).where(eq(storeAppsTable.id, appId));
+
+    const developer = (app as any).developer as { email: string; displayName: string } | null;
+    if (developer?.email) {
+      const html = wrapVendorEmail({
+        bodyHtml: `<h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Your app has been approved 🎉</h1>
+          <p style="font-size:14px;line-height:1.6;color:#444;">Hi ${escapeHtml(developer.displayName)},</p>
+          <p style="font-size:14px;line-height:1.6;color:#444;"><strong>${escapeHtml(app.name)}</strong> has been approved and is now live on the Awajimaa App Store. The publishing fee has been waived by an administrator.</p>`,
+      });
+      sendEmail({ to: developer.email, subject: `Your app "${app.name}" is now live`, html }).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "directApprove error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /store/admin/apps/:id/assign-download
 router.post("/admin/apps/:id/assign-download", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { downloadUrl } = req.body;
     if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl required" });
     await db.update(storeAppsTable).set({ downloadUrl, updatedAt: new Date() } as any).where(eq(storeAppsTable.id, parseInt(String(req.params.id))));
@@ -1771,7 +1907,7 @@ router.get("/apps/:id/update-requests", requireAuth(), async (req, res) => {
 // GET /store/admin/update-requests
 router.get("/admin/update-requests", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { status = "pending" } = req.query as Record<string, string>;
     const where = status === "all" ? undefined : eq(storeAppUpdateRequestsTable.status, status);
     const requests = await db.query.storeAppUpdateRequestsTable.findMany({
@@ -1798,7 +1934,7 @@ router.get("/admin/update-requests", requireAuth(), async (req, res) => {
 // POST /store/admin/update-requests/:id/approve
 router.post("/admin/update-requests/:id/approve", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(String(req.params.id))) });
     if (!request) return void res.status(404).json({ error: "Not found" });
@@ -1838,7 +1974,7 @@ router.post("/admin/update-requests/:id/approve", requireAuth(), async (req, res
 // POST /store/admin/update-requests/:id/reject
 router.post("/admin/update-requests/:id/reject", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const request = await db.query.storeAppUpdateRequestsTable.findFirst({ where: eq(storeAppUpdateRequestsTable.id, parseInt(String(req.params.id))) });
     if (!request) return void res.status(404).json({ error: "Not found" });
@@ -1937,7 +2073,7 @@ router.get("/payments/offline/my", requireAuth(), async (req, res) => {
 // GET /store/admin/offline-payments — admin list
 router.get("/admin/offline-payments", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { status = "submitted" } = req.query as Record<string, string>;
     const where = status === "all" ? undefined : eq(storeOfflinePaymentsTable.status, status);
     const ops = await db.query.storeOfflinePaymentsTable.findMany({
@@ -1961,7 +2097,7 @@ router.get("/admin/offline-payments", requireAuth(), async (req, res) => {
 // POST /store/admin/offline-payments/:id/admin-approve — first-level admin approval
 router.post("/admin/offline-payments/:id/admin-approve", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(String(req.params.id))) });
     if (!op) return void res.status(404).json({ error: "Not found" });
@@ -2019,7 +2155,7 @@ router.post("/admin/offline-payments/:id/super-approve", requireAuth(), async (r
 // POST /store/admin/offline-payments/:id/reject — reject offline payment proof
 router.post("/admin/offline-payments/:id/reject", requireAuth(), async (req, res) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { userId } = getAuth(req);
     const op = await db.query.storeOfflinePaymentsTable.findFirst({ where: eq(storeOfflinePaymentsTable.id, parseInt(String(req.params.id))) });
     if (!op) return void res.status(404).json({ error: "Not found" });
@@ -2083,7 +2219,7 @@ router.post(
   _apkUpload.single("file"),
   async (req: any, res: any) => {
     try {
-      if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+      if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
       if (!req.file) return void res.status(400).json({ error: "No file provided" });
       const { buffer, mimetype, originalname, size } = req.file;
       const { publicUrl } = await storeGeneratedMedia(buffer, mimetype);
@@ -2151,7 +2287,7 @@ router.get("/p/:publicId", async (req: any, res: any) => {
  */
 router.get("/admin/platform-apps", requireAuth(), async (req: any, res: any) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const apps = await db
       .select()
       .from(storeAppsTable)
@@ -2170,7 +2306,7 @@ router.get("/admin/platform-apps", requireAuth(), async (req: any, res: any) => 
  */
 router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
     if (!name || !tagline || !description || !category || !iconUrl || !downloadUrl) {
       return void res.status(400).json({ error: "name, tagline, description, category, iconUrl, and downloadUrl are required" });
@@ -2208,7 +2344,7 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
  */
 router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
@@ -2230,7 +2366,7 @@ router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: an
  */
 router.delete("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
   try {
-    if (!isAdmin(req)) return void res.status(403).json({ error: "Admin only" });
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
     const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
