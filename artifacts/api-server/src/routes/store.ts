@@ -15,6 +15,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
@@ -2222,7 +2223,29 @@ router.post(
       if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
       if (!req.file) return void res.status(400).json({ error: "No file provided" });
       const { buffer, mimetype, originalname, size } = req.file;
-      const { publicUrl } = await storeGeneratedMedia(buffer, mimetype);
+
+      // Upload to object storage, then build the public URL from the *request* host
+      // so the link always uses the correct custom domain (awajimaaappstore.com in
+      // production) rather than the dev-tunnel hostname that PUBLIC_APP_DOMAIN /
+      // REPLIT_DEV_DOMAIN would otherwise produce.
+      const _objStorage = new ObjectStorageService();
+      const uploadUrl = await _objStorage.getObjectEntityUploadURL();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mimetype },
+        body: buffer as unknown as BodyInit,
+      });
+      if (!putRes.ok) throw new Error(`Object storage upload failed (${putRes.status})`);
+      const objectPath = _objStorage.normalizeObjectEntityPath(uploadUrl);
+      await _objStorage.trySetObjectEntityAclPolicy(objectPath, { owner: "system:store-apk", visibility: "public" });
+      const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+
+      // Use the same host-derivation pattern as getBaseUrl() so the link works on
+      // the custom domain in production and on localhost in dev.
+      const proto = (req.get("x-forwarded-proto") as string | undefined) ?? req.protocol ?? "https";
+      const host  = req.get("host") as string;
+      const publicUrl = `${proto}://${host}/api/media/${objectId}`;
+
       res.json({ url: publicUrl, fileName: originalname, fileSize: size, mimeType: mimetype });
     } catch (err) {
       logger.error({ err }, "platform-apps: upload-file error");
