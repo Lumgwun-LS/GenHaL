@@ -39,6 +39,24 @@ function Stars({ rating, interactive = false, onRate }: { rating: number; intera
 
 const PLATFORM_LABEL: Record<string, string> = { android: "🤖 Android", ios: "🍎 iOS", web: "🌐 Web", all: "📱 All Platforms" };
 
+/** Displays the canonical download link with a copy button. */
+function CanonicalLinkBar({ url, version }: { url: string; version: string | null }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div style={{ marginTop: 12, background: "rgba(0,200,83,0.05)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 10, fontWeight: 800, color: "#00c853", textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>🔗 Permanent Link</span>
+      <span style={{ fontSize: 12, color: "#a78bfa", fontFamily: "monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{url}</span>
+      {version && <span style={{ fontSize: 11, color: "#8892a4", flexShrink: 0 }}>v{version}</span>}
+      <button
+        onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+        style={{ background: copied ? "rgba(0,200,83,0.2)" : "rgba(0,200,83,0.1)", color: "#00c853", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+      >
+        {copied ? "✅ Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export default function AppDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { isSignedIn } = useUser();
@@ -155,6 +173,11 @@ export default function AppDetail() {
               🗑 Report Uninstall
             </button>
           </div>
+
+          {/* Canonical download link */}
+          {app.canonicalDownloadUrl && (
+            <CanonicalLinkBar url={app.canonicalDownloadUrl} version={app.currentVersion} />
+          )}
         </div>
       </div>
 
@@ -265,19 +288,37 @@ export default function AppDetail() {
       {tab === "versions" && (
         <div style={{ maxWidth: 640 }}>
           {versions.length === 0 ? (
-            <div style={{ color: "#8892a4", fontSize: 14 }}>No version history available.</div>
-          ) : versions.map(v => (
-            <div key={v.id} style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 16, marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>v{v.version}</span>
-                <span style={{ fontSize: 12, color: "#8892a4" }}>{new Date(v.createdAt).toLocaleDateString()}</span>
+            <div style={{ color: "#8892a4", fontSize: 14, padding: "24px 0" }}>No version history available yet.</div>
+          ) : versions.map(v => {
+            const isLive = v.status === "live";
+            const versionUrl = app?.canonicalDownloadUrl
+              ? app.canonicalDownloadUrl.replace(/\/dl\//, `/dl/`) + `/${v.version}`
+              : null;
+            const identifier = app?.packageName || app?.slug;
+            const perVersionUrl = identifier ? `https://awajimaaappstore.com/dl/${encodeURIComponent(identifier)}/${v.version}` : null;
+            return (
+              <div key={v.id} style={{ background: "#0d1117", border: `1px solid ${isLive ? "rgba(0,200,83,0.3)" : "rgba(255,255,255,0.07)"}`, borderRadius: 12, padding: 16, marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>v{v.version}</span>
+                    {v.versionCode && <span style={{ fontSize: 11, color: "#8892a4" }}>build {v.versionCode}</span>}
+                    {isLive && <span style={{ background: "rgba(0,200,83,0.15)", color: "#00c853", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase" }}>● Live</span>}
+                    {v.status === "deprecated" && <span style={{ background: "rgba(255,183,77,0.1)", color: "#ffb74d", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase" }}>Archived</span>}
+                  </div>
+                  <span style={{ fontSize: 12, color: "#8892a4" }}>{new Date(v.createdAt).toLocaleDateString()}</span>
+                </div>
+                {v.minOsVersion && <div style={{ fontSize: 12, color: "#8892a4", marginBottom: 6 }}>Min OS: {v.minOsVersion}</div>}
+                {v.releaseNotes && <p style={{ fontSize: 13, color: "#c0c8d8", lineHeight: 1.6, marginBottom: 8 }}>{v.releaseNotes}</p>}
+                {v.fileSize && <div style={{ fontSize: 11, color: "#8892a4", marginBottom: 8 }}>Size: {(v.fileSize / 1024 / 1024).toFixed(1)} MB</div>}
+                {perVersionUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "6px 10px", marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: "#8892a4", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{perVersionUrl}</span>
+                    <a href={perVersionUrl} target="_blank" rel="noreferrer" style={{ color: "#00c853", fontSize: 11, flexShrink: 0, textDecoration: "none", fontWeight: 700 }}>⬇️ Download</a>
+                  </div>
+                )}
               </div>
-              {v.releaseNotes && <p style={{ fontSize: 13, color: "#c0c8d8", lineHeight: 1.6 }}>{v.releaseNotes}</p>}
-              {v.downloadUrl && (
-                <a href={v.downloadUrl} target="_blank" rel="noreferrer" style={{ color: "#00c853", fontSize: 12, display: "inline-block", marginTop: 8 }}>⬇️ Download this version</a>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

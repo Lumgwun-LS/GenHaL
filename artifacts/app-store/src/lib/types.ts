@@ -49,6 +49,8 @@ export interface App extends AppSummary {
   screenshots: string[];
   packageName: string | null;
   downloadUrl: string | null;
+  /** Permanent shareable link: awajimaaappstore.com/dl/{packageName|slug} */
+  canonicalDownloadUrl: string;
   webUrl: string | null;
   currentVersion: string | null;
   developerWebsite: string | null;
@@ -59,6 +61,8 @@ export interface App extends AppSummary {
   rejectionReason: string | null;
   publishingFeeGateway: string | null;
   developerId: number;
+  publicId: string | null;
+  publicUrl: string | null;
   updatedAt: string;
 }
 
@@ -106,8 +110,16 @@ export interface AppVersion {
   id: number;
   appId: number;
   version: string;
+  versionCode: number | null;
   releaseNotes: string | null;
-  downloadUrl: string | null;
+  fileUrl: string | null;
+  fileSize: number | null;
+  minOsVersion: string | null;
+  uploadedByClerkId: string | null;
+  /** pending | live | deprecated */
+  status: string;
+  activatedAt: string | null;
+  activatedByClerkId: string | null;
   createdAt: string;
 }
 

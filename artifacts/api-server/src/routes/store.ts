@@ -135,6 +135,31 @@ function publicAppUrl(publicId: string | null | undefined): string | null {
   return publicId ? `${STORE_DOMAIN}/app/${publicId}` : null;
 }
 
+/** Permanent, shareable download link using the app's package ID (or slug fallback).
+ *  e.g. https://awajimaaappstore.com/dl/com.awajimaa.myapp */
+function canonicalDownloadUrl(app: any): string {
+  const identifier = app.packageName || app.slug;
+  return `${STORE_DOMAIN}/dl/${encodeURIComponent(identifier)}`;
+}
+
+function serializeVersion(v: any) {
+  return {
+    id: v.id,
+    appId: v.appId,
+    version: v.version,
+    versionCode: v.versionCode ?? null,
+    releaseNotes: v.releaseNotes ?? null,
+    fileUrl: v.fileUrl ?? null,
+    fileSize: v.fileSize ?? null,
+    minOsVersion: v.minOsVersion ?? null,
+    uploadedByClerkId: v.uploadedByClerkId ?? null,
+    status: v.status,
+    activatedAt: v.activatedAt?.toISOString?.() ?? null,
+    activatedByClerkId: v.activatedByClerkId ?? null,
+    createdAt: v.createdAt?.toISOString?.() ?? null,
+  };
+}
+
 function serializeApp(app: any, developer?: any) {
   return {
     id: app.id,
@@ -148,6 +173,7 @@ function serializeApp(app: any, developer?: any) {
     screenshots: (app.screenshots as string[]) ?? [],
     packageName: app.packageName ?? null,
     downloadUrl: app.downloadUrl ?? null,
+    canonicalDownloadUrl: canonicalDownloadUrl(app),
     webUrl: app.webUrl ?? null,
     currentVersion: app.currentVersion ?? null,
     rating: app.rating,
@@ -718,18 +744,68 @@ router.post("/apps/:slug/reviews", requireAuth(), async (req, res) => {
   }
 });
 
-// GET /store/apps/:slug/versions
+// GET /store/apps/:slug/versions — public: live + deprecated only
 router.get("/apps/:slug/versions", async (req, res) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.slug, String(req.params.slug)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
     const versions = await db.query.storeAppVersionsTable.findMany({
-      where: eq(storeAppVersionsTable.appId, app.id),
+      where: and(eq(storeAppVersionsTable.appId, app.id), sql`status IN ('live','deprecated')`),
       orderBy: desc(storeAppVersionsTable.createdAt),
     });
-    res.json(versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() })));
+    res.json(versions.map(serializeVersion));
   } catch (err) {
     logger.error({ err }, "listVersions error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── CANONICAL DOWNLOAD ROUTES ────────────────────────────────────────────────
+// GET /store/dl/:identifier          → latest live version (by packageName or slug)
+// GET /store/dl/:identifier/:version → a specific version
+// These are permanent, shareable links that always resolve to the right file.
+
+router.get("/dl/:identifier", async (req: any, res: any) => {
+  try {
+    const id = decodeURIComponent(String(req.params.identifier));
+    const app = await db.query.storeAppsTable.findFirst({
+      where: or(eq((storeAppsTable as any).packageName, id), eq(storeAppsTable.slug, id)),
+    });
+    if (!app || app.status !== "approved") return void res.status(404).json({ error: "App not found" });
+
+    const liveVer = await db.query.storeAppVersionsTable.findFirst({
+      where: and(eq(storeAppVersionsTable.appId, app.id), eq(storeAppVersionsTable.status, "live")),
+    });
+    const fileUrl = liveVer?.fileUrl ?? app.downloadUrl;
+    if (!fileUrl) return void res.status(404).json({ error: "No download available for this app yet" });
+
+    await db.update(storeAppsTable).set({ totalDownloads: sql`${storeAppsTable.totalDownloads} + 1` }).where(eq(storeAppsTable.id, app.id));
+    logAppEvent(app.id, "download", req);
+    res.redirect(302, fileUrl);
+  } catch (err) {
+    logger.error({ err }, "dl:identifier error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/dl/:identifier/:version", async (req: any, res: any) => {
+  try {
+    const id = decodeURIComponent(String(req.params.identifier));
+    const ver = String(req.params.version);
+    const app = await db.query.storeAppsTable.findFirst({
+      where: or(eq((storeAppsTable as any).packageName, id), eq(storeAppsTable.slug, id)),
+    });
+    if (!app || app.status !== "approved") return void res.status(404).json({ error: "App not found" });
+
+    const version = await db.query.storeAppVersionsTable.findFirst({
+      where: and(eq(storeAppVersionsTable.appId, app.id), eq(storeAppVersionsTable.version, ver)),
+    });
+    if (!version?.fileUrl) return void res.status(404).json({ error: `Version ${ver} not found or has no file` });
+
+    logAppEvent(app.id, "download", req);
+    res.redirect(302, version.fileUrl);
+  } catch (err) {
+    logger.error({ err }, "dl:identifier:version error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -1449,6 +1525,140 @@ router.post("/admin/apps/:id/assign-download", requireAuth(), async (req, res) =
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "assignDownload error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── ADMIN VERSION MANAGEMENT ─────────────────────────────────────────────────
+
+/** Shared upload handler for admin version APK uploads */
+const _versionUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+
+/** Upload a buffer to object storage and return the public URL derived from the request host. */
+async function uploadToObjectStorage(buffer: Buffer, mimetype: string, req: any): Promise<{ publicUrl: string; fileSize: number }> {
+  const _obj = new ObjectStorageService();
+  const uploadUrl = await _obj.getObjectEntityUploadURL();
+  const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": mimetype }, body: buffer as unknown as BodyInit });
+  if (!putRes.ok) throw new Error(`Object storage upload failed (${putRes.status})`);
+  const objectPath = _obj.normalizeObjectEntityPath(uploadUrl);
+  await _obj.trySetObjectEntityAclPolicy(objectPath, { owner: "system:store-apk", visibility: "public" });
+  const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+  const proto = (req.get("x-forwarded-proto") as string | undefined) ?? req.protocol ?? "https";
+  const host = req.get("host") as string;
+  return { publicUrl: `${proto}://${host}/api/media/${objectId}`, fileSize: buffer.length };
+}
+
+// GET /store/admin/apps/:id/versions
+router.get("/admin/apps/:id/versions", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const appId = parseInt(String(req.params.id));
+    const versions = await db.query.storeAppVersionsTable.findMany({
+      where: eq(storeAppVersionsTable.appId, appId),
+      orderBy: desc(storeAppVersionsTable.createdAt),
+    });
+    res.json(versions.map(serializeVersion));
+  } catch (err) {
+    logger.error({ err }, "adminListVersions error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/apps/:id/versions — upload + register a new version
+router.post("/admin/apps/:id/versions", requireAuth(), _versionUpload.single("file"), async (req: any, res: any) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const appId = parseInt(String(req.params.id));
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, appId) });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+
+    const { version, releaseNotes, minOsVersion, autoActivate } = req.body;
+    if (!version) return void res.status(400).json({ error: "version is required" });
+
+    // Upload file if provided, or accept a pre-existing fileUrl in body
+    let fileUrl: string | null = req.body.fileUrl ?? null;
+    let fileSize: number | null = null;
+    if (req.file) {
+      const result = await uploadToObjectStorage(req.file.buffer, req.file.mimetype, req);
+      fileUrl = result.publicUrl;
+      fileSize = result.fileSize;
+    }
+
+    // Auto-assign the next integer version code
+    const [{ maxCode }] = await db.select({ maxCode: sql<number>`COALESCE(MAX(version_code), 0)` })
+      .from(storeAppVersionsTable).where(eq(storeAppVersionsTable.appId, appId));
+    const versionCode = maxCode + 1;
+
+    const shouldActivate = (autoActivate === "true" || autoActivate === true) && !!fileUrl;
+    const now = new Date();
+
+    if (shouldActivate) {
+      await db.update(storeAppVersionsTable).set({ status: "deprecated" })
+        .where(and(eq(storeAppVersionsTable.appId, appId), eq(storeAppVersionsTable.status, "live")));
+    }
+
+    const [v] = await db.insert(storeAppVersionsTable).values({
+      appId,
+      version,
+      versionCode,
+      releaseNotes: releaseNotes ?? null,
+      fileUrl,
+      fileSize: fileSize !== null ? String(fileSize) : null,
+      minOsVersion: minOsVersion ?? null,
+      uploadedByClerkId: userId,
+      status: shouldActivate ? "live" : "pending",
+      activatedAt: shouldActivate ? now : null,
+      activatedByClerkId: shouldActivate ? userId : null,
+    } as any).returning();
+
+    if (shouldActivate) {
+      await db.update(storeAppsTable)
+        .set({ downloadUrl: fileUrl, currentVersion: version, updatedAt: now })
+        .where(eq(storeAppsTable.id, appId));
+    }
+
+    res.status(201).json(serializeVersion(v));
+  } catch (err) {
+    logger.error({ err }, "adminAddVersion error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/apps/:id/versions/:versionId/activate — make a version live (rollback support)
+router.post("/admin/apps/:id/versions/:versionId/activate", requireAuth(), async (req: any, res: any) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const appId = parseInt(String(req.params.id));
+    const versionId = parseInt(String(req.params.versionId));
+
+    const [app, version] = await Promise.all([
+      db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, appId) }),
+      db.query.storeAppVersionsTable.findFirst({
+        where: and(eq(storeAppVersionsTable.id, versionId), eq(storeAppVersionsTable.appId, appId)),
+      }),
+    ]);
+    if (!app) return void res.status(404).json({ error: "App not found" });
+    if (!version) return void res.status(404).json({ error: "Version not found" });
+    if (!version.fileUrl) return void res.status(400).json({ error: "This version has no file — upload a file before activating" });
+
+    const now = new Date();
+    // Deprecate all currently live versions
+    await db.update(storeAppVersionsTable).set({ status: "deprecated" })
+      .where(and(eq(storeAppVersionsTable.appId, appId), eq(storeAppVersionsTable.status, "live")));
+    // Activate the chosen version
+    await db.update(storeAppVersionsTable)
+      .set({ status: "live", activatedAt: now, activatedByClerkId: userId })
+      .where(eq(storeAppVersionsTable.id, versionId));
+    // Sync the app's canonical download URL and version label
+    await db.update(storeAppsTable)
+      .set({ downloadUrl: version.fileUrl, currentVersion: version.version, updatedAt: now })
+      .where(eq(storeAppsTable.id, appId));
+
+    res.json({ ok: true, message: `v${version.version} is now live` });
+  } catch (err) {
+    logger.error({ err }, "activateVersion error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -2338,6 +2548,7 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
     let slug = _slugify(name);
     const clash = await db.select({ id: storeAppsTable.id }).from(storeAppsTable).where(eq(storeAppsTable.slug, slug));
     if (clash.length) slug = `${slug}-${Date.now()}`;
+    const { userId: adminClerkId } = getAuth(req);
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
       name, slug, tagline, description, category,
@@ -2354,7 +2565,22 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
       isFeatured: false,
       publicId: generatePublicId("platform"),
     } as any).returning();
-    res.status(201).json({ ...app, publicUrl: publicAppUrl((app as any).publicId) });
+
+    // Auto-create the initial version record and mark it live
+    if (downloadUrl) {
+      await db.insert(storeAppVersionsTable).values({
+        appId: app.id,
+        version: currentVersion ?? "1.0.0",
+        versionCode: 1,
+        fileUrl: downloadUrl,
+        uploadedByClerkId: adminClerkId,
+        status: "live",
+        activatedAt: new Date(),
+        activatedByClerkId: adminClerkId,
+      } as any);
+    }
+
+    res.status(201).json({ ...app, publicUrl: publicAppUrl((app as any).publicId), canonicalDownloadUrl: canonicalDownloadUrl(app) });
   } catch (err) {
     logger.error({ err }, "platform-apps: create error");
     res.status(500).json({ error: "Internal server error" });
@@ -2368,6 +2594,7 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
 router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: any) => {
   try {
     if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const { userId: adminClerkId } = getAuth(req);
     const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
@@ -2376,7 +2603,31 @@ router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: an
     const updates: any = { updatedAt: new Date() };
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
     const [updated] = await db.update(storeAppsTable).set(updates).where(eq(storeAppsTable.id, id)).returning();
-    res.json(updated);
+
+    // If a new downloadUrl was supplied and it differs from the previous one, create a new version record
+    const newDownloadUrl = req.body.downloadUrl;
+    const newVersion = req.body.currentVersion;
+    if (newDownloadUrl && newDownloadUrl !== app.downloadUrl) {
+      const [{ maxCode }] = await db.select({ maxCode: sql<number>`COALESCE(MAX(version_code), 0)` })
+        .from(storeAppVersionsTable).where(eq(storeAppVersionsTable.appId, id));
+      // Deprecate any currently live version
+      await db.update(storeAppVersionsTable).set({ status: "deprecated" })
+        .where(and(eq(storeAppVersionsTable.appId, id), eq(storeAppVersionsTable.status, "live")));
+      // Create the new live version
+      const now = new Date();
+      await db.insert(storeAppVersionsTable).values({
+        appId: id,
+        version: newVersion ?? app.currentVersion ?? "1.0.0",
+        versionCode: maxCode + 1,
+        fileUrl: newDownloadUrl,
+        uploadedByClerkId: adminClerkId,
+        status: "live",
+        activatedAt: now,
+        activatedByClerkId: adminClerkId,
+      } as any);
+    }
+
+    res.json({ ...updated, canonicalDownloadUrl: canonicalDownloadUrl(updated) });
   } catch (err) {
     logger.error({ err }, "platform-apps: update error");
     res.status(500).json({ error: "Internal server error" });

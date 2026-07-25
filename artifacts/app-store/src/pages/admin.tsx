@@ -619,6 +619,20 @@ function OfflinePaymentsTab() {
 
 // ── OurAppsTab ────────────────────────────────────────────────────────────────
 
+interface AdminVersion {
+  id: number;
+  appId: number;
+  version: string;
+  versionCode: number | null;
+  releaseNotes: string | null;
+  fileUrl: string | null;
+  fileSize: number | null;
+  minOsVersion: string | null;
+  status: string; // pending | live | deprecated
+  activatedAt: string | null;
+  createdAt: string;
+}
+
 interface PlatformApp {
   id: number;
   name: string;
@@ -686,6 +700,174 @@ async function uploadFile(file: File): Promise<string> {
   return url;
 }
 
+function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void }) {
+  const [versions, setVersions] = useState<AdminVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activating, setActivating] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [versionStr, setVersionStr] = useState("");
+  const [releaseNotes, setReleaseNotes] = useState("");
+  const [minOs, setMinOs] = useState("");
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const identifier = app.packageName || (app as any).slug || String(app.id);
+  const canonicalBase = `https://awajimaaappstore.com/dl/${encodeURIComponent(identifier)}`;
+
+  function load() {
+    setLoading(true);
+    apiFetch<AdminVersion[]>(`/admin/apps/${app.id}/versions`)
+      .then(v => setVersions(v ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+  useEffect(() => { load(); }, []);
+
+  async function activate(v: AdminVersion) {
+    if (!confirm(`Make v${v.version} the live version? All users will download this version from the canonical link.`)) return;
+    setActivating(v.id);
+    try {
+      await apiFetch(`/admin/apps/${app.id}/versions/${v.id}/activate`, { method: "POST" });
+      load();
+    } catch (e: any) { alert(e.message || "Failed to activate"); }
+    finally { setActivating(null); }
+  }
+
+  async function upload() {
+    setUploadErr(null);
+    if (!versionStr.trim()) { setUploadErr("Version string is required (e.g. 1.2.0)"); return; }
+    if (!file) { setUploadErr("Please choose an APK / file to upload"); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("version", versionStr.trim());
+      fd.append("releaseNotes", releaseNotes);
+      fd.append("minOsVersion", minOs);
+      fd.append("autoActivate", "true");
+      const res = await fetch(`/api/store/admin/apps/${app.id}/versions`, { method: "POST", body: fd });
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      setFile(null); setVersionStr(""); setReleaseNotes(""); setMinOs("");
+      load();
+    } catch (e: any) { setUploadErr(e.message || "Upload failed"); }
+    finally { setUploading(false); }
+  }
+
+  function copyUrl(url: string) {
+    navigator.clipboard.writeText(url).catch(() => {});
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  }
+
+  const STATUS_STYLE: Record<string, React.CSSProperties> = {
+    live:       { background: "rgba(0,200,83,0.15)",  color: "#00c853" },
+    deprecated: { background: "rgba(255,183,77,0.12)", color: "#ffb74d" },
+    pending:    { background: "rgba(255,255,255,0.06)", color: "#8892a4" },
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 2000, overflowY: "auto", padding: "40px 16px" }}>
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 680 }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 4 }}>📦 Version History — {app.name}</div>
+            <div style={{ fontSize: 12, color: "#8892a4" }}>Canonical link: <span style={{ color: "#a78bfa", fontFamily: "monospace" }}>{canonicalBase}</span></div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8892a4", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Upload new version */}
+        <div style={{ background: "rgba(0,200,83,0.05)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 14, padding: 18, marginBottom: 22 }}>
+          <div style={{ fontWeight: 800, fontSize: 13, color: "#00c853", marginBottom: 14 }}>⬆️ Upload New Version</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: "#8892a4", fontWeight: 700, display: "block", marginBottom: 4 }}>VERSION STRING *</label>
+              <input className="input" value={versionStr} onChange={e => setVersionStr(e.target.value)} placeholder="e.g. 1.2.0" style={{ fontSize: 13 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#8892a4", fontWeight: 700, display: "block", marginBottom: 4 }}>MIN OS VERSION</label>
+              <input className="input" value={minOs} onChange={e => setMinOs(e.target.value)} placeholder="e.g. Android 6.0" style={{ fontSize: 13 }} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: "#8892a4", fontWeight: 700, display: "block", marginBottom: 4 }}>RELEASE NOTES</label>
+            <textarea className="input" value={releaseNotes} onChange={e => setReleaseNotes(e.target.value)} placeholder="What changed in this version? Bug fixes, new features…" rows={2} style={{ fontSize: 13 }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: "#8892a4", fontWeight: 700, display: "block", marginBottom: 4 }}>APK / INSTALL FILE *</label>
+            <input type="file" accept=".apk,.aab,.ipa,.zip,.exe,.dmg,*" style={{ display: "none" }} id="versionFileInput"
+              onChange={e => setFile(e.target.files?.[0] ?? null)} />
+            <label htmlFor="versionFileInput" style={{ display: "inline-block", padding: "8px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#c0c8d8" }}>
+              {file ? `✅ ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)` : "📁 Choose file…"}
+            </label>
+          </div>
+          {uploadErr && <div style={{ color: "#ff5252", fontSize: 12, marginBottom: 10 }}>⚠️ {uploadErr}</div>}
+          <button onClick={upload} disabled={uploading}
+            style={{ background: "#00c853", color: "#000", border: "none", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 800, cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.7 : 1 }}>
+            {uploading ? "Uploading & Activating…" : "⬆️ Upload & Make Live"}
+          </button>
+        </div>
+
+        {/* Version list */}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 32 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>
+        ) : versions.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#8892a4", padding: "24px 0", fontSize: 14 }}>No versions yet. Upload the first one above.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {versions.map(v => {
+              const isLive = v.status === "live";
+              const versionUrl = `${canonicalBase}/${v.version}`;
+              return (
+                <div key={v.id} style={{ background: "#161b22", border: `1px solid ${isLive ? "rgba(0,200,83,0.3)" : "rgba(255,255,255,0.07)"}`, borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 800, fontSize: 15 }}>v{v.version}</span>
+                      {v.versionCode && <span style={{ fontSize: 11, color: "#8892a4" }}>build {v.versionCode}</span>}
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase", ...STATUS_STYLE[v.status] ?? STATUS_STYLE.pending }}>
+                        {isLive ? "● Live" : v.status}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, color: "#8892a4" }}>{new Date(v.createdAt).toLocaleDateString()}</span>
+                      {v.fileSize && <span style={{ fontSize: 11, color: "#8892a4" }}>{(v.fileSize/1024/1024).toFixed(1)} MB</span>}
+                      {!isLive && v.fileUrl && (
+                        <button onClick={() => activate(v)} disabled={activating === v.id}
+                          style={{ fontSize: 11, background: "rgba(124,77,255,0.15)", color: "#a78bfa", border: "1px solid rgba(124,77,255,0.25)", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontWeight: 700 }}>
+                          {activating === v.id ? "…" : "🔄 Make Live"}
+                        </button>
+                      )}
+                      {isLive && <span style={{ fontSize: 11, color: "#00c853", fontWeight: 700 }}>✓ Active</span>}
+                    </div>
+                  </div>
+                  {v.minOsVersion && <div style={{ fontSize: 11, color: "#8892a4", marginBottom: 4 }}>Min OS: {v.minOsVersion}</div>}
+                  {v.releaseNotes && <p style={{ fontSize: 12, color: "#c0c8d8", lineHeight: 1.6, marginBottom: 8 }}>{v.releaseNotes}</p>}
+                  {/* Per-version canonical URL */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "5px 10px" }}>
+                    <span style={{ fontSize: 11, color: "#8892a4", fontFamily: "monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{versionUrl}</span>
+                    <button onClick={() => copyUrl(versionUrl)}
+                      style={{ fontSize: 10, background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 5, padding: "2px 8px", color: "#8892a4", cursor: "pointer", flexShrink: 0 }}>
+                      {copiedUrl === versionUrl ? "✅" : "Copy"}
+                    </button>
+                    {v.fileUrl && (
+                      <a href={versionUrl} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 10, color: "#00c853", flexShrink: 0, textDecoration: "none", fontWeight: 700 }}>⬇️</a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 function OurAppsTab() {
   const [apps, setApps]       = useState<PlatformApp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -697,6 +879,7 @@ function OurAppsTab() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadedApkUrl, setUploadedApkUrl] = useState<string | null>(null);
   const [copiedApkUrl, setCopiedApkUrl] = useState(false);
+  const [versionsApp, setVersionsApp] = useState<PlatformApp | null>(null);
 
   // form fields
   const [form, setForm] = useState(emptyForm());
@@ -909,6 +1092,10 @@ function OurAppsTab() {
                   style={{ flex: 1, fontSize: 12, background: "rgba(124,77,255,0.1)", color: "#a78bfa", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
                   ✏️ Edit
                 </button>
+                <button onClick={() => setVersionsApp(app)}
+                  style={{ flex: 1, fontSize: 12, background: "rgba(0,200,83,0.08)", color: "#00c853", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
+                  📦 Versions
+                </button>
                 <button onClick={() => toggleFeatured(app)}
                   style={{ flex: 1, fontSize: 12, background: "rgba(255,179,0,0.1)", color: "#ffb300", border: "none", borderRadius: 8, padding: "7px 0", cursor: "pointer", fontWeight: 600 }}>
                   {app.isFeatured ? "Unfeature" : "★ Feature"}
@@ -921,6 +1108,11 @@ function OurAppsTab() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Version management modal */}
+      {versionsApp && (
+        <VersionsModal app={versionsApp} onClose={() => { setVersionsApp(null); load(); }} />
       )}
 
       {/* Create / Edit modal */}
