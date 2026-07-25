@@ -210,7 +210,7 @@ export default function SignInScreen() {
         </Animated.View>
 
         <Animated.Text style={styles.heroTitle} entering={FadeInDown.delay(200).springify()}>
-          VendorHub
+          Awa Biz Suite
         </Animated.Text>
         <Animated.Text
           key={heroSubtitle}

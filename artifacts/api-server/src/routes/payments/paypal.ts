@@ -129,7 +129,7 @@ router.post("/payments/paypal/checkout", async (req, res): Promise<void> => {
       },
     ],
     application_context: {
-      brand_name: "VendorHub",
+      brand_name: "Awa Biz Suite",
       return_url: returnUrl,
       cancel_url: cancelUrl,
       shipping_preference: "NO_SHIPPING",

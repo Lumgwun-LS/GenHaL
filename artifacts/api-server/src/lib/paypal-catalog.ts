@@ -55,7 +55,7 @@ export async function getPayPalAccessToken(
 // ── Product creation ──────────────────────────────────────────────────────────
 
 async function ensurePayPalProduct(token: string, base: string): Promise<string> {
-  const productName = "VendorHub Platform Subscription";
+  const productName = "Awa Biz Suite Platform Subscription";
   // PayPal-Request-Id makes this idempotent (same ID → same resource returned)
   const res = await fetch(`${base}/v1/billing/products`, {
     method: "POST",
@@ -66,7 +66,7 @@ async function ensurePayPalProduct(token: string, base: string): Promise<string>
     },
     body: JSON.stringify({
       name: productName,
-      description: "Monthly platform subscription for VendorHub vendors",
+      description: "Monthly platform subscription for Awa Biz Suite vendors",
       type: "SERVICE",
       category: "SOFTWARE",
     }),
@@ -99,7 +99,7 @@ async function ensurePayPalPlan(
   productId: string,
   plan: SubscriptionPlan,
 ): Promise<string> {
-  const planName = `VendorHub ${plan.name}`;
+  const planName = `Awa Biz Suite ${plan.name}`;
   const requestId = `vendorhub-plan-${plan.tier}-v1`;
 
   const res = await fetch(`${base}/v1/billing/plans`, {

@@ -248,14 +248,14 @@ router.post("/vendors/notifications/bulk", async (req, res): Promise<void> => {
       }
       const html = wrapVendorEmail({
         bodyHtml: `
-          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from VendorHub</h1>
+          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from Awa Biz Suite</h1>
           <p style="font-size: 14px; line-height: 1.6; color: #444;">Hi ${escapeHtml(v.name)},</p>
           <p style="font-size: 14px; line-height: 1.6; color: #444; white-space: pre-wrap;">${escapeHtml(message)}</p>
         `,
       });
       const result = await sendEmail({
         to: v.email,
-        subject: "Announcement from VendorHub",
+        subject: "Announcement from Awa Biz Suite",
         html,
       });
       if (result.status === "sent") {
@@ -364,14 +364,14 @@ router.post("/vendors/notifications/bulk/retry-emails", async (req, res): Promis
     eligible.map(async (v) => {
       const html = wrapVendorEmail({
         bodyHtml: `
-          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from VendorHub</h1>
+          <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Announcement from Awa Biz Suite</h1>
           <p style="font-size: 14px; line-height: 1.6; color: #444;">Hi ${escapeHtml(v.name)},</p>
           <p style="font-size: 14px; line-height: 1.6; color: #444; white-space: pre-wrap;">${escapeHtml(message)}</p>
         `,
       });
       const result = await sendEmail({
         to: v.email!,
-        subject: "Announcement from VendorHub",
+        subject: "Announcement from Awa Biz Suite",
         html,
       });
       if (result.status === "sent") {

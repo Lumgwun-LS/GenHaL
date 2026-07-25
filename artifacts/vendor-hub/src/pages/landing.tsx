@@ -35,8 +35,8 @@ const PHONE_NUMBERS = ["+1 917 821 8640", "+234 703 884 3102"];
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 const VIDEOS = [
-  { id: "promo", title: "VendorHub Promo Video", path: "/vendorhub-promo-video/" },
-  { id: "walkthrough", title: "VendorHub Walkthrough Video", path: "/vendorhub-walkthrough-video/" },
+  { id: "promo", title: "Awa Biz Suite Promo Video", path: "/vendorhub-promo-video/" },
+  { id: "walkthrough", title: "Awa Biz Suite Walkthrough Video", path: "/vendorhub-walkthrough-video/" },
 ];
 
 type SiteContent = {

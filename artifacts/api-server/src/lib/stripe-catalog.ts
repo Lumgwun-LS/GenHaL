@@ -73,12 +73,12 @@ async function findOrCreateTierPrice(stripe: Stripe, plan: SubscriptionPlan): Pr
     productId = typeof found.product === "string" ? found.product : found.product.id;
     await stripe.prices.update(found.id, { lookup_key: "", active: false });
     await stripe.products.update(productId, {
-      name: `VendorHub ${plan.name} Plan`,
+      name: `Awa Biz Suite ${plan.name} Plan`,
       description: plan.description,
     });
   } else {
     const product = await stripe.products.create({
-      name: `VendorHub ${plan.name} Plan`,
+      name: `Awa Biz Suite ${plan.name} Plan`,
       description: plan.description,
       metadata: { tier: plan.tier },
     });
@@ -128,7 +128,7 @@ export async function ensurePortalConfiguration(stripe: Stripe, stripeKey: strin
     const products = catalog.map((c) => ({ product: c.productId, prices: [c.priceId] }));
 
     const config = await stripe.billingPortal.configurations.create({
-      business_profile: { headline: "Manage your VendorHub subscription" },
+      business_profile: { headline: "Manage your Awa Biz Suite subscription" },
       features: {
         customer_update: { enabled: true, allowed_updates: ["email", "address"] },
         invoice_history: { enabled: true },

@@ -27,7 +27,7 @@ interface CacheEntry {
 const catalogCache = new Map<string, CacheEntry>();
 
 function planNameFor(plan: SubscriptionPlan): string {
-  return `VendorHub ${plan.name} Plan (NGN)`;
+  return `Awa Biz Suite ${plan.name} Plan (NGN)`;
 }
 
 async function paystackFetch<T>(secretKey: string, path: string, init?: RequestInit): Promise<T> {

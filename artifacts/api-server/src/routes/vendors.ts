@@ -208,6 +208,27 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
   }
 });
 
+/**
+ * GET /vendors/me
+ * Returns the vendor profile for the currently signed-in Clerk user.
+ * Unlike GET /vendors (admin-only), this endpoint is accessible to any
+ * authenticated user so the frontend can determine onboarding status without
+ * requiring admin privileges.
+ */
+router.get("/vendors/me", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "No vendor profile found" }); return; }
+  res.json(serializeVendor(vendor));
+});
+
 router.get("/vendors/:id", async (req, res): Promise<void> => {
   const params = GetVendorParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }

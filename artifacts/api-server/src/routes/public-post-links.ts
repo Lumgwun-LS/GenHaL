@@ -207,7 +207,7 @@ async function chargeProvider(params: {
           },
         ],
         application_context: {
-          brand_name: "VendorHub",
+          brand_name: "Awa Biz Suite",
           return_url: redirectUrl,
           cancel_url: redirectUrl,
           shipping_preference: "NO_SHIPPING",

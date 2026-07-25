@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { trackPageView } from "@/lib/analytics";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from 'wouter';
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { useListVendors } from "@workspace/api-client-react";
 import { useIsAdminStatus } from "@/hooks/useIsAdmin";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
@@ -150,11 +150,10 @@ function SignUpPage() {
 
 function OnboardingRoute() {
   const { isAdmin, isLoading: isAdminLoading } = useIsAdminStatus();
-  const { data: vendors, isLoading: isVendorsLoading } = useListVendors();
-  const { user } = useUser();
+  const { hasVendor, isLoading: isVendorLoading } = useCurrentVendor();
 
   // Wait for both checks before deciding — avoids a flash-redirect on slow networks.
-  if (isAdminLoading || isVendorsLoading) {
+  if (isAdminLoading || isVendorLoading) {
     return (
       <Show when="signed-in">
         <div className="flex h-screen items-center justify-center text-muted-foreground">Loading…</div>
@@ -166,7 +165,6 @@ function OnboardingRoute() {
   if (isAdmin) return <Redirect to="/dashboard" />;
 
   // Already onboarded — no need to show the form again.
-  const hasVendor = vendors?.some((v) => v.clerkUserId === user?.id) ?? false;
   if (hasVendor) return <Redirect to="/dashboard" />;
 
   return (
@@ -200,15 +198,13 @@ function HomeRedirect() {
  * by owning a vendor row, so an admin account may legitimately have no vendor profile at all.
  */
 function RequireVendorProfile({ children }: { children: React.ReactNode }) {
-  const { user } = useUser();
   const { isAdmin, isLoading: isAdminLoading } = useIsAdminStatus();
-  const { data: vendors, isLoading: isVendorsLoading } = useListVendors();
-  const hasVendor = vendors?.some((v) => v.clerkUserId === user?.id) ?? false;
+  const { hasVendor, isLoading: isVendorLoading } = useCurrentVendor();
 
   // Wait for both checks to settle — isAdmin defaults to false while its query is in flight,
   // so redirecting before it resolves would briefly (or, on a slow admin-check response,
   // not-so-briefly) send legitimate admins without a vendor row to /onboarding.
-  if (isVendorsLoading || isAdminLoading) {
+  if (isVendorLoading || isAdminLoading) {
     return <div className="flex h-screen items-center justify-center text-muted-foreground">Loading...</div>;
   }
   if (!hasVendor && !isAdmin) {

@@ -94,14 +94,14 @@ router.post("/vendors/:id/deletion-requests", async (req, res): Promise<void> =>
   const [emailResult, smsResult] = await Promise.all([
     sendEmail({
       to: vendor.email,
-      subject: "Confirm deletion of your VendorHub account data",
+      subject: "Confirm deletion of your Awa Biz Suite account data",
       html: wrapVendorEmail({
         bodyHtml: `<p>Hi ${escapeHtml(vendor.name)},</p><p>Use this code to confirm permanent deletion of your account data: <strong>${emailCode}</strong></p><p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`,
       }),
     }),
     sendSms({
       to: vendor.phone,
-      body: `Your VendorHub account deletion code is ${phoneCode}. It expires in 10 minutes.`,
+      body: `Your Awa Biz Suite account deletion code is ${phoneCode}. It expires in 10 minutes.`,
     }),
   ]);
 

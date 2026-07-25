@@ -107,7 +107,7 @@ export default function SignUpScreen() {
         </Animated.View>
 
         <Animated.Text style={styles.heroTitle} entering={FadeInDown.delay(180).springify()}>
-          VendorHub
+          Awa Biz Suite
         </Animated.Text>
         <Animated.Text style={styles.heroSubtitle} entering={FadeInDown.delay(260).springify()}>
           {awaitingCode ? 'Check your email' : 'Create your vendor account'}

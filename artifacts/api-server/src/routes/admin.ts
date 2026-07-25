@@ -122,6 +122,20 @@ router.get("/admin/check", (req, res): void => {
   res.json({ isAdmin: isAdmin(userId) });
 });
 
+// ─── GET /admin/whoami ─────────────────────────────────────────────────────────
+// Returns the current user's Clerk user ID. Useful for confirming the correct
+// ID is listed in ADMIN_USER_IDS — if isAdmin is false, copy the clerkUserId
+// value and add it to the ADMIN_USER_IDS secret (comma-separated).
+
+router.get("/admin/whoami", (req, res): void => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ clerkUserId: userId, isAdmin: isAdmin(userId) });
+});
+
 // ─── GET /admin/vendors ───────────────────────────────────────────────────────
 
 router.get("/admin/vendors", async (req, res): Promise<void> => {

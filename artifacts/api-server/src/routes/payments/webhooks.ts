@@ -71,7 +71,7 @@ async function sendSubscriptionChangedEmail(
     bodyHtml: `
       <h1 style="text-align: center; font-size: 20px; color: #1a1a1a; margin: 0 0 16px;">Your plan has changed</h1>
       <p style="font-size: 14px; line-height: 1.6; color: #444;">
-        Hi ${escapeHtml(vendorName)}, your VendorHub subscription was switched from ${escapeHtml(previousPlanName)} to ${escapeHtml(newPlanName)} via the billing portal.
+        Hi ${escapeHtml(vendorName)}, your Awa Biz Suite subscription was switched from ${escapeHtml(previousPlanName)} to ${escapeHtml(newPlanName)} via the billing portal.
       </p>
       ${featuresHtml}
       <p style="font-size: 14px; line-height: 1.6; color: #444;">
@@ -79,7 +79,7 @@ async function sendSubscriptionChangedEmail(
       </p>`,
   });
 
-  const result = await sendEmail({ to: email, subject: "Your VendorHub plan has changed", html });
+  const result = await sendEmail({ to: email, subject: "Your Awa Biz Suite plan has changed", html });
   if (result.status !== "sent") {
     console.warn(`[stripe webhook] subscription plan-change email did not send — reason=${result.error}`);
   }
@@ -729,7 +729,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       const bodyHtml = `
         <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Your free trial is ending soon</h1>
         <p style="font-size:14px;line-height:1.6;color:#444;">
-          Hi ${escapeHtml(vendor.name)}, your VendorHub ${escapeHtml(tierName)} free trial ends on <strong>${escapeHtml(dateStr)}</strong>.
+          Hi ${escapeHtml(vendor.name)}, your Awa Biz Suite ${escapeHtml(tierName)} free trial ends on <strong>${escapeHtml(dateStr)}</strong>.
         </p>
         <p style="font-size:14px;line-height:1.6;color:#444;">
           Your card on file will be automatically charged <strong>${escapeHtml(amountStr)}</strong> to continue your subscription.

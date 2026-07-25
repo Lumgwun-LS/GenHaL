@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { useLocation } from "wouter";
-import { useOnboardVendor, getListVendorsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useOnboardVendor } from "@workspace/api-client-react";
+import { useSetVendorMe } from "@/hooks/useCurrentVendor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -48,7 +48,7 @@ export default function Onboarding() {
   const { signOut } = useClerk();
   const [, setLocation] = useLocation();
   const onboardVendor = useOnboardVendor();
-  const queryClient = useQueryClient();
+  const setVendorMe = useSetVendorMe();
 
   const [form, setForm] = useState<FormState>({
     name: user?.fullName?.trim() || "",
@@ -76,11 +76,12 @@ export default function Onboarding() {
     onboardVendor.mutate(
       { data: { name: form.name.trim(), country: form.country, phone } },
       {
-        onSuccess: () => {
-          toast.success("Welcome to VendorHub!");
-          // Invalidate the vendors list so RequireVendorProfile sees the new row
-          // before we navigate — prevents the stale-cache redirect loop back to /onboarding.
-          void queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
+        onSuccess: (vendor) => {
+          toast.success("Welcome to Awa Biz Suite!");
+          // Immediately seed the /vendors/me cache so RequireVendorProfile sees
+          // hasVendor=true the instant we navigate — prevents the stale-cache
+          // redirect loop back to /onboarding.
+          setVendorMe(vendor as any);
           setLocation("/dashboard");
         },
         onError: (err: any) => toast.error(err?.message ?? "Could not complete signup. Please try again."),
@@ -96,7 +97,7 @@ export default function Onboarding() {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Store className="h-6 w-6" />
           </div>
-          <CardTitle className="text-2xl">Welcome to VendorHub</CardTitle>
+          <CardTitle className="text-2xl">Welcome to Awa Biz Suite</CardTitle>
           <CardDescription>Just a few details to finish setting up your vendor account.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -117,7 +118,7 @@ export default function Onboarding() {
             <div className="space-y-1.5">
               <Label>Email</Label>
               <Input value={email} disabled readOnly />
-              <p className="text-xs text-muted-foreground">From your VendorHub account — can't be changed here.</p>
+              <p className="text-xs text-muted-foreground">From your Awa Biz Suite account — can't be changed here.</p>
             </div>
 
             <div className="space-y-1.5">
