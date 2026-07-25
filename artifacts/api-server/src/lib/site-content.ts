@@ -212,6 +212,12 @@ export const DEFAULT_SITE_CONTENT = {
   "admin.socialHealthSettings": {
     repeatOffenderThreshold: 3,
   },
+  // Auto-deduction escalation ladder (USD thresholds).
+  // Vendors start at ladder[0]. After each successful threshold charge their
+  // personal threshold advances to the next rung. Once at the top rung all
+  // subsequent charges fire at that level. Admins can reset a vendor's rung
+  // back to null (= ladder[0]) via the billing-enforcement panel.
+  "billing.deductionLadder": [10, 50, 100, 200],
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -355,6 +361,17 @@ const socialHealthSettingsSchema = z.object({
   repeatOffenderThreshold: z.number().int().min(2).max(100),
 });
 
+const deductionLadderSchema = z
+  .array(z.number().min(0.01).max(100_000))
+  .min(1)
+  .max(20)
+  .refine((arr) => {
+    for (let i = 1; i < arr.length; i++) {
+      if (arr[i]! <= arr[i - 1]!) return false;
+    }
+    return true;
+  }, { message: "Ladder rungs must be in strictly ascending order." });
+
 const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "landing.hero": heroSchema,
   "landing.features": featuresSchema,
@@ -372,6 +389,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "billing.overageRates": overageRatesSchema,
   "admin.platformCosts": platformCostsSchema,
   "admin.socialHealthSettings": socialHealthSettingsSchema,
+  "billing.deductionLadder": deductionLadderSchema,
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

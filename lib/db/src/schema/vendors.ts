@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, date, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -81,6 +81,11 @@ export const vendorsTable = pgTable("vendors", {
   // or card declined). Blocks all metered-resource consumption until the next invoice is
   // successfully paid. Cleared automatically by the invoice.paid Stripe webhook.
   billingBlocked: boolean("billing_blocked").notNull().default(false),
+  // Auto-deduction threshold escalation.
+  // NULL → use the platform ladder[0] from the billing.deductionLadder site-content block.
+  // After each successful threshold charge the scheduler advances this to the next rung.
+  // Admins can reset it back to NULL via the billing-enforcement admin panel.
+  currentDeductionThreshold: numeric("current_deduction_threshold"),
   // Set when a vendor account is permanently deleted — used to prevent the same
   // email/phone from registering a new account on this platform.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

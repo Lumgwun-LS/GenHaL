@@ -2,13 +2,19 @@
  * Billing Threshold Scheduler
  *
  * Runs every hour. Finds vendors with unsettled pay-as-you-go overage charges
- * that have reached or exceeded the platform charge-threshold ($60 USD).
+ * that have reached or exceeded their personal auto-deduction threshold.
+ *
+ * Threshold escalation ladder:
+ *   - The platform-wide escalation ladder is admin-configurable via the
+ *     `billing.deductionLadder` site-content block (default [10, 50, 100, 200] USD).
+ *   - Each vendor starts at ladder[0]. After each successful charge, their
+ *     personal threshold advances to the next rung (stored in vendors.currentDeductionThreshold).
+ *   - Once at the top rung, subsequent charges fire at that level indefinitely.
+ *   - If a charge fails, the threshold is NOT advanced; the vendor is billing-blocked.
+ *   - Admins can reset a vendor's threshold to null (= ladder[0]) from the admin panel.
+ *
  * For Stripe vendors an invoice is finalized and charged immediately.
  * For non-Stripe vendors an in-app notification is sent and the admin is alerted.
- *
- * This prevents any single vendor from accumulating more than ~$60 in unbilled
- * resource usage — protecting platform cash-flow while giving vendors a
- * predictable billing signal.
  */
 import { db, vendorsTable, vendorOverageChargesTable, vendorNotificationsTable } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -17,32 +23,76 @@ import { recordJobRun } from "./job-run-status";
 import { sendSlackAlert } from "./slack";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
+import { getSiteContentBlock } from "./site-content";
 import { logger } from "./logger";
 
 const JOB_NAME = "billing-threshold-check";
-const CHARGE_THRESHOLD_USD = 60;
+const DEFAULT_LADDER = [10, 50, 100, 200]; // USD — fallback when site-content not yet set
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
+/** Returns the admin-configured escalation ladder, falling back to DEFAULT_LADDER. */
+async function getDeductionLadder(): Promise<number[]> {
+  try {
+    const raw = await getSiteContentBlock("billing.deductionLadder");
+    if (Array.isArray(raw) && raw.length > 0) {
+      const nums = (raw as unknown[]).filter((v): v is number => typeof v === "number" && v > 0);
+      if (nums.length > 0) return nums;
+    }
+  } catch {
+    // fall through to default
+  }
+  return DEFAULT_LADDER;
+}
+
+/** Returns the charge threshold this vendor must cross before an automatic charge fires. */
+function vendorThreshold(currentDeductionThreshold: string | null, ladder: number[]): number {
+  if (currentDeductionThreshold !== null) {
+    const v = parseFloat(currentDeductionThreshold);
+    if (!isNaN(v) && v > 0) return v;
+  }
+  return ladder[0] ?? DEFAULT_LADDER[0];
+}
+
+/** Returns the next threshold rung after a successful charge. */
+function nextRung(currentDeductionThreshold: string | null, ladder: number[]): number {
+  const current = vendorThreshold(currentDeductionThreshold, ladder);
+  const idx = ladder.findIndex((v) => Math.abs(v - current) < 0.001);
+  if (idx === -1 || idx >= ladder.length - 1) {
+    // Already at top rung (or unrecognised value) — stay there
+    return ladder[ladder.length - 1] ?? current;
+  }
+  return ladder[idx + 1];
+}
+
 async function tick(): Promise<{ checked: number; charged: number }> {
-  // Sum unsettled overage charges per vendor
+  const ladder = await getDeductionLadder();
+
+  // Pull all vendors with any unsettled overage plus their personal threshold.
   const rows = await db
     .select({
-      vendorId:        vendorOverageChargesTable.vendorId,
-      totalUnsettled:  sql<number>`sum(${vendorOverageChargesTable.totalUsd})::float`,
+      vendorId:                  vendorOverageChargesTable.vendorId,
+      totalUnsettled:            sql<number>`sum(${vendorOverageChargesTable.totalUsd})::float`,
+      currentDeductionThreshold: vendorsTable.currentDeductionThreshold,
     })
     .from(vendorOverageChargesTable)
+    .innerJoin(vendorsTable, eq(vendorOverageChargesTable.vendorId, vendorsTable.id))
     .where(isNull(vendorOverageChargesTable.settledAt))
-    .groupBy(vendorOverageChargesTable.vendorId)
-    .having(sql`sum(${vendorOverageChargesTable.totalUsd}) >= ${CHARGE_THRESHOLD_USD}`);
+    .groupBy(vendorOverageChargesTable.vendorId, vendorsTable.currentDeductionThreshold)
+    .having(sql`sum(${vendorOverageChargesTable.totalUsd}) > 0`);
 
-  if (rows.length === 0) return { checked: 0, charged: 0 };
+  // Filter to vendors who have crossed their personal threshold.
+  const eligible = rows.filter(
+    (r) => r.totalUnsettled >= vendorThreshold(r.currentDeductionThreshold, ladder),
+  );
 
-  logger.info({ count: rows.length, thresholdUsd: CHARGE_THRESHOLD_USD }, "[billing-threshold] Vendors crossing charge threshold");
+  if (eligible.length === 0) return { checked: rows.length, charged: 0 };
+
+  logger.info({ count: eligible.length, ladder }, "[billing-threshold] Vendors crossing their charge threshold");
 
   let charged = 0;
-  for (const row of rows) {
+  for (const row of eligible) {
     try {
-      await chargeVendor(row.vendorId, row.totalUnsettled);
+      await chargeVendor(row.vendorId, row.totalUnsettled, row.currentDeductionThreshold, ladder);
       charged++;
     } catch (err) {
       logger.error({ err, vendorId: row.vendorId }, "[billing-threshold] Failed to process charge for vendor");
@@ -51,13 +101,21 @@ async function tick(): Promise<{ checked: number; charged: number }> {
   return { checked: rows.length, charged };
 }
 
-async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
+async function chargeVendor(
+  vendorId: number,
+  totalUsd: number,
+  currentDeductionThreshold: string | null,
+  ladder: number[],
+): Promise<void> {
+  const threshold = vendorThreshold(currentDeductionThreshold, ladder);
+  const next      = nextRung(currentDeductionThreshold, ladder);
+
   const [vendor] = await db
     .select({
-      id:                  vendorsTable.id,
-      name:                vendorsTable.name,
-      email:               vendorsTable.email,
-      stripeCustomerId:    vendorsTable.stripeCustomerId,
+      id:                   vendorsTable.id,
+      name:                 vendorsTable.name,
+      email:                vendorsTable.email,
+      stripeCustomerId:     vendorsTable.stripeCustomerId,
       stripeSubscriptionId: vendorsTable.stripeSubscriptionId,
       subscriptionProvider: vendorsTable.subscriptionProvider,
     })
@@ -66,29 +124,28 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
 
   if (!vendor) return;
 
-  const amountStr = `$${totalUsd.toFixed(2)}`;
+  const amountStr        = `$${totalUsd.toFixed(2)}`;
+  const nextThresholdStr = `$${next.toFixed(2)}`;
 
   // ── Stripe vendors — create and immediately collect an off-cycle invoice ──
   if (vendor.stripeCustomerId && vendor.stripeSubscriptionId) {
     try {
       await callWithPlatformStripe(async (stripe) => {
-        // Create the invoice
         const invoice = await stripe.invoices.create({
-          customer:         vendor.stripeCustomerId as string,
-          description:      `Platform resource overage — threshold collection (${amountStr})`,
-          auto_advance:     true,
+          customer:     vendor.stripeCustomerId as string,
+          description:  `Platform resource overage — threshold collection (${amountStr})`,
+          auto_advance: true,
           metadata: {
             vendorId:  String(vendorId),
             trigger:   "threshold",
-            threshold: String(CHARGE_THRESHOLD_USD),
+            threshold: String(threshold),
           },
         });
 
-        // Finalize & pay immediately
         await stripe.invoices.finalizeInvoice(invoice.id);
         await stripe.invoices.pay(invoice.id, { expand: ["payment_intent"] });
 
-        // Mark the overage rows as settled
+        // Mark the overage rows settled
         await db
           .update(vendorOverageChargesTable)
           .set({ settledAt: new Date() })
@@ -97,14 +154,23 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
             isNull(vendorOverageChargesTable.settledAt),
           ));
 
-        logger.info({ vendorId, invoiceId: invoice.id, amountStr }, "[billing-threshold] Stripe invoice collected");
+        // Advance the vendor's personal threshold to the next rung
+        await db
+          .update(vendorsTable)
+          .set({ currentDeductionThreshold: next.toString(), updatedAt: new Date() })
+          .where(eq(vendorsTable.id, vendorId));
+
+        logger.info(
+          { vendorId, invoiceId: invoice.id, amountStr, nextThreshold: next },
+          "[billing-threshold] Stripe invoice collected — threshold advanced",
+        );
       });
 
       // Notify vendor
       await db.insert(vendorNotificationsTable).values({
         vendorId,
         type: "subscription",
-        message: `Your resource usage has reached ${amountStr}. An invoice has been automatically charged to your card on file.`,
+        message: `Your resource usage has reached ${amountStr}. An invoice has been automatically charged to your card on file. Your next auto-charge threshold is ${nextThresholdStr}.`,
       });
 
       if (vendor.email) {
@@ -118,10 +184,14 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
           <p style="font-size:14px;line-height:1.6;color:#444;">
             This charge covers AI image, video, voice, and other metered resources used beyond
             your plan's included credits. You can view the full breakdown in your billing dashboard.
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Your next automatic charge will fire when your unsettled usage reaches
+            <strong>${escapeHtml(nextThresholdStr)}</strong>.
           </p>`;
         await sendEmail({
           to: vendor.email,
-          subject: `Resource usage charge of ${amountStr} processed`,
+          subject: `Resource usage charge of ${amountStr} processed — next threshold: ${nextThresholdStr}`,
           html: wrapVendorEmail({ bodyHtml }),
         });
       }
@@ -129,7 +199,7 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
     } catch (err) {
       logger.error({ err, vendorId }, "[billing-threshold] Stripe invoice collection failed — billing blocked");
 
-      // Payment failed: block the vendor from further resource consumption
+      // Payment failed: block the vendor; do NOT advance their threshold
       await db.update(vendorsTable)
         .set({ billingBlocked: true, updatedAt: new Date() })
         .where(eq(vendorsTable.id, vendorId));
@@ -147,7 +217,7 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
     return;
   }
 
-  // ── Non-Stripe vendors — notify and alert admin ──────────────────────────
+  // ── Non-Stripe vendors — notify and alert admin (no threshold advancement) ──
   await db.insert(vendorNotificationsTable).values({
     vendorId,
     type: "subscription",
@@ -177,10 +247,9 @@ async function chargeVendor(vendorId: number, totalUsd: number): Promise<void> {
 }
 
 export function startBillingThresholdScheduler(): void {
-  logger.info(
-    { thresholdUsd: CHARGE_THRESHOLD_USD, intervalMinutes: INTERVAL_MS / 60_000 },
-    "[billing-threshold] Scheduler started — checks every hour",
-  );
+  getDeductionLadder()
+    .then((ladder) => logger.info({ ladder, intervalMinutes: INTERVAL_MS / 60_000 }, "[billing-threshold] Scheduler started — checks every hour"))
+    .catch(() => logger.info({ ladder: DEFAULT_LADDER, intervalMinutes: INTERVAL_MS / 60_000 }, "[billing-threshold] Scheduler started — checks every hour"));
 
   setInterval(async () => {
     try {
