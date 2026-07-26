@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DollarSign, Plus, Download, Upload, Pencil, Trash2, Lock } from "lucide-react";
 import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
@@ -34,7 +35,8 @@ export default function SalesPage() {
   const { user } = useUser();
   const { data: vendors } = useListVendors();
   const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
-  const vendorId = myVendor?.id;
+  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
+  const vendorId = myVendor?.id ?? adminVendorId;
   const qc = useQueryClient();
 
   const dateFilter = useDateRangeFilter();
@@ -197,6 +199,16 @@ export default function SalesPage() {
           </Button>
         </div>
       </div>
+
+      {!myVendor && vendors && vendors.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
+          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 shrink-0">Admin mode — operating as:</span>
+          <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
+            <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
+            <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
