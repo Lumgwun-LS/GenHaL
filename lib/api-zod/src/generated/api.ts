@@ -5476,3 +5476,130 @@ export const SendAdEmailCampaignResponse = zod.object({
 })
 
 
+/**
+ * @summary Generate multi-type AI content from a topic in parallel
+ */
+export const generateAiContentBodyTopicMax = 1000;
+
+
+export const generateAiContentBodyToneDefault = `professional`;
+export const generateAiContentBodyLanguageDefault = `english`;
+
+export const GenerateAiContentBody = zod.object({
+  "vendorId": zod.number(),
+  "topic": zod.string().max(generateAiContentBodyTopicMax),
+  "outputTypes": zod.array(zod.enum(['social_post', 'article', 'academic', 'image', 'video'])).min(1),
+  "tone": zod.enum(['professional', 'casual', 'educational', 'promotional']).default(generateAiContentBodyToneDefault),
+  "language": zod.enum(['english', 'hausa', 'yoruba', 'igbo']).default(generateAiContentBodyLanguageDefault)
+})
+
+export const GenerateAiContentResponse = zod.object({
+  "social_post": zod.object({
+  "status": zod.enum(['completed', 'failed']),
+  "content": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "videoScenes": zod.array(zod.object({
+  "id": zod.number(),
+  "prompt": zod.string(),
+  "imageUrl": zod.string()
+})).nullish(),
+  "wordCount": zod.number().nullish(),
+  "error": zod.string().nullish(),
+  "libraryId": zod.number().nullish()
+}).optional(),
+  "article": zod.object({
+  "status": zod.enum(['completed', 'failed']),
+  "content": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "videoScenes": zod.array(zod.object({
+  "id": zod.number(),
+  "prompt": zod.string(),
+  "imageUrl": zod.string()
+})).nullish(),
+  "wordCount": zod.number().nullish(),
+  "error": zod.string().nullish(),
+  "libraryId": zod.number().nullish()
+}).optional(),
+  "academic": zod.object({
+  "status": zod.enum(['completed', 'failed']),
+  "content": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "videoScenes": zod.array(zod.object({
+  "id": zod.number(),
+  "prompt": zod.string(),
+  "imageUrl": zod.string()
+})).nullish(),
+  "wordCount": zod.number().nullish(),
+  "error": zod.string().nullish(),
+  "libraryId": zod.number().nullish()
+}).optional(),
+  "image": zod.object({
+  "status": zod.enum(['completed', 'failed']),
+  "content": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "videoScenes": zod.array(zod.object({
+  "id": zod.number(),
+  "prompt": zod.string(),
+  "imageUrl": zod.string()
+})).nullish(),
+  "wordCount": zod.number().nullish(),
+  "error": zod.string().nullish(),
+  "libraryId": zod.number().nullish()
+}).optional(),
+  "video": zod.object({
+  "status": zod.enum(['completed', 'failed']),
+  "content": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "videoScenes": zod.array(zod.object({
+  "id": zod.number(),
+  "prompt": zod.string(),
+  "imageUrl": zod.string()
+})).nullish(),
+  "wordCount": zod.number().nullish(),
+  "error": zod.string().nullish(),
+  "libraryId": zod.number().nullish()
+}).optional()
+})
+
+
+/**
+ * @summary List saved content library items for a vendor
+ */
+export const ListContentLibraryQueryParams = zod.object({
+  "vendorId": zod.coerce.number()
+})
+
+export const ListContentLibraryResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "topic": zod.string(),
+  "content": zod.string(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListContentLibraryResponse = zod.array(ListContentLibraryResponseItem)
+
+
+/**
+ * @summary Manually save a generated content item to the vendor content library
+ */
+export const SaveContentLibraryItemBody = zod.object({
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "topic": zod.string(),
+  "content": zod.string(),
+  "imageUrl": zod.string().nullish()
+})
+
+export const SaveContentLibraryItemResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "type": zod.string(),
+  "topic": zod.string(),
+  "content": zod.string(),
+  "imageUrl": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+

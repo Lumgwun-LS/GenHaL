@@ -13,6 +13,7 @@ import DeveloperPortal from "./pages/developer-portal";
 import DeveloperSignup from "./pages/developer-signup";
 import Admin from "./pages/admin";
 import AppPublicLanding from "./pages/app-public-landing";
+import MyApps from "./pages/my-apps";
 import NotFound from "./pages/not-found";
 
 function PageViewTracker() {
@@ -52,8 +53,8 @@ export default function App() {
     <ClerkProvider
       publishableKey={CLERK_KEY}
       proxyUrl={clerkProxyUrl}
-      signInFallbackRedirectUrl={`${basePath}/`}
-      signUpFallbackRedirectUrl={`${basePath}/`}
+      signInFallbackRedirectUrl={`${basePath}/my-apps`}
+      signUpFallbackRedirectUrl={`${basePath}/my-apps`}
     >
       <WouterRouter base={basePath}>
         <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/search" component={Search} />
             <Route path="/apps/:slug" component={AppDetail} />
             <Route path="/app/:publicId" component={AppPublicLanding} />
+            <Route path="/my-apps" component={MyApps} />
             <Route path="/developer/signup" component={DeveloperSignup} />
             <Route path="/developer" component={DeveloperPortal} />
             <Route path="/admin" component={Admin} />

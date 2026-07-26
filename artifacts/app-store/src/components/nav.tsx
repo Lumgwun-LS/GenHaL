@@ -120,9 +120,17 @@ export default function Nav() {
           <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.1)", margin: "0 10px" }} />
 
           {isSignedIn ? (
-            <motion.div whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
-              <UserButton afterSignOutUrl="/app-store/" />
-            </motion.div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <motion.div whileHover={{ y: -1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+                <Link
+                  href="/my-apps"
+                  style={{ padding: "6px 14px", borderRadius: 8, fontSize: 14, fontWeight: 500, color: "#c0c8d8", textDecoration: "none", display: "block" }}
+                >My Apps</Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+                <UserButton afterSignOutUrl="/app-store/" />
+              </motion.div>
+            </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <SignInButton mode="modal">

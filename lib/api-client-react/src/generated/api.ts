@@ -63,6 +63,8 @@ import type {
   BulkVendorNotificationResult,
   CampaignSendResult,
   ConnectionWarningsResponse,
+  ContentLibraryItem,
+  ContentLibraryItemInput,
   DataAnalysisRequest,
   DataAnalysisSession,
   DataImportRequest,
@@ -108,6 +110,8 @@ import type {
   ExternalVoiceCampaignPatch,
   ExternalVoiceCampaignSummary,
   FinanceOverviewAnalytics,
+  GenerateAiContentInput,
+  GenerateAiContentResult,
   GetAdminDemographicsAnalyticsParams,
   GetAdminFinanceRollupAnalyticsParams,
   GetAdminMessageHistoryParams,
@@ -139,6 +143,7 @@ import type {
   ListAiGenerationsParams,
   ListAllStoreAppsParams,
   ListBranchesParams,
+  ListContentLibraryParams,
   ListEmailCampaignsParams,
   ListExpensesParams,
   ListInventoryTransactionsParams,
@@ -15518,5 +15523,229 @@ export const useSendAdEmailCampaign = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendAdEmailCampaignMutationOptions(options));
+    }
+
+export const getGenerateAiContentUrl = () => {
+
+
+
+
+  return `/api/ai/generate-content`
+}
+
+/**
+ * @summary Generate multi-type AI content from a topic in parallel
+ */
+export const generateAiContent = async (generateAiContentInput: GenerateAiContentInput, options?: RequestInit): Promise<GenerateAiContentResult> => {
+
+  return customFetch<GenerateAiContentResult>(getGenerateAiContentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateAiContentInput)
+  }
+);}
+
+
+
+
+export const getGenerateAiContentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAiContent>>, TError,{data: BodyType<GenerateAiContentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateAiContent>>, TError,{data: BodyType<GenerateAiContentInput>}, TContext> => {
+
+const mutationKey = ['generateAiContent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateAiContent>>, {data: BodyType<GenerateAiContentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateAiContent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateAiContentMutationResult = NonNullable<Awaited<ReturnType<typeof generateAiContent>>>
+    export type GenerateAiContentMutationBody = BodyType<GenerateAiContentInput>
+    export type GenerateAiContentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate multi-type AI content from a topic in parallel
+ */
+export const useGenerateAiContent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAiContent>>, TError,{data: BodyType<GenerateAiContentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateAiContent>>,
+        TError,
+        {data: BodyType<GenerateAiContentInput>},
+        TContext
+      > => {
+      return useMutation(getGenerateAiContentMutationOptions(options));
+    }
+
+export const getListContentLibraryUrl = (params: ListContentLibraryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ai/content-library?${stringifiedParams}` : `/api/ai/content-library`
+}
+
+/**
+ * @summary List saved content library items for a vendor
+ */
+export const listContentLibrary = async (params: ListContentLibraryParams, options?: RequestInit): Promise<ContentLibraryItem[]> => {
+
+  return customFetch<ContentLibraryItem[]>(getListContentLibraryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContentLibraryQueryKey = (params?: ListContentLibraryParams,) => {
+    return [
+    `/api/ai/content-library`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListContentLibraryQueryOptions = <TData = Awaited<ReturnType<typeof listContentLibrary>>, TError = ErrorType<unknown>>(params: ListContentLibraryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContentLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContentLibraryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContentLibrary>>> = ({ signal }) => listContentLibrary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContentLibrary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContentLibraryQueryResult = NonNullable<Awaited<ReturnType<typeof listContentLibrary>>>
+export type ListContentLibraryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved content library items for a vendor
+ */
+
+export function useListContentLibrary<TData = Awaited<ReturnType<typeof listContentLibrary>>, TError = ErrorType<unknown>>(
+ params: ListContentLibraryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContentLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContentLibraryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveContentLibraryItemUrl = () => {
+
+
+
+
+  return `/api/ai/content-library`
+}
+
+/**
+ * @summary Manually save a generated content item to the vendor content library
+ */
+export const saveContentLibraryItem = async (contentLibraryItemInput: ContentLibraryItemInput, options?: RequestInit): Promise<ContentLibraryItem> => {
+
+  return customFetch<ContentLibraryItem>(getSaveContentLibraryItemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contentLibraryItemInput)
+  }
+);}
+
+
+
+
+export const getSaveContentLibraryItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveContentLibraryItem>>, TError,{data: BodyType<ContentLibraryItemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveContentLibraryItem>>, TError,{data: BodyType<ContentLibraryItemInput>}, TContext> => {
+
+const mutationKey = ['saveContentLibraryItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveContentLibraryItem>>, {data: BodyType<ContentLibraryItemInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveContentLibraryItem(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveContentLibraryItemMutationResult = NonNullable<Awaited<ReturnType<typeof saveContentLibraryItem>>>
+    export type SaveContentLibraryItemMutationBody = BodyType<ContentLibraryItemInput>
+    export type SaveContentLibraryItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Manually save a generated content item to the vendor content library
+ */
+export const useSaveContentLibraryItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveContentLibraryItem>>, TError,{data: BodyType<ContentLibraryItemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveContentLibraryItem>>,
+        TError,
+        {data: BodyType<ContentLibraryItemInput>},
+        TContext
+      > => {
+      return useMutation(getSaveContentLibraryItemMutationOptions(options));
     }
 

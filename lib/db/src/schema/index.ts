@@ -63,3 +63,4 @@ export * from "./draft-video-scenes";
 export * from "./purchase-orders";
 export * from "./vendor-stock-alert-settings";
 export * from "./vendor-websites";
+export * from "./vendor-content-library";

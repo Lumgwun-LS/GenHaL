@@ -352,6 +352,36 @@ export default function CreatePost() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverDraft]);
 
+  // Pre-fill composer from the AI Content Studio ("Use in Post" button).
+  // Runs once on mount; clears the sessionStorage key immediately so a
+  // subsequent page load doesn't double-apply the same prefill.
+  useEffect(() => {
+    const stored = sessionStorage.getItem("vendorhub:studio-prefill");
+    if (!stored) return;
+    sessionStorage.removeItem("vendorhub:studio-prefill");
+    try {
+      const prefill = JSON.parse(stored) as {
+        caption?: string;
+        imageUrl?: string;
+        videoScenes?: { id: number; prompt: string; imageUrl: string }[];
+      };
+      if (prefill.caption) setCaption(prefill.caption);
+      if (prefill.imageUrl) {
+        setGeneratedImage(prefill.imageUrl);
+        setGeneratedVideo(null);
+        setVideoScenes(null);
+      }
+      if (prefill.videoScenes && prefill.videoScenes.length > 0) {
+        setVideoScenes(prefill.videoScenes);
+        setGeneratedImage(null);
+        setGeneratedVideo(null);
+      }
+    } catch {
+      // Malformed prefill — silently ignore.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleGenerateCaption = async () => {
     if (!caption.trim()) {
       toast.error("Give the AI a topic to write about first (type a few words in the caption box)");

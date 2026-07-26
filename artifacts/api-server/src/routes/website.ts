@@ -190,4 +190,106 @@ router.post("/website/upload-image", async (req, res): Promise<void> => {
   }
 });
 
+// ── POST /api/website/generate-logo ──────────────────────────────────────────
+router.post("/website/generate-logo", async (req, res): Promise<void> => {
+  const vendor = await resolveAuthedVendor(req);
+  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { businessName, description } = req.body as { businessName?: string; description?: string };
+  if (!businessName) { res.status(400).json({ error: "businessName is required" }); return; }
+
+  try {
+    const openAiBase = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+    const openAiKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? "";
+
+    const prompt = [
+      `Professional minimalist logo mark for the business "${businessName}".`,
+      description ? `The business is: ${description}.` : "",
+      "Flat vector style icon, bold geometric shapes, vibrant single-color or two-tone palette.",
+      "Clean white background. No text, no words, no letters — icon only.",
+      "Suitable for a website favicon and header. High contrast, modern, memorable.",
+    ].filter(Boolean).join(" ");
+
+    const genRes = await fetch(`${openAiBase}/images/generations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
+      body: JSON.stringify({ model: "dall-e-3", prompt, n: 1, size: "1024x1024", quality: "standard", response_format: "url" }),
+    });
+
+    if (!genRes.ok) {
+      const errText = await genRes.text();
+      res.status(500).json({ error: "AI generation failed", detail: errText });
+      return;
+    }
+
+    const genData = await genRes.json() as { data: Array<{ url: string }> };
+    const tempUrl = genData.data[0]?.url;
+    if (!tempUrl) { res.status(500).json({ error: "No image returned from AI" }); return; }
+
+    // Download the temp image and re-upload to permanent object storage
+    const imgRes = await fetch(tempUrl);
+    const imgBuffer = await imgRes.arrayBuffer();
+    const key = `vendor-${vendor.id}/website/ai-logo-${Date.now()}.png`;
+    const { uploadUrl, publicUrl } = await objectStorageService.getObjectEntityUploadURL(key, "image/png");
+
+    await fetch(uploadUrl, {
+      method: "PUT",
+      body: imgBuffer,
+      headers: { "Content-Type": "image/png" },
+    });
+
+    res.json({ logoUrl: publicUrl });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: "Failed to generate logo", detail: msg });
+  }
+});
+
+// ── POST /api/website/generate-taglines ──────────────────────────────────────
+router.post("/website/generate-taglines", async (req, res): Promise<void> => {
+  const vendor = await resolveAuthedVendor(req);
+  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { businessName, description } = req.body as { businessName?: string; description?: string };
+  if (!businessName) { res.status(400).json({ error: "businessName is required" }); return; }
+
+  try {
+    const openAiBase = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+    const openAiKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? "";
+
+    const systemMsg = [
+      "You are a world-class creative copywriter. Generate exactly 5 unique, punchy business taglines.",
+      "Each tagline: 3–9 words, memorable, action-oriented or evocative, distinct from each other.",
+      "Return ONLY a valid JSON array of 5 strings — no extra text, no markdown.",
+    ].join(" ");
+
+    const userMsg = `Business: "${businessName}"${description ? `\nWhat it does: ${description}` : ""}`;
+
+    const chatRes = await fetch(`${openAiBase}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "system", content: systemMsg }, { role: "user", content: userMsg }],
+        temperature: 0.92,
+        max_tokens: 250,
+      }),
+    });
+
+    if (!chatRes.ok) { res.status(500).json({ error: "AI generation failed" }); return; }
+
+    const chatData = await chatRes.json() as { choices: Array<{ message: { content: string } }> };
+    const raw = chatData.choices[0]?.message?.content ?? "[]";
+
+    let taglines: string[] = [];
+    try { taglines = JSON.parse(raw); } catch { taglines = []; }
+    if (!Array.isArray(taglines)) taglines = [];
+
+    res.json({ taglines: taglines.slice(0, 5) });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: "Failed to generate taglines", detail: msg });
+  }
+});
+
 export default router;

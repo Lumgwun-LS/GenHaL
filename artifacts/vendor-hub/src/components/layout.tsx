@@ -127,31 +127,68 @@ function DashboardFooter() {
   );
 }
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/vendors", label: "Vendors", icon: Users },
-  { href: "/social", label: "Social Hub", icon: Share2 },
-  { href: "/ads", label: "Ads Suite", icon: Megaphone },
-  { href: "/ai-studio", label: "AI Studio", icon: Sparkles },
-  { href: "/products", label: "Products", icon: Package },
-  { href: "/inventory", label: "Inventory", icon: Archive },
-  { href: "/orders", label: "Orders", icon: ShoppingCart },
-  { href: "/leads", label: "Leads", icon: Target },
-  { href: "/email-campaigns", label: "Email", icon: Mail },
-  { href: "/sms-campaigns", label: "SMS", icon: MessageSquare },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
-  { href: "/branches", label: "Branches", icon: Building2 },
-  { href: "/workers", label: "Workers", icon: Users },
-  { href: "/sales", label: "Sales", icon: DollarSign },
-  { href: "/expenses", label: "Expenses", icon: Receipt },
-  { href: "/investments", label: "Investments", icon: PiggyBank },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
-  { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
-  { href: "/website", label: "My Website", icon: Globe },
-  { href: "/account", label: "Account", icon: UserCircle },
-  { href: "/pricing", label: "Pricing", icon: Tag },
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { label?: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { href: "/social", label: "Social Hub", icon: Share2 },
+      { href: "/ads", label: "Ads Suite", icon: Megaphone },
+      { href: "/ai-studio", label: "AI Studio", icon: Sparkles },
+      { href: "/leads", label: "Leads", icon: Target },
+      { href: "/email-campaigns", label: "Email Campaigns", icon: Mail },
+      { href: "/sms-campaigns", label: "SMS Campaigns", icon: MessageSquare },
+      { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
+    ],
+  },
+  {
+    label: "Store",
+    items: [
+      { href: "/products", label: "Products", icon: Package },
+      { href: "/inventory", label: "Inventory", icon: Archive },
+      { href: "/orders", label: "Orders", icon: ShoppingCart },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { href: "/payments", label: "Payments", icon: CreditCard },
+      { href: "/sales", label: "Sales", icon: DollarSign },
+      { href: "/expenses", label: "Expenses", icon: Receipt },
+      { href: "/investments", label: "Investments", icon: PiggyBank },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { href: "/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
+      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { href: "/branches", label: "Branches", icon: Building2 },
+      { href: "/workers", label: "Workers", icon: Users },
+      { href: "/website", label: "My Website", icon: Globe },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { href: "/vendors", label: "Vendors", icon: Users },
+      { href: "/account", label: "Account", icon: UserCircle },
+      { href: "/pricing", label: "Pricing", icon: Tag },
+    ],
+  },
 ];
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
@@ -183,29 +220,40 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-base tracking-tight">Awa Biz Suite</span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = location === item.href || location.startsWith(item.href + "/");
-            return (
-              <Link key={item.href} href={item.href} className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-primary/10 text-primary" 
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        <nav className="flex-1 overflow-y-auto py-3 px-3">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi} className={gi > 0 ? "mt-3" : ""}>
+              {group.label && (
+                <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 select-none">
+                  {group.label}
+                </p>
               )}
-              onClick={() => setIsMobileOpen(false)}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = location === item.href || location.startsWith(item.href + "/");
+                  return (
+                    <Link key={item.href} href={item.href} className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                    onClick={() => setIsMobileOpen(false)}
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {/* Cross-app link to App Store */}
           <div className="px-3 pt-4 pb-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Switch To</p>
           </div>
           <a
-            href="/app-store/?ref=vendor-hub"
+            href="/app-store/my-apps?ref=vendor-hub"
             className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
             style={{
               background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(168,85,247,0.04))",

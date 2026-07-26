@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
-import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable } from "@workspace/db";
+import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable, vendorContentLibraryTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -38,6 +38,7 @@ import {
   SaveDraftVideoScenesResponse,
   ClearDraftVideoScenesBody,
   ClearDraftVideoScenesResponse,
+  GenerateAiContentBody,
 } from "@workspace/api-zod";
 
 const objectStorageService = new ObjectStorageService();
@@ -747,6 +748,239 @@ router.get("/ai/generations", async (req, res): Promise<void> => {
     if (params.data.type) generations = generations.filter((g) => g.type === params.data.type);
   }
   res.json(ListAiGenerationsResponse.parse(generations.map(serializeGeneration)));
+});
+
+// ─── AI CONTENT STUDIO ────────────────────────────────────────────────────────
+
+/**
+ * Generates long-form text content (article or academic paper) for the
+ * Content Studio using OpenAI. Language-aware: adds a language instruction
+ * when a non-English language is selected.
+ */
+async function generateLongForm(
+  topic: string,
+  tone: string,
+  language: string,
+  style: "article" | "academic",
+): Promise<string> {
+  const toneMap: Record<string, string> = {
+    professional: "professional and authoritative",
+    casual: "friendly and conversational",
+    educational: "clear, educational and informative",
+    promotional: "persuasive and promotional",
+  };
+  const toneDesc = toneMap[tone] ?? "professional and authoritative";
+  const langLabel =
+    language === "hausa" ? "Hausa (Harshen Hausa)" :
+    language === "yoruba" ? "Yoruba" :
+    language === "igbo" ? "Igbo" : "";
+  const langInstruction = langLabel
+    ? `\n\nIMPORTANT: Write the entire response in ${langLabel} language.`
+    : "";
+
+  if (style === "article") {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 1500,
+      messages: [
+        {
+          role: "system",
+          content:
+            `You are an expert content writer for small and medium businesses in Nigeria and West Africa. Write a structured article with a ${toneDesc} tone. Structure: compelling headline (H1), engaging 2-3 sentence introduction, 3-4 body sections each with an H2 subheading and substantive paragraphs, clear conclusion with a call-to-action. Target length: 600-900 words. Do not use placeholder brackets.${langInstruction}`,
+        },
+        { role: "user", content: `Write an article about: ${topic}` },
+      ],
+    });
+    return (response.choices[0]?.message?.content ?? "").trim();
+  } else {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 2000,
+      messages: [
+        {
+          role: "system",
+          content:
+            `You are an academic writer with expertise in business and economics. Write a formal academic-style paper with a ${toneDesc} tone. Structure: Title, Abstract (150-200 words), 1. Introduction, 2. Background and Literature Context, 3. Analysis and Discussion (2-3 subsections), 4. Conclusion, References (3-5 illustrative citations in APA style — label them as illustrative). Target length: 900-1200 words. Use formal academic language. Do not use placeholder brackets.${langInstruction}`,
+        },
+        { role: "user", content: `Write an academic paper about: ${topic}` },
+      ],
+    });
+    return (response.choices[0]?.message?.content ?? "").trim();
+  }
+}
+
+/** Number of scene-preview images generated for the "video" output type. */
+const STUDIO_VIDEO_SCENE_COUNT = 2;
+
+/**
+ * Generates multiple content types from a single topic in parallel.
+ * All generators run concurrently via Promise.allSettled; any individual
+ * failures are returned as { status: "failed", error: "…" } instead of
+ * failing the whole request. Quota is consumed upfront and refunded for
+ * any type that fails.
+ */
+router.post("/ai/generate-content", async (req, res): Promise<void> => {
+  const parsed = GenerateAiContentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { vendorId, topic, tone, language } = parsed.data;
+  // Deduplicate output types so a crafted request with repeated entries
+  // can't run the same generator multiple times while paying quota only once.
+  const outputTypes = [...new Set(parsed.data.outputTypes)];
+
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin && authedVendorId !== vendorId) { res.status(403).json({ error: "You can only generate content for your own vendor account." }); return; }
+
+  const usageVendor = await getVendorForUsage(vendorId);
+  if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  // Count quota upfront so concurrent requests can't jointly overshoot limits.
+  const textTypes = outputTypes.filter((t: string) => ["social_post", "article", "academic"].includes(t));
+  const needsImage = outputTypes.includes("image");
+  const needsVideo = outputTypes.includes("video");
+  const imageQuotaCount = (needsImage ? 1 : 0) + (needsVideo ? STUDIO_VIDEO_SCENE_COUNT : 0);
+
+  let textQuota: Awaited<ReturnType<typeof consumeQuota>> | null = null;
+  let imageQuota: Awaited<ReturnType<typeof consumeQuota>> | null = null;
+
+  if (textTypes.length > 0) {
+    textQuota = await consumeQuota(usageVendor, "aiCaptions", textTypes.length);
+    if (!textQuota.allowed) { res.status(402).json({ error: quotaExceededMessage(usageVendor, textQuota) }); return; }
+  }
+  if (imageQuotaCount > 0) {
+    imageQuota = await consumeQuota(usageVendor, "aiImages", imageQuotaCount);
+    if (!imageQuota.allowed) {
+      if (textQuota) await releaseQuota(vendorId, "aiCaptions", textTypes.length, textQuota.periodStart, textQuota.addonAllocations);
+      res.status(402).json({ error: quotaExceededMessage(usageVendor, imageQuota) }); return;
+    }
+  }
+
+  const toneStr = tone ?? "professional";
+  const langStr = language ?? "english";
+  const toneMap: Record<string, string> = {
+    professional: "professional and authoritative",
+    casual: "friendly and conversational",
+    educational: "clear, educational and informative",
+    promotional: "persuasive and promotional",
+  };
+  const toneDesc = toneMap[toneStr] ?? "professional and authoritative";
+  const langLabel =
+    langStr === "hausa" ? "Hausa (Harshen Hausa)" :
+    langStr === "yoruba" ? "Yoruba" :
+    langStr === "igbo" ? "Igbo" : "";
+  const captionLangInstruction = langLabel ? ` Write in ${langLabel}.` : "";
+
+  type ContentResultType = {
+    status: "completed" | "failed";
+    content?: string | null;
+    imageUrl?: string | null;
+    videoScenes?: { id: number; prompt: string; imageUrl: string }[] | null;
+    wordCount?: number | null;
+    error?: string | null;
+    libraryId?: number | null;
+  };
+
+  const generators = outputTypes.map(async (type: string): Promise<{ type: string; result: ContentResultType }> => {
+    try {
+      if (type === "social_post") {
+        const response = await openai.chat.completions.create({
+          model: "gpt-5.4-mini",
+          max_completion_tokens: 500,
+          messages: [
+            {
+              role: "system",
+              content: `You write high-converting social media captions for small business vendors. Tone: ${toneDesc}. End with 3-5 relevant hashtags. Use 1-3 tasteful emoji. Hard limit: 500 characters. Return only the caption text, no preamble.${captionLangInstruction}`,
+            },
+            { role: "user", content: `Topic: ${topic}` },
+          ],
+        });
+        const content = (response.choices[0]?.message?.content ?? "").trim().slice(0, 500);
+        return { type, result: { status: "completed", content, wordCount: content.split(/\s+/).filter(Boolean).length } };
+      }
+
+      if (type === "article" || type === "academic") {
+        const content = await generateLongForm(topic, toneStr, langStr, type as "article" | "academic");
+        const [saved] = await db.insert(vendorContentLibraryTable).values({ vendorId, type, topic, content }).returning();
+        return { type, result: { status: "completed", content, wordCount: content.split(/\s+/).filter(Boolean).length, libraryId: saved.id } };
+      }
+
+      if (type === "image") {
+        const fullPrompt = buildImagePrompt(topic);
+        const buffer = await generateImageBuffer(fullPrompt, "1536x1024", "high");
+        const { publicUrl } = await storeGeneratedMedia(buffer, "image/png");
+        await db.insert(aiGenerationsTable).values({ vendorId, type: "image", prompt: fullPrompt, result: publicUrl, status: "completed" });
+        const [saved] = await db.insert(vendorContentLibraryTable).values({ vendorId, type: "image", topic, content: publicUrl, imageUrl: publicUrl }).returning();
+        return { type, result: { status: "completed", imageUrl: publicUrl, libraryId: saved.id } };
+      }
+
+      if (type === "video") {
+        const fullPrompt = buildImagePrompt(topic);
+        const scenePrompts = await buildScenePrompts(fullPrompt, STUDIO_VIDEO_SCENE_COUNT);
+        const imageBuffers = await Promise.all(scenePrompts.map((p) => generateImageBuffer(p, "1536x1024", "high")));
+        const imageUrls = await Promise.all(imageBuffers.map(async (buf) => (await storeGeneratedMedia(buf, "image/png")).publicUrl));
+        const generations = await db.insert(aiGenerationsTable).values(
+          scenePrompts.map((sp, i) => ({ vendorId, type: "image" as const, prompt: sp, result: imageUrls[i], status: "completed" as const })),
+        ).returning();
+        const videoScenes = generations.map((g, i) => ({ id: g.id, prompt: scenePrompts[i], imageUrl: imageUrls[i] }));
+        return { type, result: { status: "completed", videoScenes } };
+      }
+
+      return { type, result: { status: "failed", error: "Unknown output type" } };
+    } catch (err) {
+      logger.warn({ err, type }, "AI Content Studio: generator failed for type");
+      return { type, result: { status: "failed", error: err instanceof Error ? err.message : "Generation failed" } };
+    }
+  });
+
+  const outcomes = await Promise.allSettled(generators);
+  const result: Record<string, ContentResultType> = {};
+  for (const outcome of outcomes) {
+    if (outcome.status === "fulfilled") result[outcome.value.type] = outcome.value.result;
+  }
+
+  // Refund quota for any generator that failed
+  const failedText = textTypes.filter((t: string) => result[t]?.status === "failed").length;
+  const failedImages =
+    (result["image"]?.status === "failed" ? 1 : 0) +
+    (result["video"]?.status === "failed" ? STUDIO_VIDEO_SCENE_COUNT : 0);
+  if (failedText > 0 && textQuota) await releaseQuota(vendorId, "aiCaptions", failedText, textQuota.periodStart, textQuota.addonAllocations);
+  if (failedImages > 0 && imageQuota) await releaseQuota(vendorId, "aiImages", failedImages, imageQuota.periodStart, imageQuota.addonAllocations);
+
+  res.json(result);
+});
+
+router.get("/ai/content-library", async (req, res): Promise<void> => {
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const qVendorId = req.query.vendorId ? parseInt(req.query.vendorId as string) : NaN;
+  if (!isAdmin && qVendorId !== authedVendorId) { res.status(403).json({ error: "You can only view your own vendor's content library." }); return; }
+
+  const resolvedVendorId = isAdmin && !isNaN(qVendorId) ? qVendorId : (authedVendorId as number);
+  const items = await db
+    .select()
+    .from(vendorContentLibraryTable)
+    .where(eq(vendorContentLibraryTable.vendorId, resolvedVendorId))
+    .orderBy(desc(vendorContentLibraryTable.createdAt));
+
+  res.json(items.map((item) => ({
+    ...item,
+    createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+  })));
+});
+
+router.post("/ai/content-library", async (req, res): Promise<void> => {
+  const { vendorId: authedVendorId, isAdmin } = await resolveAuthedVendor(req);
+  if (!authedVendorId && !isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { vendorId, type, topic, content, imageUrl } = req.body as {
+    vendorId: number; type: string; topic: string; content: string; imageUrl?: string | null;
+  };
+  if (!vendorId || !type || !topic || !content) { res.status(400).json({ error: "vendorId, type, topic, content are required" }); return; }
+  if (!isAdmin && vendorId !== authedVendorId) { res.status(403).json({ error: "You can only save content for your own vendor account." }); return; }
+
+  const [saved] = await db.insert(vendorContentLibraryTable).values({ vendorId, type, topic, content, imageUrl: imageUrl ?? null }).returning();
+  res.json({ ...saved, createdAt: saved.createdAt instanceof Date ? saved.createdAt.toISOString() : saved.createdAt });
 });
 
 export default router;

@@ -299,6 +299,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/contact" component={ContactPage} />
           <Route path="/pricing" component={PricingPage} />
           <Route path="/site/:slug" component={PublicSitePage} />
+          <Route path="/awajimaaai/:slug" component={PublicSitePage} />
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Globe, Eye, EyeOff, Save, Upload, RefreshCw, Trash2, Plus, GripVertical,
   Smartphone, Monitor, ExternalLink, Copy, CheckCircle, Palette, LayoutTemplate,
-  ChevronDown, ChevronUp, Image as ImageIcon,
+  ChevronDown, ChevronUp, Image as ImageIcon, Wand2, Sparkles, Loader2, X,
 } from "lucide-react";
 import { SiteRenderer, type SiteSection, type SiteData } from "@/components/site-renderer";
 import {
@@ -41,12 +41,31 @@ const SECTION_LABELS: Record<string, string> = {
 
 const SECTION_ICONS: Record<string, string> = {
   hero: "🌟", about: "👤", products: "🛍️", gallery: "🖼️",
-  testimonials: "💬", contact: "📍", social: "🔗", whatsapp_cta: "💬",
+  testimonials: "💬", contact: "📍", social: "🔗", whatsapp_cta: "📲",
 };
 
-const THEME_COLORS = [
-  "#7F50FF", "#1D4ED8", "#DC2626", "#16A34A", "#D97706",
-  "#DB2777", "#0891B2", "#7C3AED", "#374151", "#18181B",
+// Expanded colour palette — grouped by family
+const THEME_PALETTE = [
+  { label: "Violet",    color: "#7F50FF" },
+  { label: "Purple",    color: "#9F5FE0" },
+  { label: "Deep Pur",  color: "#7C3AED" },
+  { label: "Lavender",  color: "#A855F7" },
+  { label: "Indigo",    color: "#1D4ED8" },
+  { label: "Blue",      color: "#2563EB" },
+  { label: "Sky",       color: "#0891B2" },
+  { label: "Cyan",      color: "#0284C7" },
+  { label: "Teal",      color: "#0D9488" },
+  { label: "Emerald",   color: "#059669" },
+  { label: "Green",     color: "#16A34A" },
+  { label: "Forest",    color: "#15803D" },
+  { label: "Rose",      color: "#E11D48" },
+  { label: "Red",       color: "#DC2626" },
+  { label: "Pink",      color: "#DB2777" },
+  { label: "Coral",     color: "#F43F5E" },
+  { label: "Orange",    color: "#EA580C" },
+  { label: "Amber",     color: "#D97706" },
+  { label: "Slate",     color: "#1E293B" },
+  { label: "Neutral",   color: "#374151" },
 ];
 
 function TemplateCard({ id, name, description, palette, selected, onSelect }: {
@@ -112,7 +131,11 @@ function SectionEditor({ section, onChange, onUploadImage }: {
   if (section.type === "hero") return (
     <div className="space-y-3">
       <div className="space-y-1.5"><Label>Headline</Label><Input value={(c.headline as string) ?? ""} onChange={e => setField("headline", e.target.value)} placeholder="Welcome to our store" /></div>
-      <div className="space-y-1.5"><Label>Sub-headline</Label><Input value={(c.subheadline as string) ?? ""} onChange={e => setField("subheadline", e.target.value)} placeholder="Discover quality products" /></div>
+      <div className="space-y-1.5">
+        <Label>Tagline / Sub-headline</Label>
+        <Input value={(c.subheadline as string) ?? ""} onChange={e => setField("subheadline", e.target.value)} placeholder="Your catchy one-liner…" />
+        <p className="text-xs text-muted-foreground">Shown as a badge above your headline. Set it in the Design tab for AI suggestions.</p>
+      </div>
       <div className="space-y-1.5"><Label>Button Text</Label><Input value={(c.ctaText as string) ?? ""} onChange={e => setField("ctaText", e.target.value)} placeholder="Shop Now" /></div>
       <div className="space-y-1.5"><Label>Button Link</Label><Input value={(c.ctaUrl as string) ?? ""} onChange={e => setField("ctaUrl", e.target.value)} placeholder="https://... or #contact" /></div>
       {uploadBtn("backgroundImage", "Background Image")}
@@ -268,6 +291,7 @@ export default function WebsitePage() {
   const uploadLogoMutation = usePostWebsiteUploadLogo();
   const uploadImageMutation = usePostWebsiteUploadImage();
 
+  // Core site state
   const [sections, setSections] = useState<SiteSection[] | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [themeColor, setThemeColor] = useState<string | null>(null);
@@ -276,10 +300,20 @@ export default function WebsitePage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
-  const [showPreview, setShowPreview] = useState(true);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState("sections");
+
+  // AI logo generation state
+  const [aiLogoOpen, setAiLogoOpen] = useState(false);
+  const [aiLogoDesc, setAiLogoDesc] = useState("");
+  const [aiLogoGenerating, setAiLogoGenerating] = useState(false);
+  const [aiLogoResult, setAiLogoResult] = useState<string | null>(null);
+
+  // AI tagline generation state
+  const [taglineSuggestions, setTaglineSuggestions] = useState<string[]>([]);
+  const [taglinesLoading, setTaglinesLoading] = useState(false);
+  const [taglineDesc, setTaglineDesc] = useState("");
 
   const site = websiteData as unknown as Record<string, unknown> | undefined;
   const effectiveSections: SiteSection[] = (sections ?? (site?.sectionsJson as SiteSection[]) ?? []);
@@ -291,6 +325,16 @@ export default function WebsitePage() {
 
   const templates = (site?.availableTemplates as Array<Record<string, unknown>>) ?? [];
   const currentTemplate = templates.find(t => t.id === effectiveTemplate);
+
+  // Hero section helpers (for tagline shortcut in Design tab)
+  const heroSection = effectiveSections.find(s => s.type === "hero");
+  const currentTagline = (heroSection?.content?.subheadline as string) ?? "";
+
+  const updateHeroTagline = (value: string) => {
+    setSections(effectiveSections.map(s =>
+      s.type === "hero" ? { ...s, content: { ...s.content, subheadline: value } } : s
+    ));
+  };
 
   const previewData: SiteData = {
     pageTitle: effectiveTitle,
@@ -368,6 +412,63 @@ export default function WebsitePage() {
     } catch { toast.error("Logo upload failed"); }
   };
 
+  // AI logo generation
+  const handleGenerateLogo = async () => {
+    if (!effectiveTitle && !aiLogoDesc) {
+      toast.error("Enter your business name or a description first");
+      return;
+    }
+    setAiLogoGenerating(true);
+    setAiLogoResult(null);
+    try {
+      const r = await fetch(`${BASE_URL}/api/website/generate-logo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName: effectiveTitle || "My Business", description: aiLogoDesc }),
+      });
+      if (!r.ok) throw new Error("Generation failed");
+      const data = await r.json() as { logoUrl: string };
+      setAiLogoResult(data.logoUrl);
+    } catch {
+      toast.error("Logo generation failed. Please try again.");
+    } finally {
+      setAiLogoGenerating(false);
+    }
+  };
+
+  const applyAiLogo = () => {
+    if (aiLogoResult) {
+      setLogoUrl(aiLogoResult);
+      setAiLogoOpen(false);
+      setAiLogoResult(null);
+      toast.success("Logo applied! Save to keep it.");
+    }
+  };
+
+  // AI tagline generation
+  const handleGenerateTaglines = async () => {
+    if (!effectiveTitle) {
+      toast.error("Add your business name in the SEO tab (Page Title) first");
+      return;
+    }
+    setTaglinesLoading(true);
+    setTaglineSuggestions([]);
+    try {
+      const r = await fetch(`${BASE_URL}/api/website/generate-taglines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName: effectiveTitle, description: taglineDesc }),
+      });
+      if (!r.ok) throw new Error("Generation failed");
+      const data = await r.json() as { taglines: string[] };
+      setTaglineSuggestions(data.taglines ?? []);
+    } catch {
+      toast.error("Tagline generation failed. Please try again.");
+    } finally {
+      setTaglinesLoading(false);
+    }
+  };
+
   const moveSection = (id: string, dir: "up" | "down") => {
     const secs = [...effectiveSections];
     const i = secs.findIndex(s => s.id === id);
@@ -386,7 +487,10 @@ export default function WebsitePage() {
     setSections(effectiveSections.map(s => s.id === updated.id ? updated : s));
   };
 
-  const publicUrl = site ? `${window.location.origin}${BASE_URL}/site/${site.slug as string}` : "";
+  // Use the new /awajimaaai/ URL format
+  const publicUrl = site
+    ? `${window.location.origin}${BASE_URL}/awajimaaai/${site.slug as string}`
+    : "";
   const isPublished = site?.published as boolean;
 
   const copyUrl = () => {
@@ -405,7 +509,7 @@ export default function WebsitePage() {
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ height: "calc(100vh - 64px)" }}>
-      {/* Top bar */}
+      {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-6 py-3 border-b bg-background shrink-0">
         <div className="flex items-center gap-3">
           <Globe className="w-5 h-5 text-primary" />
@@ -445,7 +549,7 @@ export default function WebsitePage() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left sidebar */}
+        {/* ── Left sidebar ── */}
         <div className="w-80 shrink-0 border-r flex flex-col min-h-0 bg-muted/20">
           <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
             <TabsList className="mx-3 mt-3 shrink-0">
@@ -454,6 +558,7 @@ export default function WebsitePage() {
               <TabsTrigger value="seo" className="flex-1">SEO</TabsTrigger>
             </TabsList>
 
+            {/* ── Sections tab ── */}
             <TabsContent value="sections" className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 m-0">
               {effectiveSections.map((section, idx) => (
                 <div key={section.id}>
@@ -479,7 +584,10 @@ export default function WebsitePage() {
               ))}
             </TabsContent>
 
+            {/* ── Design tab ── */}
             <TabsContent value="design" className="flex-1 overflow-y-auto px-3 py-3 m-0 space-y-5">
+
+              {/* Template */}
               <div>
                 <Label className="mb-2 block font-semibold">Template</Label>
                 <Button variant="outline" size="sm" className="w-full justify-between" onClick={() => setTemplatePickerOpen(true)}>
@@ -487,60 +595,163 @@ export default function WebsitePage() {
                   <ChevronDown className="w-3.5 h-3.5" />
                 </Button>
               </div>
+
+              {/* Brand Colour */}
               <div>
-                <Label className="mb-2 block font-semibold">Brand Color</Label>
-                <div className="flex flex-wrap gap-2">
-                  {THEME_COLORS.map(c => (
-                    <button key={c} onClick={() => setThemeColor(c)} title={c}
-                      style={{ width: 28, height: 28, borderRadius: "50%", background: c, border: effectiveTheme === c ? "3px solid white" : "2px solid transparent", boxShadow: effectiveTheme === c ? `0 0 0 3px ${c}` : "none", cursor: "pointer" }}
+                <Label className="mb-2 block font-semibold">Brand Colour</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {THEME_PALETTE.map(({ color, label }) => (
+                    <button
+                      key={color}
+                      onClick={() => setThemeColor(color)}
+                      title={label}
+                      style={{
+                        width: 30, height: 30, borderRadius: "50%",
+                        background: color,
+                        border: effectiveTheme === color ? "3px solid white" : "2px solid transparent",
+                        boxShadow: effectiveTheme === color ? `0 0 0 3px ${color}, 0 2px 8px ${color}66` : "0 1px 4px rgba(0,0,0,.2)",
+                        cursor: "pointer", flexShrink: 0,
+                        transition: "transform .15s, box-shadow .15s",
+                      }}
                     />
                   ))}
-                  <input type="color" value={effectiveTheme} onChange={e => setThemeColor(e.target.value)}
-                    title="Custom color" style={{ width: 28, height: 28, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: "none" }}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="color"
+                    value={effectiveTheme}
+                    onChange={e => setThemeColor(e.target.value)}
+                    title="Custom colour"
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: "none" }}
                   />
+                  <span className="text-xs text-muted-foreground">Custom</span>
+                  <span className="text-xs font-mono text-muted-foreground ml-auto">{effectiveTheme}</span>
+                </div>
+                {/* Live colour preview */}
+                <div className="mt-2 rounded-lg overflow-hidden" style={{ height: 40, background: `linear-gradient(135deg, ${effectiveTheme}, ${effectiveTheme}99)`, border: `1px solid ${effectiveTheme}44` }}>
+                  <div style={{ height: "100%", display: "flex", alignItems: "center", padding: "0 0.9rem", gap: "0.6rem" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
+                    <span style={{ color: "#fff", fontSize: "0.7rem", fontWeight: 700 }}>Preview</span>
+                    <div style={{ marginLeft: "auto", background: "rgba(255,255,255,0.25)", color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: "0.65rem", fontWeight: 700 }}>BUTTON</div>
+                  </div>
                 </div>
               </div>
+
+              {/* Logo */}
               <div>
                 <Label className="mb-2 block font-semibold">Logo</Label>
-                <div className="flex gap-2 items-center">
-                  {effectiveLogo && <img src={effectiveLogo} alt="Logo" className="h-12 object-contain rounded border bg-muted p-1" />}
+                {effectiveLogo && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <img src={effectiveLogo} alt="Logo" className="h-14 object-contain rounded border bg-muted p-1.5" />
+                    <Button variant="ghost" size="sm" onClick={() => setLogoUrl("")}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  </div>
+                )}
+                <div className="flex gap-2">
                   <label className="cursor-pointer flex-1">
                     <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); }} />
                     <span className="inline-flex w-full items-center justify-center gap-1.5 text-sm border rounded px-3 py-2 hover:bg-muted">
-                      <Upload className="w-3.5 h-3.5" /> {effectiveLogo ? "Replace Logo" : "Upload Logo"}
+                      <Upload className="w-3.5 h-3.5" /> Upload Logo
                     </span>
                   </label>
-                  {effectiveLogo && <Button variant="ghost" size="sm" onClick={() => setLogoUrl("")}><Trash2 className="w-3.5 h-3.5" /></Button>}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 whitespace-nowrap"
+                    onClick={() => { setAiLogoResult(null); setAiLogoOpen(true); }}
+                  >
+                    <Wand2 className="w-3.5 h-3.5" /> AI Generate
+                  </Button>
                 </div>
+                <p className="text-xs text-muted-foreground mt-1.5">Upload your own or let AI create one from your business name.</p>
+              </div>
+
+              {/* Tagline */}
+              <div>
+                <Label className="mb-2 block font-semibold">Tagline</Label>
+                <p className="text-xs text-muted-foreground mb-2">Shown as a highlighted badge in your hero section.</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={currentTagline}
+                    onChange={e => updateHeroTagline(e.target.value)}
+                    placeholder="Your catchy one-liner…"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                    onClick={handleGenerateTaglines}
+                    disabled={taglinesLoading}
+                  >
+                    {taglinesLoading
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Sparkles className="w-3.5 h-3.5" />}
+                    Ideas
+                  </Button>
+                </div>
+                {!effectiveTitle && (
+                  <p className="text-xs text-amber-500 mt-1">Set your business name in the SEO tab to unlock AI taglines.</p>
+                )}
+                {/* AI suggestions */}
+                {taglineSuggestions.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground">AI Suggestions — click to use:</p>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setTaglineSuggestions([])}><X className="w-3 h-3" /></Button>
+                    </div>
+                    {taglineSuggestions.map((t, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { updateHeroTagline(t); setTaglineSuggestions([]); }}
+                        className="w-full text-left text-sm px-3 py-2 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors"
+                      >
+                        ✦ {t}
+                      </button>
+                    ))}
+                    {/* Optional description for better suggestions */}
+                    <div className="pt-1">
+                      <Input
+                        value={taglineDesc}
+                        onChange={e => setTaglineDesc(e.target.value)}
+                        placeholder="Describe your business for better suggestions…"
+                        className="text-xs"
+                      />
+                      <Button variant="link" size="sm" className="text-xs h-6 px-0 mt-0.5" onClick={handleGenerateTaglines} disabled={taglinesLoading}>
+                        {taglinesLoading ? "Generating…" : "Regenerate ↻"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
+            {/* ── SEO tab ── */}
             <TabsContent value="seo" className="flex-1 overflow-y-auto px-3 py-3 m-0 space-y-4">
               <div className="space-y-1.5">
-                <Label>Page Title</Label>
+                <Label>Business / Page Title</Label>
                 <Input value={effectiveTitle} onChange={e => setPageTitle(e.target.value)} placeholder="My Business Name" />
-                <p className="text-xs text-muted-foreground">Shown in browser tabs and search results</p>
+                <p className="text-xs text-muted-foreground">Shown in browser tabs and search results. Also used for AI logo & tagline generation.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Meta Description</Label>
-                <Textarea rows={3} value={effectiveMeta} onChange={e => setMetaDesc(e.target.value)} placeholder="A short description of your business for search engines" />
+                <Textarea rows={3} value={effectiveMeta} onChange={e => setMetaDesc(e.target.value)} placeholder="A short description for search engines" />
                 <p className="text-xs text-muted-foreground">{effectiveMeta.length}/160 characters</p>
               </div>
               {site && (
                 <div className="space-y-1.5">
-                  <Label>Your Website URL</Label>
+                  <Label>Shareable Website Link</Label>
                   <div className="flex gap-2">
                     <Input readOnly value={publicUrl} className="text-xs font-mono" />
                     <Button variant="outline" size="sm" onClick={copyUrl}>{copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}</Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Share this link with customers</p>
+                  <p className="text-xs text-muted-foreground">Share this link with your customers. Old <code>/site/</code> links still work.</p>
                 </div>
               )}
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Preview pane */}
+        {/* ── Preview pane ── */}
         <div className="flex-1 flex flex-col min-w-0 bg-muted/30">
           <div className="flex items-center gap-2 px-4 py-2 border-b bg-background shrink-0">
             <span className="text-sm font-medium text-muted-foreground mr-2">Preview</span>
@@ -559,15 +770,14 @@ export default function WebsitePage() {
               borderRadius: 12,
               overflow: "hidden",
               boxShadow: "0 4px 24px rgba(0,0,0,.12)",
-              transform: previewMode === "desktop" ? undefined : undefined,
             }}>
-              <SiteRenderer data={previewData} />
+              <SiteRenderer data={previewData} immediateReveal />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Template picker dialog */}
+      {/* ── Template picker dialog ── */}
       <Dialog open={templatePickerOpen} onOpenChange={setTemplatePickerOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Choose a Template</DialogTitle></DialogHeader>
@@ -580,12 +790,63 @@ export default function WebsitePage() {
                 description={t.description as string}
                 palette={t.palette as Record<string, string>}
                 selected={effectiveTemplate === t.id}
-                onSelect={() => {
-                  setTemplateId(t.id as string);
-                  setTemplatePickerOpen(false);
-                }}
+                onSelect={() => { setTemplateId(t.id as string); setTemplatePickerOpen(false); }}
               />
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── AI Logo Generation dialog ── */}
+      <Dialog open={aiLogoOpen} onOpenChange={setAiLogoOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-primary" /> AI Logo Generator
+            </DialogTitle>
+            <DialogDescription>
+              Describe your business and our AI will create a professional logo for you.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Business name</Label>
+              <Input value={effectiveTitle || ""} readOnly className="font-medium" placeholder="Set in the SEO tab" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Business description <span className="text-muted-foreground font-normal">(optional but recommended)</span></Label>
+              <Textarea
+                rows={3}
+                value={aiLogoDesc}
+                onChange={e => setAiLogoDesc(e.target.value)}
+                placeholder="e.g. A modern fashion boutique selling African print clothing in Lagos…"
+              />
+            </div>
+            <Button
+              className="w-full gap-2"
+              onClick={handleGenerateLogo}
+              disabled={aiLogoGenerating || !effectiveTitle}
+            >
+              {aiLogoGenerating
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating… (10–20 sec)</>
+                : <><Sparkles className="w-4 h-4" /> Generate Logo</>}
+            </Button>
+            {!effectiveTitle && (
+              <p className="text-xs text-amber-500 text-center">Add your business name in the SEO tab first.</p>
+            )}
+            {aiLogoResult && (
+              <Card className="p-4 space-y-3">
+                <img src={aiLogoResult} alt="AI generated logo" className="w-32 h-32 object-contain mx-auto rounded-xl border bg-white p-2" />
+                <div className="flex gap-2">
+                  <Button className="flex-1 gap-1.5" onClick={applyAiLogo}>
+                    <CheckCircle className="w-4 h-4" /> Use This Logo
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={handleGenerateLogo} disabled={aiLogoGenerating}>
+                    <RefreshCw className="w-3.5 h-3.5" /> Regenerate
+                  </Button>
+                </div>
+              </Card>
+            )}
           </div>
         </DialogContent>
       </Dialog>

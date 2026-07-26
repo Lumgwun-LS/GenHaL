@@ -13,7 +13,7 @@ import {
   storeUserSignupsTable,
   storeOfflinePaymentsTable,
 } from "@workspace/db";
-import { eq, desc, asc, ilike, and, sql, or, gte, count } from "drizzle-orm";
+import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray } from "drizzle-orm";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { sendEmail } from "../lib/mailer";
@@ -537,6 +537,57 @@ router.post("/users/track", requireAuth(), async (req, res) => {
   } catch (err) {
     logger.error({ err }, "trackStoreUser error");
     res.status(204).end();
+  }
+});
+
+// GET /store/users/me — authenticated user's installed apps and reviews
+router.get("/users/me", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+    // User's signup record (may be null if they signed in via SSO without hitting /users/track yet)
+    const userRecord = await db.query.storeUserSignupsTable.findFirst({
+      where: eq(storeUserSignupsTable.clerkUserId, userId),
+    });
+
+    // Distinct apps this user has installed, most recent install per app
+    const installAgg = await db.select({
+      appId:       storeAppEventsTable.appId,
+      installedAt: sql<string>`max(${storeAppEventsTable.createdAt})::text`,
+    })
+      .from(storeAppEventsTable)
+      .where(and(
+        eq(storeAppEventsTable.clerkUserId, userId),
+        eq(storeAppEventsTable.eventType, "install"),
+      ))
+      .groupBy(storeAppEventsTable.appId);
+
+    const appIds = installAgg.map(e => e.appId);
+    const installedApps = appIds.length > 0
+      ? await db.query.storeAppsTable.findMany({
+          where: inArray(storeAppsTable.id, appIds),
+          with: { developer: true },
+        })
+      : [];
+
+    // Attach installedAt and sort most-recent first
+    const installedWithDate = installedApps
+      .map(app => ({ ...app, installedAt: installAgg.find(e => e.appId === app.id)?.installedAt ?? null }))
+      .sort((a, b) => (b.installedAt ?? "").localeCompare(a.installedAt ?? ""));
+
+    // User's own reviews with the app they reviewed
+    const reviews = await db.query.storeAppReviewsTable.findMany({
+      where: eq(storeAppReviewsTable.reviewerClerkId, userId),
+      with: { app: true },
+      orderBy: desc(storeAppReviewsTable.createdAt),
+      limit: 20,
+    });
+
+    res.json({ user: userRecord ?? null, installedApps: installedWithDate, reviews });
+  } catch (err) {
+    logger.error({ err }, "getStoreUserMe error");
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

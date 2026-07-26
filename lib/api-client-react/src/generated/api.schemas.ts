@@ -2369,6 +2369,97 @@ export interface VendorAdAccountInput {
   accountName?: string;
 }
 
+export type GenerateAiContentInputOutputTypesItem = typeof GenerateAiContentInputOutputTypesItem[keyof typeof GenerateAiContentInputOutputTypesItem];
+
+
+export const GenerateAiContentInputOutputTypesItem = {
+  social_post: 'social_post',
+  article: 'article',
+  academic: 'academic',
+  image: 'image',
+  video: 'video',
+} as const;
+
+export type GenerateAiContentInputTone = typeof GenerateAiContentInputTone[keyof typeof GenerateAiContentInputTone];
+
+
+export const GenerateAiContentInputTone = {
+  professional: 'professional',
+  casual: 'casual',
+  educational: 'educational',
+  promotional: 'promotional',
+} as const;
+
+export type GenerateAiContentInputLanguage = typeof GenerateAiContentInputLanguage[keyof typeof GenerateAiContentInputLanguage];
+
+
+export const GenerateAiContentInputLanguage = {
+  english: 'english',
+  hausa: 'hausa',
+  yoruba: 'yoruba',
+  igbo: 'igbo',
+} as const;
+
+export interface GenerateAiContentInput {
+  vendorId: number;
+  /** @maxLength 1000 */
+  topic: string;
+  /** @minItems 1 */
+  outputTypes: GenerateAiContentInputOutputTypesItem[];
+  tone?: GenerateAiContentInputTone;
+  language?: GenerateAiContentInputLanguage;
+}
+
+export interface AiContentSceneItem {
+  id: number;
+  prompt: string;
+  imageUrl: string;
+}
+
+export type AiContentResultStatus = typeof AiContentResultStatus[keyof typeof AiContentResultStatus];
+
+
+export const AiContentResultStatus = {
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface AiContentResult {
+  status: AiContentResultStatus;
+  content?: string | null;
+  imageUrl?: string | null;
+  videoScenes?: AiContentSceneItem[] | null;
+  wordCount?: number | null;
+  error?: string | null;
+  libraryId?: number | null;
+}
+
+export interface GenerateAiContentResult {
+  social_post?: AiContentResult;
+  article?: AiContentResult;
+  academic?: AiContentResult;
+  image?: AiContentResult;
+  video?: AiContentResult;
+}
+
+export interface ContentLibraryItem {
+  id: number;
+  vendorId: number;
+  type: string;
+  topic: string;
+  content: string;
+  imageUrl?: string | null;
+  createdAt: string;
+}
+
+export interface ContentLibraryItemInput {
+  vendorId: number;
+  type: string;
+  topic: string;
+  content: string;
+  imageUrl?: string | null;
+}
+
 export type ListVendorsParams = {
 search?: string;
 industry?: string;
@@ -2651,5 +2742,9 @@ status?: string;
 
 export type DeleteVendorAdAccount200 = {
   ok: boolean;
+};
+
+export type ListContentLibraryParams = {
+vendorId: number;
 };
 

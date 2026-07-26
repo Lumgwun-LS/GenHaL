@@ -42,9 +42,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2, Bookmark, BookmarkCheck, ChevronDown } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2, Bookmark, BookmarkCheck, ChevronDown, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ContentStudio } from "./content-studio";
 
 /** Converts a Date to the value a <input type="datetime-local"> expects, in the browser's local timezone. */
 function toDatetimeLocalValue(date: Date): string {
@@ -1167,7 +1169,7 @@ export default function Social() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
+    <div className="p-8 max-w-7xl mx-auto space-y-6 w-full">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Social Hub</h1>
@@ -1181,7 +1183,17 @@ export default function Social() {
         </Button>
       </div>
 
-      <ConnectedAccounts />
+      <Tabs defaultValue="posts">
+        <TabsList>
+          <TabsTrigger value="posts">Posts</TabsTrigger>
+          <TabsTrigger value="studio">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+            AI Content Studio
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="posts" className="mt-6 space-y-8">
+          <ConnectedAccounts />
 
       <UpcomingScheduleView
         getPlatformIcon={getPlatformIcon}
@@ -1339,6 +1351,12 @@ export default function Social() {
           ))
         )}
       </div>
+        </TabsContent>
+
+        <TabsContent value="studio" className="mt-6">
+          <ContentStudio />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
