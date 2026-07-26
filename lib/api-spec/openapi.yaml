@@ -1002,6 +1002,176 @@ paths:
               schema:
                 $ref: "#/components/schemas/InventorySummary"
 
+  /inventory/analytics:
+    get:
+      operationId: getInventoryAnalytics
+      tags: [inventory]
+      summary: Get per-product sales velocity and fast/slow mover lists
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAnalytics"
+
+  /inventory/alert-settings:
+    get:
+      operationId: getInventoryAlertSettings
+      tags: [inventory]
+      summary: Get vendor stock alert preferences
+      responses:
+        "200":
+          description: Alert settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockAlertSettings"
+    patch:
+      operationId: updateInventoryAlertSettings
+      tags: [inventory]
+      summary: Update vendor stock alert preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockAlertSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockAlertSettings"
+
+  /purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [inventory]
+      summary: List purchase orders
+      parameters:
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of purchase orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+    post:
+      operationId: createPurchaseOrder
+      tags: [inventory]
+      summary: Create a purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderInput"
+      responses:
+        "201":
+          description: Created purchase order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
+  /purchase-orders/{id}:
+    get:
+      operationId: getPurchaseOrder
+      tags: [inventory]
+      summary: Get a purchase order with its items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Purchase order with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderDetail"
+    patch:
+      operationId: updatePurchaseOrder
+      tags: [inventory]
+      summary: Update a purchase order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderUpdate"
+      responses:
+        "200":
+          description: Updated purchase order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    delete:
+      operationId: deletePurchaseOrder
+      tags: [inventory]
+      summary: Delete a purchase order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /purchase-orders/{id}/email:
+    post:
+      operationId: emailPurchaseOrder
+      tags: [inventory]
+      summary: Email a purchase order to the supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailPurchaseOrderInput"
+      responses:
+        "200":
+          description: Email result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+
   # ─── ORDERS ───────────────────────────────────────────────────────────────
   /orders:
     get:
@@ -5157,6 +5327,202 @@ components:
                 type: integer
               value:
                 type: number
+
+    InventoryAnalytics:
+      type: object
+      required: [products, fastMovers, slowMovers]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVelocity"
+        fastMovers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVelocity"
+        slowMovers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVelocity"
+
+    ProductVelocity:
+      type: object
+      required: [id, name, sku, category, stockQuantity, lowStockThreshold, maxStock, price, dailyUnits, weeklyUnits, monthlyUnits]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        category:
+          type: string
+        stockQuantity:
+          type: integer
+        lowStockThreshold:
+          type: integer
+        maxStock:
+          type: integer
+        price:
+          type: number
+        unit:
+          type: string
+        stockPercent:
+          type: ["integer", "null"]
+        dailyUnits:
+          type: integer
+        weeklyUnits:
+          type: integer
+        monthlyUnits:
+          type: integer
+
+    StockAlertSettings:
+      type: object
+      required: [alert60Enabled, alert40Enabled, alert20Enabled]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        alert60Enabled:
+          type: boolean
+        alert40Enabled:
+          type: boolean
+        alert20Enabled:
+          type: boolean
+
+    PurchaseOrderInput:
+      type: object
+      required: [supplierName, items]
+      properties:
+        supplierName:
+          type: string
+        supplierEmail:
+          type: string
+        supplierPhone:
+          type: string
+        supplierAddress:
+          type: string
+        notes:
+          type: string
+        currency:
+          type: string
+        taxRate:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderInputItemsItem"
+
+    PurchaseOrderInputItemsItem:
+      type: object
+      required: [description, quantity, unitPrice]
+      properties:
+        productId:
+          type: integer
+        description:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+
+    PurchaseOrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        notes:
+          type: string
+        supplierEmail:
+          type: string
+        supplierPhone:
+          type: string
+        supplierAddress:
+          type: string
+
+    StockAlertSettingsUpdate:
+      type: object
+      properties:
+        alert60Enabled:
+          type: boolean
+        alert40Enabled:
+          type: boolean
+        alert20Enabled:
+          type: boolean
+
+    EmailPurchaseOrderInput:
+      type: object
+      properties:
+        email:
+          type: string
+
+    PurchaseOrder:
+      type: object
+      required: [id, vendorId, orderNumber, supplierName, status, subtotal, taxAmount, totalAmount, currency, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        orderNumber:
+          type: string
+        supplierName:
+          type: string
+        supplierEmail:
+          type: string
+        supplierPhone:
+          type: string
+        supplierAddress:
+          type: string
+        notes:
+          type: string
+        status:
+          type: string
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    PurchaseOrderItem:
+      type: object
+      required: [id, purchaseOrderId, description, quantity, unitPrice, totalPrice]
+      properties:
+        id:
+          type: integer
+        purchaseOrderId:
+          type: integer
+        productId:
+          type: ["integer", "null"]
+        description:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+        createdAt:
+          type: string
+
+    PurchaseOrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/PurchaseOrder"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PurchaseOrderItem"
 
     # ─── ORDER ──────────────────────────────────────────────────────────────
     Order:

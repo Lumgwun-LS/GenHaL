@@ -1310,6 +1310,255 @@ export const GetInventorySummaryResponse = zod.object({
 
 
 /**
+ * @summary Get per-product sales velocity and fast/slow mover lists
+ */
+export const GetInventoryAnalyticsQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional()
+})
+
+export const GetInventoryAnalyticsResponse = zod.object({
+  "products": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "category": zod.string(),
+  "stockQuantity": zod.number(),
+  "lowStockThreshold": zod.number(),
+  "maxStock": zod.number(),
+  "price": zod.number(),
+  "unit": zod.string().optional(),
+  "stockPercent": zod.number().nullish(),
+  "dailyUnits": zod.number(),
+  "weeklyUnits": zod.number(),
+  "monthlyUnits": zod.number()
+})),
+  "fastMovers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "category": zod.string(),
+  "stockQuantity": zod.number(),
+  "lowStockThreshold": zod.number(),
+  "maxStock": zod.number(),
+  "price": zod.number(),
+  "unit": zod.string().optional(),
+  "stockPercent": zod.number().nullish(),
+  "dailyUnits": zod.number(),
+  "weeklyUnits": zod.number(),
+  "monthlyUnits": zod.number()
+})),
+  "slowMovers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "category": zod.string(),
+  "stockQuantity": zod.number(),
+  "lowStockThreshold": zod.number(),
+  "maxStock": zod.number(),
+  "price": zod.number(),
+  "unit": zod.string().optional(),
+  "stockPercent": zod.number().nullish(),
+  "dailyUnits": zod.number(),
+  "weeklyUnits": zod.number(),
+  "monthlyUnits": zod.number()
+}))
+})
+
+
+/**
+ * @summary Get vendor stock alert preferences
+ */
+export const GetInventoryAlertSettingsResponse = zod.object({
+  "id": zod.number().optional(),
+  "vendorId": zod.number().optional(),
+  "alert60Enabled": zod.boolean(),
+  "alert40Enabled": zod.boolean(),
+  "alert20Enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Update vendor stock alert preferences
+ */
+export const UpdateInventoryAlertSettingsBody = zod.object({
+  "alert60Enabled": zod.boolean().optional(),
+  "alert40Enabled": zod.boolean().optional(),
+  "alert20Enabled": zod.boolean().optional()
+})
+
+export const UpdateInventoryAlertSettingsResponse = zod.object({
+  "id": zod.number().optional(),
+  "vendorId": zod.number().optional(),
+  "alert60Enabled": zod.boolean(),
+  "alert40Enabled": zod.boolean(),
+  "alert20Enabled": zod.boolean()
+})
+
+
+/**
+ * @summary List purchase orders
+ */
+export const ListPurchaseOrdersQueryParams = zod.object({
+  "vendorId": zod.coerce.number().optional()
+})
+
+export const ListPurchaseOrdersResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "orderNumber": zod.string(),
+  "supplierName": zod.string(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.string(),
+  "subtotal": zod.number(),
+  "taxAmount": zod.number(),
+  "totalAmount": zod.number(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
+
+
+/**
+ * @summary Create a purchase order
+ */
+export const CreatePurchaseOrderBody = zod.object({
+  "supplierName": zod.string(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "taxRate": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number()
+}))
+})
+
+export const CreatePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "orderNumber": zod.string(),
+  "supplierName": zod.string(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.string(),
+  "subtotal": zod.number(),
+  "taxAmount": zod.number(),
+  "totalAmount": zod.number(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Get a purchase order with its items
+ */
+export const GetPurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "orderNumber": zod.string(),
+  "supplierName": zod.string(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.string(),
+  "subtotal": zod.number(),
+  "taxAmount": zod.number(),
+  "totalAmount": zod.number(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+}).and(zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "productId": zod.number().nullish(),
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalPrice": zod.number(),
+  "createdAt": zod.string().optional()
+}))
+}))
+
+
+/**
+ * @summary Update a purchase order
+ */
+export const UpdatePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePurchaseOrderBody = zod.object({
+  "status": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional()
+})
+
+export const UpdatePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "orderNumber": zod.string(),
+  "supplierName": zod.string(),
+  "supplierEmail": zod.string().optional(),
+  "supplierPhone": zod.string().optional(),
+  "supplierAddress": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.string(),
+  "subtotal": zod.number(),
+  "taxAmount": zod.number(),
+  "totalAmount": zod.number(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a purchase order
+ */
+export const DeletePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePurchaseOrderResponse = zod.void()
+
+
+/**
+ * @summary Email a purchase order to the supplier
+ */
+export const EmailPurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const EmailPurchaseOrderBody = zod.object({
+  "email": zod.string().optional()
+})
+
+export const EmailPurchaseOrderResponse = zod.object({
+  "status": zod.string().optional(),
+  "error": zod.string().optional()
+})
+
+
+/**
  * @summary List sales orders
  */
 export const ListOrdersQueryParams = zod.object({

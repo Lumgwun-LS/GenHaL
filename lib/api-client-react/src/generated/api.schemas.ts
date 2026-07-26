@@ -678,6 +678,107 @@ export interface InventorySummary {
   categories: InventorySummaryCategoriesItem[];
 }
 
+export interface ProductVelocity {
+  id: number;
+  name: string;
+  sku: string;
+  category: string;
+  stockQuantity: number;
+  lowStockThreshold: number;
+  maxStock: number;
+  price: number;
+  unit?: string;
+  /** @nullable */
+  stockPercent?: number | null;
+  dailyUnits: number;
+  weeklyUnits: number;
+  monthlyUnits: number;
+}
+
+export interface InventoryAnalytics {
+  products: ProductVelocity[];
+  fastMovers: ProductVelocity[];
+  slowMovers: ProductVelocity[];
+}
+
+export interface StockAlertSettings {
+  id?: number;
+  vendorId?: number;
+  alert60Enabled: boolean;
+  alert40Enabled: boolean;
+  alert20Enabled: boolean;
+}
+
+export interface PurchaseOrderInputItemsItem {
+  productId?: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface PurchaseOrderInput {
+  supplierName: string;
+  supplierEmail?: string;
+  supplierPhone?: string;
+  supplierAddress?: string;
+  notes?: string;
+  currency?: string;
+  taxRate?: number;
+  items: PurchaseOrderInputItemsItem[];
+}
+
+export interface PurchaseOrderUpdate {
+  status?: string;
+  notes?: string;
+  supplierEmail?: string;
+  supplierPhone?: string;
+  supplierAddress?: string;
+}
+
+export interface StockAlertSettingsUpdate {
+  alert60Enabled?: boolean;
+  alert40Enabled?: boolean;
+  alert20Enabled?: boolean;
+}
+
+export interface EmailPurchaseOrderInput {
+  email?: string;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  vendorId: number;
+  orderNumber: string;
+  supplierName: string;
+  supplierEmail?: string;
+  supplierPhone?: string;
+  supplierAddress?: string;
+  notes?: string;
+  status: string;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PurchaseOrderItem {
+  id: number;
+  purchaseOrderId: number;
+  /** @nullable */
+  productId?: number | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  createdAt?: string;
+}
+
+export type PurchaseOrderDetail = PurchaseOrder & {
+  items: PurchaseOrderItem[];
+};
+
 export interface OrderItem {
   id: number;
   productId: number;
@@ -2123,6 +2224,19 @@ vendorId?: number;
 
 export type GetInventorySummaryParams = {
 vendorId?: number;
+};
+
+export type GetInventoryAnalyticsParams = {
+vendorId?: number;
+};
+
+export type ListPurchaseOrdersParams = {
+vendorId?: number;
+};
+
+export type EmailPurchaseOrder200 = {
+  status?: string;
+  error?: string;
 };
 
 export type ListOrdersParams = {

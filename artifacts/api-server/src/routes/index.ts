@@ -30,6 +30,8 @@ import salesRouter from "./sales";
 import expensesRouter from "./expenses";
 import investmentsRouter from "./investments";
 import branchesRouter from "./branches";
+import purchaseOrdersRouter from "./purchase-orders";
+import inventoryAnalyticsRouter from "./inventory-analytics";
 import workersRouter from "./workers";
 import storeRouter from "./store";
 import storeAiLaunchRouter from "./store-ai-launch";
@@ -124,5 +126,7 @@ router.use(adminBillingEnforcementRouter);
 router.use(salesRouter);
 router.use(expensesRouter);
 router.use(investmentsRouter);
+router.use(purchaseOrdersRouter);
+router.use(inventoryAnalyticsRouter);
 
 export default router;

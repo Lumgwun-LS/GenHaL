@@ -20,6 +20,7 @@ import { startBillingThresholdScheduler } from "./lib/billing-threshold-schedule
 import { startOrderExpiryScheduler } from "./lib/order-expiry-scheduler";
 import { startWebhookEventsCleanup } from "./lib/webhook-events-cleanup";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
+import { startStockAlertScheduler } from "./lib/stock-alert-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -62,4 +63,5 @@ app.listen(port, (err) => {
   startBillingThresholdScheduler();
   startOrderExpiryScheduler();
   startWebhookEventsCleanup();
+  startStockAlertScheduler();
 });

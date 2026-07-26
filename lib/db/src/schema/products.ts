@@ -13,6 +13,10 @@ export const productsTable = pgTable("products", {
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }),
   stockQuantity: integer("stock_quantity").notNull().default(0),
   lowStockThreshold: integer("low_stock_threshold").notNull().default(10),
+  /** Reference maximum for stock-alert percentage calculations. 0 = not set / alerts disabled for this product. */
+  maxStock: integer("max_stock").notNull().default(0),
+  /** The most recent stock-alert tier fired (20 | 40 | 60). NULL = no alert sent this cycle. Reset when stock recovers above 70% of maxStock. */
+  lastStockAlertLevel: integer("last_stock_alert_level"),
   category: text("category").notNull(),
   imageUrl: text("image_url"),
   status: text("status").notNull().default("active"),
