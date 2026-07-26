@@ -23,7 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Receipt, Plus, Download, Pencil, Trash2, Repeat, PauseCircle, PlayCircle, CalendarClock, List } from "lucide-react";
+import { Receipt, Plus, Download, Upload, Pencil, Trash2, Repeat, PauseCircle, PlayCircle, CalendarClock, List } from "lucide-react";
+import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
 import { format, formatDistanceToNow, isPast } from "date-fns";
 import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
@@ -122,6 +123,7 @@ export default function ExpensesPage() {
   const deleteExpense = useDeleteExpense();
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [formCategory, setFormCategory] = useState(CATEGORIES[0]!);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -267,6 +269,9 @@ export default function ExpensesPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport} disabled={!vendorId}>
             <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!vendorId}>
+            <Upload className="w-4 h-4 mr-2" /> Import CSV
           </Button>
           <Button onClick={() => setOpen(true)} disabled={!vendorId}>
             <Plus className="w-4 h-4 mr-2" /> Record Expense
@@ -675,6 +680,17 @@ export default function ExpensesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        importUrl="/api/expenses/import"
+        entityName="Expenses"
+        columns={["Category", "Description", "Amount", "Date"]}
+        requiredColumns={["Amount", "Category"]}
+        extraFields={vendorId ? { vendorId: String(vendorId) } : {}}
+        onSuccess={() => qc.invalidateQueries({ queryKey: getListExpensesQueryKey({}) })}
+      />
     </div>
   );
 }

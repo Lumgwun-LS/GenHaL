@@ -22,7 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { PiggyBank, Plus, Download, Pencil, Trash2 } from "lucide-react";
+import { PiggyBank, Plus, Download, Upload, Pencil, Trash2 } from "lucide-react";
+import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
@@ -85,6 +86,7 @@ export default function InvestmentsPage() {
   const deleteInvestment = useDeleteInvestment();
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [formType, setFormType] = useState(TYPES[0]!.value);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -209,6 +211,9 @@ export default function InvestmentsPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport} disabled={!vendorId}>
             <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!vendorId}>
+            <Upload className="w-4 h-4 mr-2" /> Import CSV
           </Button>
           <Button onClick={() => setOpen(true)} disabled={!vendorId}>
             <Plus className="w-4 h-4 mr-2" /> Record Investment
@@ -431,6 +436,17 @@ export default function InvestmentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        importUrl="/api/investments/import"
+        entityName="Investments"
+        columns={["Name", "Type", "Amount", "Date", "Current Value", "Status", "Notes"]}
+        requiredColumns={["Name", "Amount"]}
+        extraFields={vendorId ? { vendorId: String(vendorId) } : {}}
+        onSuccess={() => qc.invalidateQueries({ queryKey: getListInvestmentsQueryKey({}) })}
+      />
     </div>
   );
 }

@@ -81,7 +81,6 @@ function makePublication(
     id: Math.floor(Math.random() * 10_000),
     postId: 1,
     platform: "Facebook",
-    status: overrides.status,
     externalPostId: null,
     externalUrl: null,
     errorMessage: null,

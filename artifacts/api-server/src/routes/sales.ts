@@ -180,4 +180,65 @@ router.delete("/sales/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// ── CSV Import ───────────────────────────────────────────────────────────────
+import multer from "multer";
+const _csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function parseCSVBuffer(buffer: Buffer): string[][] {
+  const text = buffer.toString("utf8");
+  const rows: string[][] = [];
+  let row: string[] = [], current = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) { row.push(current.trim()); current = ""; }
+    else if ((ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) && !inQuotes) {
+      if (ch === '\r') i++;
+      row.push(current.trim());
+      if (row.some(v => v !== '')) rows.push(row);
+      row = []; current = "";
+    } else current += ch;
+  }
+  if (current !== '' || row.length > 0) { row.push(current.trim()); if (row.some(v => v !== '')) rows.push(row); }
+  return rows;
+}
+
+router.post("/sales/import", _csvUpload.single("file"), async (req: any, res: any): Promise<void> => {
+  const vendorId = Number(req.query.vendorId ?? req.body.vendorId);
+  if (isNaN(vendorId)) { res.status(400).json({ error: "vendorId is required" }); return; }
+  const check = await resolveOwnedVendorId(req, vendorId);
+  if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+  if (!req.file) { res.status(400).json({ error: "No CSV file uploaded" }); return; }
+
+  const rows = parseCSVBuffer(req.file.buffer);
+  if (rows.length < 2) { res.status(400).json({ error: "CSV must have a header row and at least one data row" }); return; }
+  const header = rows[0]!.map(h => h.toLowerCase().replace(/\s+/g, "_"));
+  const col = (n: string) => header.indexOf(n);
+
+  let imported = 0;
+  const errors: { row: number; error: string }[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]!;
+    const amount = parseFloat(r[col("amount")] ?? "");
+    if (isNaN(amount)) { errors.push({ row: i + 1, error: "Amount is required and must be a number" }); continue; }
+    try {
+      const rawDate = r[col("date")] || r[col("sale_date")] || r[col("saledate")] || "";
+      const saleDateVal = rawDate ? new Date(rawDate) : new Date();
+      await db.insert(salesTable).values({
+        vendorId,
+        description: r[col("description")] || null,
+        customerName: r[col("customer")] || r[col("customer_name")] || null,
+        amount: amount.toString(),
+        currency: r[col("currency")] || "USD",
+        saleDate: saleDateVal,
+        source: "manual",
+      });
+      imported++;
+    } catch (e: any) { errors.push({ row: i + 1, error: e.message ?? "Insert failed" }); }
+  }
+  res.json({ imported, skipped: 0, errors: errors.length, errorDetails: errors.slice(0, 20) });
+});
+
 export default router;

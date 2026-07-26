@@ -20,7 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DollarSign, Plus, Download, Pencil, Trash2, Lock } from "lucide-react";
+import { DollarSign, Plus, Download, Upload, Pencil, Trash2, Lock } from "lucide-react";
+import { CsvImportDialog } from "@/components/csv-import-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDateRangeFilter } from "@/hooks/use-date-range-filter";
@@ -64,6 +65,7 @@ export default function SalesPage() {
   const deleteSale = useDeleteSale();
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [amount, setAmount] = useState("");
@@ -177,6 +179,9 @@ export default function SalesPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport} disabled={!vendorId}>
             <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!vendorId}>
+            <Upload className="w-4 h-4 mr-2" /> Import CSV
           </Button>
           <Button onClick={() => setOpen(true)} disabled={!vendorId}>
             <Plus className="w-4 h-4 mr-2" /> Record Sale
@@ -332,6 +337,17 @@ export default function SalesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        importUrl="/api/sales/import"
+        entityName="Sales"
+        columns={["Description", "Customer", "Amount", "Date", "Currency"]}
+        requiredColumns={["Amount"]}
+        extraFields={vendorId ? { vendorId: String(vendorId) } : {}}
+        onSuccess={() => qc.invalidateQueries({ queryKey: getListSalesQueryKey({}) })}
+      />
     </div>
   );
 }

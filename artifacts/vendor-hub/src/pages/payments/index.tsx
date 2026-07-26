@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy, XCircle, Clock } from "lucide-react";
+import { DollarSign, CreditCard, TrendingUp, AlertCircle, RotateCcw, Webhook, CheckCircle2, Copy, XCircle, Clock, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   BarChart,
@@ -128,6 +131,51 @@ async function refundPayment(id: number): Promise<void> {
 export default function Payments() {
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Manual payment state
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualProvider, setManualProvider] = useState("manual");
+  const [manualRef, setManualRef] = useState("");
+  const [manualCurrency, setManualCurrency] = useState("USD");
+  const [manualStatus, setManualStatus] = useState("paid");
+  const [manualOrderId, setManualOrderId] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualSaving, setManualSaving] = useState(false);
+
+  async function handleManualPayment() {
+    if (!manualAmount) return;
+    setManualSaving(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/payments/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          amount: manualAmount,
+          provider: manualProvider,
+          providerReference: manualRef || undefined,
+          currency: manualCurrency,
+          status: manualStatus,
+          orderId: manualOrderId || undefined,
+          notes: manualNotes || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to record payment");
+      }
+      toast.success("Payment recorded");
+      setManualOpen(false);
+      setManualAmount(""); setManualProvider("manual"); setManualRef(""); setManualCurrency("USD");
+      setManualStatus("paid"); setManualOrderId(""); setManualNotes("");
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to record payment");
+    } finally {
+      setManualSaving(false);
+    }
+  }
   const [webhookProviderFilter, setWebhookProviderFilter] = useState<string>("all");
   const [webhookSearch, setWebhookSearch] = useState<string>("");
   const [webhookDuplicatesOnly, setWebhookDuplicatesOnly] = useState<boolean>(false);
@@ -236,9 +284,14 @@ export default function Payments() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
-        <p className="text-muted-foreground">Track all transactions across Stripe and Paystack.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
+          <p className="text-muted-foreground">Track all transactions across Stripe and Paystack.</p>
+        </div>
+        <Button onClick={() => setManualOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" /> Record Payment
+        </Button>
       </div>
 
       {/* Summary cards */}
@@ -630,6 +683,78 @@ export default function Payments() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Manual Payment Dialog */}
+      <Dialog open={manualOpen} onOpenChange={v => { if (!v) { setManualAmount(""); setManualProvider("manual"); setManualRef(""); setManualCurrency("USD"); setManualStatus("paid"); setManualOrderId(""); setManualNotes(""); } setManualOpen(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Record Manual Payment</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Amount *</Label>
+                <Input type="number" step="0.01" value={manualAmount} onChange={e => setManualAmount(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Currency</Label>
+                <Select value={manualCurrency} onValueChange={setManualCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="NGN">NGN</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Provider</Label>
+                <Select value={manualProvider} onValueChange={setManualProvider}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="paystack">Paystack</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={manualStatus} onValueChange={setManualStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Reference (optional)</Label>
+              <Input value={manualRef} onChange={e => setManualRef(e.target.value)} placeholder="Auto-generated if blank" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Order ID (optional)</Label>
+              <Input type="number" value={manualOrderId} onChange={e => setManualOrderId(e.target.value)} placeholder="Link to an existing order" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea value={manualNotes} onChange={e => setManualNotes(e.target.value)} rows={2} placeholder="Optional" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualOpen(false)}>Cancel</Button>
+            <Button onClick={handleManualPayment} disabled={manualSaving || !manualAmount}>
+              {manualSaving ? "Saving…" : "Record Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

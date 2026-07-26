@@ -439,4 +439,53 @@ router.get("/payments", async (req, res): Promise<void> => {
   }
 });
 
+// ── Manual Payment Record ─────────────────────────────────────────────────────
+router.post("/payments/manual", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  const isAdmin = adminIds.includes(userId);
+  const { vendorsTable: vt } = await import("@workspace/db");
+  const [myVendor] = await db.select({ id: vt.id }).from(vt).where(eq(vt.clerkUserId, userId));
+  if (!myVendor && !isAdmin) { res.status(403).json({ error: "Vendor not found" }); return; }
+
+  const { amount, provider, providerReference, currency, status, orderId, notes } = req.body;
+  if (!amount) { res.status(400).json({ error: "amount is required" }); return; }
+
+  // Admins who have no vendor row must supply an explicit vendorId in the body.
+  // Admins who also have a vendor row (or non-admin vendors) use their own id.
+  let vendorId: number;
+  if (!myVendor) {
+    // Must be admin (checked above). Require explicit vendorId.
+    const bodyVendorId = Number(req.body.vendorId);
+    if (!req.body.vendorId || isNaN(bodyVendorId)) {
+      res.status(400).json({ error: "vendorId is required when your account has no vendor profile" }); return;
+    }
+    const { vendorsTable: vt2 } = await import("@workspace/db");
+    const [target] = await db.select({ id: vt2.id }).from(vt2).where(eq(vt2.id, bodyVendorId));
+    if (!target) { res.status(404).json({ error: "Vendor not found" }); return; }
+    vendorId = target.id;
+  } else {
+    vendorId = myVendor.id;
+  }
+  const [payment] = await db.insert(paymentsTable).values({
+    vendorId,
+    orderId: orderId ? Number(orderId) : null,
+    provider: provider ?? "manual",
+    providerReference: providerReference ?? `MANUAL-${Date.now()}`,
+    amount: String(parseFloat(amount)),
+    currency: currency ?? "USD",
+    status: status ?? "paid",
+    metadata: notes ? { notes } : null,
+  }).returning();
+
+  if (orderId && (status ?? "paid") === "paid") {
+    await db.update(ordersTable)
+      .set({ paymentStatus: "paid", status: "completed" })
+      .where(and(eq(ordersTable.id, Number(orderId)), eq(ordersTable.vendorId, vendorId)));
+  }
+
+  res.status(201).json({ ...payment, amount: parseFloat(payment!.amount) });
+});
+
 export default router;

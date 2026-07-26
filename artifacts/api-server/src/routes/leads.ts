@@ -240,4 +240,106 @@ function generateSampleLeads(vendorId: number, industry: string, location: strin
   return leads;
 }
 
+// ── CSV helpers ──────────────────────────────────────────────────────────────
+import multer from "multer";
+const _csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function parseCSV(buffer: Buffer): string[][] {
+  const text = buffer.toString("utf8");
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      row.push(current.trim()); current = "";
+    } else if ((ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) && !inQuotes) {
+      if (ch === '\r') i++;
+      row.push(current.trim());
+      if (row.some(v => v !== '')) rows.push(row);
+      row = []; current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current !== '' || row.length > 0) {
+    row.push(current.trim());
+    if (row.some(v => v !== '')) rows.push(row);
+  }
+  return rows;
+}
+
+// ── Export ───────────────────────────────────────────────────────────────────
+router.get("/leads/export", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const effectiveVendorId = authed.isAdmin
+    ? (req.query.vendorId ? Number(req.query.vendorId) : null)
+    : authed.vendorId;
+
+  const leads = await db.select().from(leadsTable)
+    .where(effectiveVendorId !== null ? eq(leadsTable.vendorId, effectiveVendorId) : undefined)
+    .orderBy(desc(leadsTable.createdAt));
+
+  const HEADERS = ["ID", "Name", "Email", "Phone", "Company", "Industry", "Status", "Source", "Notes", "Created At"];
+  function csvCell(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    const s = v instanceof Date ? v.toISOString() : String(v);
+    const safe = /^[=+\-@|\t]/.test(s) ? `'${s}` : s;
+    if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) return `"${safe.replace(/"/g, '""')}"`;
+    return safe;
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="leads-export-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.write(HEADERS.join(",") + "\r\n");
+  for (const l of leads) {
+    res.write([l.id, l.name, l.email, l.phone, l.company, l.industry, l.status, l.source, l.notes, l.createdAt].map(csvCell).join(",") + "\r\n");
+  }
+  res.end();
+});
+
+// ── Import ───────────────────────────────────────────────────────────────────
+router.post("/leads/import", _csvUpload.single("file"), async (req: any, res: any): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const vendorId = authed.vendorId!;
+
+  if (!req.file) { res.status(400).json({ error: "No CSV file uploaded" }); return; }
+  const rows = parseCSV(req.file.buffer);
+  if (rows.length < 2) { res.status(400).json({ error: "CSV must have a header row and at least one data row" }); return; }
+
+  const header = rows[0]!.map(h => h.toLowerCase().replace(/\s+/g, "_"));
+  const col = (name: string) => header.indexOf(name);
+
+  let imported = 0; const errors: { row: number; error: string }[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]!;
+    const name = r[col("name")] ?? "";
+    if (!name) { errors.push({ row: i + 1, error: "Name is required" }); continue; }
+    try {
+      const status = (["new", "contacted", "qualified", "converted", "lost"].includes(r[col("status")] ?? "") ? r[col("status")] : "new") as any;
+      await db.insert(leadsTable).values({
+        vendorId,
+        name,
+        email: r[col("email")] || null,
+        phone: r[col("phone")] || null,
+        company: r[col("company")] || null,
+        industry: r[col("industry")] || null,
+        status,
+        source: r[col("source")] || "manual",
+        notes: r[col("notes")] || null,
+      });
+      imported++;
+    } catch (e: any) {
+      errors.push({ row: i + 1, error: e.message ?? "Insert failed" });
+    }
+  }
+  res.json({ imported, skipped: 0, errors: errors.length, errorDetails: errors.slice(0, 20) });
+});
+
 export default router;

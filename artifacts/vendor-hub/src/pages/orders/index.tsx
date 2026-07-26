@@ -1,4 +1,8 @@
-import { useListOrders, useGetOrdersSummary, useListVendors, useListBranches, useListWorkers, getListBranchesQueryKey, getListWorkersQueryKey } from "@workspace/api-client-react";
+import { useListOrders, useGetOrdersSummary, useCreateOrder, useListVendors, useListBranches, useListWorkers, useListProducts, getListBranchesQueryKey, getListWorkersQueryKey, getListOrdersQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ExternalLink } from "lucide-react";
+import { Search, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "@clerk/react";
 import { Link } from "wouter";
@@ -22,8 +26,53 @@ export default function Orders() {
   const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
   const vendorId = myVendor?.id;
 
+  const qc = useQueryClient();
+  const createOrder = useCreateOrder();
+  const { data: products } = useListProducts({ vendorId: vendorId as number });
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // New Order dialog state
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [orderNotes, setOrderNotes] = useState("");
+  const [orderItems, setOrderItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
+
+  function resetNewOrder() {
+    setCustomerName(""); setCustomerEmail(""); setOrderNotes("");
+    setOrderItems([{ productId: "", quantity: "1", unitPrice: "" }]);
+  }
+
+  async function handleCreateOrder() {
+    if (!vendorId || !customerName) return;
+    if (!customerEmail) { toast.error("Customer email is required"); return; }
+    const validItems = orderItems.filter(i => i.productId && i.productId !== "" && i.quantity && i.unitPrice);
+    if (validItems.length === 0) { toast.error("Add at least one item with a product, quantity, and price"); return; }
+    const items = validItems.map(i => ({
+      productId: Number(i.productId),
+      quantity: Number(i.quantity),
+      unitPrice: parseFloat(i.unitPrice),
+    }));
+    try {
+      await createOrder.mutateAsync({
+        data: {
+          vendorId,
+          customerName,
+          customerEmail,
+          ...(orderNotes ? { notes: orderNotes } : {}),
+          items: items as any,
+        },
+      });
+      toast.success("Order created");
+      setNewOrderOpen(false);
+      resetNewOrder();
+      qc.invalidateQueries({ queryKey: getListOrdersQueryKey({}) });
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to create order");
+    }
+  }
   const [branchFilter, setBranchFilter] = useState("all");
   const [workerFilter, setWorkerFilter] = useState("all");
   const dateFilter = useDateRangeFilter();
@@ -67,9 +116,14 @@ export default function Orders() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
-        <p className="text-muted-foreground">View and manage sales orders.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+          <p className="text-muted-foreground">View and manage sales orders.</p>
+        </div>
+        <Button onClick={() => setNewOrderOpen(true)} disabled={!vendorId}>
+          <Plus className="w-4 h-4 mr-2" /> New Order
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -207,6 +261,45 @@ export default function Orders() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* New Order Dialog */}
+      <Dialog open={newOrderOpen} onOpenChange={v => { if (!v) resetNewOrder(); setNewOrderOpen(v); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Create New Order</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Customer Name *</Label><Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="e.g. Fatima Bello" /></div>
+              <div className="space-y-1.5"><Label>Customer Email *</Label><Input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="e.g. customer@email.com" /></div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Order Items *</Label>
+              {orderItems.map((item, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <Select value={item.productId || ""} onValueChange={v => setOrderItems(prev => prev.map((it, i) => i === idx ? { ...it, productId: v, unitPrice: String(products?.find(p => p.id === Number(v))?.price ?? it.unitPrice) } : it))}>
+                    <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder="Select product *" /></SelectTrigger>
+                    <SelectContent>
+                      {products?.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" placeholder="Qty" className="w-16" value={item.quantity} onChange={e => setOrderItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))} />
+                  <Input type="number" step="0.01" placeholder="Price" className="w-24" value={item.unitPrice} onChange={e => setOrderItems(prev => prev.map((it, i) => i === idx ? { ...it, unitPrice: e.target.value } : it))} />
+                  <Button variant="ghost" size="icon" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))} disabled={orderItems.length <= 1}><Trash2 className="w-4 h-4" /></Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => setOrderItems(prev => [...prev, { productId: "", quantity: "1", unitPrice: "" }])}>+ Add Item</Button>
+            </div>
+
+            <div className="space-y-1.5"><Label>Notes</Label><Textarea value={orderNotes} onChange={e => setOrderNotes(e.target.value)} rows={2} placeholder="Optional" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewOrderOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateOrder} disabled={createOrder.isPending || !customerName || !customerEmail}>
+              {createOrder.isPending ? "Creating…" : "Create Order"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
