@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { 
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
-  Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2
+  Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2,
+  Library, Target
 } from "lucide-react";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
 
@@ -59,6 +60,8 @@ const getFeatureIcon = (title: string) => {
   if (t.includes("ai quick") || t.includes("quick create")) return Mic;
   if (t.includes("spreadsheet") || t.includes("intelligence")) return FileSpreadsheet;
   if (t.includes("website builder")) return Globe2;
+  if (t.includes("media library") || t.includes("media")) return Library;
+  if (t.includes("ads") || t.includes("paid social")) return Target;
   if (t.includes("ai ") || t.includes("studio")) return Sparkles;
   if (t.includes("sales") || t.includes("crm")) return Users;
   if (t.includes("finance")) return Wallet;
@@ -83,6 +86,8 @@ const DEFAULT_FEATURES = [
   { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
   { title: "Spreadsheet Intelligence", description: "Upload any CSV or Excel file and ask AI questions about your data. Get charts, trends, and actionable insights instantly." },
   { title: "Business Website Builder", description: "Launch a professional storefront in minutes with customizable templates, live preview, and one-click publish." },
+  { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library — pick any asset directly from your social composer or website builder." },
+  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard — connect your ad account and launch in minutes." },
 ];
 
 const ADDON_PLANS = [
