@@ -2174,6 +2174,195 @@ export interface VendorAdAccount {
   updatedAt: string;
 }
 
+export type SiteSectionContent = { [key: string]: unknown };
+
+export interface SiteSection {
+  id: string;
+  type: string;
+  enabled: boolean;
+  content: SiteSectionContent;
+}
+
+export type VendorWebsiteAvailableTemplatesItem = { [key: string]: unknown };
+
+export type VendorWebsiteTemplatePalette = { [key: string]: unknown };
+
+export interface VendorWebsite {
+  id: number;
+  vendorId: number;
+  slug: string;
+  templateId: string;
+  themeColor: string;
+  published: boolean;
+  sectionsJson: SiteSection[];
+  pageTitle?: string | null;
+  metaDescription?: string | null;
+  logoUrl?: string | null;
+  publishedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  availableTemplates?: VendorWebsiteAvailableTemplatesItem[];
+  templatePalette?: VendorWebsiteTemplatePalette;
+}
+
+export interface WebsiteUpdate {
+  templateId?: string;
+  themeColor?: string;
+  sections?: SiteSection[];
+  pageTitle?: string;
+  metaDescription?: string;
+  logoUrl?: string;
+  resetSections?: boolean;
+}
+
+export interface WebsiteUploadInput {
+  fileName: string;
+  contentType: string;
+}
+
+export interface WebsiteImageUploadInput {
+  fileName: string;
+  contentType: string;
+  sectionId?: string;
+}
+
+export type PublicSiteDataVendor = {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  category?: string | null;
+};
+
+export type PublicSiteDataTemplatePalette = { [key: string]: unknown };
+
+export type PublicSiteDataTemplate = {
+  id?: string;
+  name?: string;
+  palette?: PublicSiteDataTemplatePalette;
+  primaryFont?: string;
+};
+
+export interface PublicSiteData {
+  slug: string;
+  templateId: string;
+  themeColor: string;
+  sections: SiteSection[];
+  pageTitle: string | null;
+  metaDescription?: string | null;
+  logoUrl?: string | null;
+  publishedAt?: string | null;
+  vendor?: PublicSiteDataVendor;
+  template?: PublicSiteDataTemplate;
+}
+
+export type AiQuickCreateParseInputEntityType = typeof AiQuickCreateParseInputEntityType[keyof typeof AiQuickCreateParseInputEntityType];
+
+
+export const AiQuickCreateParseInputEntityType = {
+  product: 'product',
+  order: 'order',
+  sale: 'sale',
+} as const;
+
+export interface AiQuickCreateParseInput {
+  entityType: AiQuickCreateParseInputEntityType;
+  /** @maxLength 2000 */
+  description: string;
+}
+
+export type AiQuickCreateInputEntityType = typeof AiQuickCreateInputEntityType[keyof typeof AiQuickCreateInputEntityType];
+
+
+export const AiQuickCreateInputEntityType = {
+  product: 'product',
+  order: 'order',
+  sale: 'sale',
+} as const;
+
+export type AiQuickCreateInputData = { [key: string]: unknown };
+
+export interface AiQuickCreateInput {
+  entityType: AiQuickCreateInputEntityType;
+  data: AiQuickCreateInputData;
+}
+
+export interface AiQuickCreateResult {
+  id: number;
+  message: string;
+}
+
+export type DataColumnMetaType = typeof DataColumnMetaType[keyof typeof DataColumnMetaType];
+
+
+export const DataColumnMetaType = {
+  numeric: 'numeric',
+  date: 'date',
+  categorical: 'categorical',
+  text: 'text',
+} as const;
+
+export interface DataColumnMeta {
+  name: string;
+  type: DataColumnMetaType;
+  min?: number | null;
+  max?: number | null;
+  avg?: number | null;
+  uniqueCount?: number | null;
+}
+
+export type DataAnalysisSessionPreviewItem = {[key: string]: string};
+
+export type DataAnalysisSessionDetectedSchema = typeof DataAnalysisSessionDetectedSchema[keyof typeof DataAnalysisSessionDetectedSchema];
+
+
+export const DataAnalysisSessionDetectedSchema = {
+  sales: 'sales',
+  expenses: 'expenses',
+  products: 'products',
+  contacts: 'contacts',
+  generic: 'generic',
+} as const;
+
+export interface DataAnalysisSession {
+  sessionId: string;
+  fileName: string;
+  rowCount: number;
+  columns: DataColumnMeta[];
+  preview: DataAnalysisSessionPreviewItem[];
+  detectedSchema: DataAnalysisSessionDetectedSchema;
+}
+
+export interface DataAnalysisRequest {
+  sessionId: string;
+  question?: string | null;
+}
+
+export type DataImportRequestTargetSchema = typeof DataImportRequestTargetSchema[keyof typeof DataImportRequestTargetSchema];
+
+
+export const DataImportRequestTargetSchema = {
+  sales: 'sales',
+  expenses: 'expenses',
+  products: 'products',
+} as const;
+
+export type DataImportRequestMapping = {[key: string]: string};
+
+export interface DataImportRequest {
+  sessionId: string;
+  targetSchema: DataImportRequestTargetSchema;
+  mapping: DataImportRequestMapping;
+}
+
+export type DataImportResultErrorsItem = { [key: string]: unknown };
+
+export interface DataImportResult {
+  imported: number;
+  errors: DataImportResultErrorsItem[];
+  total: number;
+}
+
 export interface VendorAdAccountInput {
   platform: string;
   externalAccountId: string;
@@ -2237,6 +2426,22 @@ vendorId?: number;
 export type EmailPurchaseOrder200 = {
   status?: string;
   error?: string;
+};
+
+export type PostWebsiteUploadLogo200 = {
+  uploadUrl?: string;
+  logoUrl?: string;
+};
+
+export type PostWebsiteUploadImage200 = {
+  uploadUrl?: string;
+  imageUrl?: string;
+};
+
+export type AiQuickCreateParse200 = { [key: string]: unknown };
+
+export type UploadDataFileBody = {
+  file?: Blob;
 };
 
 export type ListOrdersParams = {

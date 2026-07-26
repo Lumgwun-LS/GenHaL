@@ -1559,6 +1559,295 @@ export const EmailPurchaseOrderResponse = zod.object({
 
 
 /**
+ * @summary Get the vendor's website (creates a default if none exists)
+ */
+export const GetWebsiteResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "slug": zod.string(),
+  "templateId": zod.string(),
+  "themeColor": zod.string(),
+  "published": zod.boolean(),
+  "sectionsJson": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})),
+  "pageTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "availableTemplates": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "templatePalette": zod.object({
+
+}).passthrough().optional()
+})
+
+
+/**
+ * @summary Save website draft
+ */
+export const PutWebsiteBody = zod.object({
+  "templateId": zod.string().optional(),
+  "themeColor": zod.string().optional(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})).optional(),
+  "pageTitle": zod.string().optional(),
+  "metaDescription": zod.string().optional(),
+  "logoUrl": zod.string().optional(),
+  "resetSections": zod.boolean().optional()
+})
+
+export const PutWebsiteResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "slug": zod.string(),
+  "templateId": zod.string(),
+  "themeColor": zod.string(),
+  "published": zod.boolean(),
+  "sectionsJson": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})),
+  "pageTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "availableTemplates": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "templatePalette": zod.object({
+
+}).passthrough().optional()
+})
+
+
+/**
+ * @summary Publish the vendor's website
+ */
+export const PostWebsitePublishResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "slug": zod.string(),
+  "templateId": zod.string(),
+  "themeColor": zod.string(),
+  "published": zod.boolean(),
+  "sectionsJson": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})),
+  "pageTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "availableTemplates": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "templatePalette": zod.object({
+
+}).passthrough().optional()
+})
+
+
+/**
+ * @summary Unpublish the vendor's website
+ */
+export const PostWebsiteUnpublishResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "slug": zod.string(),
+  "templateId": zod.string(),
+  "themeColor": zod.string(),
+  "published": zod.boolean(),
+  "sectionsJson": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})),
+  "pageTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "availableTemplates": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "templatePalette": zod.object({
+
+}).passthrough().optional()
+})
+
+
+/**
+ * @summary Get a presigned URL to upload a logo
+ */
+export const PostWebsiteUploadLogoBody = zod.object({
+  "fileName": zod.string(),
+  "contentType": zod.string()
+})
+
+export const PostWebsiteUploadLogoResponse = zod.object({
+  "uploadUrl": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+
+/**
+ * @summary Get a presigned URL to upload a section image
+ */
+export const PostWebsiteUploadImageBody = zod.object({
+  "fileName": zod.string(),
+  "contentType": zod.string(),
+  "sectionId": zod.string().optional()
+})
+
+export const PostWebsiteUploadImageResponse = zod.object({
+  "uploadUrl": zod.string().optional(),
+  "imageUrl": zod.string().optional()
+})
+
+
+/**
+ * @summary Get a published public site by slug (unauthenticated)
+ */
+export const GetSiteBySlugParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetSiteBySlugResponse = zod.object({
+  "slug": zod.string(),
+  "templateId": zod.string(),
+  "themeColor": zod.string(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "enabled": zod.boolean(),
+  "content": zod.record(zod.string(), zod.unknown())
+})),
+  "pageTitle": zod.string().nullable(),
+  "metaDescription": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "vendor": zod.object({
+  "name": zod.string().optional(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "category": zod.string().nullish()
+}).optional(),
+  "template": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string().optional(),
+  "palette": zod.object({
+
+}).passthrough().optional(),
+  "primaryFont": zod.string().optional()
+}).optional()
+})
+
+
+/**
+ * @summary Parse a natural-language description into a structured entity payload
+ */
+export const aiQuickCreateParseBodyDescriptionMax = 2000;
+
+
+
+export const AiQuickCreateParseBody = zod.object({
+  "entityType": zod.enum(['product', 'order', 'sale']),
+  "description": zod.string().max(aiQuickCreateParseBodyDescriptionMax)
+})
+
+export const AiQuickCreateParseResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Create a product, order, or sale from a structured payload
+ */
+export const AiQuickCreateCreateBody = zod.object({
+  "entityType": zod.enum(['product', 'order', 'sale']),
+  "data": zod.record(zod.string(), zod.unknown())
+})
+
+export const AiQuickCreateCreateResponse = zod.object({
+  "id": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
+ */
+export const UploadDataFileBody = zod.object({
+  "file": zod.instanceof(File).optional()
+})
+
+export const UploadDataFileResponse = zod.object({
+  "sessionId": zod.string(),
+  "fileName": zod.string(),
+  "rowCount": zod.number(),
+  "columns": zod.array(zod.object({
+  "name": zod.string(),
+  "type": zod.enum(['numeric', 'date', 'categorical', 'text']),
+  "min": zod.number().nullish(),
+  "max": zod.number().nullish(),
+  "avg": zod.number().nullish(),
+  "uniqueCount": zod.number().nullish()
+})),
+  "preview": zod.array(zod.record(zod.string(), zod.string())),
+  "detectedSchema": zod.enum(['sales', 'expenses', 'products', 'contacts', 'generic'])
+})
+
+
+/**
+ * @summary Run AI analysis on an uploaded dataset (SSE streaming)
+ */
+export const AnalyzeDataBody = zod.object({
+  "sessionId": zod.string(),
+  "question": zod.string().nullish()
+})
+
+export const AnalyzeDataResponse = zod.unknown()
+
+
+/**
+ * @summary Import parsed spreadsheet rows into Sales, Expenses, or Products
+ */
+export const ImportDataFileBody = zod.object({
+  "sessionId": zod.string(),
+  "targetSchema": zod.enum(['sales', 'expenses', 'products']),
+  "mapping": zod.record(zod.string(), zod.string())
+})
+
+export const ImportDataFileResponse = zod.object({
+  "imported": zod.number(),
+  "errors": zod.array(zod.object({
+
+}).passthrough()),
+  "total": zod.number()
+})
+
+
+/**
  * @summary List sales orders
  */
 export const ListOrdersQueryParams = zod.object({

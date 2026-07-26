@@ -46,6 +46,9 @@ import Workers from "@/pages/workers/index";
 import AdsPage from "@/pages/ads/index";
 import ContactPage from "@/pages/contact";
 import PricingPage from "@/pages/pricing";
+import WebsitePage from "@/pages/website/index";
+import PublicSitePage from "@/pages/site/index";
+import DataAnalysisPage from "@/pages/data-analysis/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -295,6 +298,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/pricing" component={PricingPage} />
+          <Route path="/site/:slug" component={PublicSitePage} />
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
 
@@ -325,6 +329,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/branches" component={() => <AuthenticatedRoute component={Branches} />} />
           <Route path="/workers" component={() => <AuthenticatedRoute component={Workers} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
+          <Route path="/data-analysis" component={() => <AuthenticatedRoute component={DataAnalysisPage} />} />
+          <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           
           <Route path="/:rest*">

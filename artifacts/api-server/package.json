@@ -23,6 +23,7 @@
     "@workspace/integrations-gemini-ai": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",
     "adm-zip": "^0.6.0",
+    "xlsx": "^0.18.5",
     "axios": "^1.18.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

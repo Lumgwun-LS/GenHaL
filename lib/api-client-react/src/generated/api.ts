@@ -44,6 +44,10 @@ import type {
   AiImageRequest,
   AiImageUploadUrlRequest,
   AiImageUploadUrlResponse,
+  AiQuickCreateInput,
+  AiQuickCreateParse200,
+  AiQuickCreateParseInput,
+  AiQuickCreateResult,
   AiVideoCaptionRequest,
   AiVideoRenderRequest,
   AiVideoSceneRegenerateRequest,
@@ -59,6 +63,10 @@ import type {
   BulkVendorNotificationResult,
   CampaignSendResult,
   ConnectionWarningsResponse,
+  DataAnalysisRequest,
+  DataAnalysisSession,
+  DataImportRequest,
+  DataImportResult,
   DeleteVendorAdAccount200,
   DeletionEligibility,
   DeletionRequestResult,
@@ -157,10 +165,13 @@ import type {
   PostInput,
   PostPublication,
   PostUpdate,
+  PostWebsiteUploadImage200,
+  PostWebsiteUploadLogo200,
   PostWithPublications,
   Product,
   ProductInput,
   ProductUpdate,
+  PublicSiteData,
   PublishPost502,
   PurchaseOrder,
   PurchaseOrderDetail,
@@ -203,6 +214,7 @@ import type {
   StoreReview,
   StoreReviewFlagInput,
   StoreReviewInput,
+  UploadDataFileBody,
   Vendor,
   VendorAdAccount,
   VendorAdAccountInput,
@@ -213,7 +225,11 @@ import type {
   VendorPerformanceAnalytics,
   VendorStats,
   VendorUpdate,
+  VendorWebsite,
   VerifyVendorDeletion200,
+  WebsiteImageUploadInput,
+  WebsiteUpdate,
+  WebsiteUploadInput,
   Worker,
   WorkerInput,
   WorkerUpdate
@@ -4402,6 +4418,864 @@ export const useEmailPurchaseOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getEmailPurchaseOrderMutationOptions(options));
+    }
+
+export const getGetWebsiteUrl = () => {
+
+
+
+
+  return `/api/website`
+}
+
+/**
+ * @summary Get the vendor's website (creates a default if none exists)
+ */
+export const getWebsite = async ( options?: RequestInit): Promise<VendorWebsite> => {
+
+  return customFetch<VendorWebsite>(getGetWebsiteUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWebsiteQueryKey = () => {
+    return [
+    `/api/website`
+    ] as const;
+    }
+
+
+export const getGetWebsiteQueryOptions = <TData = Awaited<ReturnType<typeof getWebsite>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWebsite>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWebsiteQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWebsite>>> = ({ signal }) => getWebsite({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWebsite>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWebsiteQueryResult = NonNullable<Awaited<ReturnType<typeof getWebsite>>>
+export type GetWebsiteQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the vendor's website (creates a default if none exists)
+ */
+
+export function useGetWebsite<TData = Awaited<ReturnType<typeof getWebsite>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWebsite>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWebsiteQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPutWebsiteUrl = () => {
+
+
+
+
+  return `/api/website`
+}
+
+/**
+ * @summary Save website draft
+ */
+export const putWebsite = async (websiteUpdate: WebsiteUpdate, options?: RequestInit): Promise<VendorWebsite> => {
+
+  return customFetch<VendorWebsite>(getPutWebsiteUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(websiteUpdate)
+  }
+);}
+
+
+
+
+export const getPutWebsiteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putWebsite>>, TError,{data: BodyType<WebsiteUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof putWebsite>>, TError,{data: BodyType<WebsiteUpdate>}, TContext> => {
+
+const mutationKey = ['putWebsite'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putWebsite>>, {data: BodyType<WebsiteUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  putWebsite(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutWebsiteMutationResult = NonNullable<Awaited<ReturnType<typeof putWebsite>>>
+    export type PutWebsiteMutationBody = BodyType<WebsiteUpdate>
+    export type PutWebsiteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save website draft
+ */
+export const usePutWebsite = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putWebsite>>, TError,{data: BodyType<WebsiteUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof putWebsite>>,
+        TError,
+        {data: BodyType<WebsiteUpdate>},
+        TContext
+      > => {
+      return useMutation(getPutWebsiteMutationOptions(options));
+    }
+
+export const getPostWebsitePublishUrl = () => {
+
+
+
+
+  return `/api/website/publish`
+}
+
+/**
+ * @summary Publish the vendor's website
+ */
+export const postWebsitePublish = async ( options?: RequestInit): Promise<VendorWebsite> => {
+
+  return customFetch<VendorWebsite>(getPostWebsitePublishUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostWebsitePublishMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsitePublish>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postWebsitePublish>>, TError,void, TContext> => {
+
+const mutationKey = ['postWebsitePublish'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postWebsitePublish>>, void> = () => {
+
+
+          return  postWebsitePublish(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostWebsitePublishMutationResult = NonNullable<Awaited<ReturnType<typeof postWebsitePublish>>>
+
+    export type PostWebsitePublishMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Publish the vendor's website
+ */
+export const usePostWebsitePublish = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsitePublish>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postWebsitePublish>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostWebsitePublishMutationOptions(options));
+    }
+
+export const getPostWebsiteUnpublishUrl = () => {
+
+
+
+
+  return `/api/website/unpublish`
+}
+
+/**
+ * @summary Unpublish the vendor's website
+ */
+export const postWebsiteUnpublish = async ( options?: RequestInit): Promise<VendorWebsite> => {
+
+  return customFetch<VendorWebsite>(getPostWebsiteUnpublishUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostWebsiteUnpublishMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUnpublish>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUnpublish>>, TError,void, TContext> => {
+
+const mutationKey = ['postWebsiteUnpublish'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postWebsiteUnpublish>>, void> = () => {
+
+
+          return  postWebsiteUnpublish(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostWebsiteUnpublishMutationResult = NonNullable<Awaited<ReturnType<typeof postWebsiteUnpublish>>>
+
+    export type PostWebsiteUnpublishMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Unpublish the vendor's website
+ */
+export const usePostWebsiteUnpublish = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUnpublish>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postWebsiteUnpublish>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostWebsiteUnpublishMutationOptions(options));
+    }
+
+export const getPostWebsiteUploadLogoUrl = () => {
+
+
+
+
+  return `/api/website/upload-logo`
+}
+
+/**
+ * @summary Get a presigned URL to upload a logo
+ */
+export const postWebsiteUploadLogo = async (websiteUploadInput: WebsiteUploadInput, options?: RequestInit): Promise<PostWebsiteUploadLogo200> => {
+
+  return customFetch<PostWebsiteUploadLogo200>(getPostWebsiteUploadLogoUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(websiteUploadInput)
+  }
+);}
+
+
+
+
+export const getPostWebsiteUploadLogoMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadLogo>>, TError,{data: BodyType<WebsiteUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadLogo>>, TError,{data: BodyType<WebsiteUploadInput>}, TContext> => {
+
+const mutationKey = ['postWebsiteUploadLogo'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postWebsiteUploadLogo>>, {data: BodyType<WebsiteUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postWebsiteUploadLogo(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostWebsiteUploadLogoMutationResult = NonNullable<Awaited<ReturnType<typeof postWebsiteUploadLogo>>>
+    export type PostWebsiteUploadLogoMutationBody = BodyType<WebsiteUploadInput>
+    export type PostWebsiteUploadLogoMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Get a presigned URL to upload a logo
+ */
+export const usePostWebsiteUploadLogo = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadLogo>>, TError,{data: BodyType<WebsiteUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postWebsiteUploadLogo>>,
+        TError,
+        {data: BodyType<WebsiteUploadInput>},
+        TContext
+      > => {
+      return useMutation(getPostWebsiteUploadLogoMutationOptions(options));
+    }
+
+export const getPostWebsiteUploadImageUrl = () => {
+
+
+
+
+  return `/api/website/upload-image`
+}
+
+/**
+ * @summary Get a presigned URL to upload a section image
+ */
+export const postWebsiteUploadImage = async (websiteImageUploadInput: WebsiteImageUploadInput, options?: RequestInit): Promise<PostWebsiteUploadImage200> => {
+
+  return customFetch<PostWebsiteUploadImage200>(getPostWebsiteUploadImageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(websiteImageUploadInput)
+  }
+);}
+
+
+
+
+export const getPostWebsiteUploadImageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadImage>>, TError,{data: BodyType<WebsiteImageUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadImage>>, TError,{data: BodyType<WebsiteImageUploadInput>}, TContext> => {
+
+const mutationKey = ['postWebsiteUploadImage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postWebsiteUploadImage>>, {data: BodyType<WebsiteImageUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postWebsiteUploadImage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostWebsiteUploadImageMutationResult = NonNullable<Awaited<ReturnType<typeof postWebsiteUploadImage>>>
+    export type PostWebsiteUploadImageMutationBody = BodyType<WebsiteImageUploadInput>
+    export type PostWebsiteUploadImageMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Get a presigned URL to upload a section image
+ */
+export const usePostWebsiteUploadImage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postWebsiteUploadImage>>, TError,{data: BodyType<WebsiteImageUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postWebsiteUploadImage>>,
+        TError,
+        {data: BodyType<WebsiteImageUploadInput>},
+        TContext
+      > => {
+      return useMutation(getPostWebsiteUploadImageMutationOptions(options));
+    }
+
+export const getGetSiteBySlugUrl = (slug: string,) => {
+
+
+
+
+  return `/api/sites/${slug}`
+}
+
+/**
+ * @summary Get a published public site by slug (unauthenticated)
+ */
+export const getSiteBySlug = async (slug: string, options?: RequestInit): Promise<PublicSiteData> => {
+
+  return customFetch<PublicSiteData>(getGetSiteBySlugUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSiteBySlugQueryKey = (slug: string,) => {
+    return [
+    `/api/sites/${slug}`
+    ] as const;
+    }
+
+
+export const getGetSiteBySlugQueryOptions = <TData = Awaited<ReturnType<typeof getSiteBySlug>>, TError = ErrorType<void>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSiteBySlug>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSiteBySlugQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSiteBySlug>>> = ({ signal }) => getSiteBySlug(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSiteBySlug>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSiteBySlugQueryResult = NonNullable<Awaited<ReturnType<typeof getSiteBySlug>>>
+export type GetSiteBySlugQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a published public site by slug (unauthenticated)
+ */
+
+export function useGetSiteBySlug<TData = Awaited<ReturnType<typeof getSiteBySlug>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSiteBySlug>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSiteBySlugQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAiQuickCreateParseUrl = () => {
+
+
+
+
+  return `/api/ai-quick-create/parse`
+}
+
+/**
+ * @summary Parse a natural-language description into a structured entity payload
+ */
+export const aiQuickCreateParse = async (aiQuickCreateParseInput: AiQuickCreateParseInput, options?: RequestInit): Promise<AiQuickCreateParse200> => {
+
+  return customFetch<AiQuickCreateParse200>(getAiQuickCreateParseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiQuickCreateParseInput)
+  }
+);}
+
+
+
+
+export const getAiQuickCreateParseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateParse>>, TError,{data: BodyType<AiQuickCreateParseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateParse>>, TError,{data: BodyType<AiQuickCreateParseInput>}, TContext> => {
+
+const mutationKey = ['aiQuickCreateParse'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof aiQuickCreateParse>>, {data: BodyType<AiQuickCreateParseInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  aiQuickCreateParse(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AiQuickCreateParseMutationResult = NonNullable<Awaited<ReturnType<typeof aiQuickCreateParse>>>
+    export type AiQuickCreateParseMutationBody = BodyType<AiQuickCreateParseInput>
+    export type AiQuickCreateParseMutationError = ErrorType<void>
+
+    /**
+ * @summary Parse a natural-language description into a structured entity payload
+ */
+export const useAiQuickCreateParse = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateParse>>, TError,{data: BodyType<AiQuickCreateParseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof aiQuickCreateParse>>,
+        TError,
+        {data: BodyType<AiQuickCreateParseInput>},
+        TContext
+      > => {
+      return useMutation(getAiQuickCreateParseMutationOptions(options));
+    }
+
+export const getAiQuickCreateCreateUrl = () => {
+
+
+
+
+  return `/api/ai-quick-create/create`
+}
+
+/**
+ * @summary Create a product, order, or sale from a structured payload
+ */
+export const aiQuickCreateCreate = async (aiQuickCreateInput: AiQuickCreateInput, options?: RequestInit): Promise<AiQuickCreateResult> => {
+
+  return customFetch<AiQuickCreateResult>(getAiQuickCreateCreateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiQuickCreateInput)
+  }
+);}
+
+
+
+
+export const getAiQuickCreateCreateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateCreate>>, TError,{data: BodyType<AiQuickCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateCreate>>, TError,{data: BodyType<AiQuickCreateInput>}, TContext> => {
+
+const mutationKey = ['aiQuickCreateCreate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof aiQuickCreateCreate>>, {data: BodyType<AiQuickCreateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  aiQuickCreateCreate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AiQuickCreateCreateMutationResult = NonNullable<Awaited<ReturnType<typeof aiQuickCreateCreate>>>
+    export type AiQuickCreateCreateMutationBody = BodyType<AiQuickCreateInput>
+    export type AiQuickCreateCreateMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a product, order, or sale from a structured payload
+ */
+export const useAiQuickCreateCreate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiQuickCreateCreate>>, TError,{data: BodyType<AiQuickCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof aiQuickCreateCreate>>,
+        TError,
+        {data: BodyType<AiQuickCreateInput>},
+        TContext
+      > => {
+      return useMutation(getAiQuickCreateCreateMutationOptions(options));
+    }
+
+export const getUploadDataFileUrl = () => {
+
+
+
+
+  return `/api/data-analysis/upload`
+}
+
+/**
+ * @summary Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
+ */
+export const uploadDataFile = async (uploadDataFileBody: UploadDataFileBody, options?: RequestInit): Promise<DataAnalysisSession> => {
+    const formData = new FormData();
+if(uploadDataFileBody.file !== undefined) {
+ formData.append(`file`, uploadDataFileBody.file);
+ }
+
+  return customFetch<DataAnalysisSession>(getUploadDataFileUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+export const getUploadDataFileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext> => {
+
+const mutationKey = ['uploadDataFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDataFile>>, {data: BodyType<UploadDataFileBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadDataFile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadDataFileMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDataFile>>>
+    export type UploadDataFileMutationBody = BodyType<UploadDataFileBody>
+    export type UploadDataFileMutationError = ErrorType<void>
+
+    /**
+ * @summary Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
+ */
+export const useUploadDataFile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadDataFile>>,
+        TError,
+        {data: BodyType<UploadDataFileBody>},
+        TContext
+      > => {
+      return useMutation(getUploadDataFileMutationOptions(options));
+    }
+
+export const getAnalyzeDataUrl = () => {
+
+
+
+
+  return `/api/data-analysis/analyze`
+}
+
+/**
+ * @summary Run AI analysis on an uploaded dataset (SSE streaming)
+ */
+export const analyzeData = async (dataAnalysisRequest: DataAnalysisRequest, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getAnalyzeDataUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dataAnalysisRequest)
+  }
+);}
+
+
+
+
+export const getAnalyzeDataMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeData>>, TError,{data: BodyType<DataAnalysisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeData>>, TError,{data: BodyType<DataAnalysisRequest>}, TContext> => {
+
+const mutationKey = ['analyzeData'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeData>>, {data: BodyType<DataAnalysisRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeData(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeDataMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeData>>>
+    export type AnalyzeDataMutationBody = BodyType<DataAnalysisRequest>
+    export type AnalyzeDataMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run AI analysis on an uploaded dataset (SSE streaming)
+ */
+export const useAnalyzeData = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeData>>, TError,{data: BodyType<DataAnalysisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeData>>,
+        TError,
+        {data: BodyType<DataAnalysisRequest>},
+        TContext
+      > => {
+      return useMutation(getAnalyzeDataMutationOptions(options));
+    }
+
+export const getImportDataFileUrl = () => {
+
+
+
+
+  return `/api/data-analysis/import`
+}
+
+/**
+ * @summary Import parsed spreadsheet rows into Sales, Expenses, or Products
+ */
+export const importDataFile = async (dataImportRequest: DataImportRequest, options?: RequestInit): Promise<DataImportResult> => {
+
+  return customFetch<DataImportResult>(getImportDataFileUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dataImportRequest)
+  }
+);}
+
+
+
+
+export const getImportDataFileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importDataFile>>, TError,{data: BodyType<DataImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importDataFile>>, TError,{data: BodyType<DataImportRequest>}, TContext> => {
+
+const mutationKey = ['importDataFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importDataFile>>, {data: BodyType<DataImportRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importDataFile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportDataFileMutationResult = NonNullable<Awaited<ReturnType<typeof importDataFile>>>
+    export type ImportDataFileMutationBody = BodyType<DataImportRequest>
+    export type ImportDataFileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Import parsed spreadsheet rows into Sales, Expenses, or Products
+ */
+export const useImportDataFile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importDataFile>>, TError,{data: BodyType<DataImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importDataFile>>,
+        TError,
+        {data: BodyType<DataImportRequest>},
+        TContext
+      > => {
+      return useMutation(getImportDataFileMutationOptions(options));
     }
 
 export const getListOrdersUrl = (params?: ListOrdersParams,) => {

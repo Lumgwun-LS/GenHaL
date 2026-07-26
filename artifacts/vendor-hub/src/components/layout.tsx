@@ -1,3 +1,5 @@
+import WhatsAppButton from "@/components/whatsapp-button";
+import AiQuickCreate from "@/components/ai-quick-create";
 import { Link, useLocation, useSearch } from "wouter";
 import { UserButton } from "@clerk/react";
 import { 
@@ -13,6 +15,8 @@ import {
   MessageSquare,
   CreditCard,
   Phone,
+  Globe,
+  BarChart2,
   Menu,
   X,
   ShieldCheck,
@@ -142,6 +146,8 @@ const NAV_ITEMS = [
   { href: "/investments", label: "Investments", icon: PiggyBank },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
+  { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
+  { href: "/website", label: "My Website", icon: Globe },
   { href: "/account", label: "Account", icon: UserCircle },
   { href: "/pricing", label: "Pricing", icon: Tag },
 ];
@@ -276,6 +282,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <DashboardFooter />
       </main>
+
+      {/* Floating action buttons — bottom-right stack */}
+      <AiQuickCreate />
+      <WhatsAppButton />
     </div>
   );
 }

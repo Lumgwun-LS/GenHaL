@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { 
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
-  Command, Play, MapPin, Phone, ChevronLeft
+  Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2
 } from "lucide-react";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
 
@@ -56,6 +56,9 @@ async function fetchSiteContent(): Promise<SiteContent> {
 const getFeatureIcon = (title: string) => {
   const t = title.toLowerCase();
   if (t.includes("social")) return MessageSquareText;
+  if (t.includes("ai quick") || t.includes("quick create")) return Mic;
+  if (t.includes("spreadsheet") || t.includes("intelligence")) return FileSpreadsheet;
+  if (t.includes("website builder")) return Globe2;
   if (t.includes("ai ") || t.includes("studio")) return Sparkles;
   if (t.includes("sales") || t.includes("crm")) return Users;
   if (t.includes("finance")) return Wallet;
@@ -77,6 +80,72 @@ const DEFAULT_FEATURES = [
   { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
   { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
   { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
+  { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
+  { title: "Spreadsheet Intelligence", description: "Upload any CSV or Excel file and ask AI questions about your data. Get charts, trends, and actionable insights instantly." },
+  { title: "Business Website Builder", description: "Launch a professional storefront in minutes with customizable templates, live preview, and one-click publish." },
+];
+
+const ADDON_PLANS = [
+  {
+    name: "AI Quick Create",
+    badge: "Popular",
+    price: { usd: 7, ngn: 4500 },
+    description: "Create inventory, orders & invoices by voice, chat, or form — with instant AI parsing and confirmation.",
+    features: [
+      "Voice & chat-based record creation",
+      "Inventory items, orders & sales",
+      "AI auto-fills fields from plain English",
+      "Confirmation dialog before saving",
+      "In-app notifications on every create",
+    ],
+    color: "from-violet-500/20 to-primary/10",
+    border: "border-primary/40",
+  },
+  {
+    name: "Spreadsheet Intelligence",
+    badge: null,
+    price: { usd: 5, ngn: 3000 },
+    description: "Upload any CSV or Excel file and interrogate your data with AI — charts, trend analysis, and direct import.",
+    features: [
+      "CSV, XLS & XLSX file support",
+      "Auto-generated charts & visualizations",
+      "AI-powered Q&A on your dataset",
+      "Import rows directly into Sales/Inventory",
+      "Streaming analysis results",
+    ],
+    color: "from-blue-500/20 to-cyan-500/10",
+    border: "border-blue-500/30",
+  },
+  {
+    name: "Business Website Builder",
+    badge: null,
+    price: { usd: 9, ngn: 5500 },
+    description: "A full website editor with 4 professional templates, custom branding, SEO controls, and live public hosting.",
+    features: [
+      "4 professional templates",
+      "Custom theme color & logo",
+      "8 section types (hero, gallery, menu…)",
+      "Live public URL at your custom slug",
+      "SEO title & meta description controls",
+    ],
+    color: "from-emerald-500/20 to-teal-500/10",
+    border: "border-emerald-500/30",
+  },
+  {
+    name: "WhatsApp Direct Support",
+    badge: "Free",
+    price: null,
+    description: "One-click WhatsApp access to the Awa Biz team from anywhere in your dashboard — Nigeria & US offices.",
+    features: [
+      "Floating WhatsApp button everywhere",
+      "Nigeria & US office contacts",
+      "Links to real WhatsApp chats",
+      "No app switching needed",
+      "Available 24/7",
+    ],
+    color: "from-emerald-500/20 to-green-500/10",
+    border: "border-emerald-500/30",
+  },
 ];
 
 export default function LandingPage() {
@@ -249,6 +318,71 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {featuresList.map((f, i) => (
                 <FeatureCard key={f.title} title={f.title} description={f.description} index={i} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Add-on Services Section */}
+        <section className="py-24 border-t border-border/50 relative overflow-hidden bg-card/20">
+          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+          <div className="container mx-auto px-6 max-w-6xl relative z-10">
+            <div className="text-center mb-14">
+              <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+                <Badge className="border-primary/30 bg-primary/10 text-primary px-4 py-1.5 text-xs font-bold uppercase tracking-wider mb-6">
+                  <Sparkles className="w-3.5 h-3.5 mr-2" /> Power-Ups
+                </Badge>
+              </motion.div>
+              <motion.h2 initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+                className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4">
+                Add-on Services
+              </motion.h2>
+              <motion.p initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+                className="text-muted-foreground max-w-2xl mx-auto text-lg font-medium">
+                Bolt on extra capabilities to any plan — pay only for what you need, cancel any time.
+              </motion.p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {ADDON_PLANS.map((addon, i) => (
+                <motion.div
+                  key={addon.name}
+                  initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className={`relative rounded-2xl border ${addon.border} bg-gradient-to-br ${addon.color} backdrop-blur-sm p-6 flex flex-col gap-4 group hover:scale-[1.02] transition-transform duration-300`}
+                >
+                  {addon.badge && (
+                    <span className={`absolute -top-3 left-4 text-xs font-bold px-3 py-1 rounded-full ${addon.badge === "Free" ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"}`}>
+                      {addon.badge}
+                    </span>
+                  )}
+                  <div>
+                    <h3 className="font-bold text-lg mb-1">{addon.name}</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{addon.description}</p>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight">
+                    {addon.price ? (
+                      <>
+                        <span>${addon.price.usd}</span>
+                        <span className="text-sm font-medium text-muted-foreground">/mo</span>
+                        <div className="text-sm font-semibold text-muted-foreground">₦{addon.price.ngn.toLocaleString()}/mo</div>
+                      </>
+                    ) : (
+                      <span className="text-emerald-400">Free</span>
+                    )}
+                  </div>
+                  <ul className="space-y-2 flex-1">
+                    {addon.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href="/pricing"
+                    className="mt-2 block text-center text-xs font-bold py-2 px-4 rounded-lg bg-background/60 hover:bg-background border border-border/50 hover:border-primary/40 transition-all">
+                    {addon.price ? "Add to Plan →" : "Included Free →"}
+                  </Link>
+                </motion.div>
               ))}
             </div>
           </div>

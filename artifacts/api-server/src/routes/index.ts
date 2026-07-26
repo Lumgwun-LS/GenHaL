@@ -32,6 +32,10 @@ import investmentsRouter from "./investments";
 import branchesRouter from "./branches";
 import purchaseOrdersRouter from "./purchase-orders";
 import inventoryAnalyticsRouter from "./inventory-analytics";
+import websiteRouter from "./website";
+import dataAnalysisRouter from "./data-analysis";
+import aiQuickCreateRouter from "./ai-quick-create";
+import sitesRouter from "./sites";
 import workersRouter from "./workers";
 import storeRouter from "./store";
 import storeAiLaunchRouter from "./store-ai-launch";
@@ -88,6 +92,9 @@ router.use("/store/ai-launch", storeAiLaunchRouter);
 // Visitor pageview beacon — public, no auth needed
 router.use(analyticsPublicRouter);
 
+// Public site pages — no auth required
+router.use(sitesRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -128,5 +135,8 @@ router.use(expensesRouter);
 router.use(investmentsRouter);
 router.use(purchaseOrdersRouter);
 router.use(inventoryAnalyticsRouter);
+router.use(websiteRouter);
+router.use(dataAnalysisRouter);
+router.use(aiQuickCreateRouter);
 
 export default router;

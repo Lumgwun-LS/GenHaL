@@ -1172,6 +1172,245 @@ paths:
                   error:
                     type: string
 
+  # ─── WEBSITE BUILDER ──────────────────────────────────────────────────────
+
+  /website:
+    get:
+      operationId: getWebsite
+      tags: [website]
+      summary: Get the vendor's website (creates a default if none exists)
+      responses:
+        "200":
+          description: Website data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorWebsite"
+    put:
+      operationId: putWebsite
+      tags: [website]
+      summary: Save website draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteUpdate"
+      responses:
+        "200":
+          description: Saved website
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorWebsite"
+
+  /website/publish:
+    post:
+      operationId: postWebsitePublish
+      tags: [website]
+      summary: Publish the vendor's website
+      responses:
+        "200":
+          description: Published website
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorWebsite"
+
+  /website/unpublish:
+    post:
+      operationId: postWebsiteUnpublish
+      tags: [website]
+      summary: Unpublish the vendor's website
+      responses:
+        "200":
+          description: Unpublished website
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorWebsite"
+
+  /website/upload-logo:
+    post:
+      operationId: postWebsiteUploadLogo
+      tags: [website]
+      summary: Get a presigned URL to upload a logo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteUploadInput"
+      responses:
+        "200":
+          description: Upload URL and public logo URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl:
+                    type: string
+                  logoUrl:
+                    type: string
+
+  /website/upload-image:
+    post:
+      operationId: postWebsiteUploadImage
+      tags: [website]
+      summary: Get a presigned URL to upload a section image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteImageUploadInput"
+      responses:
+        "200":
+          description: Upload URL and public image URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl:
+                    type: string
+                  imageUrl:
+                    type: string
+
+  /sites/{slug}:
+    get:
+      operationId: getSiteBySlug
+      tags: [website]
+      summary: Get a published public site by slug (unauthenticated)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public site data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicSiteData"
+        "404":
+          description: Site not found or not published
+
+  # ─── AI QUICK CREATE ──────────────────────────────────────────────────────
+
+  /ai-quick-create/parse:
+    post:
+      operationId: aiQuickCreateParse
+      tags: [ai-quick-create]
+      summary: Parse a natural-language description into a structured entity payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiQuickCreateParseInput"
+      responses:
+        "200":
+          description: Parsed entity object
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Missing or invalid input
+        "422":
+          description: AI returned unparseable response
+
+  /ai-quick-create/create:
+    post:
+      operationId: aiQuickCreateCreate
+      tags: [ai-quick-create]
+      summary: Create a product, order, or sale from a structured payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiQuickCreateInput"
+      responses:
+        "200":
+          description: Created entity id and success message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiQuickCreateResult"
+        "400":
+          description: Invalid payload
+
+  # ─── DATA ANALYSIS ────────────────────────────────────────────────────────
+
+  /data-analysis/upload:
+    post:
+      operationId: uploadDataFile
+      tags: [data-analysis]
+      summary: Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Parsed file preview and column metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataAnalysisSession"
+        "400":
+          description: Invalid file
+
+  /data-analysis/analyze:
+    post:
+      operationId: analyzeData
+      tags: [data-analysis]
+      summary: Run AI analysis on an uploaded dataset (SSE streaming)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataAnalysisRequest"
+      responses:
+        "200":
+          description: Server-Sent Events stream of AI analysis
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /data-analysis/import:
+    post:
+      operationId: importDataFile
+      tags: [data-analysis]
+      summary: Import parsed spreadsheet rows into Sales, Expenses, or Products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataImportRequest"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataImportResult"
+
   # ─── ORDERS ───────────────────────────────────────────────────────────────
   /orders:
     get:
@@ -7753,6 +7992,278 @@ components:
           type: string
         updatedAt:
           type: string
+
+    # ── Website Builder ──────────────────────────────────────────────────────
+
+    SiteSection:
+      type: object
+      required: [id, type, enabled, content]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        enabled:
+          type: boolean
+        content:
+          type: object
+          additionalProperties: true
+
+    VendorWebsite:
+      type: object
+      required: [id, vendorId, slug, templateId, themeColor, published, sectionsJson, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        slug:
+          type: string
+        templateId:
+          type: string
+        themeColor:
+          type: string
+        published:
+          type: boolean
+        sectionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiteSection"
+        pageTitle:
+          type: string
+          nullable: true
+        metaDescription:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        availableTemplates:
+          type: array
+          items:
+            type: object
+        templatePalette:
+          type: object
+
+    WebsiteUpdate:
+      type: object
+      properties:
+        templateId:
+          type: string
+        themeColor:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiteSection"
+        pageTitle:
+          type: string
+        metaDescription:
+          type: string
+        logoUrl:
+          type: string
+        resetSections:
+          type: boolean
+
+    WebsiteUploadInput:
+      type: object
+      required: [fileName, contentType]
+      properties:
+        fileName:
+          type: string
+        contentType:
+          type: string
+
+    WebsiteImageUploadInput:
+      type: object
+      required: [fileName, contentType]
+      properties:
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sectionId:
+          type: string
+
+    PublicSiteData:
+      type: object
+      required: [slug, templateId, themeColor, sections, pageTitle]
+      properties:
+        slug:
+          type: string
+        templateId:
+          type: string
+        themeColor:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiteSection"
+        pageTitle:
+          type: string
+          nullable: true
+        metaDescription:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          nullable: true
+        vendor:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+              nullable: true
+            phone:
+              type: string
+              nullable: true
+            address:
+              type: string
+              nullable: true
+            category:
+              type: string
+              nullable: true
+        template:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            palette:
+              type: object
+            primaryFont:
+              type: string
+
+    # ── AI Quick Create ──────────────────────────────────────────────────────
+
+    AiQuickCreateParseInput:
+      type: object
+      required: [entityType, description]
+      properties:
+        entityType:
+          type: string
+          enum: [product, order, sale]
+        description:
+          type: string
+          maxLength: 2000
+
+    AiQuickCreateInput:
+      type: object
+      required: [entityType, data]
+      properties:
+        entityType:
+          type: string
+          enum: [product, order, sale]
+        data:
+          type: object
+          additionalProperties: true
+
+    AiQuickCreateResult:
+      type: object
+      required: [id, message]
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+
+    # ── Data Analysis ────────────────────────────────────────────────────────
+
+    DataColumnMeta:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [numeric, date, categorical, text]
+        min:
+          type: number
+          nullable: true
+        max:
+          type: number
+          nullable: true
+        avg:
+          type: number
+          nullable: true
+        uniqueCount:
+          type: integer
+          nullable: true
+
+    DataAnalysisSession:
+      type: object
+      required: [sessionId, fileName, rowCount, columns, preview, detectedSchema]
+      properties:
+        sessionId:
+          type: string
+        fileName:
+          type: string
+        rowCount:
+          type: integer
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/DataColumnMeta"
+        preview:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+        detectedSchema:
+          type: string
+          enum: [sales, expenses, products, contacts, generic]
+
+    DataAnalysisRequest:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId:
+          type: string
+        question:
+          type: string
+          nullable: true
+
+    DataImportRequest:
+      type: object
+      required: [sessionId, targetSchema, mapping]
+      properties:
+        sessionId:
+          type: string
+        targetSchema:
+          type: string
+          enum: [sales, expenses, products]
+        mapping:
+          type: object
+          additionalProperties:
+            type: string
+
+    DataImportResult:
+      type: object
+      required: [imported, errors, total]
+      properties:
+        imported:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
 
     VendorAdAccountInput:
       type: object
