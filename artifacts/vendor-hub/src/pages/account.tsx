@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUser } from "@clerk/react";
 import { useLocation } from "wouter";
+import { useVoice } from "@/contexts/voice-context";
 import {
   useListVendors,
   useUpdateVendor,
@@ -26,7 +27,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Mic } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 const GENDERS = [
@@ -144,6 +146,51 @@ function ProfileSection({ vendorId, gender, country, state, city }: { vendorId: 
           {updateVendor.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           Save profile
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VoiceControlSection() {
+  const { voiceEnabled, setVoiceEnabled } = useVoice();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Mic className="w-4 h-4 text-violet-500" />
+          Voice Control
+        </CardTitle>
+        <CardDescription>
+          Tap the mic button (bottom-right on any dashboard page) and speak to fill form fields,
+          open dialogs, or navigate. Say <em>"Go to inventory"</em>, <em>"Name: Basmati Rice"</em>, or <em>"New product"</em>.
+          Works in Chrome and Edge.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-4">
+          <Switch
+            id="voice-control-toggle"
+            checked={voiceEnabled}
+            onCheckedChange={setVoiceEnabled}
+          />
+          <label htmlFor="voice-control-toggle" className="text-sm font-medium cursor-pointer">
+            {voiceEnabled ? "Voice control is enabled" : "Voice control is disabled"}
+          </label>
+        </div>
+        {voiceEnabled && (
+          <div className="mt-4 rounded-lg bg-violet-500/10 border border-violet-500/20 p-3 space-y-1.5 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground text-sm">Quick reference</p>
+            <ul className="space-y-1 list-disc pl-4">
+              <li><strong>Navigate:</strong> <em>"Go to orders"</em>, <em>"Open inventory"</em></li>
+              <li><strong>Open a form:</strong> <em>"New product"</em>, <em>"Record sale"</em>, <em>"New expense"</em></li>
+              <li><strong>Fill a field:</strong> <em>"Price: 4500"</em>, <em>"Customer name: John Doe"</em></li>
+              <li><strong>Fill focused input:</strong> Click the field, then speak its value</li>
+              <li><strong>Submit form:</strong> <em>"Save"</em> or <em>"Submit"</em></li>
+              <li><strong>Dismiss dialog:</strong> <em>"Cancel"</em> or <em>"Close"</em></li>
+            </ul>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -299,6 +346,8 @@ export default function Account() {
         vendorId={myVendor.id}
         currentLeadMinutes={(myVendor as any).postReminderLeadMinutes ?? 30}
       />
+
+      <VoiceControlSection />
 
       <ProfileSection
         vendorId={myVendor.id}

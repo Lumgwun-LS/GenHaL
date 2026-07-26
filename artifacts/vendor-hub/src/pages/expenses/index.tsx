@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVoiceField, useVoiceCommand } from "@/contexts/voice-context";
 import {
   useListVendors,
   useListExpenses,
@@ -132,6 +133,13 @@ export default function ExpensesPage() {
   const [formWorkerId, setFormWorkerId] = useState("none");
   const [formIsRecurring, setFormIsRecurring] = useState(false);
   const [formFrequency, setFormFrequency] = useState<RecurringFrequency>("monthly");
+
+  // Voice field registrations
+  useVoiceField("expense-description", "description", setDescription);
+  useVoiceField("expense-amount", "amount", setAmount);
+  useVoiceField("expense-date", "expense date", setExpenseDate);
+  useVoiceCommand("record expense", () => setOpen(true));
+  useVoiceCommand("new expense", () => setOpen(true));
 
   const [editing, setEditing] = useState<{ id: number; category: string; description: string; amount: number; expenseDate: string; branchId: string; workerId: string; isRecurring: boolean; recurringFrequency: RecurringFrequency } | null>(null);
 
@@ -570,68 +578,11 @@ export default function ExpensesPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={formCategory} onValueChange={setFormCategory}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Expense Date</Label>
-              <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
-            </div>
-            <BranchWorkerFormFields
-              branches={branches} workers={workers}
-              branchId={formBranchId} onBranchChange={setFormBranchId}
-              workerId={formWorkerId} onWorkerChange={setFormWorkerId}
-            />
-            <div className="flex items-center gap-2 pt-1">
-              <Checkbox id="create-recurring" checked={formIsRecurring} onCheckedChange={(c) => setFormIsRecurring(c === true)} />
-              <Label htmlFor="create-recurring" className="cursor-pointer">Make this a recurring expense</Label>
-            </div>
-            {formIsRecurring && (
-              <div className="space-y-1.5">
-                <Label>Repeats</Label>
-                <Select value={formFrequency} onValueChange={(v) => setFormFrequency(v as RecurringFrequency)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">A new expense will be created automatically each period, starting from the expense date above.</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={createExpense.isPending || !amount}>
-              {createExpense.isPending ? "Saving…" : "Record Expense"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── EDIT DIALOG ── */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing?.isRecurring ? "Edit Recurring Template" : "Edit Expense"}</DialogTitle></DialogHeader>
-          {editing && (
+          <form onSubmit={e => { e.preventDefault(); handleCreate(); }}>
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={editing.category} onValueChange={(v) => setEditing({ ...editing, category: v })}>
+                <Select value={formCategory} onValueChange={setFormCategory}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
@@ -640,44 +591,105 @@ export default function ExpensesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>
-                <Input value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
               </div>
               <div className="space-y-1.5">
                 <Label>Amount</Label>
-                <Input type="number" step="0.01" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
               </div>
               <div className="space-y-1.5">
                 <Label>Expense Date</Label>
-                <Input type="date" value={editing.expenseDate} onChange={(e) => setEditing({ ...editing, expenseDate: e.target.value })} />
+                <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
               </div>
               <BranchWorkerFormFields
                 branches={branches} workers={workers}
-                branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
-                workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+                branchId={formBranchId} onBranchChange={setFormBranchId}
+                workerId={formWorkerId} onWorkerChange={setFormWorkerId}
               />
               <div className="flex items-center gap-2 pt-1">
-                <Checkbox id="edit-recurring" checked={editing.isRecurring} onCheckedChange={(c) => setEditing({ ...editing, isRecurring: c === true })} />
-                <Label htmlFor="edit-recurring" className="cursor-pointer">Make this a recurring expense</Label>
+                <Checkbox id="create-recurring" checked={formIsRecurring} onCheckedChange={(c) => setFormIsRecurring(c === true)} />
+                <Label htmlFor="create-recurring" className="cursor-pointer">Make this a recurring expense</Label>
               </div>
-              {editing.isRecurring && (
+              {formIsRecurring && (
                 <div className="space-y-1.5">
                   <Label>Repeats</Label>
-                  <Select value={editing.recurringFrequency} onValueChange={(v) => setEditing({ ...editing, recurringFrequency: v as RecurringFrequency })}>
+                  <Select value={formFrequency} onValueChange={(v) => setFormFrequency(v as RecurringFrequency)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">A new expense will be created automatically each period, starting from the expense date above.</p>
                 </div>
               )}
             </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createExpense.isPending || !amount}>
+                {createExpense.isPending ? "Saving…" : "Record Expense"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── EDIT DIALOG ── */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{editing?.isRecurring ? "Edit Recurring Template" : "Edit Expense"}</DialogTitle></DialogHeader>
+          {editing && (
+            <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={editing.category} onValueChange={(v) => setEditing({ ...editing, category: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Input value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Amount</Label>
+                  <Input type="number" step="0.01" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Expense Date</Label>
+                  <Input type="date" value={editing.expenseDate} onChange={(e) => setEditing({ ...editing, expenseDate: e.target.value })} />
+                </div>
+                <BranchWorkerFormFields
+                  branches={branches} workers={workers}
+                  branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
+                  workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+                />
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox id="edit-recurring" checked={editing.isRecurring} onCheckedChange={(c) => setEditing({ ...editing, isRecurring: c === true })} />
+                  <Label htmlFor="edit-recurring" className="cursor-pointer">Make this a recurring expense</Label>
+                </div>
+                {editing.isRecurring && (
+                  <div className="space-y-1.5">
+                    <Label>Repeats</Label>
+                    <Select value={editing.recurringFrequency} onValueChange={(v) => setEditing({ ...editing, recurringFrequency: v as RecurringFrequency })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+                <Button type="submit" disabled={updateExpense.isPending}>
+                  {updateExpense.isPending ? "Saving…" : "Save"}
+                </Button>
+              </DialogFooter>
+            </form>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={updateExpense.isPending}>
-              {updateExpense.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

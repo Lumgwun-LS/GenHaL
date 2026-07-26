@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVoiceField, useVoiceCommand } from "@/contexts/voice-context";
 import {
   useListProducts,
   useCreateProduct,
@@ -49,6 +50,15 @@ export default function Products() {
   const [unit, setUnit] = useState("units");
   const [lowStockThreshold, setLowStockThreshold] = useState("10");
   const [description, setDescription] = useState("");
+
+  // Voice field registrations (smart fill by label)
+  useVoiceField("product-name", "product name", setName);
+  useVoiceField("product-sku", "sku", setSku);
+  useVoiceField("product-price", "price", setPrice);
+  useVoiceField("product-cost-price", "cost price", setCostPrice);
+  useVoiceField("product-stock", "stock quantity", setStock);
+  useVoiceField("product-description", "description", setDescription);
+  useVoiceCommand("new product", () => setAddOpen(true));
 
   const lowStockCount = products?.filter(p => p.stockQuantity <= (p.lowStockThreshold || 10)).length || 0;
 
@@ -172,41 +182,43 @@ export default function Products() {
       <Dialog open={addOpen} onOpenChange={v => { if (!v) resetForm(); setAddOpen(v); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add a Product</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5"><Label>Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Basmati Rice 5kg" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} placeholder="Auto-generated if blank" /></div>
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
+          <form onSubmit={e => { e.preventDefault(); handleCreate(); }}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5"><Label>Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Basmati Rice 5kg" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} placeholder="Auto-generated if blank" /></div>
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Price *</Label><Input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" /></div>
-              <div className="space-y-1.5"><Label>Cost Price</Label><Input type="number" step="0.01" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="Optional" /></div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5"><Label>Stock Qty *</Label><Input type="number" value={stock} onChange={e => setStock(e.target.value)} placeholder="0" /></div>
-              <div className="space-y-1.5">
-                <Label>Unit</Label>
-                <Select value={unit} onValueChange={setUnit}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Price *</Label><Input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" /></div>
+                <div className="space-y-1.5"><Label>Cost Price</Label><Input type="number" step="0.01" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="Optional" /></div>
               </div>
-              <div className="space-y-1.5"><Label>Low Stock Alert</Label><Input type="number" value={lowStockThreshold} onChange={e => setLowStockThreshold(e.target.value)} /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5"><Label>Stock Qty *</Label><Input type="number" value={stock} onChange={e => setStock(e.target.value)} placeholder="0" /></div>
+                <div className="space-y-1.5">
+                  <Label>Unit</Label>
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label>Low Stock Alert</Label><Input type="number" value={lowStockThreshold} onChange={e => setLowStockThreshold(e.target.value)} /></div>
+              </div>
+              <div className="space-y-1.5"><Label>Description</Label><Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional" /></div>
             </div>
-            <div className="space-y-1.5"><Label>Description</Label><Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional" /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={createProduct.isPending || !name || !price || !stock}>
-              {createProduct.isPending ? "Saving…" : "Add Product"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createProduct.isPending || !name || !price || !stock}>
+                {createProduct.isPending ? "Saving…" : "Add Product"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVoiceField, useVoiceCommand } from "@/contexts/voice-context";
 import {
   useListVendors,
   useListSales,
@@ -72,6 +73,14 @@ export default function SalesPage() {
   const [saleDate, setSaleDate] = useState("");
   const [formBranchId, setFormBranchId] = useState("none");
   const [formWorkerId, setFormWorkerId] = useState("none");
+
+  // Voice field registrations
+  useVoiceField("sale-description", "description", setDescription);
+  useVoiceField("sale-customer", "customer name", setCustomerName);
+  useVoiceField("sale-amount", "amount", setAmount);
+  useVoiceField("sale-date", "sale date", setSaleDate);
+  useVoiceCommand("record sale", () => setOpen(true));
+  useVoiceCommand("new sale", () => setOpen(true));
 
   const [editing, setEditing] = useState<{ id: number; description: string; customerName: string; amount: number; saleDate: string; branchId: string; workerId: string } | null>(null);
 
@@ -269,35 +278,37 @@ export default function SalesPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Record a Sale</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Custom order" />
+          <form onSubmit={e => { e.preventDefault(); handleCreate(); }}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Custom order" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Customer Name</Label>
+                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Optional" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Amount</Label>
+                <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sale Date</Label>
+                <Input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
+              </div>
+              <BranchWorkerFormFields
+                branches={branches} workers={workers}
+                branchId={formBranchId} onBranchChange={setFormBranchId}
+                workerId={formWorkerId} onWorkerChange={setFormWorkerId}
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label>Customer Name</Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Optional" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Sale Date</Label>
-              <Input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
-            </div>
-            <BranchWorkerFormFields
-              branches={branches} workers={workers}
-              branchId={formBranchId} onBranchChange={setFormBranchId}
-              workerId={formWorkerId} onWorkerChange={setFormWorkerId}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={createSale.isPending || !amount}>
-              {createSale.isPending ? "Saving…" : "Record Sale"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createSale.isPending || !amount}>
+                {createSale.isPending ? "Saving…" : "Record Sale"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -305,36 +316,38 @@ export default function SalesPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Sale</DialogTitle></DialogHeader>
           {editing && (
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Input value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+            <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }}>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Input value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Customer Name</Label>
+                  <Input value={editing.customerName} onChange={(e) => setEditing({ ...editing, customerName: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Amount</Label>
+                  <Input type="number" step="0.01" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Sale Date</Label>
+                  <Input type="date" value={editing.saleDate} onChange={(e) => setEditing({ ...editing, saleDate: e.target.value })} />
+                </div>
+                <BranchWorkerFormFields
+                  branches={branches} workers={workers}
+                  branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
+                  workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
+                />
               </div>
-              <div className="space-y-1.5">
-                <Label>Customer Name</Label>
-                <Input value={editing.customerName} onChange={(e) => setEditing({ ...editing, customerName: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount</Label>
-                <Input type="number" step="0.01" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Sale Date</Label>
-                <Input type="date" value={editing.saleDate} onChange={(e) => setEditing({ ...editing, saleDate: e.target.value })} />
-              </div>
-              <BranchWorkerFormFields
-                branches={branches} workers={workers}
-                branchId={editing.branchId} onBranchChange={(v) => setEditing({ ...editing, branchId: v })}
-                workerId={editing.workerId} onWorkerChange={(v) => setEditing({ ...editing, workerId: v })}
-              />
-            </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+                <Button type="submit" disabled={updateSale.isPending}>
+                  {updateSale.isPending ? "Saving…" : "Save"}
+                </Button>
+              </DialogFooter>
+            </form>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={updateSale.isPending}>
-              {updateSale.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

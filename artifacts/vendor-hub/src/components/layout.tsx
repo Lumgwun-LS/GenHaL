@@ -1,5 +1,7 @@
 import WhatsAppButton from "@/components/whatsapp-button";
 import AiQuickCreate from "@/components/ai-quick-create";
+import VoiceFAB from "@/components/voice-fab";
+import { VoiceProvider } from "@/contexts/voice-context";
 import { Link, useLocation, useSearch } from "wouter";
 import { UserButton } from "@clerk/react";
 import { 
@@ -152,7 +154,7 @@ const NAV_ITEMS = [
   { href: "/pricing", label: "Pricing", icon: Tag },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+function LayoutInner({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const search = useSearch();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -284,8 +286,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Floating action buttons — bottom-right stack */}
+      <VoiceFAB />
       <AiQuickCreate />
       <WhatsAppButton />
     </div>
+  );
+}
+
+// Wrap LayoutInner with VoiceProvider so the FAB and all forms share the context
+export function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <VoiceProvider>
+      <LayoutInner>{children}</LayoutInner>
+    </VoiceProvider>
   );
 }
