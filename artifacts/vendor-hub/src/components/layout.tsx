@@ -35,6 +35,7 @@ import {
   ShieldOff,
   Tag,
   Store,
+  FileText,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState } from "react";
@@ -160,6 +161,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       { href: "/payments", label: "Payments", icon: CreditCard },
+      { href: "/invoices", label: "Invoices", icon: FileText },
       { href: "/sales", label: "Sales", icon: DollarSign },
       { href: "/expenses", label: "Expenses", icon: Receipt },
       { href: "/investments", label: "Investments", icon: PiggyBank },

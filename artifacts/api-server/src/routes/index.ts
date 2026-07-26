@@ -38,6 +38,8 @@ import aiQuickCreateRouter from "./ai-quick-create";
 import sitesRouter from "./sites";
 import workersRouter from "./workers";
 import storeRouter from "./store";
+import invoicesRouter from "./invoices";
+import invoicesPublicRouter from "./invoices-public";
 import storeAiLaunchRouter from "./store-ai-launch";
 import notificationsRouter from "./notifications";
 import accountDeletionRouter from "./account-deletion";
@@ -92,6 +94,9 @@ router.use("/store/ai-launch", storeAiLaunchRouter);
 // Visitor pageview beacon — public, no auth needed
 router.use(analyticsPublicRouter);
 
+// Public invoice pages — no auth required, scoped by shareToken
+router.use(invoicesPublicRouter);
+
 // Public site pages — no auth required
 router.use(sitesRouter);
 
@@ -138,5 +143,6 @@ router.use(inventoryAnalyticsRouter);
 router.use(websiteRouter);
 router.use(dataAnalysisRouter);
 router.use(aiQuickCreateRouter);
+router.use(invoicesRouter);
 
 export default router;

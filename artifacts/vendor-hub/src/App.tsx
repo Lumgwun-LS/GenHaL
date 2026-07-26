@@ -49,6 +49,8 @@ import PricingPage from "@/pages/pricing";
 import WebsitePage from "@/pages/website/index";
 import PublicSitePage from "@/pages/site/index";
 import DataAnalysisPage from "@/pages/data-analysis/index";
+import InvoicesPage from "@/pages/invoices/index";
+import InvoicePublicPage from "@/pages/invoice-public/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -302,6 +304,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/awajimaaai/:slug" component={PublicSitePage} />
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
+          <Route path="/invoice/:token" component={InvoicePublicPage} />
 
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />
@@ -329,6 +332,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/finance-analytics" component={() => <AuthenticatedRoute component={FinanceAnalytics} />} />
           <Route path="/branches" component={() => <AuthenticatedRoute component={Branches} />} />
           <Route path="/workers" component={() => <AuthenticatedRoute component={Workers} />} />
+          <Route path="/invoices" component={() => <AuthenticatedRoute component={InvoicesPage} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
           <Route path="/data-analysis" component={() => <AuthenticatedRoute component={DataAnalysisPage} />} />
           <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />

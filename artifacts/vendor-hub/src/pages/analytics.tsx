@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
 import { Link } from "wouter";
 import { useListVendors, useGetVendorPerformanceAnalytics, getGetVendorPerformanceAnalyticsQueryKey } from "@workspace/api-client-react";
@@ -405,14 +406,22 @@ export default function Analytics() {
   const healthScore = currentReport ? Math.round(parseFloat(currentReport.healthScore)) : null;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground">Performance insights and AI-powered business intelligence.</p>
+    <div className="relative p-6 max-w-7xl mx-auto space-y-6 w-full overflow-hidden">
+      {/* Aurora background blobs */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <motion.div className="absolute -top-40 -left-40 w-[550px] h-[550px] rounded-full bg-primary/7 blur-[120px]" animate={{ x:[0,50,0],y:[0,60,0],scale:[1,1.06,1] }} transition={{ duration:24,repeat:Infinity,ease:"easeInOut" }} />
+        <motion.div className="absolute top-1/2 -right-40 w-[450px] h-[450px] rounded-full bg-violet-500/6 blur-[100px]" animate={{ x:[0,-50,0],y:[0,-40,0] }} transition={{ duration:30,repeat:Infinity,ease:"easeInOut",delay:6 }} />
+        <motion.div className="absolute -bottom-20 left-1/3 w-[320px] h-[320px] rounded-full bg-cyan-500/5 blur-[80px]" animate={{ x:[0,35,0],y:[0,-35,0] }} transition={{ duration:20,repeat:Infinity,ease:"easeInOut",delay:10 }} />
       </div>
 
+      <motion.div className="flex flex-col gap-1" initial={{ opacity:0,y:-18 }} animate={{ opacity:1,y:0 }} transition={{ duration:0.5,ease:[0.22,1,0.36,1] }}>
+        <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">Analytics</h1>
+        <p className="text-muted-foreground">Performance insights and AI-powered business intelligence.</p>
+      </motion.div>
+
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="mb-4">
+        <motion.div initial={{ opacity:0,y:10 }} animate={{ opacity:1,y:0 }} transition={{ duration:0.4,delay:0.1 }}>
+        <TabsList className="mb-4 bg-card/50 border border-border/50 backdrop-blur-sm">
           <TabsTrigger value="performance" className="gap-2">
             <BarChart2 className="w-4 h-4" /> Performance
           </TabsTrigger>
@@ -420,10 +429,12 @@ export default function Analytics() {
             <Sparkles className="w-4 h-4" /> Business Intelligence
           </TabsTrigger>
         </TabsList>
+        </motion.div>
 
         {/* ── Performance tab ─────────────────────────────────────────────── */}
         <TabsContent value="performance" className="space-y-6">
-          <Card>
+          <motion.div initial={{ opacity:0,y:16 }} animate={{ opacity:1,y:0 }} transition={{ duration:0.4,delay:0.15 }}>
+          <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
             <CardContent className="flex flex-wrap items-end gap-4 pt-6">
               <div className="space-y-1.5">
                 <Label className="text-xs">Period</Label>
@@ -449,23 +460,31 @@ export default function Analytics() {
             </CardContent>
           </Card>
 
+          </motion.div>
+
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading performance data…</div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <motion.div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                initial="hidden" animate="show"
+                variants={{ hidden:{}, show:{ transition:{ staggerChildren:0.07, delayChildren:0.2 } } }}>
                 {stats.map((stat, i) => (
-                  <Card key={i}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                    </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stat.value}</div></CardContent>
-                  </Card>
+                  <motion.div key={i} variants={{ hidden:{ opacity:0, y:20 }, show:{ opacity:1, y:0, transition:{ duration:0.45, ease:[0.22,1,0.36,1] } } }}>
+                    <Card className="group hover:shadow-lg hover:shadow-primary/10 transition-shadow duration-300 border-border/50 bg-card/70 backdrop-blur-sm overflow-hidden relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                        <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                      </CardHeader>
+                      <CardContent><div className="text-2xl font-bold">{stat.value}</div></CardContent>
+                    </Card>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
+                <motion.div initial={{ opacity:0, x:-20 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.5, delay:0.35, ease:[0.22,1,0.36,1] }}>
+                <Card className="border-border/50 bg-card/70 backdrop-blur-sm">
                   <CardHeader><CardTitle className="text-base">Revenue over time</CardTitle></CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={260}>
@@ -479,7 +498,9 @@ export default function Analytics() {
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
-                <Card>
+                </motion.div>
+                <motion.div initial={{ opacity:0, x:20 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.5, delay:0.42, ease:[0.22,1,0.36,1] }}>
+                <Card className="border-border/50 bg-card/70 backdrop-blur-sm">
                   <CardHeader><CardTitle className="text-base">Orders over time</CardTitle></CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={260}>
@@ -493,6 +514,7 @@ export default function Analytics() {
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
+                </motion.div>
               </div>
             </>
           )}

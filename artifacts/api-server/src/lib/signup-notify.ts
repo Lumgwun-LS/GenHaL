@@ -1,13 +1,26 @@
 /**
- * Sends a signup-alert email to the Awajimaa admin address whenever a new
+ * Sends a signup-alert email to ALL super admin addresses whenever a new
  * user registers on any platform (vendor-hub, mobile app, app store).
+ *
+ * Recipients are read from the SUPER_ADMIN_EMAILS environment variable
+ * (comma-separated list of addresses). Falls back to the hard-coded address
+ * when the variable is empty so local dev still receives alerts.
  *
  * Fire-and-forget: never blocks or fails the caller.
  */
 import { sendEmail } from "./mailer";
 import { logger } from "./logger";
 
-const ADMIN_EMAIL = "Lumgwunsolutions@gmail.com";
+/** Fallback used only when SUPER_ADMIN_EMAILS is not set. */
+const FALLBACK_ADMIN_EMAIL = "Lumgwunsolutions@gmail.com";
+
+function getSuperAdminEmails(): string[] {
+  const raw = (process.env.SUPER_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return raw.length > 0 ? raw : [FALLBACK_ADMIN_EMAIL];
+}
 
 export type SignupPlatform = "vendor-hub" | "mobile-app" | "app-store" | "app-store-user";
 
@@ -93,12 +106,14 @@ export function notifyAdminSignup(info: SignupInfo): void {
 </body>
 </html>`;
 
+      const recipients = getSuperAdminEmails();
       await sendEmail({
-        to: ADMIN_EMAIL,
+        to: recipients.join(", "),
         subject: `New sign-up: ${info.name} — ${label}`,
         html,
         text: `New sign-up on ${label}\n\nName: ${info.name}\nEmail: ${info.email}${info.phone ? `\nPhone: ${info.phone}` : ""}${info.country ? `\nCountry: ${info.country}` : ""}${info.userType ? `\nUser type: ${info.userType}` : ""}\nSigned up: ${now}`,
       });
+      logger.info({ recipients, platform: info.platform }, "[signup-notify] Admin signup alert sent");
     } catch (err) {
       logger.warn({ err }, "[signup-notify] Failed to send admin signup alert — continuing normally");
     }

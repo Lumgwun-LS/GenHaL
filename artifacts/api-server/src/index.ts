@@ -21,6 +21,7 @@ import { startOrderExpiryScheduler } from "./lib/order-expiry-scheduler";
 import { startWebhookEventsCleanup } from "./lib/webhook-events-cleanup";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 import { startStockAlertScheduler } from "./lib/stock-alert-scheduler";
+import { startOverdueInvoiceScheduler } from "./lib/overdue-invoice-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -64,4 +65,5 @@ app.listen(port, (err) => {
   startOrderExpiryScheduler();
   startWebhookEventsCleanup();
   startStockAlertScheduler();
+  startOverdueInvoiceScheduler();
 });

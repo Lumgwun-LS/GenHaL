@@ -65,3 +65,4 @@ export * from "./vendor-stock-alert-settings";
 export * from "./vendor-websites";
 export * from "./vendor-content-library";
 export * from "./business-swot-reports";
+export * from "./invoices";

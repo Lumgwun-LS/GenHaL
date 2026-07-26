@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -283,20 +284,29 @@ export default function Payments() {
   });
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
-          <p className="text-muted-foreground">Track all transactions across Stripe and Paystack.</p>
-        </div>
-        <Button onClick={() => setManualOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Record Payment
-        </Button>
+    <div className="relative p-8 max-w-7xl mx-auto space-y-8 w-full overflow-hidden">
+      {/* Aurora background */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <motion.div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-violet-500/7 blur-[110px]" animate={{ x:[0,45,0],y:[0,55,0] }} transition={{ duration:22,repeat:Infinity,ease:"easeInOut" }} />
+        <motion.div className="absolute -bottom-20 right-0 w-[400px] h-[400px] rounded-full bg-teal-500/6 blur-[90px]" animate={{ x:[0,-40,0],y:[0,-30,0] }} transition={{ duration:26,repeat:Infinity,ease:"easeInOut",delay:5 }} />
       </div>
 
+      <motion.div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" initial={{ opacity:0,y:-18 }} animate={{ opacity:1,y:0 }} transition={{ duration:0.5,ease:[0.22,1,0.36,1] }}>
+        <div>
+          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">Payments</h1>
+          <p className="text-muted-foreground">Track all transactions across Stripe and Paystack.</p>
+        </div>
+        <motion.div whileHover={{ scale:1.04 }} whileTap={{ scale:0.97 }}>
+        <Button onClick={() => setManualOpen(true)} className="bg-gradient-to-r from-primary to-violet-600 shadow-lg shadow-primary/25 border-0">
+          <Plus className="w-4 h-4 mr-2" /> Record Payment
+        </Button>
+        </motion.div>
+      </motion.div>
+
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      <motion.div className="grid gap-4 md:grid-cols-4" initial="hidden" animate="show" variants={{ hidden:{}, show:{ transition:{ staggerChildren:0.07, delayChildren:0.2 } } }}>
+        <motion.div variants={{ hidden:{ opacity:0, y:20 }, show:{ opacity:1, y:0, transition:{ duration:0.45, ease:[0.22,1,0.36,1] } } }}>
+        <Card className="group hover:shadow-lg hover:shadow-primary/10 transition-shadow duration-300 border-border/50 bg-card/70 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <DollarSign className="w-4 h-4" /> Total Revenue
@@ -308,7 +318,9 @@ export default function Payments() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        </motion.div>
+        <motion.div variants={{ hidden:{ opacity:0, y:20 }, show:{ opacity:1, y:0, transition:{ duration:0.45, ease:[0.22,1,0.36,1] } } }}>
+        <Card className="group hover:shadow-lg hover:shadow-primary/10 transition-shadow duration-300 border-border/50 bg-card/70 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <CreditCard className="w-4 h-4" /> Transactions
@@ -319,7 +331,9 @@ export default function Payments() {
             <p className="text-xs text-muted-foreground mt-1">{summary?.paid ?? 0} paid</p>
           </CardContent>
         </Card>
-        <Card>
+        </motion.div>
+        <motion.div variants={{ hidden:{ opacity:0, y:20 }, show:{ opacity:1, y:0, transition:{ duration:0.45, ease:[0.22,1,0.36,1] } } }}>
+        <Card className="group hover:shadow-lg hover:shadow-violet-500/10 transition-shadow duration-300 border-border/50 bg-card/70 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4" /> Stripe Revenue
@@ -331,7 +345,9 @@ export default function Payments() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        </motion.div>
+        <motion.div variants={{ hidden:{ opacity:0, y:20 }, show:{ opacity:1, y:0, transition:{ duration:0.45, ease:[0.22,1,0.36,1] } } }}>
+        <Card className="group hover:shadow-lg hover:shadow-teal-500/10 transition-shadow duration-300 border-border/50 bg-card/70 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4" /> Paystack Revenue
@@ -343,7 +359,8 @@ export default function Payments() {
             </div>
           </CardContent>
         </Card>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Revenue chart */}
       {chartData.length > 0 && (

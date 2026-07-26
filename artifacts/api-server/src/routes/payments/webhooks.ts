@@ -366,6 +366,15 @@ async function applyPaymentStatusTransition(
         amount: updated.amount,
         currency: updated.currency,
       });
+
+      // If this payment is linked to an invoice instalment, reconcile it
+      const meta = (existing?.metadata ?? {}) as Record<string, unknown>;
+      if (meta.instalmentId) {
+        const { reconcileInstalmentPayment } = await import("../../lib/invoice-reconcile");
+        reconcileInstalmentPayment(Number(meta.instalmentId), paymentRow.id).catch((e) =>
+          console.error("[webhooks] invoice instalment reconcile failed:", e),
+        );
+      }
     }
   }
 
