@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { desc, and, gte, lte, eq as eqOp } from "drizzle-orm";
-import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable, paymentsTable, salesTable, expensesTable, investmentsTable } from "@workspace/db";
+import { db, vendorsTable, ordersTable, leadsTable, postsTable, productsTable, emailCampaignsTable, orderItemsTable, paymentsTable, salesTable, expensesTable, investmentsTable, businessSwotReportsTable } from "@workspace/db";
+import type { SwotReportData, ScoreDimension } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { resolveDateRange } from "../lib/date-range";
@@ -279,4 +280,329 @@ router.get("/analytics/finance-overview", async (req, res): Promise<void> => {
   }));
 });
 
+// ── Business Intelligence: helpers ────────────────────────────────────────────
+
+interface BusinessSnapshot {
+  vendorId: number;
+  generatedAt: string;
+  revenue30d: number;
+  prevRevenue30d: number;
+  revenueGrowthPct: number;
+  expenses30d: number;
+  expenseRatio: number;
+  totalProducts: number;
+  outOfStockProducts: number;
+  lowStockProducts: number;
+  healthyStockProducts: number;
+  orders30d: number;
+  completedOrders30d: number;
+  pendingOrders30d: number;
+  orderCompletionRate: number;
+  avgOrderValue30d: number;
+  payments30d: number;
+  paidPayments30d: number;
+  paymentSuccessRate: number;
+  totalLeads30d: number;
+  qualifiedLeads30d: number;
+  leadConversionRate: number;
+  publishedPosts30d: number;
+  scheduledPosts30d: number;
+  platformBreakdown: Record<string, number>;
+  topExpenseCategories: Array<{ category: string; amount: number }>;
+}
+
+function computeHealthScore(s: BusinessSnapshot): { score: number; breakdown: Record<string, ScoreDimension> } {
+  const breakdown: Record<string, ScoreDimension> = {};
+
+  // Revenue growth (15 pts)
+  const gPct = s.revenueGrowthPct;
+  const revScore = gPct >= 30 ? 15 : gPct >= 10 ? 12 : gPct >= 0 ? 8 : Math.max(0, 8 + (gPct / 50) * 8);
+  breakdown.revenueGrowth = { score: Math.round(revScore), max: 15, label: "Revenue Growth" };
+
+  // Expense efficiency (20 pts)
+  const eRatio = s.revenue30d > 0 ? s.expenses30d / s.revenue30d : 0.5;
+  const expScore = eRatio <= 0.4 ? 20 : eRatio <= 0.55 ? 16 : eRatio <= 0.7 ? 10 : eRatio <= 0.85 ? 5 : 0;
+  breakdown.expenseRatio = { score: expScore, max: 20, label: "Expense Efficiency" };
+
+  // Inventory health (15 pts)
+  const invScore = s.totalProducts > 0 ? (s.healthyStockProducts / s.totalProducts) * 15 : 7.5;
+  breakdown.inventoryHealth = { score: Math.round(invScore), max: 15, label: "Inventory Health" };
+
+  // Lead conversion (15 pts)
+  const leadScore = s.totalLeads30d > 0 ? Math.min(1, s.qualifiedLeads30d / s.totalLeads30d) * 15 : 7.5;
+  breakdown.leadConversion = { score: Math.round(leadScore), max: 15, label: "Lead Conversion" };
+
+  // Payment success (15 pts)
+  breakdown.paymentSuccess = { score: Math.round(s.paymentSuccessRate * 15), max: 15, label: "Payment Success" };
+
+  // Social activity (10 pts)
+  const posts = s.publishedPosts30d;
+  const socialScore = posts >= 15 ? 10 : posts >= 8 ? 8 : posts >= 3 ? 5 : posts >= 1 ? 2 : 0;
+  breakdown.socialActivity = { score: socialScore, max: 10, label: "Social Activity" };
+
+  // Order completion (10 pts)
+  breakdown.orderCompletion = { score: Math.round(s.orderCompletionRate * 10), max: 10, label: "Order Completion" };
+
+  const total = Object.values(breakdown).reduce((sum, d) => sum + d.score, 0);
+  return { score: Math.min(100, Math.max(0, total)), breakdown };
+}
+
+async function buildBusinessSnapshot(vendorId: number): Promise<BusinessSnapshot> {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+  const [sales30d, prevSales30d, expenses30d, products, orders30d, payments30d, leads30d, posts30d] =
+    await Promise.all([
+      db.select().from(salesTable).where(and(eq(salesTable.vendorId, vendorId), gte(salesTable.saleDate, thirtyDaysAgo))),
+      db.select().from(salesTable).where(and(eq(salesTable.vendorId, vendorId), gte(salesTable.saleDate, sixtyDaysAgo), lte(salesTable.saleDate, thirtyDaysAgo))),
+      db.select().from(expensesTable).where(and(eq(expensesTable.vendorId, vendorId), gte(expensesTable.expenseDate, thirtyDaysAgo))),
+      db.select().from(productsTable).where(eq(productsTable.vendorId, vendorId)),
+      db.select().from(ordersTable).where(and(eq(ordersTable.vendorId, vendorId), gte(ordersTable.createdAt, thirtyDaysAgo))),
+      db.select().from(paymentsTable).where(and(eq(paymentsTable.vendorId, vendorId), gte(paymentsTable.createdAt, thirtyDaysAgo))),
+      db.select().from(leadsTable).where(and(eq(leadsTable.vendorId, vendorId), gte(leadsTable.createdAt, thirtyDaysAgo))),
+      db.select().from(postsTable).where(and(eq(postsTable.vendorId, vendorId), gte(postsTable.createdAt, thirtyDaysAgo))),
+    ]);
+
+  const revenue30d = sales30d.reduce((s, r) => s + parseFloat(r.amount), 0);
+  const prevRevenue30d = prevSales30d.reduce((s, r) => s + parseFloat(r.amount), 0);
+  const revenueGrowthPct = prevRevenue30d > 0 ? ((revenue30d - prevRevenue30d) / prevRevenue30d) * 100 : 0;
+  const expenses30dTotal = expenses30d.reduce((s, e) => s + parseFloat(e.amount), 0);
+  const expenseRatio = revenue30d > 0 ? expenses30dTotal / revenue30d : 0;
+
+  const outOfStock = products.filter((p) => (p.stockQuantity ?? 0) <= 0).length;
+  const lowStock = products.filter((p) => (p.stockQuantity ?? 0) > 0 && (p.stockQuantity ?? 0) <= (p.lowStockThreshold ?? 0)).length;
+  const healthyStock = products.filter((p) => (p.stockQuantity ?? 0) > (p.lowStockThreshold ?? 0)).length;
+
+  const completedOrders = orders30d.filter((o) => o.status === "completed" || o.status === "delivered").length;
+  const pendingOrders = orders30d.filter((o) => o.status === "pending" || o.status === "processing").length;
+  const orderCompletionRate = orders30d.length > 0 ? completedOrders / orders30d.length : 0;
+  const avgOrderValue30d = orders30d.length > 0
+    ? orders30d.reduce((s, o) => s + parseFloat(o.totalAmount as string), 0) / orders30d.length : 0;
+
+  const paidPayments = payments30d.filter((p) => p.status === "paid" || p.status === "completed").length;
+  const paymentSuccessRate = payments30d.length > 0 ? paidPayments / payments30d.length : 1;
+
+  const qualifiedLeads = leads30d.filter((l) =>
+    ["qualified", "converted", "closed_won", "active"].includes(l.status ?? "")
+  ).length;
+  const leadConversionRate = leads30d.length > 0 ? qualifiedLeads / leads30d.length : 0;
+
+  const publishedPosts = posts30d.filter((p) => p.status === "published").length;
+  const scheduledPosts = posts30d.filter((p) => p.status === "scheduled").length;
+  const platformBreakdown: Record<string, number> = {};
+  for (const post of posts30d) {
+    for (const platform of (post.platforms ?? [])) {
+      platformBreakdown[platform] = (platformBreakdown[platform] ?? 0) + 1;
+    }
+  }
+
+  const categoryMap: Record<string, number> = {};
+  for (const e of expenses30d) {
+    categoryMap[e.category] = (categoryMap[e.category] ?? 0) + parseFloat(e.amount);
+  }
+  const topExpenseCategories = Object.entries(categoryMap)
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3);
+
+  return {
+    vendorId,
+    generatedAt: now.toISOString(),
+    revenue30d,
+    prevRevenue30d,
+    revenueGrowthPct,
+    expenses30d: expenses30dTotal,
+    expenseRatio,
+    totalProducts: products.length,
+    outOfStockProducts: outOfStock,
+    lowStockProducts: lowStock,
+    healthyStockProducts: healthyStock,
+    orders30d: orders30d.length,
+    completedOrders30d: completedOrders,
+    pendingOrders30d: pendingOrders,
+    orderCompletionRate,
+    avgOrderValue30d,
+    payments30d: payments30d.length,
+    paidPayments30d: paidPayments,
+    paymentSuccessRate,
+    totalLeads30d: leads30d.length,
+    qualifiedLeads30d: qualifiedLeads,
+    leadConversionRate,
+    publishedPosts30d: publishedPosts,
+    scheduledPosts30d: scheduledPosts,
+    platformBreakdown,
+    topExpenseCategories,
+  };
+}
+
+// GET /analytics/business-snapshot — aggregate last 30-day metrics + health score
+router.get("/analytics/business-snapshot", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const [vendor] = await db
+    .select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId));
+  if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+  const snapshot = await buildBusinessSnapshot(vendor.id);
+  const { score, breakdown } = computeHealthScore(snapshot);
+  return res.json({ snapshot, healthScore: score, scoreBreakdown: breakdown });
+});
+
+// POST /analytics/swot — generate SWOT via AI, save and return
+router.post("/analytics/swot", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const [vendor] = await db
+    .select({ id: vendorsTable.id, name: vendorsTable.name })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId));
+  if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+  const snapshot = await buildBusinessSnapshot(vendor.id);
+  const { score, breakdown } = computeHealthScore(snapshot);
+
+  const topPlatforms = Object.entries(snapshot.platformBreakdown)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([k, v]) => `${k}×${v}`)
+    .join(", ");
+
+  const prompt = `You are a strategic business analyst for a vendor on the Awa Biz Suite platform. Based on the following 30-day operational metrics, generate a SWOT analysis with exactly 3–4 bullet points per quadrant.
+
+Business metrics (last 30 days):
+- Revenue: $${snapshot.revenue30d.toFixed(2)} | Previous 30d: $${snapshot.prevRevenue30d.toFixed(2)} | MoM Growth: ${snapshot.revenueGrowthPct >= 0 ? "+" : ""}${snapshot.revenueGrowthPct.toFixed(1)}%
+- Expenses: $${snapshot.expenses30d.toFixed(2)} | Expense ratio: ${(snapshot.expenseRatio * 100).toFixed(1)}% of revenue
+- Inventory: ${snapshot.totalProducts} products | ${snapshot.outOfStockProducts} out-of-stock | ${snapshot.lowStockProducts} low-stock | ${snapshot.healthyStockProducts} healthy
+- Orders: ${snapshot.orders30d} total | ${snapshot.completedOrders30d} completed | ${snapshot.pendingOrders30d} pending | Completion rate: ${(snapshot.orderCompletionRate * 100).toFixed(0)}% | Avg value: $${snapshot.avgOrderValue30d.toFixed(2)}
+- Payments: ${snapshot.payments30d} transactions | ${snapshot.paidPayments30d} paid | Success rate: ${(snapshot.paymentSuccessRate * 100).toFixed(1)}%
+- Leads: ${snapshot.totalLeads30d} new | ${snapshot.qualifiedLeads30d} qualified/converted | Conversion: ${(snapshot.leadConversionRate * 100).toFixed(1)}%
+- Social posts: ${snapshot.publishedPosts30d} published | ${snapshot.scheduledPosts30d} scheduled | Platforms: ${topPlatforms || "none"}
+- Top expense categories: ${snapshot.topExpenseCategories.map((c) => `${c.category} $${c.amount.toFixed(0)}`).join(" | ") || "none"}
+- Health score: ${score}/100
+
+Rules:
+- Each point must cite at least one specific number from the data above.
+- Be direct and specific — avoid generic business advice.
+- For each point, optionally suggest ONE navigation link using a key from: sales, expenses, inventory, leads, social, analytics, finance, payments, orders, products.
+- Return ONLY valid JSON, no markdown, no explanation.
+
+JSON format:
+{
+  "strengths": [
+    {"point": "...", "linkKey": "sales", "linkLabel": "View sales"}
+  ],
+  "weaknesses": [
+    {"point": "...", "linkKey": "expenses", "linkLabel": "Review expenses"}
+  ],
+  "opportunities": [
+    {"point": "..."}
+  ],
+  "threats": [
+    {"point": "...", "linkKey": "inventory", "linkLabel": "Check inventory"}
+  ]
+}`;
+
+  const openAiBase = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  const openAiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? "";
+
+  const aiRes = await fetch(`${openAiBase}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 1200,
+    }),
+  });
+
+  if (!aiRes.ok) {
+    const txt = await aiRes.text();
+    console.error("OpenAI SWOT error:", txt);
+    return res.status(502).json({ error: "AI generation failed. Please try again." });
+  }
+
+  const aiJson = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
+  const raw = aiJson.choices?.[0]?.message?.content ?? "{}";
+
+  let swotReport: SwotReportData;
+  try {
+    const parsed = JSON.parse(raw.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim()) as SwotReportData;
+    swotReport = {
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 4) : [],
+      weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses.slice(0, 4) : [],
+      opportunities: Array.isArray(parsed.opportunities) ? parsed.opportunities.slice(0, 4) : [],
+      threats: Array.isArray(parsed.threats) ? parsed.threats.slice(0, 4) : [],
+    };
+  } catch {
+    return res.status(502).json({ error: "Failed to parse AI response. Please try again." });
+  }
+
+  const [saved] = await db
+    .insert(businessSwotReportsTable)
+    .values({
+      vendorId: vendor.id,
+      healthScore: String(score),
+      scoreBreakdown: breakdown,
+      swotReport,
+      snapshotJson: snapshot as unknown as Record<string, unknown>,
+    })
+    .returning();
+
+  return res.json({
+    id: saved!.id,
+    healthScore: saved!.healthScore,
+    scoreBreakdown: saved!.scoreBreakdown,
+    swotReport: saved!.swotReport,
+    snapshotJson: saved!.snapshotJson,
+    createdAt: saved!.createdAt,
+  });
+});
+
+// GET /analytics/swot/history — last 10 reports
+router.get("/analytics/swot/history", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const [vendor] = await db
+    .select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId));
+  if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+  const reports = await db
+    .select()
+    .from(businessSwotReportsTable)
+    .where(eq(businessSwotReportsTable.vendorId, vendor.id))
+    .orderBy(desc(businessSwotReportsTable.createdAt))
+    .limit(10);
+
+  return res.json({ reports });
+});
+
+// GET /analytics/swot/:id — single report (for PDF generation)
+router.get("/analytics/swot/:id", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const [vendor] = await db
+    .select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId));
+  if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+  const id = parseInt(req.params.id ?? "", 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid report id" });
+
+  const [report] = await db
+    .select()
+    .from(businessSwotReportsTable)
+    .where(and(eq(businessSwotReportsTable.id, id), eq(businessSwotReportsTable.vendorId, vendor.id)));
+
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  return res.json(report);
+});
+
 export default router;
+
