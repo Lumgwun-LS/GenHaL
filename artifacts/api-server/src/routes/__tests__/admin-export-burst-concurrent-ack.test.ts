@@ -249,7 +249,7 @@ function request(
   return fetch(`${baseUrl}${path}`, { method, headers }).then(async (res) => {
     let body: Record<string, unknown> = {};
     try {
-      body = await res.json();
+      body = await res.json() as Record<string, unknown>;
     } catch {
       body = {};
     }

@@ -292,7 +292,7 @@ function CategoryGrid({ categories }: { categories: Category[] }) {
           key={cat.name}
           variants={{
             hidden: { opacity: 0, scale: 0.78, y: 16 },
-            visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 290, damping: 22 } },
+            visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring" as const, stiffness: 290, damping: 22 } },
           }}
           whileHover={{ scale: 1.07, y: -5, boxShadow: "0 8px 28px rgba(0,200,83,0.18), 0 0 0 1px rgba(0,200,83,0.25)" }}
           whileTap={{ scale: 0.95 }}
@@ -325,7 +325,7 @@ function AppGrid({ apps, layout = "grid" }: { apps: AppSummary[]; layout?: "grid
   };
   const itemVariants = {
     hidden: { opacity: 0, y: 22, scale: 0.95 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } },
+    visible: { opacity: 1, y: 0, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
   };
 
   return (

@@ -2452,6 +2452,79 @@ export interface ContentLibraryItem {
   createdAt: string;
 }
 
+export type MediaLibraryItemSource = typeof MediaLibraryItemSource[keyof typeof MediaLibraryItemSource];
+
+
+export const MediaLibraryItemSource = {
+  ai: 'ai',
+  upload: 'upload',
+} as const;
+
+export type MediaLibraryItemType = typeof MediaLibraryItemType[keyof typeof MediaLibraryItemType];
+
+
+export const MediaLibraryItemType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface MediaLibraryItem {
+  id: string;
+  source: MediaLibraryItemSource;
+  type: MediaLibraryItemType;
+  url: string;
+  prompt?: string | null;
+  expiringSoon: boolean;
+  createdAt: string;
+}
+
+export type MediaUploadUrlInputMediaType = typeof MediaUploadUrlInputMediaType[keyof typeof MediaUploadUrlInputMediaType];
+
+
+export const MediaUploadUrlInputMediaType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface MediaUploadUrlInput {
+  mediaType: MediaUploadUrlInputMediaType;
+}
+
+export interface MediaUploadUrlResponse {
+  uploadUrl: string;
+  mediaUrl: string;
+}
+
+export type MediaProcessVideoInputTrim = {
+  startSeconds?: number;
+  durationSeconds?: number;
+};
+
+export type MediaProcessVideoInputCaptionPosition = typeof MediaProcessVideoInputCaptionPosition[keyof typeof MediaProcessVideoInputCaptionPosition];
+
+
+export const MediaProcessVideoInputCaptionPosition = {
+  top: 'top',
+  center: 'center',
+  bottom: 'bottom',
+} as const;
+
+export type MediaProcessVideoInputCaption = {
+  text?: string;
+  position?: MediaProcessVideoInputCaptionPosition;
+  fontSize?: number;
+};
+
+export interface MediaProcessVideoInput {
+  sourceUrl: string;
+  trim?: MediaProcessVideoInputTrim;
+  caption?: MediaProcessVideoInputCaption;
+}
+
+export interface MediaProcessVideoResponse {
+  videoUrl: string;
+}
+
 export interface ContentLibraryItemInput {
   vendorId: number;
   type: string;

@@ -1,4 +1,15 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
+
+/** Inline schema — matches GenerateAiContentInput in openapi.yaml.
+ *  Defined here because api-zod codegen has not yet been run for this schema. */
+const GenerateAiContentBody = z.object({
+  vendorId: z.number().int(),
+  topic: z.string().max(1000),
+  outputTypes: z.array(z.enum(["social_post", "article", "academic", "image", "video"])).min(1),
+  tone: z.enum(["professional", "casual", "educational", "promotional"]).optional(),
+  language: z.enum(["english", "hausa", "yoruba", "igbo"]).optional(),
+});
 import { getAuth } from "@clerk/express";
 import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable, vendorContentLibraryTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -38,7 +49,6 @@ import {
   SaveDraftVideoScenesResponse,
   ClearDraftVideoScenesBody,
   ClearDraftVideoScenesResponse,
-  GenerateAiContentBody,
 } from "@workspace/api-zod";
 
 const objectStorageService = new ObjectStorageService();

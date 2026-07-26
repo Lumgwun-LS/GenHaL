@@ -406,12 +406,12 @@ describe("POST /vendors/:id/subscription/checkout — Paystack de-duplication", 
     // real fetch so the helper's `res.text()` etc. still work.
     vi.stubGlobal(
       "fetch",
-      (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      (input: string | Request | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as unknown as { url: string }).url;
         if (url.includes("paystack.co")) {
-          return paystackApiCall(url, init);
+          return (paystackApiCall as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
         }
-        return originalFetch(input, init);
+        return originalFetch(input as Parameters<typeof originalFetch>[0], init);
       },
     );
   });

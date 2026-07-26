@@ -54,6 +54,7 @@ import voiceTtsAudioRouter from "./voice-tts-audio";
 import mediaRouter from "./media";
 import vendorAddonsRouter from "./vendor-addons";
 import adsRouter from "./ads";
+import mediaLibraryRouter from "./media-library";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -126,6 +127,7 @@ router.use(voiceCampaignsRouter);
 router.use(subscriptionUpgradeRouter);
 router.use(vendorAddonsRouter);
 router.use(adsRouter);
+router.use(mediaLibraryRouter);
 router.use(adminRouter);
 router.use(adminAnalyticsRouter);
 router.use(adminPaymentGatewaysRouter);

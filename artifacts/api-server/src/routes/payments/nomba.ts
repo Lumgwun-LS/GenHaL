@@ -197,7 +197,7 @@ router.post("/payments/nomba/checkout", async (req, res): Promise<void> => {
 
   if (!amount) { res.status(400).json({ error: "amount is required" }); return; }
 
-  const result = await createNombaCheckout({ ...rest, orderId, vendorId, amount });
+  const result = await createNombaCheckout({ ...rest, orderId: orderId ?? null, vendorId, amount } as Parameters<typeof createNombaCheckout>[0]);
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.json({ paymentId: result.paymentId, reference: result.reference, url: result.url });
 });

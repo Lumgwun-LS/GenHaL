@@ -778,8 +778,8 @@ describe("void-error-check-scheduler — push notifications (exactly-once guaran
 
     // Each call carries the correct title and a body that identifies the payment.
     const calls = sendPushToAdminsMock.mock.calls;
-    const titles = calls.map((c) => c[0] as string);
-    const bodies = calls.map((c) => c[1] as string);
+    const titles = calls.map((c) => (c as unknown[])[0] as string);
+    const bodies = calls.map((c) => (c as unknown[])[1] as string);
 
     expect(titles.every((t) => t.includes("Void Error"))).toBe(true);
     expect(bodies.some((b) => b.includes("60"))).toBe(true);

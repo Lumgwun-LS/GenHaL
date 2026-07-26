@@ -40,12 +40,12 @@ router.use(remitaRouter);
  * Initiates a full refund for a paid payment via the original gateway.
  */
 router.post("/payments/:id/refund", async (req, res): Promise<void> => {
-  try {
   const paymentId = parseInt(req.params.id);
   if (isNaN(paymentId)) {
     res.status(400).json({ error: "Invalid payment id" });
     return;
   }
+  try {
 
   // Atomic claim: flip status to "refunding" only if currently "paid".
   // This prevents two concurrent refund requests from both reaching the gateway.

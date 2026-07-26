@@ -166,9 +166,11 @@ router.post("/website/upload-logo", async (req, res): Promise<void> => {
   if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   try {
-    const { fileName, contentType } = req.body as { fileName: string; contentType: string };
-    const key = `vendor-${vendor.id}/website/logo-${Date.now()}-${fileName}`;
-    const { uploadUrl, publicUrl } = await objectStorageService.getObjectEntityUploadURL(key, contentType);
+    const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+    const _op1 = objectStorageService.normalizeObjectEntityPath(uploadUrl);
+    const _oid1 = _op1.replace(/^\/objects\/uploads\//, "");
+    const _base1 = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || "";
+    const publicUrl = `https://${_base1}/api/media/${_oid1}`;
     res.json({ uploadUrl, logoUrl: publicUrl });
   } catch (e: unknown) {
     res.status(500).json({ error: "Failed to generate upload URL" });
@@ -181,10 +183,12 @@ router.post("/website/upload-image", async (req, res): Promise<void> => {
   if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   try {
-    const { fileName, contentType, sectionId } = req.body as { fileName: string; contentType: string; sectionId?: string };
-    const key = `vendor-${vendor.id}/website/${sectionId ?? "section"}-${Date.now()}-${fileName}`;
-    const { uploadUrl, publicUrl } = await objectStorageService.getObjectEntityUploadURL(key, contentType);
-    res.json({ uploadUrl, imageUrl: publicUrl });
+    const uploadUrl2 = await objectStorageService.getObjectEntityUploadURL();
+    const _op2 = objectStorageService.normalizeObjectEntityPath(uploadUrl2);
+    const _oid2 = _op2.replace(/^\/objects\/uploads\//, "");
+    const _base2 = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || "";
+    const publicUrl2 = `https://${_base2}/api/media/${_oid2}`;
+    res.json({ uploadUrl: uploadUrl2, imageUrl: publicUrl2 });
   } catch (e: unknown) {
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
@@ -229,16 +233,19 @@ router.post("/website/generate-logo", async (req, res): Promise<void> => {
     // Download the temp image and re-upload to permanent object storage
     const imgRes = await fetch(tempUrl);
     const imgBuffer = await imgRes.arrayBuffer();
-    const key = `vendor-${vendor.id}/website/ai-logo-${Date.now()}.png`;
-    const { uploadUrl, publicUrl } = await objectStorageService.getObjectEntityUploadURL(key, "image/png");
+    const uploadUrl3 = await objectStorageService.getObjectEntityUploadURL();
+    const _op3 = objectStorageService.normalizeObjectEntityPath(uploadUrl3);
+    const _oid3 = _op3.replace(/^\/objects\/uploads\//, "");
+    const _base3 = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || "";
+    const publicUrl3 = `https://${_base3}/api/media/${_oid3}`;
 
-    await fetch(uploadUrl, {
+    await fetch(uploadUrl3, {
       method: "PUT",
       body: imgBuffer,
       headers: { "Content-Type": "image/png" },
     });
 
-    res.json({ logoUrl: publicUrl });
+    res.json({ logoUrl: publicUrl3 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ error: "Failed to generate logo", detail: msg });

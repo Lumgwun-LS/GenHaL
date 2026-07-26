@@ -1086,6 +1086,55 @@ export const ListAiGenerationsResponse = zod.array(ListAiGenerationsResponseItem
 
 
 /**
+ * @summary Unified media library (AI-generated + uploaded images and videos)
+ */
+export const GetMediaLibraryResponseItem = zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['ai', 'upload']),
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string(),
+  "prompt": zod.string().nullish(),
+  "expiringSoon": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const GetMediaLibraryResponse = zod.array(GetMediaLibraryResponseItem)
+
+
+/**
+ * @summary Get a presigned upload URL for a vendor image or video (auth-derived vendor)
+ */
+export const GetMediaUploadUrlBody = zod.object({
+  "mediaType": zod.enum(['image', 'video'])
+})
+
+export const GetMediaUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string(),
+  "mediaUrl": zod.string()
+})
+
+
+/**
+ * @summary Trim and/or add caption to a video via server-side ffmpeg
+ */
+export const ProcessVideoBody = zod.object({
+  "sourceUrl": zod.string(),
+  "trim": zod.object({
+  "startSeconds": zod.number().optional(),
+  "durationSeconds": zod.number().optional()
+}).optional(),
+  "caption": zod.object({
+  "text": zod.string().optional(),
+  "position": zod.enum(['top', 'center', 'bottom']).optional(),
+  "fontSize": zod.number().optional()
+}).optional()
+})
+
+export const ProcessVideoResponse = zod.object({
+  "videoUrl": zod.string()
+})
+
+
+/**
  * @summary List products
  */
 export const ListProductsQueryParams = zod.object({

@@ -404,11 +404,12 @@ router.post("/data-analysis/import", async (req: Request, res: Response): Promis
           await db.insert(productsTable).values({
             vendorId: vendor.id,
             name,
-            sku: get(row, "sku") || null,
-            description: get(row, "description") || null,
+            category: get(row, "category") || "",
+            sku: get(row, "sku") || "",
+            description: get(row, "description") || "",
             price: price.toString(),
             stockQuantity: parseInt(get(row, "stock") || "0") || 0,
-            status: "active",
+            status: "active" as const,
           });
           imported++;
         } catch (e) { errors.push({ row: i + 1, error: String(e) }); }

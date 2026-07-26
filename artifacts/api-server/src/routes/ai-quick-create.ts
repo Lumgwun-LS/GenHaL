@@ -10,15 +10,15 @@
  *   fires an in-app vendor notification.
  */
 import { Router } from "express";
-import { db } from "@workspace/db";
 import {
+  db,
   productsTable,
   ordersTable,
   orderItemsTable,
   salesTable,
   vendorNotificationsTable,
   vendorsTable,
-} from "@workspace/db/schema";
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -46,9 +46,7 @@ async function insertNotification(
   await db.insert(vendorNotificationsTable).values({
     vendorId,
     type,
-    title,
-    message,
-    read: false,
+    message: title ? `${title}: ${message}` : message,
   });
 }
 

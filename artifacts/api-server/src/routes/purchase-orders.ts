@@ -221,7 +221,7 @@ router.post("/purchase-orders/:id/email", async (req, res): Promise<void> => {
     </table>
   `;
 
-  const html = wrapVendorEmail(`Purchase Order from ${escapeHtml(authed.vendorName ?? "Vendor")}`, bodyHtml);
+  const html = wrapVendorEmail({ bodyHtml });
   const result = await sendEmail({ to: toEmail, subject: `Purchase Order ${order.orderNumber}`, html });
 
   if (result.status === "sent") {

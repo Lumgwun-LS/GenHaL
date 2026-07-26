@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import {
   Globe, Eye, EyeOff, Save, Upload, RefreshCw, Trash2, Plus, GripVertical,
   Smartphone, Monitor, ExternalLink, Copy, CheckCircle, Palette, LayoutTemplate,
-  ChevronDown, ChevronUp, Image as ImageIcon, Wand2, Sparkles, Loader2, X,
+  ChevronDown, ChevronUp, Image as ImageIcon, Wand2, Sparkles, Loader2, X, FolderOpen,
 } from "lucide-react";
+import { MediaPickerDialog } from "@/components/media-picker-dialog";
 import { SiteRenderer, type SiteSection, type SiteData } from "@/components/site-renderer";
 import {
   useGetWebsite,
@@ -94,10 +95,11 @@ function TemplateCard({ id, name, description, palette, selected, onSelect }: {
   );
 }
 
-function SectionEditor({ section, onChange, onUploadImage }: {
+function SectionEditor({ section, onChange, onUploadImage, onPickFromLibrary }: {
   section: SiteSection;
   onChange: (updated: SiteSection) => void;
   onUploadImage: (sectionId: string, file: File, field: string) => Promise<string>;
+  onPickFromLibrary?: (sectionId: string, field: string) => void;
 }) {
   const setField = (key: string, value: unknown) =>
     onChange({ ...section, content: { ...section.content, [key]: value } });
@@ -106,7 +108,7 @@ function SectionEditor({ section, onChange, onUploadImage }: {
   const uploadBtn = (field: string, label: string) => (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         {typeof c[field] === "string" && c[field] && (
           <img src={c[field] as string} alt="" className="h-10 w-16 object-cover rounded border" />
         )}
@@ -121,6 +123,15 @@ function SectionEditor({ section, onChange, onUploadImage }: {
             <ImageIcon className="w-3.5 h-3.5" /> Upload
           </span>
         </label>
+        {onPickFromLibrary && (
+          <button
+            type="button"
+            onClick={() => onPickFromLibrary(section.id, field)}
+            className="inline-flex items-center gap-1.5 text-sm border rounded px-3 py-1.5 hover:bg-muted"
+          >
+            <FolderOpen className="w-3.5 h-3.5" /> Library
+          </button>
+        )}
         {typeof c[field] === "string" && c[field] && (
           <Button variant="ghost" size="sm" onClick={() => setField(field, "")}><Trash2 className="w-3.5 h-3.5" /></Button>
         )}
@@ -217,7 +228,7 @@ function SectionEditor({ section, onChange, onUploadImage }: {
               const files = Array.from(e.target.files ?? []).slice(0, 8 - images.length);
               for (const file of files) {
                 const url = await onUploadImage(section.id, file, `gallery-${Date.now()}`);
-                if (url) setImages(prev => [...prev, { url }]);
+                if (url) setImages([...images, { url }]);
               }
             }} /><span className="inline-flex items-center gap-1.5 text-sm border rounded px-3 py-1.5 hover:bg-muted cursor-pointer"><Plus className="w-3.5 h-3.5" /> Add Images</span></label>
           )}
@@ -304,6 +315,23 @@ export default function WebsitePage() {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState("sections");
 
+  // Media library picker state
+  const [pickerTarget, setPickerTarget] = useState<{ sectionId: string; field: string } | null>(null);
+
+  const handlePickFromLibrary = (sectionId: string, field: string) => {
+    setPickerTarget({ sectionId, field });
+  };
+
+  const handleLibrarySelect = (url: string) => {
+    if (!pickerTarget) return;
+    const { sectionId, field } = pickerTarget;
+    const base: SiteSection[] = sections ?? (site?.sectionsJson as SiteSection[]) ?? [];
+    setSections(base.map(s =>
+      s.id === sectionId ? { ...s, content: { ...s.content, [field]: url } } : s
+    ));
+    setPickerTarget(null);
+  };
+
   // AI logo generation state
   const [aiLogoOpen, setAiLogoOpen] = useState(false);
   const [aiLogoDesc, setAiLogoDesc] = useState("");
@@ -343,7 +371,7 @@ export default function WebsitePage() {
     templateId: effectiveTemplate,
     sections: effectiveSections,
     template: currentTemplate ? {
-      palette: currentTemplate.palette as SiteData["template"]["palette"],
+      palette: currentTemplate.palette as SiteData["template"] extends { palette: infer P } ? P : never,
       primaryFont: "Inter, sans-serif",
       name: currentTemplate.name as string,
     } : undefined,
@@ -577,7 +605,7 @@ export default function WebsitePage() {
                   </div>
                   {activeSectionId === section.id && (
                     <div className="border border-t-0 rounded-b-lg p-3 bg-background">
-                      <SectionEditor section={section} onChange={updateSection} onUploadImage={handleUploadImage} />
+                      <SectionEditor section={section} onChange={updateSection} onUploadImage={handleUploadImage} onPickFromLibrary={handlePickFromLibrary} />
                     </div>
                   )}
                 </div>
@@ -850,6 +878,15 @@ export default function WebsitePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Media Library Picker — opened when user clicks "Library" on any image field */}
+      <MediaPickerDialog
+        open={!!pickerTarget}
+        onClose={() => setPickerTarget(null)}
+        onSelect={handleLibrarySelect}
+        typeFilter="image"
+        title="Choose Image from Library"
+      />
     </div>
   );
 }

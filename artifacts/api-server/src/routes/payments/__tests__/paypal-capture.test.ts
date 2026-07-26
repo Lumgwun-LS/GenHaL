@@ -243,12 +243,12 @@ beforeEach(() => {
   fetchCalls = [];
   vi.clearAllMocks();
 
-  globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = vi.fn(async (url: string | Request | URL, init?: RequestInit) => {
     const urlStr = String(url);
 
     // Pass localhost calls (test server) through to the real implementation.
     if (urlStr.startsWith("http://localhost")) {
-      return _realFetch(url, init);
+      return _realFetch(url as Parameters<typeof _realFetch>[0], init);
     }
 
     // Intercept PayPal API calls.

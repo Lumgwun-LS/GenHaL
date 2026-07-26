@@ -161,6 +161,11 @@ import type {
   ListVendorsParams,
   ListWorkersParams,
   MarkAllVendorNotificationsRead200,
+  MediaLibraryItem,
+  MediaProcessVideoInput,
+  MediaProcessVideoResponse,
+  MediaUploadUrlInput,
+  MediaUploadUrlResponse,
   Order,
   OrderInput,
   OrderUpdate,
@@ -3063,6 +3068,223 @@ export function useListAiGenerations<TData = Awaited<ReturnType<typeof listAiGen
 
 
 
+
+export const getGetMediaLibraryUrl = () => {
+
+
+
+
+  return `/api/media-library`
+}
+
+/**
+ * @summary Unified media library (AI-generated + uploaded images and videos)
+ */
+export const getMediaLibrary = async ( options?: RequestInit): Promise<MediaLibraryItem[]> => {
+
+  return customFetch<MediaLibraryItem[]>(getGetMediaLibraryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMediaLibraryQueryKey = () => {
+    return [
+    `/api/media-library`
+    ] as const;
+    }
+
+
+export const getGetMediaLibraryQueryOptions = <TData = Awaited<ReturnType<typeof getMediaLibrary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMediaLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMediaLibraryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMediaLibrary>>> = ({ signal }) => getMediaLibrary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMediaLibrary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMediaLibraryQueryResult = NonNullable<Awaited<ReturnType<typeof getMediaLibrary>>>
+export type GetMediaLibraryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Unified media library (AI-generated + uploaded images and videos)
+ */
+
+export function useGetMediaLibrary<TData = Awaited<ReturnType<typeof getMediaLibrary>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMediaLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMediaLibraryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMediaUploadUrlUrl = () => {
+
+
+
+
+  return `/api/media/upload-url`
+}
+
+/**
+ * @summary Get a presigned upload URL for a vendor image or video (auth-derived vendor)
+ */
+export const getMediaUploadUrl = async (mediaUploadUrlInput: MediaUploadUrlInput, options?: RequestInit): Promise<MediaUploadUrlResponse> => {
+
+  return customFetch<MediaUploadUrlResponse>(getGetMediaUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mediaUploadUrlInput)
+  }
+);}
+
+
+
+
+export const getGetMediaUploadUrlMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMediaUploadUrl>>, TError,{data: BodyType<MediaUploadUrlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getMediaUploadUrl>>, TError,{data: BodyType<MediaUploadUrlInput>}, TContext> => {
+
+const mutationKey = ['getMediaUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getMediaUploadUrl>>, {data: BodyType<MediaUploadUrlInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getMediaUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetMediaUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof getMediaUploadUrl>>>
+    export type GetMediaUploadUrlMutationBody = BodyType<MediaUploadUrlInput>
+    export type GetMediaUploadUrlMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Get a presigned upload URL for a vendor image or video (auth-derived vendor)
+ */
+export const useGetMediaUploadUrl = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMediaUploadUrl>>, TError,{data: BodyType<MediaUploadUrlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getMediaUploadUrl>>,
+        TError,
+        {data: BodyType<MediaUploadUrlInput>},
+        TContext
+      > => {
+      return useMutation(getGetMediaUploadUrlMutationOptions(options));
+    }
+
+export const getProcessVideoUrl = () => {
+
+
+
+
+  return `/api/media/process-video`
+}
+
+/**
+ * @summary Trim and/or add caption to a video via server-side ffmpeg
+ */
+export const processVideo = async (mediaProcessVideoInput: MediaProcessVideoInput, options?: RequestInit): Promise<MediaProcessVideoResponse> => {
+
+  return customFetch<MediaProcessVideoResponse>(getProcessVideoUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mediaProcessVideoInput)
+  }
+);}
+
+
+
+
+export const getProcessVideoMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processVideo>>, TError,{data: BodyType<MediaProcessVideoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof processVideo>>, TError,{data: BodyType<MediaProcessVideoInput>}, TContext> => {
+
+const mutationKey = ['processVideo'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processVideo>>, {data: BodyType<MediaProcessVideoInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  processVideo(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProcessVideoMutationResult = NonNullable<Awaited<ReturnType<typeof processVideo>>>
+    export type ProcessVideoMutationBody = BodyType<MediaProcessVideoInput>
+    export type ProcessVideoMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Trim and/or add caption to a video via server-side ffmpeg
+ */
+export const useProcessVideo = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processVideo>>, TError,{data: BodyType<MediaProcessVideoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof processVideo>>,
+        TError,
+        {data: BodyType<MediaProcessVideoInput>},
+        TContext
+      > => {
+      return useMutation(getProcessVideoMutationOptions(options));
+    }
 
 export const getListProductsUrl = (params?: ListProductsParams,) => {
   const normalizedParams = new URLSearchParams();

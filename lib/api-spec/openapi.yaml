@@ -822,6 +822,60 @@ paths:
                 items:
                   $ref: "#/components/schemas/AiGeneration"
 
+  # ─── MEDIA LIBRARY ────────────────────────────────────────────────────────
+  /media-library:
+    get:
+      operationId: getMediaLibrary
+      tags: [media]
+      summary: Unified media library (AI-generated + uploaded images and videos)
+      responses:
+        "200":
+          description: List of media items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MediaLibraryItem"
+
+  /media/upload-url:
+    post:
+      operationId: getMediaUploadUrl
+      tags: [media]
+      summary: Get a presigned upload URL for a vendor image or video (auth-derived vendor)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaUploadUrlInput"
+      responses:
+        "200":
+          description: Presigned upload URL and public media URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaUploadUrlResponse"
+
+  /media/process-video:
+    post:
+      operationId: processVideo
+      tags: [media]
+      summary: Trim and/or add caption to a video via server-side ffmpeg
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaProcessVideoInput"
+      responses:
+        "200":
+          description: Processed video URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaProcessVideoResponse"
+
   # ─── PRODUCTS ─────────────────────────────────────────────────────────────
   /products:
     get:
@@ -8430,6 +8484,76 @@ components:
           type: string
           nullable: true
         createdAt:
+          type: string
+
+    MediaLibraryItem:
+      type: object
+      required: [id, source, type, url, expiringSoon, createdAt]
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          enum: [ai, upload]
+        type:
+          type: string
+          enum: [image, video]
+        url:
+          type: string
+        prompt:
+          type: string
+          nullable: true
+        expiringSoon:
+          type: boolean
+        createdAt:
+          type: string
+
+    MediaUploadUrlInput:
+      type: object
+      required: [mediaType]
+      properties:
+        mediaType:
+          type: string
+          enum: [image, video]
+
+    MediaUploadUrlResponse:
+      type: object
+      required: [uploadUrl, mediaUrl]
+      properties:
+        uploadUrl:
+          type: string
+        mediaUrl:
+          type: string
+
+    MediaProcessVideoInput:
+      type: object
+      required: [sourceUrl]
+      properties:
+        sourceUrl:
+          type: string
+        trim:
+          type: object
+          properties:
+            startSeconds:
+              type: number
+            durationSeconds:
+              type: number
+        caption:
+          type: object
+          properties:
+            text:
+              type: string
+            position:
+              type: string
+              enum: [top, center, bottom]
+            fontSize:
+              type: integer
+
+    MediaProcessVideoResponse:
+      type: object
+      required: [videoUrl]
+      properties:
+        videoUrl:
           type: string
 
     ContentLibraryItemInput:

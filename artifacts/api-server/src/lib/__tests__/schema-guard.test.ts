@@ -54,7 +54,7 @@ let dbExecuteResult: Array<{ table_name: string; column_name: string }> = [];
 const dbExecuteMock = vi.fn(() => Promise.resolve({ rows: dbExecuteResult }));
 vi.mock("@workspace/db", () => ({
   db: {
-    execute: (...args: unknown[]) => dbExecuteMock(...args),
+    execute: dbExecuteMock,
   },
 }));
 

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload, RefreshCw, Film, X } from "lucide-react";
+import { ArrowLeft, Sparkles, Image as ImageIcon, Video as VideoIcon, CalendarClock, ShoppingBag, Link as LinkIcon, Copy, Check, Loader2, Send, Upload, RefreshCw, Film, X, FolderOpen } from "lucide-react";
+import { MediaPickerDialog } from "@/components/media-picker-dialog";
 import {
   useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage,
   useGenerateAiVideoScenes, useRegenerateAiVideoScene, useRenderAiVideo,
@@ -68,6 +69,7 @@ export default function CreatePost() {
 
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [selectedAccountByPlatform, setSelectedAccountByPlatform] = useState<Record<string, number>>({});
   const [sceneCount, setSceneCount] = useState<1 | 2 | 3>(1);
   const [motionTemplate, setMotionTemplate] = useState<"auto" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "zoom-pan">("auto");
@@ -813,6 +815,15 @@ export default function CreatePost() {
                       if (file) handleImageFileSelected(file);
                     }}
                   />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => setLibraryOpen(true)}
+                  >
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                    From Library
+                  </Button>
                 </div>
                 <span>{caption.length} / 2200</span>
               </div>
@@ -1085,6 +1096,23 @@ export default function CreatePost() {
           </Card>
         </div>
       </div>
+
+      {/* Media Library Picker — "From Library" button */}
+      <MediaPickerDialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onSelect={(url, type) => {
+          if (type === "video") {
+            setGeneratedVideo(url);
+            setGeneratedImage(null);
+          } else {
+            setGeneratedImage(url);
+            setGeneratedVideo(null);
+          }
+        }}
+        typeFilter="all"
+        title="Choose from Media Library"
+      />
     </div>
   );
 }

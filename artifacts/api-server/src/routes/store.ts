@@ -1589,7 +1589,7 @@ const _versionUpload = multer({ storage: multer.memoryStorage(), limits: { fileS
 async function uploadToObjectStorage(buffer: Buffer, mimetype: string, req: any): Promise<{ publicUrl: string; fileSize: number }> {
   const _obj = new ObjectStorageService();
   const uploadUrl = await _obj.getObjectEntityUploadURL();
-  const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": mimetype }, body: buffer as unknown as BodyInit });
+  const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": mimetype }, body: buffer as unknown as Uint8Array });
   if (!putRes.ok) throw new Error(`Object storage upload failed (${putRes.status})`);
   const objectPath = _obj.normalizeObjectEntityPath(uploadUrl);
   await _obj.trySetObjectEntityAclPolicy(objectPath, { owner: "system:store-apk", visibility: "public" });
@@ -1665,7 +1665,7 @@ router.post("/admin/apps/:id/versions", requireAuth(), _versionUpload.single("fi
 
     if (shouldActivate) {
       await db.update(storeAppsTable)
-        .set({ downloadUrl: fileUrl, currentVersion: version, updatedAt: now })
+        .set({ downloadUrl: fileUrl as string, currentVersion: version, updatedAt: now })
         .where(eq(storeAppsTable.id, appId));
     }
 
@@ -2494,7 +2494,7 @@ router.post(
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": mimetype },
-        body: buffer as unknown as BodyInit,
+        body: buffer as unknown as Uint8Array,
       });
       if (!putRes.ok) throw new Error(`Object storage upload failed (${putRes.status})`);
       const objectPath = _objStorage.normalizeObjectEntityPath(uploadUrl);

@@ -128,7 +128,7 @@ export default function Nav() {
                 >My Apps</Link>
               </motion.div>
               <motion.div whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
-                <UserButton afterSignOutUrl="/app-store/" />
+                <UserButton />
               </motion.div>
             </div>
           ) : (

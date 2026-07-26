@@ -826,7 +826,7 @@ function serializePost(post: typeof postsTable.$inferSelect) {
     scheduledAt: post.scheduledAt ? post.scheduledAt.toISOString() : null,
     publishedAt: post.publishedAt ? post.publishedAt.toISOString() : null,
     reminderSentAt: post.reminderSentAt ? post.reminderSentAt.toISOString() : null,
-    autoPublishFailedAt: post.autoPublishFailedAt ? post.autoPublishFailedAt.toISOString() : null,
+    autoPublishFailed: post.autoPublishFailed ?? false,
     createdAt: post.createdAt.toISOString(),
   };
 }

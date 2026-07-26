@@ -28,7 +28,6 @@ router.get("/sites/:slug", async (req, res): Promise<void> => {
       vendorEmail: vendorsTable.email,
       vendorPhone: vendorsTable.phone,
       vendorAddress: vendorsTable.address,
-      vendorCategory: vendorsTable.category,
     })
     .from(vendorWebsitesTable)
     .innerJoin(vendorsTable, eq(vendorWebsitesTable.vendorId, vendorsTable.id))
@@ -58,7 +57,7 @@ router.get("/sites/:slug", async (req, res): Promise<void> => {
       email: site.vendorEmail,
       phone: site.vendorPhone,
       address: site.vendorAddress,
-      category: site.vendorCategory,
+
     },
     template: {
       id: template.id,

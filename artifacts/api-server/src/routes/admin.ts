@@ -9,6 +9,7 @@ import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
+import { subscriptionRefundBlacklistTable } from "@workspace/db/schema";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
 import { getSiteContent, getSiteContentBlock, setSiteContentBlock, validateSiteContentBlock, getSiteContentAuditLog, SITE_CONTENT_KEYS, type SiteContentKey } from "../lib/site-content";
@@ -1775,6 +1776,62 @@ router.post("/admin/late-arrival-refunds/:id/resolve", async (req, res): Promise
   );
 
   res.json({ success: true });
+});
+
+// ─── GET /admin/subscription-refund-blacklist ─────────────────────────────────
+// Lists all vendors who have been blacklisted due to a subscription refund within
+// the 10-day window. Ordered most-recent first.
+router.get("/admin/subscription-refund-blacklist", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdminUser(userId)) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const rows = await db
+    .select({
+      id: subscriptionRefundBlacklistTable.id,
+      vendorId: subscriptionRefundBlacklistTable.vendorId,
+      vendorName: vendorsTable.name,
+      vendorEmail: vendorsTable.email,
+      refundedTier: subscriptionRefundBlacklistTable.refundedTier,
+      minAllowedTier: subscriptionRefundBlacklistTable.minAllowedTier,
+      minAllowedTierRank: subscriptionRefundBlacklistTable.minAllowedTierRank,
+      gateway: subscriptionRefundBlacklistTable.gateway,
+      refundReference: subscriptionRefundBlacklistTable.refundReference,
+      refundedAt: subscriptionRefundBlacklistTable.refundedAt,
+      createdAt: subscriptionRefundBlacklistTable.createdAt,
+    })
+    .from(subscriptionRefundBlacklistTable)
+    .leftJoin(vendorsTable, eq(subscriptionRefundBlacklistTable.vendorId, vendorsTable.id))
+    .orderBy(desc(subscriptionRefundBlacklistTable.createdAt));
+
+  res.json(rows.map((r) => ({
+    ...r,
+    refundedAt: r.refundedAt?.toISOString() ?? null,
+    createdAt: r.createdAt?.toISOString() ?? null,
+  })));
+});
+
+// ─── DELETE /admin/subscription-refund-blacklist/:id ─────────────────────────
+// Admin pardon: removes a specific blacklist entry by row ID.
+// After removal the vendor can subscribe to any tier again.
+router.delete("/admin/subscription-refund-blacklist/:id", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdminUser(userId)) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const rowId = parseInt(req.params.id);
+  if (isNaN(rowId)) { res.status(400).json({ error: "Invalid blacklist entry id" }); return; }
+
+  const [deleted] = await db
+    .delete(subscriptionRefundBlacklistTable)
+    .where(eq(subscriptionRefundBlacklistTable.id, rowId))
+    .returning();
+
+  if (!deleted) {
+    res.status(404).json({ error: "Blacklist entry not found" });
+    return;
+  }
+
+  console.info(`[admin] subscription-refund-blacklist entry removed — id=${rowId} vendor=${deleted.vendorId} admin=${userId}`);
+  res.json({ success: true, removed: { ...deleted, refundedAt: deleted.refundedAt?.toISOString(), createdAt: deleted.createdAt?.toISOString() } });
 });
 
 // ─── GET /admin/vendors/search ────────────────────────────────────────────────

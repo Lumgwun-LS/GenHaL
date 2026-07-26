@@ -659,7 +659,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 
     const [vendorBefore] = await db
-      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, currentPeriodStart: vendorsTable.currentPeriodStart, stripeCustomerId: vendorsTable.stripeCustomerId })
       .from(vendorsTable)
       .where(eq(vendorsTable.stripeCustomerId, customerId));
 
@@ -690,6 +690,20 @@ async function processStripeEvent(event: Stripe.Event): Promise<{ matched: boole
       if (vendorBefore.email) {
         await sendSubscriptionCancelledEmail(vendorBefore.email, vendorBefore.name, previousTier);
       }
+
+      // Fire-and-forget: if cancelled within 10 days, refund and blacklist vendor.
+      void (async () => {
+        try {
+          const { maybeRefundSubscriptionCancellation } = await import("../../lib/subscription-refund");
+          await maybeRefundSubscriptionCancellation(
+            { ...vendorBefore, id: updated.id },
+            "stripe",
+            { stripeCustomerId: customerId, stripeSubscriptionId: subscription.id },
+          );
+        } catch (err) {
+          console.error("[stripe webhook] subscription-refund helper threw:", err);
+        }
+      })();
     } else {
       console.warn(`[stripe webhook] subscription cancelled — no vendor found for customer=${customerId}`);
       return { matched: false };
@@ -1308,6 +1322,22 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
     const { applyVendorTierDowngrade } = await import("../../lib/subscription-sync");
     await applyVendorTierDowngrade(vendor, "webhook");
     console.info(`[paystack webhook] ${event.event} — vendor=${vendor.id} downgraded to free`);
+
+    // Fire-and-forget: if cancelled within 10 days, refund and blacklist vendor.
+    void (async () => {
+      try {
+        const { maybeRefundSubscriptionCancellation } = await import("../../lib/subscription-refund");
+        const paystackTxRef =
+          (event.data as Record<string, any>)?.most_recent_invoice?.transaction?.reference ?? null;
+        await maybeRefundSubscriptionCancellation(
+          vendor,
+          "paystack",
+          { paystackTransactionRef: paystackTxRef },
+        );
+      } catch (err) {
+        console.error("[paystack webhook] subscription-refund helper threw:", err);
+      }
+    })();
     return { matched: true };
   } else if (event.event === "invoice.payment_failed") {
     // Paystack retries automatically; no immediate downgrade — subscription.disable
@@ -2246,7 +2276,7 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
     eventType === "BILLING.SUBSCRIPTION.SUSPENDED"
   ) {
     const [vendor] = await db
-      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, subscriptionProvider: vendorsTable.subscriptionProvider })
+      .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier, subscriptionProvider: vendorsTable.subscriptionProvider, currentPeriodStart: vendorsTable.currentPeriodStart, paypalSubscriptionId: vendorsTable.paypalSubscriptionId })
       .from(vendorsTable)
       .where(eq(vendorsTable.paypalSubscriptionId, subscriptionId));
 
@@ -2295,6 +2325,22 @@ async function processPayPalEvent(event: PayPalWebhookEvent): Promise<{ matched:
     }
 
     console.info(`[paypal webhook] ${eventType} — vendor=${vendor.id} downgraded from ${previousTier} to free`);
+
+    // Fire-and-forget: if cancelled within 10 days, refund and blacklist vendor.
+    if (eventType === "BILLING.SUBSCRIPTION.CANCELLED") {
+      void (async () => {
+        try {
+          const { maybeRefundSubscriptionCancellation } = await import("../../lib/subscription-refund");
+          await maybeRefundSubscriptionCancellation(
+            { ...vendor, subscriptionTier: previousTier },
+            "paypal",
+            { paypalSubscriptionId: vendor.paypalSubscriptionId ?? subscriptionId },
+          );
+        } catch (err) {
+          console.error("[paypal webhook] subscription-refund helper threw:", err);
+        }
+      })();
+    }
     return { matched: true };
   }
 

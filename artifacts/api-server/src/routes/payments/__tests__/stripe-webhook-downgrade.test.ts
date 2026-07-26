@@ -329,7 +329,7 @@ describe("POST /payments/stripe/webhook — customer.subscription.updated", () =
     expect(notificationRows).toHaveLength(1);
     expect(notificationRows[0]).toMatchObject({ vendorId: 42, type: "tier_change" });
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    expect(sendEmailMock.mock.calls[0][0]).toMatchObject({ to: "vendor@example.com" });
+    expect((sendEmailMock.mock.calls[0] as unknown[])[0]).toMatchObject({ to: "vendor@example.com" });
   });
 
   it("does not notify when the plan switch resolves to the same tier", async () => {
@@ -428,7 +428,7 @@ describe("POST /payments/stripe/webhook — cancelled payment reconciliation con
     expect(paymentRows[0].status).toBe("cancelled");
     expect(notifyVendorPaymentStatusMock).not.toHaveBeenCalled();
     expect(sendSlackAlertMock).toHaveBeenCalledTimes(1);
-    expect(sendSlackAlertMock.mock.calls[0][0]).toMatch(/reconciliation conflict/i);
+    expect((sendSlackAlertMock.mock.calls[0] as unknown[])[0]).toMatch(/reconciliation conflict/i);
   });
 
   it("does not resurrect a vendor-cancelled payment when checkout.session.expired arrives late", async () => {

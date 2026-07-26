@@ -312,7 +312,7 @@ global.fetch = (async (url: string, opts: unknown) => {
       }),
     } as unknown as Response;
   }
-  return originalFetch(url as RequestInfo, opts as RequestInit);
+  return originalFetch(url as string, opts as RequestInit);
 }) as typeof fetch;
 
 // ── Express app builder ───────────────────────────────────────────────────────

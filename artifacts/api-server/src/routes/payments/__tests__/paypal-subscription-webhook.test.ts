@@ -262,7 +262,7 @@ beforeEach(() => {
     }
     // Intercept PayPal signature verification
     if (urlStr.includes("/v1/notifications/verify-webhook-signature")) {
-      return { ok: true, json: async () => ({ verification_status: "SUCCESS" }) } as Response;
+      return { ok: true, json: async () => ({ verification_status: "SUCCESS" }) } as unknown as Response;
     }
     throw new Error(`Unexpected fetch in test: ${urlStr}`);
   }) as typeof fetch;

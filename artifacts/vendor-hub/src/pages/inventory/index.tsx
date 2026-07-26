@@ -85,15 +85,15 @@ function PrintablePO({ order, items, vendorName, onClose }: {
           <div>
             <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">To (Supplier)</div>
             <div className="font-semibold">{order.supplierName as string}</div>
-            {order.supplierAddress && <div className="text-sm text-muted-foreground">{order.supplierAddress as string}</div>}
-            {order.supplierEmail && <div className="text-sm text-muted-foreground">{order.supplierEmail as string}</div>}
-            {order.supplierPhone && <div className="text-sm text-muted-foreground">{order.supplierPhone as string}</div>}
+            {order.supplierAddress ? <div className="text-sm text-muted-foreground">{order.supplierAddress as string}</div> : null}
+            {order.supplierEmail ? <div className="text-sm text-muted-foreground">{order.supplierEmail as string}</div> : null}
+            {order.supplierPhone ? <div className="text-sm text-muted-foreground">{order.supplierPhone as string}</div> : null}
           </div>
         </div>
 
-        {order.notes && (
+        {order.notes ? (
           <div className="mb-6 p-3 bg-muted rounded text-sm">{order.notes as string}</div>
-        )}
+        ) : null}
 
         <table className="w-full border-collapse mb-8">
           <thead>
@@ -390,7 +390,7 @@ export default function Inventory() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-muted-foreground">${(p.stockQuantity * p.price).toFixed(0)} idle</div>
-                      {p.stockPercent !== null && stockBadge(p.stockPercent)}
+                      {p.stockPercent != null && stockBadge(p.stockPercent)}
                     </div>
                   </div>
                 ))}

@@ -16,7 +16,40 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ApiError } from "../../../../../../lib/api-client-react/src/custom-fetch";
+
+// ─── Local ApiError stub — replicates the real class without importing outside rootDir ──
+function _buildApiErrorMsg(res: { status: number; statusText: string }, data: unknown): string {
+  const prefix = `HTTP ${res.status} ${res.statusText}`;
+  const getString = (key: string): string | undefined => {
+    if (!data || typeof data !== "object") return undefined;
+    const v = (data as Record<string, unknown>)[key];
+    return typeof v === "string" && v.trim() ? v.trim() : undefined;
+  };
+  if (typeof data === "string" && data.trim()) return `${prefix}: ${data.trim()}`;
+  const detail = getString("detail");
+  const title = getString("title");
+  const msg = getString("message") ?? getString("error_description") ?? getString("error");
+  if (title && detail) return `${prefix}: ${title} — ${detail}`;
+  if (detail) return `${prefix}: ${detail}`;
+  if (msg) return `${prefix}: ${msg}`;
+  if (title) return `${prefix}: ${title}`;
+  return prefix;
+}
+class ApiError<T = unknown> extends Error {
+  readonly name = "ApiError";
+  readonly status: number;
+  readonly data: T | null;
+  constructor(
+    response: { status: number; statusText: string; headers: unknown; url: string },
+    data: T | null,
+    _info: { method: string; url: string },
+  ) {
+    super(_buildApiErrorMsg(response, data));
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.status = response.status;
+    this.data = data;
+  }
+}
 
 // ─── Mutable state shared by mock closures ────────────────────────────────────
 

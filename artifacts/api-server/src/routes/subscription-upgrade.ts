@@ -21,8 +21,8 @@
 
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { vendorsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { vendorsTable, subscriptionRefundBlacklistTable } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import type { Vendor } from "@workspace/db/schema";
 import { resolveGatewayField, callWithPlatformStripe } from "../lib/platform-gateways";
@@ -149,10 +149,16 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
     return;
   }
 
-  const [trialSettings, plans, enabledGateways] = await Promise.all([
+  const [trialSettings, plans, enabledGateways, blacklistEntry] = await Promise.all([
     getTrialSettings(),
     getSubscriptionPlans(),
     getEnabledSubscriptionGateways(),
+    db.select()
+      .from(subscriptionRefundBlacklistTable)
+      .where(eq(subscriptionRefundBlacklistTable.vendorId, vendor.id))
+      .orderBy(desc(subscriptionRefundBlacklistTable.minAllowedTierRank))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ]);
 
   res.json({
@@ -168,6 +174,10 @@ router.get("/vendors/:id/subscription/plans", async (req, res): Promise<void> =>
     trialPeriodDays: trialSettings.defaultDurationDays,
     plans,
     enabledGateways,
+    /** If non-null, the vendor has a refund-based restriction and may only subscribe to this tier or higher. */
+    blacklistMinTier: blacklistEntry?.minAllowedTier ?? null,
+    blacklistMinTierRank: blacklistEntry?.minAllowedTierRank ?? null,
+    blacklistRefundedTier: blacklistEntry?.refundedTier ?? null,
   });
 });
 
@@ -252,6 +262,30 @@ router.post("/vendors/:id/subscription/checkout", async (req, res): Promise<void
     res.status(409).json({
       error: `You are already on the ${vendor.subscriptionTier} plan or higher. Choose a higher tier to upgrade.`,
       currentTier: vendor.subscriptionTier,
+    });
+    return;
+  }
+
+  // ── Refund blacklist guard ────────────────────────────────────────────────
+  // If the vendor previously received a refund within the 10-day window, they
+  // may only subscribe to a tier strictly above the one that was refunded.
+  const [blacklist] = await db
+    .select()
+    .from(subscriptionRefundBlacklistTable)
+    .where(eq(subscriptionRefundBlacklistTable.vendorId, vendor.id))
+    .orderBy(desc(subscriptionRefundBlacklistTable.minAllowedTierRank))
+    .limit(1);
+
+  if (blacklist && targetRank < blacklist.minAllowedTierRank) {
+    const minLabel =
+      blacklist.minAllowedTier.charAt(0).toUpperCase() + blacklist.minAllowedTier.slice(1);
+    res.status(409).json({
+      error:
+        `Your account cannot subscribe to the ${tier} plan. Due to a previous refund, ` +
+        `you may only subscribe to the ${minLabel} plan or higher.`,
+      currentTier: vendor.subscriptionTier,
+      blacklistMinTier: blacklist.minAllowedTier,
+      blacklistMinTierRank: blacklist.minAllowedTierRank,
     });
     return;
   }

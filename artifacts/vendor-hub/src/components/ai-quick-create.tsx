@@ -129,7 +129,7 @@ export default function AiQuickCreate() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const recogRef = useRef<SpeechRecognition | null>(null);
+  const recogRef = useRef<unknown>(null);
   const { getToken } = useAuth();
 
   useEffect(() => {
@@ -203,12 +203,18 @@ export default function AiQuickCreate() {
   }
 
   function startVoice() {
-    const SR = (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
-      ?? (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    type SpeechRecognitionCtor = new () => {
+      lang: string; interimResults: boolean; maxAlternatives: number;
+      onresult: ((e: { results: Iterable<{ 0: { transcript: string } }> }) => void) | null;
+      onend: (() => void) | null; onerror: ((e: Event) => void) | null;
+      start(): void; stop(): void;
+    };
+    const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SR) { setError("Voice input is not supported in this browser. Try Chrome or Edge."); return; }
     const rec = new SR();
     rec.lang = "en-US"; rec.interimResults = true; rec.maxAlternatives = 1;
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e) => {
       const t = Array.from(e.results).map((r) => r[0].transcript).join(" ");
       setTranscript(t);
     };
@@ -221,7 +227,7 @@ export default function AiQuickCreate() {
   }
 
   function stopVoice() {
-    recogRef.current?.stop();
+    (recogRef.current as { stop(): void } | null)?.stop();
     setIsRecording(false);
   }
 
@@ -394,13 +400,13 @@ export default function AiQuickCreate() {
                       {entity === "order" && (
                         <OrderForm
                           data={{ customerName: formData.customerName, customerEmail: formData.customerEmail, customerPhone: formData.customerPhone, totalAmount: formData.totalAmount, currency: formData.currency, notes: formData.notes, shippingAddress: formData.shippingAddress }}
-                          onChange={(d) => setFormData(d as Record<string, string>)}
+                          onChange={(d) => setFormData(d as unknown as Record<string, string>)}
                         />
                       )}
                       {entity === "sale" && (
                         <SaleForm
                           data={{ description: formData.description, customerName: formData.customerName, amount: formData.amount, currency: formData.currency }}
-                          onChange={(d) => setFormData(d as Record<string, string>)}
+                          onChange={(d) => setFormData(d as unknown as Record<string, string>)}
                         />
                       )}
                       <Button className="w-full" size="sm" onClick={handleFormSubmit}>

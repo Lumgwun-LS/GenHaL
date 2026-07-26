@@ -105,7 +105,7 @@ vi.mock("../post-notifications", () => ({
 
 // ─── Facebook status check mock ───────────────────────────────────────────────
 type FbStatus = { status: "ready" | "error" | "processing"; failureReason: string | null };
-const checkFacebookVideoStatus = vi.fn<[], Promise<FbStatus>>();
+const checkFacebookVideoStatus = vi.fn<() => Promise<FbStatus>>();
 vi.mock("../meta", () => ({
   checkFacebookVideoStatus,
   isMetaAuthError: () => false,
