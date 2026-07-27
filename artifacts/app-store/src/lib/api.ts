@@ -3,8 +3,16 @@
 // the browser is currently viewing.
 const API_BASE = "/api/store";
 
+export class StoreApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "StoreApiError";
+  }
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -13,7 +21,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new StoreApiError(res.status, text || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as unknown as T;
   return res.json() as Promise<T>;

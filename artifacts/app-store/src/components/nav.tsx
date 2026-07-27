@@ -2,10 +2,19 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useUser, SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import { apiFetch } from "../lib/api";
 
 export default function Nav() {
   const { isSignedIn } = useUser();
   const [, navigate] = useLocation();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) { setIsAdmin(false); return; }
+    apiFetch<{ isAdmin: boolean }>("/admin/me")
+      .then(d => setIsAdmin(d.isAdmin))
+      .catch(() => setIsAdmin(false));
+  }, [isSignedIn]);
   const [query, setQuery] = useState("");
   const [scrolled, setScrolled] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -81,6 +90,7 @@ export default function Nav() {
           {[
             { href: "/", label: "Browse" },
             { href: "/developer", label: "Publish" },
+            ...(isAdmin ? [{ href: "/admin", label: "⚙️ Admin" }] : []),
           ].map(({ href, label }) => (
             <motion.div key={label} whileHover={{ y: -1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
               <Link

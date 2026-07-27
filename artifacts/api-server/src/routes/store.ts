@@ -1235,6 +1235,18 @@ router.post("/webhooks/paystack", async (req, res) => {
 
 // ─── ADMIN ROUTES ──────────────────────────────────────────────────────────────
 
+// GET /store/admin/me — lightweight admin check for the frontend nav/guard
+router.get("/admin/me", requireAuth(), async (req, res) => {
+  try {
+    const admin = await checkIsAdmin(req);
+    if (!admin) return void res.status(403).json({ error: "Admin only" });
+    res.json({ isAdmin: true });
+  } catch (err) {
+    logger.error({ err }, "adminMe error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /store/admin/stats
 router.get("/admin/stats", requireAuth(), async (req, res) => {
   try {

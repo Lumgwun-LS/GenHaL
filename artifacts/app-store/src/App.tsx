@@ -1,11 +1,33 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, Component, type ReactNode, type ErrorInfo } from "react";
 import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
 import { CrossAppBanner } from "./components/cross-app-banner";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("App error:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ textAlign: "center", padding: "80px 20px", color: "#8892a4" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#e8eaf0", marginBottom: 8 }}>Something went wrong</div>
+          <div style={{ fontSize: 14, marginBottom: 24 }}>{(this.state.error as Error).message}</div>
+          <button onClick={() => window.location.reload()}
+            style={{ background: "#00c853", color: "#000", border: "none", borderRadius: 20, padding: "10px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import Home from "./pages/home";
 import Search from "./pages/search";
 import AppDetail from "./pages/app-detail";
@@ -62,17 +84,19 @@ export default function App() {
           <PageViewTracker />
           <UserTracker />
           <Nav />
-          <Switch>
-            <Route path="/" component={Home} />
-            <Route path="/search" component={Search} />
-            <Route path="/apps/:slug" component={AppDetail} />
-            <Route path="/app/:publicId" component={AppPublicLanding} />
-            <Route path="/my-apps" component={MyApps} />
-            <Route path="/developer/signup" component={DeveloperSignup} />
-            <Route path="/developer" component={DeveloperPortal} />
-            <Route path="/admin" component={Admin} />
-            <Route component={NotFound} />
-          </Switch>
+          <ErrorBoundary>
+            <Switch>
+              <Route path="/" component={Home} />
+              <Route path="/search" component={Search} />
+              <Route path="/apps/:slug" component={AppDetail} />
+              <Route path="/app/:publicId" component={AppPublicLanding} />
+              <Route path="/my-apps" component={MyApps} />
+              <Route path="/developer/signup" component={DeveloperSignup} />
+              <Route path="/developer" component={DeveloperPortal} />
+              <Route path="/admin" component={Admin} />
+              <Route component={NotFound} />
+            </Switch>
+          </ErrorBoundary>
         </div>
       </WouterRouter>
     </ClerkProvider>

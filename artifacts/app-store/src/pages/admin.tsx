@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, StoreApiError } from "../lib/api";
 import type { App, AdminStats, Developer, UpdateRequest, OfflinePayment } from "../lib/types";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -1263,9 +1263,11 @@ function OurAppsTab() {
 // ── Main Admin ────────────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn, isLoaded, user } = useUser();
   const [tab, setTab] = useState<Tab>("overview");
+  const [accessState, setAccessState] = useState<"loading" | "granted" | "denied">("loading");
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [pending, setPending] = useState<App[]>([]);
   const [allApps, setAllApps] = useState<App[]>([]);
   const [developers, setDevelopers] = useState<Developer[]>([]);
@@ -1278,9 +1280,18 @@ export default function Admin() {
   const [downloadUrl, setDownloadUrl] = useState("");
 
   useEffect(() => {
-    apiFetch<AdminStats>("/admin/stats").then(setStats).catch(() => {});
+    if (!isLoaded) return;
+    if (!isSignedIn) { setAccessState("denied"); return; }
+    setStatsLoading(true);
+    apiFetch<AdminStats>("/admin/stats")
+      .then(data => { setStats(data); setAccessState("granted"); })
+      .catch((err) => {
+        if (err instanceof StoreApiError && err.status === 403) setAccessState("denied");
+        else setAccessState("granted"); // server error — let them in, individual calls will fail gracefully
+      })
+      .finally(() => setStatsLoading(false));
     loadPending();
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
   function loadPending() {
     apiFetch<App[]>("/admin/apps/pending").then(setPending).catch(() => {});
@@ -1344,7 +1355,28 @@ export default function Admin() {
     catch { alert("Failed"); } finally { setActionLoading(null); }
   }
 
-  if (!isSignedIn) return <div style={{ textAlign: "center", padding: 80, color: "#8892a4" }}>Please sign in.</div>;
+  if (!isLoaded || accessState === "loading") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "120px 20px", gap: 20 }}>
+        <div className="spinner" />
+        <div style={{ color: "#8892a4", fontSize: 14 }}>Checking admin access…</div>
+      </div>
+    );
+  }
+
+  if (accessState === "denied") {
+    return (
+      <div style={{ textAlign: "center", padding: "100px 20px" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <div style={{ fontWeight: 800, fontSize: 22, color: "#e8eaf0", marginBottom: 8 }}>Access Denied</div>
+        <div style={{ color: "#8892a4", fontSize: 14 }}>
+          {!isSignedIn
+            ? "Please sign in with an admin account to access this panel."
+            : "Your account does not have admin privileges."}
+        </div>
+      </div>
+    );
+  }
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "our-apps",   label: "🚀 Our Apps" },
@@ -1378,15 +1410,19 @@ export default function Admin() {
       </div>
 
       {/* Overview */}
-      {tab === "overview" && stats && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
-          <StatCard icon="📱" label="Total Apps"     value={stats.totalApps} />
-          <StatCard icon="💳" label="Pending Payment" value={stats.pendingPayment} color="#ffb300" />
-          <StatCard icon="🔍" label="Pending Review"  value={stats.pendingReview}  color="#a78bfa" />
-          <StatCard icon="✅" label="Live Apps"       value={stats.approvedApps}   color="#00c853" />
-          <StatCard icon="👥" label="Developers"      value={stats.totalDevelopers} />
-          <StatCard icon="📥" label="Total Downloads" value={(stats.totalDownloads ?? 0).toLocaleString()} />
-        </div>
+      {tab === "overview" && (
+        statsLoading
+          ? <div style={{ textAlign: "center", padding: 60 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>
+          : stats
+            ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+                <StatCard icon="📱" label="Total Apps"      value={stats.totalApps} />
+                <StatCard icon="💳" label="Pending Payment" value={stats.pendingPayment} color="#ffb300" />
+                <StatCard icon="🔍" label="Pending Review"  value={stats.pendingReview}  color="#a78bfa" />
+                <StatCard icon="✅" label="Live Apps"       value={stats.approvedApps}   color="#00c853" />
+                <StatCard icon="👥" label="Developers"      value={stats.totalDevelopers} />
+                <StatCard icon="📥" label="Total Downloads" value={(stats.totalDownloads ?? 0).toLocaleString()} />
+              </div>
+            : <div style={{ color: "#8892a4", padding: 40, textAlign: "center" }}>Could not load stats. Try refreshing.</div>
       )}
 
       {/* Our Apps (first-party) */}
