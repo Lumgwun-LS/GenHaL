@@ -37,7 +37,7 @@ import {
   Store,
   FileText,
   Ruler,
-  Home,
+  ChevronDown,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState, useCallback } from "react";
@@ -133,7 +133,7 @@ function DashboardFooter() {
 }
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
-type NavGroup = { label?: string; items: NavItem[] };
+type NavGroup = { label?: string; items: NavItem[]; defaultOpen?: boolean };
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -143,65 +143,168 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Insights",
+    defaultOpen: true,
     items: [
-      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
-      { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
+      { href: "/analytics",        label: "Analytics",         icon: BarChart3 },
+      { href: "/data-analysis",    label: "Data Analysis",     icon: BarChart2 },
+      { href: "/finance-analytics",label: "Finance Analytics", icon: LineChart },
     ],
   },
   {
     label: "Marketing",
+    defaultOpen: true,
     items: [
-      { href: "/social", label: "Social Hub", icon: Share2 },
-      { href: "/ads", label: "Ads Suite", icon: Megaphone },
-      { href: "/ai-studio", label: "AI Studio", icon: Sparkles },
-      { href: "/leads", label: "Leads", icon: Target },
-      { href: "/email-campaigns", label: "Email Campaigns", icon: Mail },
-      { href: "/sms-campaigns", label: "SMS Campaigns", icon: MessageSquare },
-      { href: "/voice-campaigns", label: "Voice Campaigns", icon: Phone },
+      { href: "/social",           label: "Social Hub",        icon: Share2 },
+      { href: "/ads",              label: "Ads Suite",         icon: Megaphone },
+      { href: "/ai-studio",        label: "AI Studio",         icon: Sparkles },
+      { href: "/leads",            label: "Leads & CRM",       icon: Target },
+      { href: "/email-campaigns",  label: "Email Campaigns",   icon: Mail },
+      { href: "/sms-campaigns",    label: "SMS Campaigns",     icon: MessageSquare },
+      { href: "/voice-campaigns",  label: "Voice Campaigns",   icon: Phone },
     ],
   },
   {
     label: "Store",
+    defaultOpen: true,
     items: [
-      { href: "/products", label: "Products", icon: Package },
-      { href: "/inventory", label: "Inventory", icon: Archive },
-      { href: "/orders", label: "Orders", icon: ShoppingCart },
+      { href: "/products",  label: "Products",   icon: Package },
+      { href: "/inventory", label: "Inventory",  icon: Archive },
+      { href: "/orders",    label: "Orders",     icon: ShoppingCart },
     ],
   },
   {
     label: "Finance",
+    defaultOpen: true,
     items: [
-      { href: "/payments", label: "Payments", icon: CreditCard },
-      { href: "/invoices", label: "Invoices", icon: FileText },
-      { href: "/sales", label: "Sales", icon: DollarSign },
-      { href: "/expenses", label: "Expenses", icon: Receipt },
+      { href: "/payments",    label: "Payments",    icon: CreditCard },
+      { href: "/invoices",    label: "Invoices",    icon: FileText },
+      { href: "/sales",       label: "Sales",       icon: DollarSign },
+      { href: "/expenses",    label: "Expenses",    icon: Receipt },
       { href: "/investments", label: "Investments", icon: PiggyBank },
     ],
   },
   {
     label: "Operations",
+    defaultOpen: true,
     items: [
-      { href: "/branches", label: "Branches", icon: Building2 },
-      { href: "/workers", label: "Workers", icon: Users },
-      { href: "/website", label: "My Website", icon: Globe },
+      { href: "/branches", label: "Branches",   icon: Building2 },
+      { href: "/workers",  label: "Workers",    icon: Users },
+      { href: "/website",  label: "My Website", icon: Globe },
     ],
   },
   {
     label: "Design Studio",
+    defaultOpen: true,
     items: [
-      { href: "/architect", label: "AI Design Studio", icon: Ruler },
+      { href: "/architect",     label: "AI Design Studio",  icon: Ruler },
+      { href: "/real-estate",   label: "Real Estate",       icon: Building2 },
     ],
   },
   {
     label: "Account",
+    defaultOpen: true,
     items: [
-      { href: "/vendors", label: "Vendors", icon: Users },
-      { href: "/account", label: "Account", icon: UserCircle },
-      { href: "/pricing", label: "Pricing", icon: Tag },
+      { href: "/vendors", label: "Vendors",  icon: Users },
+      { href: "/account", label: "Account",  icon: UserCircle },
+      { href: "/pricing", label: "Pricing",  icon: Tag },
     ],
   },
 ];
+
+/** A single collapsible nav group with smooth CSS-transition animation */
+function NavGroupSection({
+  group,
+  location,
+  onNavClick,
+}: {
+  group: NavGroup;
+  location: string;
+  onNavClick: (label: string) => void;
+}) {
+  const hasActive = group.items.some(
+    (item) => location === item.href || location.startsWith(item.href + "/")
+  );
+  const [open, setOpen] = useState(group.defaultOpen ?? true);
+
+  // Always open if a child is active
+  const isOpen = open || hasActive;
+
+  if (!group.label) {
+    // Pinned top-level items — never collapsible
+    return (
+      <div className="space-y-0.5 mb-1">
+        {group.items.map((item) => (
+          <NavLink key={item.href} item={item} location={location} onClick={onNavClick} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/40 transition-all duration-150 select-none group/hdr"
+      >
+        <span>{group.label}</span>
+        <ChevronDown
+          className={cn(
+            "w-3 h-3 transition-transform duration-200",
+            isOpen ? "rotate-0" : "-rotate-90"
+          )}
+        />
+      </button>
+
+      {/* Smooth height animation via max-height trick */}
+      <div
+        className="overflow-hidden transition-all duration-300 ease-in-out"
+        style={{ maxHeight: isOpen ? `${group.items.length * 44}px` : "0px" }}
+      >
+        <div className="space-y-0.5 pt-0.5">
+          {group.items.map((item) => (
+            <NavLink key={item.href} item={item} location={location} onClick={onNavClick} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavLink({
+  item,
+  location,
+  onClick,
+}: {
+  item: NavItem;
+  location: string;
+  onClick: (label: string) => void;
+}) {
+  const isActive = location === item.href || location.startsWith(item.href + "/");
+  return (
+    <Link
+      href={item.href}
+      onClick={() => onClick(item.label)}
+      className={cn(
+        "group/link flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium",
+        "transition-all duration-150 ease-out",
+        "hover:translate-x-0.5",
+        isActive
+          ? "bg-primary/12 text-primary shadow-sm shadow-primary/10 border border-primary/15"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground border border-transparent"
+      )}
+    >
+      <item.icon className={cn(
+        "w-4 h-4 shrink-0 transition-colors duration-150",
+        isActive ? "text-primary" : "text-muted-foreground/70 group-hover/link:text-foreground"
+      )} />
+      <span className="truncate">{item.label}</span>
+      {isActive && (
+        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+      )}
+    </Link>
+  );
+}
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -217,152 +320,149 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+
+      {/* ── Mobile top bar ─────────────────────────────────────── */}
+      <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b bg-card/95 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
-          <span className="font-bold text-lg">Awa Biz Suite</span>
+          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-7 h-7 rounded object-cover" />
+          <span className="font-bold text-base tracking-tight">Awa Biz Suite</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/home"
-            onClick={() => setIsMobileOpen(false)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-lg hover:bg-muted border border-transparent hover:border-border/50"
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <Button
+            variant="ghost" size="icon"
+            className="w-9 h-9"
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            aria-label={isMobileOpen ? "Close menu" : "Open menu"}
           >
-            <Home className="w-3.5 h-3.5" />
-            Home
-          </Link>
-          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
-            {isMobileOpen ? <X /> : <Menu />}
+            {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
         </div>
       </div>
 
-      {/* Sidebar */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
-        isMobileOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="p-5 hidden md:flex items-center justify-between border-b">
-          <div className="flex items-center gap-3">
-            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
-            <span className="font-bold text-base tracking-tight">Awa Biz Suite</span>
-          </div>
-          <Link
-            href="/home"
-            title="View home page"
-            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors px-2.5 py-1.5 rounded-lg hover:bg-primary/10 border border-transparent hover:border-primary/20 shrink-0"
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span>Home</span>
-          </Link>
-        </div>
+      {/* ── Mobile drawer overlay ──────────────────────────────── */}
+      {isMobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
 
-        <nav className="flex-1 overflow-y-auto py-3 px-3">
-          {NAV_GROUPS.map((group, gi) => (
-            <div key={gi} className={gi > 0 ? "mt-3" : ""}>
-              {group.label && (
-                <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 select-none">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive = location === item.href || location.startsWith(item.href + "/");
-                  return (
-                    <Link key={item.href} href={item.href} className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                    onClick={() => handleNavClick(item.label)}
-                    >
-                      <item.icon className="w-4 h-4 shrink-0" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          {/* Cross-app link to App Store */}
-          <div className="px-3 pt-4 pb-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Switch To</p>
+      {/* ── Sidebar ───────────────────────────────────────────── */}
+      {/*   mobile: fixed overlay that slides in from left         */}
+      {/*   desktop: sticky column that matches the viewport height */}
+      <aside className={cn(
+        // shared
+        "z-50 w-72 bg-card border-r border-border/60 flex flex-col",
+        // mobile: full-height fixed slide-in panel
+        "fixed inset-y-0 left-0 transition-transform duration-300 ease-in-out",
+        isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+        // desktop: static sticky column — key fix for scroll
+        "md:sticky md:top-0 md:h-screen md:translate-x-0 md:transition-none md:shadow-none"
+      )}>
+
+        {/* Sidebar header */}
+        <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50 shrink-0">
+          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold text-sm tracking-tight block truncate">Awa Biz Suite</span>
+            <span className="text-[10px] text-muted-foreground/60 font-medium">Business Platform</span>
           </div>
-          <a
-            href="/app-store/my-apps?ref=vendor-hub"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
-            style={{
-              background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(168,85,247,0.04))",
-              border: "1px solid rgba(124,58,237,0.18)",
-            }}
+          {/* Mobile close */}
+          <button
+            className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
             onClick={() => setIsMobileOpen(false)}
           >
-            <Store className="w-4 h-4 text-violet-400" />
-            <span>Awajimaa App Store</span>
-            <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-60 transition-opacity" />
-          </a>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
+        {/* Scrollable nav — takes all remaining height */}
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-2 px-2 space-y-0.5
+          [&::-webkit-scrollbar]:w-1
+          [&::-webkit-scrollbar-track]:bg-transparent
+          [&::-webkit-scrollbar-thumb]:rounded-full
+          [&::-webkit-scrollbar-thumb]:bg-border/50
+          [&::-webkit-scrollbar-thumb:hover]:bg-border">
+
+          {NAV_GROUPS.map((group, gi) => (
+            <NavGroupSection
+              key={gi}
+              group={group}
+              location={location}
+              onNavClick={handleNavClick}
+            />
+          ))}
+
+          {/* App Store cross-link */}
+          <div className="pt-2 pb-1">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">
+              Switch To
+            </p>
+            <a
+              href="/app-store/my-apps?ref=vendor-hub"
+              className="group/store flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-150 hover:translate-x-0.5 border border-transparent"
+              style={{ background: "linear-gradient(135deg,rgba(124,58,237,0.08),rgba(168,85,247,0.04))", border: "1px solid rgba(124,58,237,0.18)" }}
+              onClick={() => setIsMobileOpen(false)}
+            >
+              <Store className="w-4 h-4 text-violet-400 shrink-0" />
+              <span className="truncate">Awajimaa App Store</span>
+              <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover/store:opacity-60 transition-opacity shrink-0" />
+            </a>
+          </div>
+
+          {/* Admin links */}
           {isAdmin && (
-            <>
-              <div className="px-3 pt-4 pb-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Platform Admin</p>
-              </div>
-              <Link
-                href="/admin"
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  location === "/admin" && !search.includes("tab=")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                Admin Panel
-              </Link>
-              <Link
-                href="/admin?tab=infrastructure-billing"
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  location === "/admin" && search.includes("tab=infrastructure-billing")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                <Cpu className="w-4 h-4" />
-                Billing Intelligence
-              </Link>
-              <Link
-                href="/admin?tab=billing-enforcement"
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  location === "/admin" && search.includes("tab=billing-enforcement")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                <ShieldOff className="w-4 h-4" />
-                Billing Enforcement
-              </Link>
-            </>
+            <div className="pt-2">
+              <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">
+                Platform Admin
+              </p>
+              {[
+                { href: "/admin",                             label: "Admin Panel",         icon: ShieldCheck, match: (l: string, s: string) => l === "/admin" && !s.includes("tab=") },
+                { href: "/admin?tab=infrastructure-billing",  label: "Billing Intelligence", icon: Cpu,         match: (_: string, s: string) => s.includes("tab=infrastructure-billing") },
+                { href: "/admin?tab=billing-enforcement",     label: "Billing Enforcement",  icon: ShieldOff,   match: (_: string, s: string) => s.includes("tab=billing-enforcement") },
+              ].map(({ href, label, icon: Icon, match }) => {
+                const active = match(location, search);
+                return (
+                  <Link key={href} href={href}
+                    className={cn(
+                      "group/link flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 hover:translate-x-0.5 border",
+                      active
+                        ? "bg-primary/12 text-primary shadow-sm shadow-primary/10 border-primary/15"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground border-transparent"
+                    )}
+                    onClick={() => setIsMobileOpen(false)}
+                  >
+                    <Icon className={cn("w-4 h-4 shrink-0 transition-colors duration-150", active ? "text-primary" : "text-muted-foreground/70 group-hover/link:text-foreground")} />
+                    {label}
+                    {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                  </Link>
+                );
+              })}
+            </div>
           )}
+
+          {/* Bottom padding so last item isn't flush against user bar */}
+          <div className="h-4" />
         </nav>
 
-        <div className="p-4 border-t flex items-center gap-3">
-          <UserButton {...{ afterSignOutUrl: "/" } as object} appearance={{ elements: { userButtonAvatarBox: "w-8 h-8" } }} />
+        {/* User bar — pinned to bottom */}
+        <div className="px-3 py-3 border-t border-border/50 shrink-0 flex items-center gap-3 bg-card">
+          <UserButton
+            {...{ afterSignOutUrl: "/" } as object}
+            appearance={{ elements: { userButtonAvatarBox: "w-8 h-8" } }}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">My Account</p>
           </div>
-          <NotificationBell />
+          <div className="hidden md:block">
+            <NotificationBell />
+          </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
+      {/* ── Main content ──────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
         <CrossAppBanner />
         <TrialUpgradeBanner />
         <div className="flex-1">
@@ -371,7 +471,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <DashboardFooter />
       </main>
 
-      {/* Floating action buttons — bottom-right stack */}
+      {/* Floating action buttons */}
       <VoiceFAB />
       <AiQuickCreate />
       <WhatsAppButton />
