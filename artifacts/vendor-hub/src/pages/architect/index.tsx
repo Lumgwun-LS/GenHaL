@@ -1057,8 +1057,10 @@ export default function ArchitectPage() {
   }
 
   async function handleSavePlan(plan: Record<string, string>, shapes: unknown[]) {
-    await updatePlan.mutateAsync({ id: plan.id, data: { shapes } });
-    await refetchPlans();
+    try {
+      await updatePlan.mutateAsync({ id: plan.id, data: { shapes } });
+      await refetchPlans();
+    } catch { toast.error("Failed to save floor plan"); }
   }
 
   // ── Admin picker guard ──
@@ -1197,7 +1199,7 @@ export default function ArchitectPage() {
                                 <Pencil size={12} />
                               </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={async () => { await deleteProject.mutateAsync(proj.id); toast.success("Project deleted"); }}>
+                                onClick={async () => { try { await deleteProject.mutateAsync(proj.id); toast.success("Project deleted"); } catch { toast.error("Delete failed"); } }}>
                                 <Trash2 size={12} />
                               </Button>
                             </div>
@@ -1231,7 +1233,7 @@ export default function ArchitectPage() {
                                         <Button size="icon" variant="ghost" className="h-5 w-5"
                                           onClick={() => setMilestoneCtx({ project: proj, item: m })}><Pencil size={10} /></Button>
                                         <Button size="icon" variant="ghost" className="h-5 w-5 text-destructive"
-                                          onClick={async () => { await deleteMilestone.mutateAsync(m.id); toast.success("Deleted"); }}><Trash2 size={10} /></Button>
+                                          onClick={async () => { try { await deleteMilestone.mutateAsync(m.id); toast.success("Deleted"); } catch { toast.error("Delete failed"); } }}><Trash2 size={10} /></Button>
                                       </div>
                                     </div>
                                   ))}
@@ -1311,7 +1313,7 @@ export default function ArchitectPage() {
                                 <Pencil size={11} /> Edit
                               </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={async () => { await deletePlan.mutateAsync(fp.id); toast.success("Deleted"); }}>
+                                onClick={async () => { try { await deletePlan.mutateAsync(fp.id); toast.success("Deleted"); } catch { toast.error("Delete failed"); } }}>
                                 <Trash2 size={12} />
                               </Button>
                             </div>
@@ -1372,7 +1374,7 @@ export default function ArchitectPage() {
                               )}
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDrawingDialog({ open: true, item: d })}><Pencil size={12} /></Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive"
-                                onClick={async () => { await deleteDrawing.mutateAsync(d.id); toast.success("Deleted"); }}><Trash2 size={12} /></Button>
+                                onClick={async () => { try { await deleteDrawing.mutateAsync(d.id); toast.success("Deleted"); } catch { toast.error("Delete failed"); } }}><Trash2 size={12} /></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1437,7 +1439,7 @@ export default function ArchitectPage() {
                             <div className="flex gap-1">
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setContractorDialog({ open: true, item: c })}><Pencil size={12} /></Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive"
-                                onClick={async () => { await deleteContractor.mutateAsync(c.id); toast.success("Deleted"); }}><Trash2 size={12} /></Button>
+                                onClick={async () => { try { await deleteContractor.mutateAsync(c.id); toast.success("Deleted"); } catch { toast.error("Delete failed"); } }}><Trash2 size={12} /></Button>
                             </div>
                           </TableCell>
                         </TableRow>
