@@ -40,6 +40,7 @@ import BackgroundJobsPanel from "./background-jobs";
 import SocialAccountHealthPanel from "./social-account-health";
 import InfrastructureBillingPanel from "./infrastructure-billing";
 import BillingEnforcementPanel from "./billing-enforcement";
+import PlatformFinancialsPanel from "./platform-financials";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2338,6 +2339,9 @@ export default function AdminPanel() {
           <TabsTrigger value="revenue-intelligence" className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4" /> Revenue & Pricing
           </TabsTrigger>
+          <TabsTrigger value="platform-financials" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" /> Platform Financials
+          </TabsTrigger>
           <TabsTrigger value="infrastructure-billing" className="flex items-center gap-2">
             <Cpu className="w-4 h-4" /> Billing Intelligence
           </TabsTrigger>
@@ -3654,6 +3658,11 @@ export default function AdminPanel() {
         {/* ── Revenue & Pricing Intelligence tab ─────────────────────── */}
         <TabsContent value="revenue-intelligence">
           <RevenueIntelligencePanel />
+        </TabsContent>
+
+        {/* ── Platform Financials tab ──────────────────────────────────── */}
+        <TabsContent value="platform-financials">
+          <PlatformFinancialsPanel />
         </TabsContent>
 
         {/* ── Billing Intelligence tab ────────────────────────────────── */}

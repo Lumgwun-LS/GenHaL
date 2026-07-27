@@ -7,8 +7,8 @@
  */
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable, vendorOverageChargesTable } from "@workspace/db";
-import { and, gte, lte, sql } from "drizzle-orm";
+import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable, vendorOverageChargesTable, resourceUsageTable, aiGenerationsTable, vendorUploadsTable } from "@workspace/db";
+import { and, gte, lte, sql, eq, isNotNull } from "drizzle-orm";
 import { resolveDateRange } from "../lib/date-range";
 import { computeFinanceOverview } from "../lib/finance-overview";
 import { getExportBurstStatus, checkExportBurst } from "../lib/admin-export-burst";
@@ -583,6 +583,298 @@ router.get("/admin/analytics/revenue-intelligence", async (req, res): Promise<vo
   } catch (err) {
     console.error("GET /admin/analytics/revenue-intelligence error:", err);
     res.status(500).json({ error: "Failed to load revenue intelligence" });
+  }
+});
+
+/**
+ * GET /admin/analytics/platform-financials
+ *
+ * Unified view of Replit/infrastructure charges vs platform revenue,
+ * with full filter support: period, custom date range, country, resource type.
+ *
+ * Query params:
+ *   period=week|month|year|custom  (default: month)
+ *   from=YYYY-MM-DD               (when period=custom)
+ *   to=YYYY-MM-DD                 (when period=custom)
+ *   country=Nigeria               (optional – filter revenue by vendor country)
+ *   resource=aiImages|aiVideos|... (optional – focus on one resource)
+ */
+router.get("/admin/analytics/platform-financials", async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+    const { from, to, period } = resolveDateRange(req.query as { period?: string; from?: string; to?: string });
+    const countryFilter = typeof req.query.country === "string" && req.query.country ? req.query.country : null;
+    const resourceFilter = typeof req.query.resource === "string" && req.query.resource ? req.query.resource : null;
+
+    // ── Provider cost rates (mirrors admin-infrastructure-billing.ts) ─────────
+    const PROVIDER_COST_PER_UNIT: Record<string, number> = {
+      aiImages:     0.04,
+      aiVideos:     0.20,
+      aiCaptions:   0.002,
+      voiceMinutes: 0.018,
+      sms:          0.0075,
+      email:        0.0001,
+    };
+    const RESOURCE_LABELS: Record<string, string> = {
+      aiImages: "AI Images", aiVideos: "AI Videos", aiCaptions: "AI Captions",
+      voiceMinutes: "Voice Minutes", sms: "SMS", email: "Email",
+    };
+    // Fixed monthly infrastructure costs
+    const FIXED_INFRA = {
+      fixedVm:   20.00,   // Standard + Nano VMs
+      workspace: 25.00,   // Replit Core
+      database:  0.011,   // ~0.5 GiB PostgreSQL
+    };
+    const EGRESS_PER_GIB = 0.10;
+    const STORAGE_PER_GIB = 0.023;
+    // Scale fixed costs to selected period
+    const msInRange = to.getTime() - from.getTime();
+    const msPerMonth = 1000 * 60 * 60 * 24 * 30.44;
+    const monthsInRange = msInRange / msPerMonth;
+
+    // ── Parallel data fetch ───────────────────────────────────────────────────
+    const [
+      vendors,
+      allPayments,
+      overageCharges,
+      usageRows,
+      aiGenRows,
+      uploadsRow,
+      platformCostsRaw,
+      plansRaw,
+    ] = await Promise.all([
+      db.select().from(vendorsTable),
+      db.select().from(paymentsTable).where(and(gte(paymentsTable.createdAt, from), lte(paymentsTable.createdAt, to))),
+      db.select().from(vendorOverageChargesTable).where(and(gte(vendorOverageChargesTable.createdAt, from), lte(vendorOverageChargesTable.createdAt, to))),
+      db.select({
+        resource: resourceUsageTable.resource,
+        periodStart: resourceUsageTable.periodStart,
+        vendorId: resourceUsageTable.vendorId,
+        used: sql<number>`coalesce(sum(${resourceUsageTable.used}),0)::float`,
+      }).from(resourceUsageTable)
+        .where(and(gte(resourceUsageTable.periodStart, from), lte(resourceUsageTable.periodStart, to)))
+        .groupBy(resourceUsageTable.resource, resourceUsageTable.periodStart, resourceUsageTable.vendorId),
+      db.select({ type: aiGenerationsTable.type, count: sql<number>`count(*)::int` })
+        .from(aiGenerationsTable)
+        .where(sql`${aiGenerationsTable.mediaDeletedAt} is null`)
+        .groupBy(aiGenerationsTable.type),
+      db.select({ count: sql<number>`count(*)::int` }).from(vendorUploadsTable)
+        .where(sql`${vendorUploadsTable.mediaDeletedAt} is null`),
+      getSiteContentBlock("admin.platformCosts"),
+      getSiteContentBlock("billing.subscriptionPlans"),
+    ]);
+
+    const platformCosts = platformCostsRaw as { replitMonthlyCostUsd?: number; otherMonthlyCostUsd?: number; notes?: string };
+    const plans = ((plansRaw as { plans?: { tier: string; pricing: { usd: number; ngn: number } }[] })?.plans) ?? [];
+    const planPriceByTier: Record<string, { usd: number }> = {};
+    for (const p of plans) planPriceByTier[p.tier] = { usd: p.pricing.usd };
+
+    const paidPayments = allPayments.filter(p => p.status === "paid");
+    const vendorById = new Map(vendors.map(v => [v.id, v]));
+
+    // Apply country filter to revenue calculations
+    const filteredPayments = countryFilter
+      ? paidPayments.filter(p => (vendorById.get(p.vendorId)?.country ?? "Unknown") === countryFilter)
+      : paidPayments;
+
+    // ── Revenue aggregation ───────────────────────────────────────────────────
+    const totalSubscriptionRevenue = filteredPayments.reduce((s, p) => s + parseFloat(p.amount), 0);
+    const totalOverageRevenue = overageCharges.reduce((s, o) => s + parseFloat(o.totalUsd), 0);
+    const totalGrossRevenue = totalSubscriptionRevenue + totalOverageRevenue;
+
+    // ── Resource cost aggregation ─────────────────────────────────────────────
+    const resourceTotals: Record<string, { units: number; costUsd: number }> = {};
+    for (const row of usageRows) {
+      if (resourceFilter && row.resource !== resourceFilter) continue;
+      const costPerUnit = PROVIDER_COST_PER_UNIT[row.resource] ?? 0;
+      if (!resourceTotals[row.resource]) resourceTotals[row.resource] = { units: 0, costUsd: 0 };
+      resourceTotals[row.resource]!.units += row.used;
+      resourceTotals[row.resource]!.costUsd += row.used * costPerUnit;
+    }
+
+    const totalExternalApiCosts = Object.values(resourceTotals).reduce((s, r) => s + r.costUsd, 0);
+
+    // Infra costs scaled to period
+    const storageGib = aiGenRows.reduce((s, r) => s + (r.type === "video" ? 15 : 0.5) * r.count, 0) / 1024;
+    const egressGib = Object.values(resourceTotals).reduce((s, r) => s + r.units, 0) * 5000 / (1024 ** 3);
+    const objStorageCost = storageGib * STORAGE_PER_GIB;
+    const egressCost = egressGib * EGRESS_PER_GIB;
+
+    // Use admin-configured monthly cost if set, otherwise use our computed estimate
+    const adminConfiguredCost = platformCosts.replitMonthlyCostUsd ?? 0;
+    const computedFixedMonthly = FIXED_INFRA.fixedVm + FIXED_INFRA.workspace + FIXED_INFRA.database;
+    const fixedCostForPeriod = (adminConfiguredCost > 0 ? adminConfiguredCost : computedFixedMonthly) * monthsInRange;
+    const totalInfrastructureCosts = +(fixedCostForPeriod + objStorageCost + egressCost).toFixed(2);
+    const totalCosts = +(totalInfrastructureCosts + totalExternalApiCosts).toFixed(2);
+
+    const netProfit = +(totalGrossRevenue - totalCosts).toFixed(2);
+    const profitMarginPct = totalGrossRevenue > 0 ? +((netProfit / totalGrossRevenue) * 100).toFixed(1) : 0;
+
+    // ── MRR ───────────────────────────────────────────────────────────────────
+    const payingVendors = vendors.filter(v => v.subscriptionTier !== "free");
+    const mrrUsd = payingVendors.reduce((s, v) => s + (planPriceByTier[v.subscriptionTier]?.usd ?? 0), 0);
+
+    // ── Resource cost detail rows ─────────────────────────────────────────────
+    // Also compute per-resource overage revenue
+    const overageByResource: Record<string, number> = {};
+    for (const o of overageCharges) {
+      overageByResource[o.resource] = (overageByResource[o.resource] ?? 0) + parseFloat(o.totalUsd);
+    }
+    const resourceCosts = Object.entries(PROVIDER_COST_PER_UNIT).map(([resource, costPerUnit]) => ({
+      resource,
+      label: RESOURCE_LABELS[resource] ?? resource,
+      units: +(resourceTotals[resource]?.units ?? 0).toFixed(2),
+      costUsd: +(resourceTotals[resource]?.costUsd ?? 0).toFixed(4),
+      overageRevenueUsd: +(overageByResource[resource] ?? 0).toFixed(2),
+      costPerUnit,
+    }));
+
+    // ── Revenue by country ────────────────────────────────────────────────────
+    const countryMap: Record<string, { revenue: number; count: number; vendorCount: number }> = {};
+    for (const p of filteredPayments) {
+      const country = vendorById.get(p.vendorId)?.country ?? "Unknown";
+      if (!countryMap[country]) countryMap[country] = { revenue: 0, count: 0, vendorCount: 0 };
+      countryMap[country]!.revenue += parseFloat(p.amount);
+      countryMap[country]!.count += 1;
+    }
+    for (const v of vendors) {
+      const country = v.country ?? "Unknown";
+      if (!countryMap[country]) countryMap[country] = { revenue: 0, count: 0, vendorCount: 0 };
+      countryMap[country]!.vendorCount += 1;
+    }
+    const revenueByCountry = Object.entries(countryMap)
+      .map(([country, d]) => ({ country, revenue: +d.revenue.toFixed(2), count: d.count, vendorCount: d.vendorCount }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 20);
+
+    // ── Revenue by gateway ────────────────────────────────────────────────────
+    const gatewayMap: Record<string, { revenue: number; count: number }> = {};
+    for (const p of filteredPayments) {
+      const key = p.provider ?? "unknown";
+      if (!gatewayMap[key]) gatewayMap[key] = { revenue: 0, count: 0 };
+      gatewayMap[key]!.revenue += parseFloat(p.amount);
+      gatewayMap[key]!.count += 1;
+    }
+    const revenueByGateway = Object.entries(gatewayMap)
+      .map(([gateway, d]) => ({ gateway, revenue: +d.revenue.toFixed(2), count: d.count }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // ── Revenue by tier ───────────────────────────────────────────────────────
+    const tierMap: Record<string, { revenue: number; count: number }> = {};
+    for (const p of filteredPayments) {
+      const tier = vendorById.get(p.vendorId)?.subscriptionTier ?? "unknown";
+      if (!tierMap[tier]) tierMap[tier] = { revenue: 0, count: 0 };
+      tierMap[tier]!.revenue += parseFloat(p.amount);
+      tierMap[tier]!.count += 1;
+    }
+    const revenueByTier = Object.entries(tierMap)
+      .map(([tier, d]) => ({ tier, revenue: +d.revenue.toFixed(2), count: d.count }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // ── Time series (daily revenue + daily resource cost) ─────────────────────
+    const dayKey = (d: Date) => d.toISOString().split("T")[0]!;
+    const weekKey = (d: Date) => {
+      const day = d.getDay();
+      const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
+      return mon.toISOString().split("T")[0]!;
+    };
+    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const yearKey = (d: Date) => String(d.getFullYear());
+
+    // Daily revenue
+    const dailyRevMap: Record<string, number> = {};
+    for (const p of filteredPayments) {
+      const k = dayKey(new Date(p.createdAt));
+      dailyRevMap[k] = (dailyRevMap[k] ?? 0) + parseFloat(p.amount);
+    }
+    // Daily resource cost (from periodStart-bucketed usage)
+    const dailyCostMap: Record<string, number> = {};
+    for (const row of usageRows) {
+      if (resourceFilter && row.resource !== resourceFilter) continue;
+      const costPerUnit = PROVIDER_COST_PER_UNIT[row.resource] ?? 0;
+      const k = dayKey(new Date(row.periodStart));
+      dailyCostMap[k] = (dailyCostMap[k] ?? 0) + row.used * costPerUnit;
+    }
+    // Prorate daily fixed infra cost
+    const totalDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)));
+    const dailyFixedCost = fixedCostForPeriod / totalDays;
+
+    // Build sorted set of all dates in range with data
+    const allDates = new Set([...Object.keys(dailyRevMap), ...Object.keys(dailyCostMap)]);
+    const timeSeries = Array.from(allDates)
+      .sort()
+      .map(date => ({
+        date,
+        revenue: +(dailyRevMap[date] ?? 0).toFixed(2),
+        resourceCostUsd: +(dailyCostMap[date] ?? 0).toFixed(4),
+        infraCostUsd: +dailyFixedCost.toFixed(4),
+        totalCostUsd: +((dailyCostMap[date] ?? 0) + dailyFixedCost).toFixed(4),
+      }));
+
+    // ── Bucketed rollups ──────────────────────────────────────────────────────
+    function rollup(keyFn: (d: Date) => string): { label: string; revenue: number; costUsd: number }[] {
+      const map: Record<string, { rev: number; cost: number }> = {};
+      for (const p of filteredPayments) {
+        const k = keyFn(new Date(p.createdAt)); if (!map[k]) map[k] = { rev: 0, cost: 0 };
+        map[k]!.rev += parseFloat(p.amount);
+      }
+      for (const row of usageRows) {
+        if (resourceFilter && row.resource !== resourceFilter) continue;
+        const k = keyFn(new Date(row.periodStart)); if (!map[k]) map[k] = { rev: 0, cost: 0 };
+        map[k]!.cost += row.used * (PROVIDER_COST_PER_UNIT[row.resource] ?? 0);
+      }
+      return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+        .map(([label, { rev, cost }]) => ({ label, revenue: +rev.toFixed(2), costUsd: +cost.toFixed(4) }));
+    }
+
+    const weeklyTotals  = rollup(weekKey);
+    const monthlyTotals = rollup(monthKey);
+    const yearlyTotals  = rollup(yearKey);
+
+    // ── Country list for filter dropdown ─────────────────────────────────────
+    const allCountries = Array.from(new Set(vendors.map(v => v.country).filter(Boolean))).sort();
+
+    res.json({
+      range: { from: from.toISOString(), to: to.toISOString(), period },
+      filters: { country: countryFilter, resource: resourceFilter },
+      summary: {
+        totalInfrastructureCosts: +totalInfrastructureCosts.toFixed(2),
+        totalExternalApiCosts:    +totalExternalApiCosts.toFixed(2),
+        totalCosts,
+        totalSubscriptionRevenue: +totalSubscriptionRevenue.toFixed(2),
+        totalOverageRevenue:      +totalOverageRevenue.toFixed(2),
+        totalGrossRevenue:        +totalGrossRevenue.toFixed(2),
+        netProfit,
+        profitMarginPct,
+        mrrUsd:        +mrrUsd.toFixed(2),
+        arrUsd:        +(mrrUsd * 12).toFixed(2),
+        totalVendors:  vendors.length,
+        payingVendors: payingVendors.length,
+        freeVendors:   vendors.length - payingVendors.length,
+        replitInfraBreakdown: {
+          fixedVm:      +(FIXED_INFRA.fixedVm * monthsInRange).toFixed(2),
+          workspace:    +(FIXED_INFRA.workspace * monthsInRange).toFixed(2),
+          database:     +(FIXED_INFRA.database * monthsInRange).toFixed(4),
+          objectStorage: +objStorageCost.toFixed(4),
+          egress:       +egressCost.toFixed(4),
+        },
+      },
+      resourceCosts,
+      revenueByCountry,
+      revenueByGateway,
+      revenueByTier,
+      timeSeries,
+      weeklyTotals,
+      monthlyTotals,
+      yearlyTotals,
+      allCountries,
+    });
+  } catch (err) {
+    console.error("GET /admin/analytics/platform-financials error:", err);
+    res.status(500).json({ error: "Failed to load platform financials" });
   }
 });
 
