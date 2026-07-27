@@ -37,6 +37,7 @@ import {
   Store,
   FileText,
   Ruler,
+  Home,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState } from "react";
@@ -214,9 +215,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
           <span className="font-bold text-lg">Awa Biz Suite</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
-          {isMobileOpen ? <X /> : <Menu />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/home"
+            onClick={() => setIsMobileOpen(false)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-lg hover:bg-muted border border-transparent hover:border-border/50"
+          >
+            <Home className="w-3.5 h-3.5" />
+            Home
+          </Link>
+          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
+            {isMobileOpen ? <X /> : <Menu />}
+          </Button>
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -224,9 +235,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 hidden md:flex items-center gap-3 border-b">
-          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
-          <span className="font-bold text-base tracking-tight">Awa Biz Suite</span>
+        <div className="p-5 hidden md:flex items-center justify-between border-b">
+          <div className="flex items-center gap-3">
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
+            <span className="font-bold text-base tracking-tight">Awa Biz Suite</span>
+          </div>
+          <Link
+            href="/home"
+            title="View home page"
+            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors px-2.5 py-1.5 rounded-lg hover:bg-primary/10 border border-transparent hover:border-primary/20 shrink-0"
+          >
+            <Home className="w-3.5 h-3.5" />
+            <span>Home</span>
+          </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-3">

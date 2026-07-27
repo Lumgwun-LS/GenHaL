@@ -301,6 +301,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingRoute} />
+          <Route path="/home" component={LandingPage} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/pricing" component={PricingPage} />
           <Route path="/site/:slug" component={PublicSitePage} />
