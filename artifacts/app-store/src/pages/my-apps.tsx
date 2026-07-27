@@ -129,16 +129,19 @@ export default function MyApps() {
   const fromBizSuite = search.includes("ref=vendor-hub");
 
   const [data, setData] = useState<MeData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Start as true to avoid the brief window where isSignedIn=true but data=null and loading=false,
+  // which caused the installed-apps section to crash trying data!.installedApps.map on null.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isLoaded) return;
+    if (!isSignedIn) { setLoading(false); return; }
     setLoading(true);
     apiFetch<MeData>("/users/me")
       .then(d => { setData(d); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
-  }, [isSignedIn]);
+  }, [isLoaded, isSignedIn]);
 
   if (!isLoaded) {
     return (
@@ -259,7 +262,7 @@ export default function MyApps() {
                 variants={STAGGER}
                 style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}
               >
-                {data!.installedApps.map(app => <AppCard key={app.id} app={app} />)}
+                {data?.installedApps.map(app => <AppCard key={app.id} app={app} />)}
               </motion.div>
             </AnimatePresence>
           )}
