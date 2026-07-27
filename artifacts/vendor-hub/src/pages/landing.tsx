@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,7 +8,8 @@ import {
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
   Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2,
-  Library, Target, HelpCircle, Plus
+  Library, Target, HelpCircle, Plus, Building2, Palette, Scissors, BarChart3,
+  Menu, X, ChevronDown, BookOpen
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
@@ -61,9 +62,13 @@ const getFeatureIcon = (title: string) => {
   if (t.includes("social")) return MessageSquareText;
   if (t.includes("ai quick") || t.includes("quick create")) return Mic;
   if (t.includes("spreadsheet") || t.includes("intelligence")) return FileSpreadsheet;
+  if (t.includes("data analytics") || t.includes("analytics")) return BarChart3;
   if (t.includes("website builder")) return Globe2;
   if (t.includes("media library") || t.includes("media")) return Library;
   if (t.includes("ads") || t.includes("paid social")) return Target;
+  if (t.includes("architecture") || t.includes("building design")) return Building2;
+  if (t.includes("interior design")) return Palette;
+  if (t.includes("fashion") || t.includes("tailoring")) return Scissors;
   if (t.includes("ai ") || t.includes("studio")) return Sparkles;
   if (t.includes("sales") || t.includes("crm")) return Users;
   if (t.includes("finance")) return Wallet;
@@ -82,15 +87,17 @@ const DEFAULT_FEATURES = [
   { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range, exportable anytime." },
   { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale." },
   { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, full order fulfillment, and transaction histories." },
+  { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI — describe your vision and get a professional design in seconds." },
+  { title: "Interior Design Studio", description: "Visualize room layouts, furniture arrangements, color palettes, and full interior renders for any space — residential, commercial, or retail." },
+  { title: "Fashion & Tailoring AI", description: "Create fashion illustrations, outfit concepts, fabric pattern ideas, and tailoring spec sheets with AI — built for designers, boutiques, and bespoke tailors." },
+  { title: "Data Analytics", description: "Upload any CSV or Excel file, connect your sales data, and interrogate it with AI — get interactive charts, trend summaries, and actionable insights instantly." },
   { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
   { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
   { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
   { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
-  { title: "Spreadsheet Intelligence", description: "Upload any CSV or Excel file and ask AI questions about your data. Get charts, trends, and actionable insights instantly." },
   { title: "Business Website Builder", description: "Launch a professional storefront in minutes with customizable templates, live preview, and one-click publish." },
   { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library — pick any asset directly from your social composer or website builder." },
   { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard — connect your ad account and launch in minutes." },
-  { title: "AI Design Studio", description: "Generate professional building designs, brand identities, fashion illustrations, and interior renders in seconds — choose a style, describe your vision, and download a watermarked PNG." },
 ];
 
 const ADDON_PLANS = [
@@ -156,9 +163,53 @@ const ADDON_PLANS = [
   },
 ];
 
+const NAV_FEATURE_GROUPS = [
+  {
+    label: "Marketing",
+    items: [
+      { icon: MessageSquareText, title: "Social Media", desc: "Schedule & publish to all platforms" },
+      { icon: Sparkles,          title: "AI Content & Video", desc: "Captions, images, multi-scene video" },
+      { icon: Target,            title: "Ads Suite", desc: "Meta & X paid campaigns" },
+      { icon: Megaphone,         title: "Omnichannel Campaigns", desc: "Email, SMS & voice broadcast" },
+    ],
+  },
+  {
+    label: "Design Studio",
+    items: [
+      { icon: Building2, title: "Architecture & Building", desc: "AI floor plans, elevations & renders" },
+      { icon: Palette,   title: "Interior Design", desc: "Room layouts & interior renders" },
+      { icon: Scissors,  title: "Fashion & Tailoring", desc: "Outfit concepts & pattern specs" },
+      { icon: Library,   title: "Media Library", desc: "All your AI & uploaded assets" },
+    ],
+  },
+  {
+    label: "Business Ops",
+    items: [
+      { icon: Users,        title: "Sales & Leads CRM", desc: "Pipeline, deals & customer history" },
+      { icon: Package,      title: "Orders & Inventory", desc: "Stock tracking & fulfillment" },
+      { icon: Wallet,       title: "Finance Suite", desc: "Sales, expenses & investments" },
+      { icon: BarChart3,    title: "Data Analytics", desc: "AI-powered charts from any CSV" },
+    ],
+  },
+];
+
 export default function LandingPage() {
   const { data } = useQuery({ queryKey: ["site-content"], queryFn: fetchSiteContent, staleTime: 60_000 });
   const [activeVideo, setActiveVideo] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const featuresRef = useRef<HTMLDivElement>(null);
+
+  // Close features dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (featuresRef.current && !featuresRef.current.contains(e.target as Node)) {
+        setFeaturesOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const hero = data?.["landing.hero"];
   const features = data?.["landing.features"];
@@ -172,23 +223,160 @@ export default function LandingPage() {
     <div className="dark min-h-screen bg-background text-foreground flex flex-col font-sans bg-noise selection:bg-primary/30">
       {/* Navbar */}
       <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 transition-all">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+          {/* Logo */}
           <div className="flex items-center gap-3">
             <img src={settings?.logoUrl ?? "/awajimaa-logo.jpg"} alt={settings?.siteName ?? "Awajimaa"} className="w-8 h-8 rounded bg-primary/20 object-cover border border-primary/30" />
             <span className="font-extrabold text-lg tracking-tight">{settings?.siteName ?? "Awa Biz Suite"}</span>
           </div>
-          <div className="flex items-center gap-6">
-            <Link href="/pricing" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
+
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-1">
+            {/* Features mega-dropdown */}
+            <div className="relative" ref={featuresRef}>
+              <button
+                onClick={() => setFeaturesOpen((v) => !v)}
+                className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50"
+              >
+                Features
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${featuresOpen ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {featuresOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[720px] rounded-2xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl shadow-black/40 p-5"
+                    onClick={() => setFeaturesOpen(false)}
+                  >
+                    <div className="grid grid-cols-3 gap-5">
+                      {NAV_FEATURE_GROUPS.map((group) => (
+                        <div key={group.label}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-3 px-2">{group.label}</p>
+                          <div className="space-y-0.5">
+                            {group.items.map((item) => (
+                              <Link
+                                key={item.title}
+                                href="/sign-up"
+                                className="flex items-start gap-3 px-2 py-2.5 rounded-lg hover:bg-primary/10 transition-colors group/item"
+                              >
+                                <div className="mt-0.5 w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 group-hover/item:bg-primary/20 transition-colors">
+                                  <item.icon className="w-3.5 h-3.5 text-primary" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-foreground leading-tight">{item.title}</div>
+                                  <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">{item.desc}</div>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-border/40 flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">All features included from day one — even on the free plan.</p>
+                      <Link href="/pricing" className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+                        See pricing <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <Link href="/pricing" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50">
               Pricing
             </Link>
-            <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
-              Sign In
+            <Link href="/developers" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" />
+              Docs
             </Link>
-            <Link href="/sign-up" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all">
-              Start Free Trial
-            </Link>
-          </div>
+
+            <div className="ml-4 flex items-center gap-3">
+              <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-md hover:bg-muted/50">
+                Sign In
+              </Link>
+              <Link href="/sign-up" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all">
+                Start Free Trial
+              </Link>
+            </div>
+          </nav>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMobileMenuOpen((v) => !v)}
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
+
+        {/* Mobile dropdown menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden overflow-hidden border-t border-border/50 bg-background/98 backdrop-blur-xl"
+            >
+              <div className="px-4 py-4 space-y-1">
+                {/* Feature groups */}
+                {NAV_FEATURE_GROUPS.map((group) => (
+                  <div key={group.label} className="mb-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 px-3 mb-1">{group.label}</p>
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.title}
+                        href="/sign-up"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-primary/10 transition-colors"
+                      >
+                        <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                          <item.icon className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">{item.title}</div>
+                          <div className="text-xs text-muted-foreground">{item.desc}</div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ))}
+
+                {/* Divider */}
+                <div className="border-t border-border/40 my-2" />
+
+                {/* Top-level links */}
+                <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  Pricing
+                </Link>
+                <Link href="/developers" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  Documentation
+                </Link>
+                <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-muted-foreground">
+                  Sign In
+                </Link>
+
+                <div className="pt-2">
+                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
+                    Start Free Trial
+                    <ChevronRight className="ml-2 w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <main className="flex-1 pt-16">
