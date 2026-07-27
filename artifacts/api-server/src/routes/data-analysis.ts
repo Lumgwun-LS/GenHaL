@@ -42,7 +42,8 @@ export type ParsedSession = {
   allRows: Record<string, string>[];  // all rows (for import)
   detectedSchema: "sales" | "expenses" | "products" | "contacts" | "generic";
   expiresAt: number;
-  vendorId: number;
+  userId: string;           // for ownership checks
+  vendorId: number | null;  // null when user has no vendor profile (admin)
   history: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
@@ -59,12 +60,13 @@ setInterval(() => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function resolveVendor(req: Request) {
+/** Returns authenticated user + their vendor profile (null if admin/no vendor). */
+async function resolveUser(req: Request): Promise<{ userId: string; vendor: { id: number; name: string } | null } | null> {
   const { userId } = getAuth(req);
   if (!userId) return null;
   const [v] = await db.select({ id: vendorsTable.id, name: vendorsTable.name })
     .from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
-  return v ?? null;
+  return { userId, vendor: v ?? null };
 }
 
 const LIKELY_DATE_PATTERNS = [
@@ -156,8 +158,8 @@ function buildDataSummaryText(session: ParsedSession): string {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.post("/data-analysis/upload", upload.single("file"), async (req: any, res: any): Promise<void> => {
-  const vendor = await resolveVendor(req);
-  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const user = await resolveUser(req);
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
 
   const { originalname, buffer, mimetype } = req.file;
@@ -205,8 +207,36 @@ router.post("/data-analysis/upload", upload.single("file"), async (req: any, res
           ])
         )
       );
+    } else if (ext === "tsv") {
+      const text = buffer.toString("utf8");
+      const lines = text.split(/\r?\n/).filter((l: string) => l.trim() !== "");
+      if (lines.length < 2) { res.status(400).json({ error: "TSV must have a header row and at least one data row" }); return; }
+      const headers = lines[0]!.split("\t").map((h: string) => h.trim());
+      rows = lines.slice(1).map((l: string) => {
+        const cells = l.split("\t");
+        return Object.fromEntries(headers.map((h: string, i: number) => [h, (cells[i] ?? "").trim()]));
+      });
+    } else if (ext === "json") {
+      try {
+        const text = buffer.toString("utf8");
+        const parsed = JSON.parse(text);
+        // Accept array, or object wrapping an array at a known key
+        const arr: unknown[] = Array.isArray(parsed)
+          ? parsed
+          : (parsed.data ?? parsed.rows ?? parsed.records ?? Object.values(parsed as Record<string, unknown>).find(Array.isArray)) ?? [];
+        if (!Array.isArray(arr) || arr.length === 0) {
+          res.status(400).json({ error: "JSON must be an array of objects (or an object with a 'data'/'rows' array)" });
+          return;
+        }
+        rows = (arr as Record<string, unknown>[]).map(r =>
+          Object.fromEntries(Object.entries(r).map(([k, v]) => [String(k), v === null || v === undefined ? "" : String(v)]))
+        );
+      } catch {
+        res.status(400).json({ error: "Failed to parse JSON — ensure it is valid JSON" });
+        return;
+      }
     } else {
-      res.status(400).json({ error: "Unsupported file type. Upload .xlsx, .xls, or .csv" });
+      res.status(400).json({ error: "Unsupported file type. Upload .xlsx, .xls, .csv, .tsv, or .json" });
       return;
     }
   } catch (e: unknown) {
@@ -238,7 +268,8 @@ router.post("/data-analysis/upload", upload.single("file"), async (req: any, res
     allRows: rows,
     detectedSchema,
     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-    vendorId: vendor.id,
+    userId: user.userId,
+    vendorId: user.vendor?.id ?? null,
     history: [],
   });
 
@@ -255,15 +286,15 @@ router.post("/data-analysis/upload", upload.single("file"), async (req: any, res
 // ── Analyze (SSE streaming) ───────────────────────────────────────────────────
 
 router.post("/data-analysis/analyze", async (req: Request, res: Response): Promise<void> => {
-  const vendor = await resolveVendor(req);
-  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const user = await resolveUser(req);
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const { sessionId, question } = req.body as { sessionId: string; question?: string };
   if (!sessionId) { res.status(400).json({ error: "sessionId is required" }); return; }
 
   const session = sessions.get(sessionId);
   if (!session) { res.status(404).json({ error: "Session not found or expired" }); return; }
-  if (session.vendorId !== vendor.id) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (session.userId !== user.userId) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const userQuestion = question?.trim() || "Summarise this dataset: describe what it contains, highlight key statistics, identify any trends or anomalies, and suggest 2-3 business insights.";
 
@@ -333,18 +364,23 @@ Focus on actionable insights relevant to a small business owner.`;
 // ── Import ────────────────────────────────────────────────────────────────────
 
 router.post("/data-analysis/import", async (req: Request, res: Response): Promise<void> => {
-  const vendor = await resolveVendor(req);
-  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const user = await resolveUser(req);
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const { sessionId, mapping, targetSchema } = req.body as {
+  const { sessionId, mapping, targetSchema, vendorId: explicitVendorId } = req.body as {
     sessionId: string;
     targetSchema: "sales" | "expenses" | "products";
     mapping: Record<string, string>; // our field → column name in file
+    vendorId?: number; // admins pass this explicitly
   };
 
   const session = sessions.get(sessionId);
   if (!session) { res.status(404).json({ error: "Session not found or expired" }); return; }
-  if (session.vendorId !== vendor.id) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (session.userId !== user.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Resolve which vendor to import into: session's own vendor (regular user) or admin-selected
+  const effectiveVendorId = session.vendorId ?? (typeof explicitVendorId === "number" ? explicitVendorId : undefined);
+  if (!effectiveVendorId) { res.status(400).json({ error: "No vendor selected — choose a vendor to import data into" }); return; }
 
   const get = (row: Record<string, string>, key: string): string =>
     (mapping[key] ? row[mapping[key]] : undefined) ?? "";
@@ -366,7 +402,7 @@ router.post("/data-analysis/import", async (req: Request, res: Response): Promis
         if (!amount) { errors.push({ row: i + 1, error: "Missing or zero amount" }); continue; }
         try {
           await db.insert(salesTable).values({
-            vendorId: vendor.id,
+            vendorId: effectiveVendorId,
             source: "manual",
             description: get(row, "description") || session.fileName,
             customerName: get(row, "customerName") || null,
@@ -384,7 +420,7 @@ router.post("/data-analysis/import", async (req: Request, res: Response): Promis
         if (!amount) { errors.push({ row: i + 1, error: "Missing or zero amount" }); continue; }
         try {
           await db.insert(expensesTable).values({
-            vendorId: vendor.id,
+            vendorId: effectiveVendorId,
             category: get(row, "category") || "Other",
             description: get(row, "description") || session.fileName,
             amount: amount.toString(),
@@ -402,7 +438,7 @@ router.post("/data-analysis/import", async (req: Request, res: Response): Promis
         const price = parseNum(get(row, "price"));
         try {
           await db.insert(productsTable).values({
-            vendorId: vendor.id,
+            vendorId: effectiveVendorId,
             name,
             category: get(row, "category") || "",
             sku: get(row, "sku") || "",

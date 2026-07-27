@@ -170,9 +170,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Insights",
     items: [
+      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
-      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
     ],
   },
   {

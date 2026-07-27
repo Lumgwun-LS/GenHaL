@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { useGetEmailCampaign, useUpdateEmailCampaign, useCreateEmailCampaign, useSendEmailCampaign, getGetEmailCampaignQueryKey, getListEmailCampaignsQueryKey } from "@workspace/api-client-react";
+import { useGetEmailCampaign, useUpdateEmailCampaign, useCreateEmailCampaign, useSendEmailCampaign, useListVendors, getGetEmailCampaignQueryKey, getListEmailCampaignsQueryKey } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,9 @@ export default function EmailCampaignEditor() {
   const createCampaign = useCreateEmailCampaign();
   const updateCampaign = useUpdateEmailCampaign();
   const sendCampaign = useSendEmailCampaign();
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const vendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
@@ -49,7 +53,7 @@ export default function EmailCampaignEditor() {
       if (isNew) {
         await createCampaign.mutateAsync({
           data: {
-            vendorId: 1, // hardcoded for demo
+            vendorId,
             name,
             subject,
             targetAudience,

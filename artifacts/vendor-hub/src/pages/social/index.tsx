@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   useListPosts,
+  useListVendors,
   useSubmitPostForReview,
   useApprovePost,
   useRequestPostChanges,
@@ -22,6 +23,7 @@ import {
   type Post,
   type PostPublication,
 } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { handleAddTikTokAccount } from "@/lib/social-connect";
 import { filterScheduledPosts } from "@/lib/schedule-filters";
 import {
@@ -120,6 +122,9 @@ function ConnectionWarningsNotice({
    *  to sessionStorage before an OAuth redirect so the dialog can restore its state. */
   scheduledAtValue: string;
 }) {
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const activeVendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
   const { data } = useGetPostConnectionWarnings(postId, {
     query: { enabled: true, queryKey: getGetPostConnectionWarningsQueryKey(postId) },
   });
@@ -153,14 +158,14 @@ function ConnectionWarningsNotice({
   const handleAddTikTok = async () => {
     const result = await handleAddTikTokAccount({
       accountName: tiktokAccountName,
-      vendorId: 1,
+      vendorId: activeVendorId,
       postId,
       mutateAsync: createAccount.mutateAsync,
       connectionWarningsQueryKey: getGetPostConnectionWarningsQueryKey(postId),
       onInvalidateConnectionWarnings: (queryKey) =>
         queryClient.invalidateQueries({ queryKey: queryKey as string[] }),
       onInvalidateSocialAccounts: () =>
-        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) }),
+        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: activeVendorId }) }),
     });
     if (result.ok) {
       toast.success("TikTok account connected");
@@ -457,7 +462,10 @@ function CheckoutPaymentHealthWarning({ vendorId }: { vendorId: number }) {
 }
 
 function ConnectedAccounts() {
-  const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: 1 });
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const activeVendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
+  const { data: accounts, isLoading } = useListSocialAccounts({ vendorId: activeVendorId });
   const createAccount = useCreateSocialAccount();
   const deleteAccount = useDeleteSocialAccount();
   const queryClient = useQueryClient();
@@ -473,7 +481,7 @@ function ConnectedAccounts() {
       const providerParam = params.get("provider");
       const provider = providerParam === "linkedin" ? "LinkedIn" : providerParam === "twitter" ? "X" : "Facebook/Instagram";
       toast.success(`Connected ${count ?? ""} ${provider} account${count === "1" ? "" : "s"}`.trim());
-      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: activeVendorId }) });
       window.history.replaceState({}, "", window.location.pathname);
     } else if (result === "error") {
       toast.error(params.get("message") ?? "Failed to connect account");
@@ -497,8 +505,8 @@ function ConnectedAccounts() {
   const handleConnect = async () => {
     if (!accountName.trim()) { toast.error("Enter the account/page name"); return; }
     try {
-      await createAccount.mutateAsync({ data: { vendorId: 1, platform, accountName: accountName.trim() } });
-      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      await createAccount.mutateAsync({ data: { vendorId: activeVendorId, platform, accountName: accountName.trim() } });
+      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: activeVendorId }) });
       toast.success(`${platform} account connected`);
       setAccountName("");
       setOpen(false);
@@ -510,7 +518,7 @@ function ConnectedAccounts() {
   const handleDisconnect = async (id: number) => {
     try {
       await deleteAccount.mutateAsync({ id });
-      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+      queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: activeVendorId }) });
       toast.success("Account disconnected");
     } catch {
       toast.error("Failed to disconnect account");
@@ -641,10 +649,13 @@ function UpcomingScheduleView({
   onReschedule: (id: number, date: Date, force?: boolean) => Promise<{ warnings?: { platform: string; message: string }[] } | void>;
   onCancelSchedule: (id: number) => void;
 }) {
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const activeVendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
   const { data: scheduled, isLoading } = useListScheduledPosts({
     query: { enabled: true, queryKey: getListScheduledPostsQueryKey() },
   });
-  const { data: accounts } = useListSocialAccounts({ vendorId: 1 });
+  const { data: accounts } = useListSocialAccounts({ vendorId: activeVendorId });
 
   // Multi-select: set of "platform:<Platform>" | "account:<id>" strings.
   // Empty set = no filter applied (show all).
@@ -1029,6 +1040,9 @@ function UpcomingScheduleView({
 }
 
 export default function Social() {
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const activeVendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
   const { data: posts, isLoading } = useListPosts();
   const highlightId = Number(new URLSearchParams(window.location.search).get("highlight")) || null;
   const highlightRef = useRef<HTMLDivElement | null>(null);
@@ -1048,7 +1062,7 @@ export default function Social() {
         // Ensure the warnings query refetches in the reopened dialog.
         queryClient.invalidateQueries({ queryKey: getGetPostConnectionWarningsQueryKey(state.postId) });
         // Also refresh the accounts list so the newly-connected account is visible.
-        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: 1 }) });
+        queryClient.invalidateQueries({ queryKey: getListSocialAccountsQueryKey({ vendorId: activeVendorId }) });
       }
     } catch {
       // Malformed sessionStorage entry — ignore.

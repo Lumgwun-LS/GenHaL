@@ -33,10 +33,12 @@ import {
 import {
   useGenerateAiContent,
   useListContentLibrary,
+  useListVendors,
   getListContentLibraryQueryKey,
   type GenerateAiContentResult,
   type ContentLibraryItem,
 } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -324,6 +326,9 @@ function LibraryCard({
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function ContentStudio() {
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const vendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -340,11 +345,11 @@ export function ContentStudio() {
 
   const generateMutation = useGenerateAiContent();
   const { data: library, isLoading: libraryLoading } = useListContentLibrary(
-    { vendorId: 1 },
+    { vendorId },
     {
       query: {
         enabled: studioTab === "library",
-        queryKey: getListContentLibraryQueryKey({ vendorId: 1 }),
+        queryKey: getListContentLibraryQueryKey({ vendorId }),
       },
     },
   );
@@ -367,7 +372,7 @@ export function ContentStudio() {
     try {
       const res = await generateMutation.mutateAsync({
         data: {
-          vendorId: 1,
+          vendorId,
           topic,
           outputTypes: selectedTypes as ('social_post' | 'article' | 'academic' | 'image' | 'video')[],
           tone,
@@ -376,7 +381,7 @@ export function ContentStudio() {
       });
       setResults(res);
       // Refresh library if it's been loaded
-      queryClient.invalidateQueries({ queryKey: getListContentLibraryQueryKey({ vendorId: 1 }) });
+      queryClient.invalidateQueries({ queryKey: getListContentLibraryQueryKey({ vendorId }) });
       const succeeded = selectedTypes.filter(
         (t) => (res as Record<string, { status: string }>)[t]?.status === "completed",
       ).length;

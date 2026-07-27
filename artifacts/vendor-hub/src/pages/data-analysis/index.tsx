@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUser } from "@clerk/react";
+import { useListVendors } from "@workspace/api-client-react";
 import {
   Table,
   TableBody,
@@ -266,6 +268,11 @@ function MarkdownText({ text }: { text: string }) {
 }
 
 export default function DataAnalysisPage() {
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const myVendorId = vendors?.find(v => v.clerkUserId === user?.id)?.id ?? null;
+  const isAdmin = !myVendorId && (vendors?.length ?? 0) > 0;
+
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [session, setSession] = useState<UploadResult | null>(null);
@@ -277,16 +284,20 @@ export default function DataAnalysisPage() {
   const [importMapping, setImportMapping] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; errors: unknown[]; total: number } | null>(null);
+  // Admin selects which vendor to import into (regular vendors use their own id)
+  const [adminImportVendorId, setAdminImportVendorId] = useState<number | null>(vendors?.[0]?.id ?? null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const charts = session ? buildCharts(session.columns, session.preview) : [];
 
+  const ACCEPTED_EXTS = ["xlsx", "xls", "csv", "tsv", "ods", "json"];
+
   const handleFile = useCallback(async (file: File) => {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!["xlsx", "xls", "csv"].includes(ext)) {
-      toast.error("Please upload a .xlsx, .xls, or .csv file");
+    if (!ACCEPTED_EXTS.includes(ext)) {
+      toast.error("Supported formats: .xlsx, .xls, .csv, .tsv, .ods, .json");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -394,13 +405,24 @@ export default function DataAnalysisPage() {
 
   const handleImport = async () => {
     if (!session) return;
+    // Admins must pick a vendor first
+    const effectiveVendorId = myVendorId ?? adminImportVendorId;
+    if (isAdmin && !effectiveVendorId) {
+      toast.error("Select a vendor to import data into");
+      return;
+    }
     setImporting(true);
     try {
       const resp = await fetch(`${BASE_URL}/api/data-analysis/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ sessionId: session.sessionId, targetSchema: importTarget, mapping: importMapping }),
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          targetSchema: importTarget,
+          mapping: importMapping,
+          ...(isAdmin && effectiveVendorId ? { vendorId: effectiveVendorId } : {}),
+        }),
       });
       const data = await resp.json();
       if (!resp.ok) { toast.error(data.error ?? "Import failed"); return; }
@@ -415,10 +437,15 @@ export default function DataAnalysisPage() {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BarChart2 className="w-6 h-6 text-primary" /> Data Analysis
-          </h1>
-          <p className="text-muted-foreground mt-1">Upload an Excel or CSV file to get AI-powered insights, charts, and an optional import into your account.</p>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <BarChart2 className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Data Analysis</h1>
+              <p className="text-muted-foreground text-sm">Upload a file — get AI insights, charts, and one-click data import</p>
+            </div>
+          </div>
         </div>
 
         <div
@@ -428,13 +455,24 @@ export default function DataAnalysisPage() {
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
         >
-          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.tsv,.ods,.json"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+          />
           {uploading
             ? <><RefreshCw className="w-10 h-10 mx-auto mb-3 text-primary animate-spin" /><p className="text-muted-foreground">Parsing file…</p></>
             : <>
               <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-              <p className="text-lg font-semibold mb-1">Drop your spreadsheet here</p>
-              <p className="text-muted-foreground text-sm mb-4">Supports .xlsx, .xls, .csv — up to 10 MB</p>
+              <p className="text-lg font-semibold mb-1">Drop your data file here</p>
+              <div className="flex flex-wrap gap-1.5 justify-center mb-4">
+                {[".xlsx", ".xls", ".csv", ".tsv", ".ods", ".json"].map(ext => (
+                  <span key={ext} className="text-xs bg-muted rounded px-2 py-0.5 font-mono text-muted-foreground">{ext}</span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">Up to 10 MB</p>
               <Button variant="outline"><Upload className="w-4 h-4 mr-2" />Browse File</Button>
             </>
           }
@@ -442,9 +480,9 @@ export default function DataAnalysisPage() {
 
         <div className="mt-6 grid grid-cols-3 gap-3">
           {[
-            { icon: FileSpreadsheet, title: "Preview", desc: "See first 20 rows and column types instantly" },
-            { icon: Sparkles, title: "AI Summary", desc: "Plain-English insights, statistics, and trends" },
-            { icon: Database, title: "Import", desc: "One-click import into Sales, Expenses, or Products" },
+            { icon: FileSpreadsheet, title: "Instant Preview", desc: "See first 20 rows and column types as soon as you upload" },
+            { icon: Sparkles, title: "AI Analysis", desc: "Ask anything in plain English — trends, anomalies, insights" },
+            { icon: Database, title: "Direct Import", desc: "One-click import into Sales, Expenses, or Products" },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="border rounded-lg p-4 text-center">
               <Icon className="w-6 h-6 mx-auto mb-2 text-primary" />
@@ -474,7 +512,14 @@ export default function DataAnalysisPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setSession(null); setMessages([]); }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.tsv,.ods,.json"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) { e.target.value = ""; handleFile(f); } }}
+          />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
             <Upload className="w-3.5 h-3.5 mr-1" />New File
           </Button>
           <Button size="sm" onClick={() => sendQuestion("Summarise this dataset: describe what it contains, highlight key statistics, identify any trends or anomalies, and give 2-3 business insights.")} disabled={analyzing}>
@@ -630,6 +675,24 @@ export default function DataAnalysisPage() {
             </div>
           ) : (
             <div className="max-w-lg space-y-5">
+              {/* Admin: pick which vendor to import into */}
+              {isAdmin && vendors && vendors.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Import into vendor</Label>
+                  <Select
+                    value={adminImportVendorId?.toString() ?? ""}
+                    onValueChange={v => setAdminImportVendorId(parseInt(v))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
+                    <SelectContent>
+                      {vendors.map(v => (
+                        <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Import as</Label>
                 <Select value={importTarget} onValueChange={(v: typeof importTarget) => {

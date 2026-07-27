@@ -294,6 +294,8 @@ export default function Analytics() {
   const { user } = useUser();
   const { data: vendors, isLoading: vendorsLoading } = useListVendors();
   const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
+  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
+  const effectiveVendor = myVendor ?? vendors?.find((v) => v.id === adminVendorId);
 
   const [period, setPeriod] = useState("month");
   const [from, setFrom] = useState("");
@@ -313,18 +315,18 @@ export default function Analytics() {
 
   // Performance analytics
   const performanceParams = {
-    vendorId: myVendor?.id as number,
+    vendorId: effectiveVendor?.id as number,
     period,
     ...(period === "custom" && from ? { from: new Date(from).toISOString() } : {}),
     ...(period === "custom" && to ? { to: new Date(to).toISOString() } : {}),
   };
   const { data, isLoading } = useGetVendorPerformanceAnalytics(performanceParams, {
-    query: { enabled: Boolean(myVendor?.id), queryKey: getGetVendorPerformanceAnalyticsQueryKey(performanceParams) },
+    query: { enabled: Boolean(effectiveVendor?.id), queryKey: getGetVendorPerformanceAnalyticsQueryKey(performanceParams) },
   });
 
   // Load business snapshot
   const loadSnapshot = useCallback(async () => {
-    if (!myVendor) return;
+    if (!effectiveVendor) return;
     setLoadingSnapshot(true);
     setBiError(null);
     try {
@@ -339,11 +341,11 @@ export default function Analytics() {
     } finally {
       setLoadingSnapshot(false);
     }
-  }, [myVendor]);
+  }, [effectiveVendor]);
 
   // Generate SWOT
   const generateSwot = useCallback(async () => {
-    if (!myVendor) return;
+    if (!effectiveVendor) return;
     setGenerating(true);
     setBiError(null);
     try {
@@ -363,11 +365,11 @@ export default function Analytics() {
     } finally {
       setGenerating(false);
     }
-  }, [myVendor]);
+  }, [effectiveVendor]);
 
   // Load history
   const loadHistory = useCallback(async () => {
-    if (!myVendor) return;
+    if (!effectiveVendor) return;
     setLoadingHistory(true);
     try {
       const r = await fetch(`${BASE_URL}/api/analytics/swot/history`);
@@ -377,7 +379,7 @@ export default function Analytics() {
     } finally {
       setLoadingHistory(false);
     }
-  }, [myVendor]);
+  }, [effectiveVendor]);
 
   // Handle tab switch — load snapshot when switching to BI
   const handleTabChange = (tab: string) => {
@@ -391,7 +393,21 @@ export default function Analytics() {
   if (vendorsLoading) {
     return <div className="p-8 flex items-center justify-center min-h-[50vh]">Loading analytics...</div>;
   }
-  if (!myVendor) {
+  if (!effectiveVendor) {
+    if (vendors && vendors.length > 0) {
+      return (
+        <div className="p-8 max-w-xl mx-auto space-y-6">
+          <h1 className="text-3xl font-black tracking-tight">Analytics</h1>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col gap-3">
+            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">Admin mode — select a vendor to view analytics:</span>
+            <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
+              <SelectTrigger><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
+              <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+      );
+    }
     return <div className="p-8 text-center text-muted-foreground">No vendor profile found for this account.</div>;
   }
 

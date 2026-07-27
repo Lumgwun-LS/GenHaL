@@ -170,6 +170,8 @@ export default function InvoicesPage() {
   const { data: vendors, isLoading: vendorsLoading } = useListVendors();
   const { toast } = useToast();
   const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
+  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
+  const effectiveVendor = myVendor ?? vendors?.find((v) => v.id === adminVendorId);
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<InvoiceSummary>({ totalBilled: 0, totalCollected: 0, outstanding: 0 });
@@ -188,7 +190,7 @@ export default function InvoicesPage() {
   const [items, setItems] = useState<LineItem[]>([emptyItem()]);
 
   const fetchInvoices = useCallback(async () => {
-    if (!myVendor) return;
+    if (!effectiveVendor) return;
     setLoading(true);
     try {
       const r = await fetch(`${BASE_URL}/api/invoices`);
@@ -201,9 +203,9 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [myVendor, toast]);
+  }, [effectiveVendor, toast]);
 
-  useEffect(() => { if (myVendor) fetchInvoices(); }, [myVendor?.id]);
+  useEffect(() => { if (effectiveVendor) fetchInvoices(); }, [effectiveVendor?.id]);
 
   const subtotal = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
   const total = Math.max(0, subtotal - form.discountAmount + form.taxAmount);
@@ -303,7 +305,23 @@ export default function InvoicesPage() {
       </motion.div>
     </div>
   );
-  if (!myVendor) return <div className="p-8 text-center text-muted-foreground">No vendor profile found.</div>;
+  if (!effectiveVendor) {
+    if (vendors && vendors.length > 0) {
+      return (
+        <div className="p-8 max-w-xl mx-auto space-y-6">
+          <h1 className="text-3xl font-black tracking-tight">Invoices</h1>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col gap-3">
+            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">Admin mode — select a vendor to manage invoices:</span>
+            <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
+              <SelectTrigger><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
+              <SelectContent>{vendors?.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+      );
+    }
+    return <div className="p-8 text-center text-muted-foreground">No vendor profile found.</div>;
+  }
 
   return (
     <div className="relative p-6 max-w-7xl mx-auto space-y-6 w-full overflow-hidden">

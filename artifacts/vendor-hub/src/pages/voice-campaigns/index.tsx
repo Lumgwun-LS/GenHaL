@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, Plus, PlayCircle, BarChart2, Clock, CheckCircle2, AlertCircle, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useListVendors } from "@workspace/api-client-react";
@@ -55,8 +56,9 @@ export default function VoiceCampaignsPage() {
   const qc = useQueryClient();
 
   // Find the vendor that belongs to this user
-  const myVendor = vendors?.find((v) => v.clerkUserId === user?.id) ?? vendors?.[0];
-  const vendorId = myVendor?.id;
+  const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
+  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
+  const vendorId = myVendor?.id ?? adminVendorId;
 
   const { data: campaigns, isLoading } = useQuery<Campaign[]>({
     queryKey: ["voice-campaigns", vendorId],
@@ -187,10 +189,20 @@ export default function VoiceCampaignsPage() {
             Place personalised AI voice calls to your leads. Use <code className="text-xs bg-muted px-1 rounded">{"{{name}}"}</code> in your script to personalise each call.
           </p>
         </div>
-        <Button onClick={() => setOpen(true)} className="flex items-center gap-2">
+        <Button onClick={() => setOpen(true)} className="flex items-center gap-2" disabled={!vendorId}>
           <Plus className="w-4 h-4" /> New Campaign
         </Button>
       </div>
+
+      {!myVendor && vendors && vendors.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
+          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 shrink-0">Admin mode — operating as:</span>
+          <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
+            <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
+            <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Twilio status callout — only shown when not configured */}
       {voiceStatus && !voiceStatus.configured && (

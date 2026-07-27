@@ -11,8 +11,9 @@ import {
   useCreatePost, useUpdatePost, useListProducts, useGenerateAiCaption, useGenerateAiImage,
   useGenerateAiVideoScenes, useRegenerateAiVideoScene, useRenderAiVideo,
   useGetAiVideoUploadUrl, useGetAiImageUploadUrl, useAnalyzeVideoCaption, useSubmitPostForReview, useListSocialAccounts,
-  useGetDraftVideoScenes, useSaveDraftVideoScenes, useClearDraftVideoScenes,
+  useGetDraftVideoScenes, useSaveDraftVideoScenes, useClearDraftVideoScenes, useListVendors,
 } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListPostsQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -273,7 +274,7 @@ export default function CreatePost() {
       // Only delete the server draft after hydration is complete — i.e. this
       // null is a user-initiated discard/render, not the initial mount state.
       if (draftHydratedRef.current) {
-        clearDraft.mutate({ data: { vendorId: 1 } });
+        clearDraft.mutate({ data: { vendorId } });
       }
     } else {
       // Scenes are set (either from sessionStorage lazy init or from restore) —
@@ -288,7 +289,7 @@ export default function CreatePost() {
       // sessionStorage still protects against reloads).
       if (serverDraftSaveTimerRef.current) clearTimeout(serverDraftSaveTimerRef.current);
       serverDraftSaveTimerRef.current = setTimeout(() => {
-        saveDraft.mutate({ data: { vendorId: 1, scenes: videoScenes } });
+        saveDraft.mutate({ data: { vendorId, scenes: videoScenes } });
       }, 800);
     }
   // SCENE_STORAGE_KEY and the mutation fns are stable references.
@@ -301,8 +302,12 @@ export default function CreatePost() {
     setLocation("/social");
   }, [setLocation]);
 
-  const { data: products } = useListProducts({ vendorId: 1 });
-  const { data: socialAccounts } = useListSocialAccounts({ vendorId: 1 });
+  const { user } = useUser();
+  const { data: vendors } = useListVendors();
+  const vendorId = vendors?.find((v) => v.clerkUserId === user?.id)?.id ?? vendors?.[0]?.id ?? 1;
+
+  const { data: products } = useListProducts({ vendorId });
+  const { data: socialAccounts } = useListSocialAccounts({ vendorId });
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const generateCaption = useGenerateAiCaption();
@@ -318,7 +323,7 @@ export default function CreatePost() {
 
   // Server-side draft persistence — survives browser crashes and cleared
   // sessionStorage (e.g. after a tab restores from a previous session).
-  const { data: serverDraft } = useGetDraftVideoScenes({ vendorId: 1 });
+  const { data: serverDraft } = useGetDraftVideoScenes({ vendorId });
   const saveDraft = useSaveDraftVideoScenes();
   const clearDraft = useClearDraftVideoScenes();
 
@@ -391,7 +396,7 @@ export default function CreatePost() {
     }
     try {
       const result = await generateCaption.mutateAsync({
-        data: { vendorId: 1, topic: caption, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
+        data: { vendorId, topic: caption, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
       });
       if (result.status === "failed") { toast.error(result.result ?? "Caption generation failed"); return; }
       setCaption(result.result ?? caption);
@@ -407,7 +412,7 @@ export default function CreatePost() {
       return;
     }
     try {
-      const result = await generateImage.mutateAsync({ data: { vendorId: 1, prompt: caption } });
+      const result = await generateImage.mutateAsync({ data: { vendorId, prompt: caption } });
       if (result.status === "failed") { toast.error(result.result ?? "Image generation failed"); return; }
       setGeneratedImage(result.result ?? null);
       setGeneratedVideo(null);
@@ -431,7 +436,7 @@ export default function CreatePost() {
       return;
     }
     try {
-      const result = await generateVideoScenes.mutateAsync({ data: { vendorId: 1, prompt: caption, sceneCount } });
+      const result = await generateVideoScenes.mutateAsync({ data: { vendorId, prompt: caption, sceneCount } });
       const failed = result.scenes.find((s) => s.status === "failed");
       if (failed) { toast.error(failed.result ?? "Scene generation failed"); return; }
       setVideoScenes(result.scenes.map((s) => ({ id: s.id, prompt: s.prompt, imageUrl: s.result ?? "" })));
@@ -458,7 +463,7 @@ export default function CreatePost() {
     const scene = videoScenes[index];
     setRegeneratingSceneId(scene.id);
     try {
-      const result = await regenerateVideoScene.mutateAsync({ data: { vendorId: 1, prompt: scene.prompt } });
+      const result = await regenerateVideoScene.mutateAsync({ data: { vendorId, prompt: scene.prompt } });
       if (result.status === "failed") { toast.error(result.result ?? "Scene regeneration failed"); return; }
       setVideoScenes((prev) =>
         prev ? prev.map((s, i) => (i === index ? { id: result.id, prompt: result.prompt, imageUrl: result.result ?? "" } : s)) : prev,
@@ -478,7 +483,7 @@ export default function CreatePost() {
     try {
       const result = await renderVideo.mutateAsync({
         data: {
-          vendorId: 1,
+          vendorId,
           prompt: caption,
           sceneImageUrls: videoScenes.map((s) => s.imageUrl),
           captionText: caption,
@@ -506,13 +511,13 @@ export default function CreatePost() {
     }
     try {
       setUploadedVideoStage("uploading");
-      const { uploadUrl, videoUrl } = await getVideoUploadUrl.mutateAsync({ data: { vendorId: 1 } });
+      const { uploadUrl, videoUrl } = await getVideoUploadUrl.mutateAsync({ data: { vendorId } });
       const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "video/mp4" }, body: file });
       if (!putRes.ok) throw new Error("Upload failed");
 
       setUploadedVideoStage("analyzing");
       const result = await analyzeVideoCaption.mutateAsync({
-        data: { vendorId: 1, videoUrl, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
+        data: { vendorId, videoUrl, platform: selectedPlatforms[0], tone: "professional", includeHashtags: true, includeEmoji: true },
       });
       if (result.status === "failed") { toast.error(result.result ?? "Couldn't analyze the video"); return; }
 
@@ -536,7 +541,7 @@ export default function CreatePost() {
     }
     try {
       setUploadingImage(true);
-      const { uploadUrl, imageUrl } = await getImageUploadUrl.mutateAsync({ data: { vendorId: 1 } });
+      const { uploadUrl, imageUrl } = await getImageUploadUrl.mutateAsync({ data: { vendorId } });
       const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "image/jpeg" }, body: file });
       if (!putRes.ok) throw new Error("Upload failed");
 
@@ -606,7 +611,7 @@ export default function CreatePost() {
     try {
       const post = await createPost.mutateAsync({
         data: {
-          vendorId: 1, // hardcoded for demo, normally from context
+          vendorId,
           caption,
           platforms: selectedPlatforms,
           socialAccountIds: selectedPlatforms.map((id) => selectedAccountByPlatform[id] ?? 0),
