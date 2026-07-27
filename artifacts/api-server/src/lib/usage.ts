@@ -114,15 +114,33 @@ export function getBillingPeriodEnd(periodStart: Date): Date {
   return new Date(periodStart.getTime() + PERIOD_LENGTH_MS);
 }
 
+/**
+ * Returns the effective subscription tier for a vendor, accounting for
+ * admin-assigned free trials. A free-tier vendor with an active trial
+ * (trialEndsAt > now) is treated as "starter" so they actually receive
+ * premium quotas and overage eligibility during the trial period.
+ */
+export function getEffectiveTier(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): string {
+  if (
+    vendor.subscriptionTier === "free" &&
+    vendor.trialEndsAt instanceof Date &&
+    vendor.trialEndsAt > new Date()
+  ) {
+    return "starter";
+  }
+  return vendor.subscriptionTier;
+}
+
 /** Returns true when the vendor is on a paid plan (overage billing is possible). */
-function isPaidTier(vendor: Pick<Vendor, "subscriptionTier">): boolean {
-  return vendor.subscriptionTier !== "free";
+function isPaidTier(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): boolean {
+  return getEffectiveTier(vendor) !== "free";
 }
 
 /** Resolves the quota bundle for whatever tier the vendor is currently on. */
-export async function getVendorQuotas(vendor: Pick<Vendor, "subscriptionTier">): Promise<SubscriptionPlanQuotas> {
-  if (vendor.subscriptionTier === "free") return FREE_TIER_QUOTAS;
-  const plan = await getSubscriptionPlan(vendor.subscriptionTier);
+export async function getVendorQuotas(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): Promise<SubscriptionPlanQuotas> {
+  const effective = getEffectiveTier(vendor);
+  if (effective === "free") return FREE_TIER_QUOTAS;
+  const plan = await getSubscriptionPlan(effective);
   return plan?.quotas ?? FREE_TIER_QUOTAS;
 }
 
@@ -288,8 +306,9 @@ export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: 
 }
 
 /** Human-readable message for a hard block (free-tier vendors who hit quota). */
-export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier">, result: QuotaCheckResult): string {
-  const tierLabel = vendor.subscriptionTier === "free" ? "Free" : vendor.subscriptionTier;
+export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">, result: QuotaCheckResult): string {
+  const effective = getEffectiveTier(vendor);
+  const tierLabel = effective === "free" ? "Free" : effective;
   return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan or purchase add-on capacity to continue.`;
 }
 
@@ -728,7 +747,7 @@ export async function getUsageSummary(vendor: Vendor): Promise<{
   return {
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
-    tier: vendor.subscriptionTier,
+    tier: getEffectiveTier(vendor),
     overageEnabled: paid,
     totalOverageUsd,
     usage,

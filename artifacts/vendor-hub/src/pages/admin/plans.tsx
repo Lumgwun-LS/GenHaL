@@ -487,8 +487,9 @@ function AssignTrialCard() {
           Assign Free Trial to Vendor
         </CardTitle>
         <CardDescription>
-          Manually grant a trial of any duration to any vendor. They receive an in-app notification and a welcome email
-          immediately. This works for vendors on any tier — existing trials are overwritten.
+          Manually grant a trial to any free-tier vendor. They receive an in-app notification and a welcome email
+          immediately, and gain full starter-plan access until the trial expires. Vendors already on a paid plan
+          do not need a trial — they already have premium access.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

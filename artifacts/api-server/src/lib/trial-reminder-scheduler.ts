@@ -13,7 +13,7 @@
  */
 import { db } from "@workspace/db";
 import { vendorsTable, vendorNotificationsTable } from "@workspace/db/schema";
-import { and, eq, isNotNull, gt, lt, gte, sql } from "drizzle-orm";
+import { and, eq, isNotNull, gt, lt, lte, gte, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendEmail } from "./mailer";
 import { wrapVendorEmail, escapeHtml } from "./email-branding";
@@ -54,6 +54,77 @@ async function sendReminderEmail(vendor: { email: string; name: string }, subjec
     action: { label: actionLabel, url: actionUrl },
   });
   await sendEmail({ to: vendor.email, subject, html });
+}
+
+/**
+ * Clear expired admin-assigned trials: find free-tier vendors whose trialEndsAt
+ * has already passed, null out the trial columns, and send a "trial ended"
+ * in-app notification + email.
+ */
+async function expireTrials(): Promise<{ expired: number }> {
+  const now = new Date();
+
+  const expired = await db
+    .select()
+    .from(vendorsTable)
+    .where(
+      and(
+        isNotNull(vendorsTable.trialEndsAt),
+        lte(vendorsTable.trialEndsAt, now),
+        eq(vendorsTable.subscriptionTier, "free"),
+      ),
+    );
+
+  const baseUrl = process.env.VITE_APP_URL ?? "https://awajimaaai.com";
+
+  for (const vendor of expired) {
+    try {
+      // Clear trial fields
+      await db
+        .update(vendorsTable)
+        .set({ trialEndsAt: null, trialStartedAt: null, trialDurationDays: null })
+        .where(eq(vendorsTable.id, vendor.id));
+
+      // Skip if already sent an expiry notification (dedup by type within 48h)
+      if (await alreadySentToday(vendor.id, "trial_expired")) continue;
+
+      const vendorName = escapeHtml(vendor.name);
+
+      await db.insert(vendorNotificationsTable).values({
+        vendorId: vendor.id,
+        type: "trial_expired",
+        message: `Your free trial has ended. Upgrade to a paid plan to regain access to AI Studio, Social Hub, Voice Campaigns, and all premium features.`,
+      });
+
+      const bodyHtml = `
+        <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#fff">
+          Your free trial has ended
+        </h2>
+        <p style="margin:0 0 10px;color:#ccc;font-size:15px">
+          Hi ${vendorName}, your Awa Biz Suite free trial has now expired and your account has
+          reverted to the <strong>Free plan</strong>.
+        </p>
+        <p style="margin:0 0 10px;color:#ccc;font-size:15px">
+          Upgrade now to restore full access to <strong>AI Studio, Social Hub, Voice Campaigns,
+          Analytics, and more</strong> — your data and settings are all still here waiting for you.
+        </p>`;
+
+      const html = wrapVendorEmail({
+        bodyHtml,
+        action: { label: "Upgrade Now", url: `${baseUrl}/vendor-hub/account` },
+      });
+
+      await sendEmail({
+        to: vendor.email,
+        subject: `Your Awa Biz Suite free trial has ended`,
+        html,
+      });
+    } catch (err) {
+      logger.error({ err, vendorId: vendor.id }, "[trial-reminders] Failed to expire trial");
+    }
+  }
+
+  return { expired: expired.length };
 }
 
 async function tickTrialReminders(): Promise<{ checked: number; reminded: number }> {
@@ -197,8 +268,13 @@ export function startTrialReminderScheduler(): void {
 
   const run = async () => {
     try {
+      const expiry = await expireTrials();
       const counts = await tickTrialReminders();
-      await recordJobRun(JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.reminded });
+      await recordJobRun(JOB_NAME, {
+        success: true,
+        checkedCount: counts.checked + expiry.expired,
+        affectedCount: counts.reminded + expiry.expired,
+      });
     } catch (err) {
       logger.error({ err }, "[trial-reminders] Scheduler error");
       await recordJobRun(JOB_NAME, { success: false, error: err instanceof Error ? err.message : String(err) });

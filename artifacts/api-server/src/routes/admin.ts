@@ -1539,6 +1539,13 @@ router.post("/admin/vendors/:id/trial", async (req, res): Promise<void> => {
 
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
+  if (vendor.subscriptionTier !== "free") {
+    res.status(400).json({
+      error: `Vendor is already on the '${vendor.subscriptionTier}' plan. Admin-assigned trials only apply to free-tier vendors — this vendor already has paid access.`,
+    });
+    return;
+  }
+
   const now = new Date();
   const trialEndsAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
   const expiryStr = trialEndsAt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
