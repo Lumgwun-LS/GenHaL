@@ -52,7 +52,7 @@ export default function Scene11_Closing() {
         transition={{ duration: 4, ease: 'easeOut' }}
       />
 
-      <div className="relative z-20 flex flex-col items-center justify-center gap-10">
+      <div className="relative z-20 flex flex-col items-center justify-center gap-10 pb-[10vh]">
         <motion.div variants={itemVariants} className="overflow-hidden rounded-sm mix-blend-screen">
           <img 
             src={`${import.meta.env.BASE_URL}images/logo.jpg`} 

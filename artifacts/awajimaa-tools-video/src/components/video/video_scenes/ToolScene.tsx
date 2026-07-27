@@ -75,20 +75,20 @@ export default function ToolScene({ title, phrase, image, index }: ToolSceneProp
 
       {/* Content */}
       <motion.div 
-        className="relative z-10 w-full px-[10vw] flex flex-col justify-center"
+        className="relative z-10 w-full px-[10vw] flex flex-col justify-center pt-[14vh]"
         variants={textContainer}
         initial="hidden"
         animate="visible"
       >
-        <div className="flex flex-col max-w-[50vw]">
-          <motion.div variants={textItem} className="overflow-hidden mb-4">
-            <h2 className="font-display text-5xl md:text-7xl font-bold text-primary tracking-tight leading-tight" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}>
+        <div className="flex flex-col max-w-[65vw]">
+          <motion.div variants={textItem} className="mb-4">
+            <h2 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-primary tracking-tight leading-tight" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}>
               {title}
             </h2>
           </motion.div>
 
-          <motion.div variants={textItem} className="overflow-hidden">
-            <p className="font-body text-2xl md:text-3xl font-light text-text-primary tracking-wide leading-snug" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
+          <motion.div variants={textItem}>
+            <p className="font-body text-xl md:text-2xl font-light text-text-primary tracking-wide leading-snug" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
               {phrase}
             </p>
           </motion.div>
