@@ -88,6 +88,7 @@ const DEFAULT_FEATURES = [
   { title: "Business Website Builder", description: "Launch a professional storefront in minutes with customizable templates, live preview, and one-click publish." },
   { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library — pick any asset directly from your social composer or website builder." },
   { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard — connect your ad account and launch in minutes." },
+  { title: "AI Design Studio", description: "Generate professional building designs, brand identities, fashion illustrations, and interior renders in seconds — choose a style, describe your vision, and download a watermarked PNG." },
 ];
 
 const ADDON_PLANS = [

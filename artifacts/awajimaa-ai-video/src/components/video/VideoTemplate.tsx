@@ -11,6 +11,8 @@ import { Scene6 } from './video_scenes/Scene6';
 import { Scene7 } from './video_scenes/Scene7';
 import { Scene8 } from './video_scenes/Scene8';
 import { Scene9 } from './video_scenes/Scene9';
+import { Scene10 } from './video_scenes/Scene10';
+import { Scene11 } from './video_scenes/Scene11';
 
 export const SCENE_DURATIONS = {
   scene1: 5000,
@@ -21,6 +23,8 @@ export const SCENE_DURATIONS = {
   scene6: 5000,
   scene7: 5000,
   scene8: 4000,
+  scene10: 6000,
+  scene11: 6000,
   scene9: 6000,
 };
 
@@ -33,6 +37,8 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   scene6: Scene6,
   scene7: Scene7,
   scene8: Scene8,
+  scene10: Scene10,
+  scene11: Scene11,
   scene9: Scene9,
 };
 
@@ -46,6 +52,8 @@ const SCENE_OVERLAYS = [
   'radial-gradient(circle at 20% 20%, hsl(217 91% 60% / 0.35), transparent 70%)',
   'radial-gradient(circle at 50% 80%, hsl(258 90% 66% / 0.4), transparent 70%)',
   'radial-gradient(circle at 80% 50%, hsl(292 84% 61% / 0.35), transparent 70%)',
+  'radial-gradient(circle at 30% 60%, hsl(258 90% 66% / 0.38), transparent 70%)',
+  'radial-gradient(circle at 70% 30%, hsl(217 91% 60% / 0.38), transparent 70%)',
   'radial-gradient(circle at 50% 50%, hsl(258 90% 66% / 0.5), transparent 80%)',
 ];
 
@@ -140,18 +148,27 @@ export default function VideoTemplate({
 
         {/* Persistent logo — top-left, slow fade in */}
         <motion.div
-          className="absolute top-[4vh] left-[3vw] z-40"
+          className="absolute top-[3.5vh] left-[3vw] z-40"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: sceneIndex === 0 ? 0 : 1, y: 0 }}
           transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          <motion.img
-            src={`${import.meta.env.BASE_URL}images/awa-logo.png`}
-            alt="Awajimaa"
-            style={{ height: '3.5vh', width: 'auto', filter: 'drop-shadow(0 0 10px rgba(180,140,255,0.6)) brightness(1.1)' }}
-            animate={{ opacity: [0.85, 1, 0.85] }}
+          <motion.div
+            className="rounded-full overflow-hidden bg-white flex items-center justify-center"
+            style={{
+              width: '4.2vh', height: '4.2vh',
+              boxShadow: '0 0 18px rgba(245,197,24,0.55), 0 0 6px rgba(255,255,255,0.25)',
+              border: '1.5px solid rgba(255,255,255,0.25)',
+            }}
+            animate={{ opacity: [0.88, 1, 0.88] }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          />
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}images/logo.jpg`}
+              alt="Awajimaa"
+              style={{ width: '110%', height: '110%', objectFit: 'cover', objectPosition: 'center' }}
+            />
+          </motion.div>
         </motion.div>
 
         {/* Scene foreground */}
