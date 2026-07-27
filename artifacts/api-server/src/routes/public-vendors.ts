@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, isNotNull, ne, asc } from "drizzle-orm";
 import { db, vendorsTable } from "@workspace/db";
 import { BRAND_THEMES } from "../lib/brand-themes";
 
@@ -34,6 +34,36 @@ router.get("/public/vendors/:id", async (req, res): Promise<void> => {
     description: vendor.description,
     brandTheme: vendor.brandTheme,
   });
+});
+
+/**
+ * Public list of vendors who have uploaded a logo — used by the landing page
+ * "Trusted by" section. Only returns safe public fields, no PII.
+ * Returns { count, vendors } so the frontend can gate on count >= 10.
+ */
+router.get("/public/trusted-vendors", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: vendorsTable.id,
+      name: vendorsTable.name,
+      logoUrl: vendorsTable.logoUrl,
+      industry: vendorsTable.industry,
+    })
+    .from(vendorsTable)
+    .where(
+      and(
+        eq(vendorsTable.status, "active"),
+        isNotNull(vendorsTable.logoUrl),
+        ne(vendorsTable.logoUrl, ""),
+      ),
+    )
+    .orderBy(asc(vendorsTable.createdAt))
+    .limit(80);
+
+  // Extra JS filter in case DB contains whitespace-only strings
+  const vendors = rows.filter((v) => v.logoUrl?.trim());
+
+  res.json({ count: vendors.length, vendors });
 });
 
 export default router;

@@ -476,6 +476,9 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Trusted By Section */}
+        <TrustedBySection />
+
         {/* Ecosystem Section */}
         <section className="py-28 border-t border-border/50 relative overflow-hidden bg-background/50">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-primary/5 blur-[160px] rounded-full pointer-events-none" />
@@ -773,6 +776,162 @@ function FeatureCard({ title, description, index }: { title: string; description
       {/* Bottom shimmer bar on hover */}
       <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-gradient-to-r from-transparent via-primary/60 to-transparent transition-all duration-700 ease-out pointer-events-none rounded-b-2xl" />
     </motion.div>
+  );
+}
+
+// ─── Trusted By ──────────────────────────────────────────────────────────────
+
+type TrustedVendor = { id: number; name: string; logoUrl: string | null; industry: string | null };
+
+function VendorLogoCard({ vendor }: { vendor: TrustedVendor }) {
+  const initial = vendor.name.trim().charAt(0).toUpperCase();
+  return (
+    <motion.div
+      whileHover={{ scale: 1.07, y: -3 }}
+      transition={{ type: "spring", stiffness: 380, damping: 18 }}
+      className="flex items-center gap-3 shrink-0 px-5 py-3 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 backdrop-blur-sm cursor-default select-none transition-colors"
+    >
+      {vendor.logoUrl ? (
+        <img
+          src={vendor.logoUrl}
+          alt={vendor.name}
+          className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/5"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        />
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
+          <span className="text-xs font-black text-primary">{initial}</span>
+        </div>
+      )}
+      <span className="text-sm font-semibold text-foreground/80 whitespace-nowrap max-w-[140px] truncate">{vendor.name}</span>
+    </motion.div>
+  );
+}
+
+function TrustedBySection() {
+  const { data } = useQuery<{ count: number; vendors: TrustedVendor[] }>({
+    queryKey: ["trusted-vendors"],
+    queryFn: () => fetch("/api/public/trusted-vendors").then((r) => r.json()),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Gate: only show when 10+ vendors have uploaded their logo
+  if (!data || data.count < 10) return null;
+
+  const vendors = data.vendors;
+  // Split into two rows; each row duplicated for seamless infinite loop
+  const mid = Math.ceil(vendors.length / 2);
+  const row1 = [...vendors.slice(0, mid), ...vendors.slice(0, mid)];
+  const row2 = [...vendors.slice(mid), ...vendors.slice(mid)];
+  // Ensure row2 is never empty
+  const safeRow2 = row2.length >= 2 ? row2 : [...vendors, ...vendors];
+
+  return (
+    <section className="py-20 border-t border-border/50 relative overflow-hidden bg-gradient-to-b from-card/20 to-background/60">
+      {/* CSS for marquee animations */}
+      <style>{`
+        @keyframes awa-marquee-ltr {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        @keyframes awa-marquee-rtl {
+          from { transform: translateX(-50%); }
+          to   { transform: translateX(0); }
+        }
+        .awa-marquee-ltr { animation: awa-marquee-ltr 40s linear infinite; }
+        .awa-marquee-rtl { animation: awa-marquee-rtl 32s linear infinite; }
+        .awa-marquee-wrap:hover .awa-marquee-ltr,
+        .awa-marquee-wrap:hover .awa-marquee-rtl { animation-play-state: paused; }
+      `}</style>
+
+      {/* Ambient glow */}
+      <motion.div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(ellipse, hsl(var(--primary)/0.06) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0.9, 0.5] }}
+        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      {/* Edge fade masks */}
+      <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+
+      {/* Heading */}
+      <div className="container mx-auto px-6 max-w-4xl relative z-10 text-center mb-12">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.75, y: 10 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ type: "spring", stiffness: 300, damping: 18 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-border/60 bg-muted/60 text-muted-foreground text-xs font-bold uppercase tracking-widest mb-6"
+        >
+          <motion.span
+            className="w-2 h-2 rounded-full bg-emerald-400"
+            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.6, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          Trusted by {data.count}+ businesses
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 24, filter: "blur(4px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.1, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4"
+        >
+          Growing businesses run on{" "}
+          <span className="text-primary">Awa Biz Suite</span>
+        </motion.h2>
+
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="text-muted-foreground text-base font-medium max-w-xl mx-auto"
+        >
+          Operators across Africa and the diaspora trust us to run their entire business.
+        </motion.p>
+      </div>
+
+      {/* Marquee rows */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.3, duration: 0.7 }}
+        className="space-y-4 awa-marquee-wrap relative z-[5]"
+      >
+        {/* Row 1 — scrolls left */}
+        <div className="overflow-hidden">
+          <div className="awa-marquee-ltr flex gap-4">
+            {row1.map((v, i) => <VendorLogoCard key={`r1-${v.id}-${i}`} vendor={v} />)}
+          </div>
+        </div>
+
+        {/* Row 2 — scrolls right */}
+        <div className="overflow-hidden">
+          <div className="awa-marquee-rtl flex gap-4">
+            {safeRow2.map((v, i) => <VendorLogoCard key={`r2-${v.id}-${i}`} vendor={v} />)}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Bottom CTA nudge */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.5 }}
+        className="text-center mt-10 relative z-10"
+      >
+        <p className="text-xs text-muted-foreground/50 font-medium">
+          Your logo could be here —{" "}
+          <a href="/sign-up" className="text-primary hover:underline font-semibold">join free today</a>
+        </p>
+      </motion.div>
+    </section>
   );
 }
 
