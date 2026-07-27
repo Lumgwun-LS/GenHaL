@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { trackPageView } from "@/lib/analytics";
+import { useUser } from "@clerk/react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -242,7 +243,14 @@ function AuthenticatedRoute({ component: Component }: { component: React.Compone
 
 function PageViewTracker() {
   const [location] = useLocation();
-  useEffect(() => { trackPageView(location); }, [location]);
+  const { user } = useUser();
+  const { vendor } = useCurrentVendor();
+  useEffect(() => {
+    trackPageView(location, {
+      isAuthenticated: !!user,
+      vendorId: vendor?.id ?? null,
+    });
+  }, [location, user, vendor]);
   return null;
 }
 

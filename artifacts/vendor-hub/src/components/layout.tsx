@@ -40,7 +40,9 @@ import {
   Home,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { trackEvent } from "@/lib/analytics";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -206,6 +208,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const search = useSearch();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const isAdmin = useIsAdmin();
+  const { vendor } = useCurrentVendor();
+
+  const handleNavClick = useCallback((label: string) => {
+    setIsMobileOpen(false);
+    trackEvent("nav_click", label, { vendorId: vendor?.id ?? null });
+  }, [vendor]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -268,7 +276,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
-                    onClick={() => setIsMobileOpen(false)}
+                    onClick={() => handleNavClick(item.label)}
                     >
                       <item.icon className="w-4 h-4 shrink-0" />
                       {item.label}

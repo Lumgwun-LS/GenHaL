@@ -8,7 +8,8 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db, vendorsTable, paymentsTable, salesTable, expensesTable, investmentsTable, pageViewsTable, storeDeveloperAccountsTable, adminExportLogsTable, vendorOverageChargesTable, resourceUsageTable, aiGenerationsTable, vendorUploadsTable } from "@workspace/db";
-import { and, gte, lte, sql, eq, isNotNull } from "drizzle-orm";
+import { and, gte, lte, sql, eq, isNotNull, desc } from "drizzle-orm";
+import { eventLogsTable } from "@workspace/db";
 import { resolveDateRange } from "../lib/date-range";
 import { computeFinanceOverview } from "../lib/finance-overview";
 import { getExportBurstStatus, checkExportBurst } from "../lib/admin-export-burst";
@@ -878,4 +879,166 @@ router.get("/admin/analytics/platform-financials", async (req, res): Promise<voi
   }
 });
 
+// ── GET /admin/analytics/visitor-intelligence ─────────────────────────────────
+// Rich pageview + event breakdown: sources, geo, device, time-of-day, menus.
+router.get("/admin/analytics/visitor-intelligence", async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+    const { period = "month", from, to } = req.query as Record<string, string>;
+    const range = resolveDateRange({ period, from, to });
+    const rangeFrom = range.from;
+    const rangeTo   = range.to;
+
+    const [views, events] = await Promise.all([
+      db.select().from(pageViewsTable).where(
+        and(gte(pageViewsTable.createdAt, rangeFrom), lte(pageViewsTable.createdAt, rangeTo))
+      ),
+      db.select().from(eventLogsTable).where(
+        and(gte(eventLogsTable.createdAt, rangeFrom), lte(eventLogsTable.createdAt, rangeTo))
+      ),
+    ]);
+
+    // ── KPIs ──────────────────────────────────────────────────────────────────
+    const totalViews = views.length;
+    const uniqueSessions = new Set(views.map((v) => v.sessionId).filter(Boolean)).size;
+    const authenticatedSessions = new Set(
+      views.filter((v) => v.isAuthenticated).map((v) => v.sessionId).filter(Boolean)
+    ).size;
+    const signupConversionRate = uniqueSessions > 0
+      ? +((authenticatedSessions / uniqueSessions) * 100).toFixed(1)
+      : 0;
+
+    // ── Traffic sources ───────────────────────────────────────────────────────
+    const sourceMap: Record<string, number> = {};
+    for (const v of views) {
+      const src = v.trafficSource ?? "Direct";
+      sourceMap[src] = (sourceMap[src] ?? 0) + 1;
+    }
+    const trafficSources = Object.entries(sourceMap)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Countries ─────────────────────────────────────────────────────────────
+    const countryMap: Record<string, number> = {};
+    for (const v of views) {
+      const c = v.country ?? "Unknown";
+      countryMap[c] = (countryMap[c] ?? 0) + 1;
+    }
+    const countriesFromVisits = Object.entries(countryMap)
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    // ── Time patterns ─────────────────────────────────────────────────────────
+    const hourBuckets: number[] = Array(24).fill(0);
+    const dayBuckets: number[] = Array(7).fill(0); // 0=Sun … 6=Sat
+    for (const v of views) {
+      hourBuckets[v.createdAt.getUTCHours()]!++;
+      dayBuckets[v.createdAt.getUTCDay()]!++;
+    }
+    const byHour = hourBuckets.map((count, hour) => ({ hour, count }));
+    const byDayOfWeek = dayBuckets.map((count, day) => ({
+      day: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]!,
+      count,
+    }));
+
+    // ── Device / browser / OS ─────────────────────────────────────────────────
+    function bucket(items: typeof views, key: keyof typeof views[0]) {
+      const m: Record<string, number> = {};
+      for (const v of items) {
+        const k = (v[key] as string | null) ?? "Unknown";
+        m[k] = (m[k] ?? 0) + 1;
+      }
+      return Object.entries(m).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    }
+    const byDevice  = bucket(views, "device");
+    const byBrowser = bucket(views, "browser");
+    const byOS      = bucket(views, "os");
+
+    // ── Top pages ─────────────────────────────────────────────────────────────
+    const pageMap: Record<string, number> = {};
+    for (const v of views) {
+      // Normalize path: strip query string
+      const p = v.path.split("?")[0]!;
+      pageMap[p] = (pageMap[p] ?? 0) + 1;
+    }
+    const topPages = Object.entries(pageMap)
+      .map(([path, count]) => ({ path, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    // ── UTM campaigns ─────────────────────────────────────────────────────────
+    const campaignMap: Record<string, number> = {};
+    for (const v of views.filter((x) => x.utmCampaign)) {
+      const k = `${v.utmSource ?? "?"} / ${v.utmMedium ?? "?"} / ${v.utmCampaign}`;
+      campaignMap[k] = (campaignMap[k] ?? 0) + 1;
+    }
+    const utmCampaigns = Object.entries(campaignMap)
+      .map(([campaign, count]) => ({ campaign, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    // ── Menu / nav event usage ─────────────────────────────────────────────────
+    const menuMap: Record<string, number> = {};
+    for (const e of events.filter((x) => x.eventType === "nav_click")) {
+      menuMap[e.eventName] = (menuMap[e.eventName] ?? 0) + 1;
+    }
+    const menuUsage = Object.entries(menuMap)
+      .map(([menu, count]) => ({ menu, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Visitors over time (daily) ─────────────────────────────────────────────
+    const dailyMap: Record<string, { views: number; sessions: Set<string> }> = {};
+    for (const v of views) {
+      const d = v.createdAt.toISOString().split("T")[0]!;
+      if (!dailyMap[d]) dailyMap[d] = { views: 0, sessions: new Set() };
+      dailyMap[d]!.views++;
+      if (v.sessionId) dailyMap[d]!.sessions.add(v.sessionId);
+    }
+    const visitorsOverTime = Object.entries(dailyMap)
+      .map(([date, { views: v, sessions }]) => ({ date, views: v, uniqueSessions: sessions.size }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // ── Platform breakdown ────────────────────────────────────────────────────
+    const platformMap: Record<string, number> = {};
+    for (const v of views) {
+      platformMap[v.platform] = (platformMap[v.platform] ?? 0) + 1;
+    }
+    const byPlatform = Object.entries(platformMap)
+      .map(([platform, count]) => ({ platform, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      period: { from: rangeFrom.toISOString(), to: rangeTo.toISOString() },
+      kpis: {
+        totalViews,
+        uniqueSessions,
+        authenticatedSessions,
+        anonymousSessions: uniqueSessions - authenticatedSessions,
+        signupConversionRate,
+        totalMenuEvents: events.filter((e) => e.eventType === "nav_click").length,
+      },
+      trafficSources,
+      countriesFromVisits,
+      byHour,
+      byDayOfWeek,
+      byDevice,
+      byBrowser,
+      byOS,
+      topPages,
+      utmCampaigns,
+      menuUsage,
+      visitorsOverTime,
+      byPlatform,
+    });
+  } catch (err) {
+    console.error("GET /admin/analytics/visitor-intelligence error:", err);
+    res.status(500).json({ error: "Failed to load visitor intelligence" });
+  }
+});
+
 export default router;
+

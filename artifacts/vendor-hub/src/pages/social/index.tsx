@@ -593,6 +593,16 @@ function ConnectedAccounts() {
                     Reconnect
                   </Button>
                 )}
+                {a.status === "needs_reconnect" && a.connectedVia === "oauth_linkedin" && (
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleConnectLinkedIn}>
+                    Reconnect
+                  </Button>
+                )}
+                {a.status === "needs_reconnect" && a.connectedVia === "oauth_twitter" && (
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleConnectTwitter}>
+                    Reconnect
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDisconnect(a.id)}>
                   <Trash2 className="w-3 h-3" />
                 </Button>
