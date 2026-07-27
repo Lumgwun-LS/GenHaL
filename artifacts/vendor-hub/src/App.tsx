@@ -54,6 +54,8 @@ import InvoicePublicPage from "@/pages/invoice-public/index";
 import RealEstatePage from "@/pages/real-estate/index";
 import PublicPropertyListings from "@/pages/real-estate/public";
 import ArchitectPage from "@/pages/architect/index";
+import DevelopersPage from "@/pages/developers";
+import OAuthConsent from "@/pages/oauth-consent";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -302,6 +304,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/home" component={LandingPage} />
+          <Route path="/developers" component={DevelopersPage} />
+          <Route path="/oauth/authorize" component={OAuthConsent} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/pricing" component={PricingPage} />
           <Route path="/site/:slug" component={PublicSitePage} />

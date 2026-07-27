@@ -8,8 +8,9 @@ import {
   MessageSquareText, Zap, ChevronRight, 
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
   Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2,
-  Library, Target
+  Library, Target, HelpCircle, Plus
 } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
 
 const SOCIAL_LINKS = [
@@ -505,6 +506,116 @@ export default function LandingPage() {
               reporting and responding to emergencies, commerce, and education. The WeChat of Africa, and the
               digital infrastructure that will power states and organizations across Africa and beyond.
             </motion.p>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="py-28 border-t border-border/50 relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 blur-[140px] rounded-full pointer-events-none" />
+          <div className="container mx-auto px-6 max-w-3xl relative z-10">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <Badge className="border-primary/30 bg-primary/10 text-primary px-4 py-1.5 text-xs font-bold uppercase tracking-wider mb-4">
+                <HelpCircle className="w-3.5 h-3.5 mr-2" /> FAQ
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-balance">
+                Common questions
+              </h2>
+              <p className="text-muted-foreground mt-3 text-lg font-medium">
+                Everything you need to know about Awa Biz Suite.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+            >
+              <Accordion type="single" collapsible className="space-y-3">
+                {[
+                  {
+                    q: "What is Awa Biz Suite / Awajimaa AI?",
+                    a: "Awa Biz Suite is an all-in-one business command centre built for vendors, agencies, and multi-brand operators. It brings social media management, inventory, orders, leads, CRM, payments, SMS & email campaigns, AI content creation, and analytics into one dashboard — no juggling 10 separate tools. It's powered by Awajimaa AI, part of the broader Awajimaa App ecosystem."
+                  },
+                  {
+                    q: "Is there a free plan?",
+                    a: "Yes. The Free plan gives you access to the core features with generous limits so you can run your business without paying anything upfront. Paid plans (Starter, Professional, Enterprise) unlock higher quotas, advanced AI features, voice campaigns, and priority support. You can upgrade, downgrade, or cancel at any time."
+                  },
+                  {
+                    q: "What payment gateways are supported?",
+                    a: "Awa Biz Suite supports Stripe (USD), Paystack (NGN), PayPal, Flutterwave, Nomba, and Remita out of the box. You can enable only the gateways relevant to your customers. Each gateway connects with your own merchant credentials so funds go directly to your account."
+                  },
+                  {
+                    q: "Can I connect Awa Biz Suite to Zapier, HubSpot, my CRM, or an AI platform?",
+                    a: "Absolutely — that's a core capability. Generate an API key from Account → Developer, or use our full OAuth 2.0 flow for marketplace-grade integrations. We expose a REST API covering posts, leads, products, inventory, orders, campaigns, and analytics, plus real-time webhooks for events like order.paid and lead.created. See the Developer Docs for guides specific to Zapier, HubSpot, Salesforce, Make, Power Automate, and n8n."
+                  },
+                  {
+                    q: "Is there a mobile app?",
+                    a: "Yes. Awa Biz Suite Mobile (available on iOS and Android via the Expo/EAS build) gives you a full dashboard on the go — manage products, orders, leads, and social posts from anywhere. Download links are in the App section of your dashboard."
+                  },
+                  {
+                    q: "How does the AI assistant work?",
+                    a: "The AI is embedded throughout the platform. The Social Media Manager generates captions and images for any platform in seconds. The AI Design Studio (Architect) creates brand assets and edits existing designs using vision + image generation. The AI Content Studio auto-generates full post batches. Voice Control lets you speak commands to fill forms and navigate — all powered by OpenAI and Google Gemini models running through our secure integration layer."
+                  },
+                  {
+                    q: "Can I manage multiple brands or businesses?",
+                    a: "Each vendor account represents one brand. If you manage multiple businesses, you can create separate vendor accounts (one per business) and switch between them. Enterprise plans include bulk management features and shared analytics across accounts."
+                  },
+                  {
+                    q: "Which social media platforms can I post to?",
+                    a: "Facebook Pages, Instagram Business, LinkedIn (personal profile), and X (Twitter) are supported with direct publishing. TikTok content can be drafted and scheduled with manual posting guidance. You can connect multiple accounts per platform and manage them all from a single compose screen."
+                  },
+                  {
+                    q: "What happens if I go over my plan's usage limits?",
+                    a: "Paid-tier vendors are never hard-blocked when they exceed their monthly quota. Instead, overage is tracked transparently and billed as a small pay-as-you-go charge at the end of the billing period — you always stay operational. Free-tier accounts are paused at the limit until the next period."
+                  },
+                  {
+                    q: "How secure is my data?",
+                    a: "All data is encrypted in transit (TLS 1.3) and at rest. Clerk handles authentication — your passwords are never stored by us. Payment credentials are stored encrypted and never logged. API keys are stored as SHA-256 hashes; the raw key is shown only once. Webhook signatures use HMAC-SHA256 so you can verify every delivery came from us."
+                  },
+                  {
+                    q: "Can I export my data?",
+                    a: "Yes. You can export orders, leads, products, expenses, and sales as CSV from the dashboard at any time. The API also gives programmatic access to all your data with no export quotas. If you need a full data extract for compliance or migration, contact support@awajimaaai.com."
+                  },
+                  {
+                    q: "How do I cancel my subscription?",
+                    a: "Go to Account → Billing → Manage Subscription. You'll be redirected to your Stripe or Paystack billing portal where you can cancel with one click. Your paid features remain active until the end of the current billing period — no pro-rating, no surprise charges."
+                  },
+                  {
+                    q: "What support do you offer?",
+                    a: "All plans include email support (support@awajimaaai.com). Starter and above include priority response. Professional and Enterprise customers can schedule calls with the team. We also maintain a developer support line at developers@awajimaaai.com for API and integration questions."
+                  },
+                  {
+                    q: "What countries is Awa Biz Suite available in?",
+                    a: "Awa Biz Suite is available globally. The platform is optimised for Nigerian businesses (Naira pricing, Paystack, Nomba, Remita, and local phone formats) and fully supports USD pricing and Stripe for international vendors. We're based in Port Harcourt, Nigeria and Gaithersburg, Maryland USA."
+                  },
+                ].map(({ q, a }, i) => (
+                  <AccordionItem
+                    key={i}
+                    value={`item-${i}`}
+                    className="border border-border/50 rounded-xl px-5 bg-card/30 backdrop-blur-sm data-[state=open]:border-primary/30 data-[state=open]:bg-primary/5 transition-colors"
+                  >
+                    <AccordionTrigger className="text-left font-semibold text-sm py-4 hover:no-underline gap-3 [&>svg]:hidden">
+                      <span className="flex-1 text-left">{q}</span>
+                      <Plus className="w-4 h-4 shrink-0 text-primary transition-transform duration-200 [[data-state=open]_&]:rotate-45" />
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground text-sm leading-relaxed pb-4">
+                      {a}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+              className="text-center mt-10 text-sm text-muted-foreground"
+            >
+              Still have questions?{" "}
+              <a href="mailto:support@awajimaaai.com" className="text-primary hover:underline font-medium">
+                Email us at support@awajimaaai.com
+              </a>
+            </motion.div>
           </div>
         </section>
 

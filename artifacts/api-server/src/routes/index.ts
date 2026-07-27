@@ -58,6 +58,8 @@ import mediaLibraryRouter from "./media-library";
 import realEstatePublicRouter from "./real-estate-public";
 import realEstateRouter from "./real-estate";
 import architectRouter from "./architect";
+import developerRouter from "./developer";
+import oauthRouter from "./oauth";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -97,6 +99,9 @@ router.use("/store/ai-launch", storeAiLaunchRouter);
 
 // Visitor pageview beacon — public, no auth needed
 router.use(analyticsPublicRouter);
+
+// OAuth 2.0 server — mostly public (token, revoke, well-known); /oauth/authorize verifies Clerk internally
+router.use(oauthRouter);
 
 // Public invoice pages — no auth required, scoped by shareToken
 router.use(invoicesPublicRouter);
@@ -154,5 +159,6 @@ router.use(aiQuickCreateRouter);
 router.use(invoicesRouter);
 router.use(realEstateRouter);
 router.use(architectRouter);
+router.use(developerRouter);
 
 export default router;

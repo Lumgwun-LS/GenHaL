@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useVoice } from "@/contexts/voice-context";
@@ -13,9 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +32,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { AlertTriangle, CheckCircle2, Loader2, Mic } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle, CheckCircle2, Loader2, Mic, Key, Webhook, Plus, Trash2, Copy, CheckCheck, ExternalLink, Eye, EyeOff, Code2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
@@ -357,7 +372,428 @@ export default function Account() {
         city={(myVendor as any).city ?? null}
       />
 
+      <DeveloperSection vendorId={myVendor.id} />
+
       <DeleteAccountSection vendorId={myVendor.id} />
     </div>
+  );
+}
+
+// ─── Developer Section ────────────────────────────────────────────────────────
+
+const ALL_SCOPES = [
+  { id: "read",             label: "Read",             desc: "Read posts, leads, products, orders, analytics" },
+  { id: "write:posts",      label: "Write: Posts",     desc: "Create, edit, delete social posts" },
+  { id: "write:leads",      label: "Write: Leads",     desc: "Create, update, delete leads" },
+  { id: "write:products",   label: "Write: Products",  desc: "Create, edit, delete products" },
+  { id: "write:orders",     label: "Write: Orders",    desc: "Create and update orders" },
+  { id: "write:inventory",  label: "Write: Inventory", desc: "Adjust inventory levels" },
+  { id: "write:campaigns",  label: "Write: Campaigns", desc: "Create and send campaigns" },
+  { id: "analytics",        label: "Analytics",        desc: "Access detailed analytics" },
+];
+
+const WEBHOOK_EVENTS = [
+  "*", "order.created", "order.paid", "order.cancelled",
+  "lead.created", "lead.updated",
+  "payment.succeeded", "payment.failed",
+  "post.published", "post.failed",
+  "product.created", "product.updated", "product.deleted",
+];
+
+interface ApiKeyRow {
+  id: number; name: string; prefix: string; scopes: string[];
+  isActive: boolean; lastUsedAt: string | null; createdAt: string | null;
+}
+interface WebhookRow {
+  id: number; url: string; rawSecretPreview: string | null;
+  events: string[]; isActive: boolean; createdAt: string | null;
+}
+
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button onClick={copy} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded">
+      {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
+function DeveloperSection({ vendorId: _vendorId }: { vendorId: number }) {
+  // ── API Keys state ──────────────────────────────────────────────────────────
+  const [keys, setKeys] = useState<ApiKeyRow[]>([]);
+  const [keysLoading, setKeysLoading] = useState(true);
+  const [newKeyName, setNewKeyName]   = useState("");
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(["read"]);
+  const [creatingKey, setCreatingKey]  = useState(false);
+  const [revealedKey, setRevealedKey]  = useState<string | null>(null);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+
+  // ── Webhooks state ──────────────────────────────────────────────────────────
+  const [hooks, setHooks]             = useState<WebhookRow[]>([]);
+  const [hooksLoading, setHooksLoading] = useState(true);
+  const [newHookUrl, setNewHookUrl]   = useState("");
+  const [newHookEvents, setNewHookEvents] = useState<string[]>(["*"]);
+  const [creatingHook, setCreatingHook]   = useState(false);
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [hookDialogOpen, setHookDialogOpen] = useState(false);
+  const [testingHook, setTestingHook] = useState<number | null>(null);
+
+  const fetchKeys = useCallback(async () => {
+    setKeysLoading(true);
+    try {
+      const r = await fetch("/api/developer/api-keys");
+      if (r.ok) setKeys(await r.json());
+    } finally { setKeysLoading(false); }
+  }, []);
+
+  const fetchHooks = useCallback(async () => {
+    setHooksLoading(true);
+    try {
+      const r = await fetch("/api/developer/webhooks");
+      if (r.ok) setHooks(await r.json());
+    } finally { setHooksLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchKeys(); fetchHooks(); }, [fetchKeys, fetchHooks]);
+
+  async function createKey() {
+    if (!newKeyName.trim()) { toast.error("Give the key a name"); return; }
+    if (!newKeyScopes.length) { toast.error("Select at least one scope"); return; }
+    setCreatingKey(true);
+    try {
+      const r = await fetch("/api/developer/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName.trim(), scopes: newKeyScopes }),
+      });
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.error ?? "Could not create API key"); return; }
+      setRevealedKey(data.rawKey);
+      setNewKeyName(""); setNewKeyScopes(["read"]);
+      fetchKeys();
+    } finally { setCreatingKey(false); }
+  }
+
+  async function revokeKey(id: number) {
+    const r = await fetch(`/api/developer/api-keys/${id}`, { method: "DELETE" });
+    if (r.ok) { toast.success("API key revoked"); fetchKeys(); }
+    else toast.error("Could not revoke key");
+  }
+
+  async function createHook() {
+    if (!newHookUrl.startsWith("https://")) { toast.error("URL must start with https://"); return; }
+    setCreatingHook(true);
+    try {
+      const r = await fetch("/api/developer/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newHookUrl.trim(), events: newHookEvents }),
+      });
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.error ?? "Could not register webhook"); return; }
+      setRevealedSecret(data.rawSecret);
+      setNewHookUrl(""); setNewHookEvents(["*"]);
+      fetchHooks();
+    } finally { setCreatingHook(false); }
+  }
+
+  async function deleteHook(id: number) {
+    const r = await fetch(`/api/developer/webhooks/${id}`, { method: "DELETE" });
+    if (r.ok) { toast.success("Webhook removed"); fetchHooks(); }
+    else toast.error("Could not remove webhook");
+  }
+
+  async function testHook(id: number) {
+    setTestingHook(id);
+    try {
+      const r = await fetch(`/api/developer/webhooks/${id}/test`, { method: "POST" });
+      const data = await r.json();
+      if (data.ok) toast.success(`Test event delivered (HTTP ${data.statusCode})`);
+      else toast.error(`Delivery failed: ${data.error ?? data.statusCode}`);
+    } finally { setTestingHook(null); }
+  }
+
+  function toggleScope(scope: string) {
+    setNewKeyScopes((prev) => prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]);
+  }
+  function toggleEvent(ev: string) {
+    if (ev === "*") { setNewHookEvents(["*"]); return; }
+    setNewHookEvents((prev) => {
+      const without = prev.filter((e) => e !== "*" && e !== ev);
+      return prev.includes(ev) ? without : [...without, ev];
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Code2 className="w-4 h-4 text-violet-500" />
+          Developer & Integrations
+        </CardTitle>
+        <CardDescription className="leading-relaxed">
+          Connect Zapier, Make, HubSpot, CRMs, AI platforms, or any custom app to your business data using API keys or OAuth 2.0.{" "}
+          <Link href="/developers" className="text-violet-400 hover:underline inline-flex items-center gap-0.5">
+            View full docs <ExternalLink className="w-3 h-3" />
+          </Link>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <Tabs defaultValue="api-keys">
+          <TabsList className="mb-4">
+            <TabsTrigger value="api-keys" className="gap-1.5">
+              <Key className="w-3.5 h-3.5" /> API Keys
+            </TabsTrigger>
+            <TabsTrigger value="webhooks" className="gap-1.5">
+              <Webhook className="w-3.5 h-3.5" /> Webhooks
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── API Keys ─────────────────────────────────────────────── */}
+          <TabsContent value="api-keys" className="space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Use an API key as a Bearer token on <code className="bg-muted px-1 rounded text-xs">https://awajimaaapp.io/api/external/features/*</code>. Keys are shown once — save them immediately.
+            </p>
+
+            {/* Revealed key banner */}
+            {revealedKey && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3 space-y-2">
+                <p className="text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> API key created — copy it now, it won't be shown again
+                </p>
+                <div className="flex items-center gap-2 bg-background/50 rounded px-3 py-1.5 border border-border/40">
+                  <code className="flex-1 text-xs font-mono break-all text-foreground/90">{revealedKey}</code>
+                  <CopyBtn text={revealedKey} />
+                </div>
+                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setRevealedKey(null)}>Dismiss</Button>
+              </div>
+            )}
+
+            {/* Existing keys */}
+            {keysLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading keys…</div>
+            ) : keys.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No API keys yet. Create one below.</p>
+            ) : (
+              <div className="space-y-2">
+                {keys.map((k) => (
+                  <div key={k.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-muted/20">
+                    <Key className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium truncate">{k.name}</span>
+                        {k.isActive
+                          ? <Badge variant="secondary" className="text-xs py-0 px-1.5 bg-green-500/10 text-green-400 border-green-500/20">Active</Badge>
+                          : <Badge variant="secondary" className="text-xs py-0 px-1.5">Revoked</Badge>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <code className="text-xs font-mono text-muted-foreground">{k.prefix}…</code>
+                        <span className="text-xs text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground">{k.scopes.join(", ")}</span>
+                      </div>
+                      {k.lastUsedAt && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Last used {new Date(k.lastUsedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {k.isActive && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 w-8 p-0 shrink-0">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Revoke "{k.name}"?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Any integrations using this key will immediately stop working. This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => revokeKey(k.id)} className="bg-destructive hover:bg-destructive/90">
+                              Revoke key
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Create new key */}
+            <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <Plus className="w-4 h-4" /> New API key
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create API key</DialogTitle>
+                  <DialogDescription>Choose a name and select the permissions this key will have.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Key name</Label>
+                    <Input
+                      placeholder="e.g. Zapier integration, HubSpot CRM"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Permissions (scopes)</Label>
+                    <div className="grid grid-cols-1 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                      {ALL_SCOPES.map((s) => (
+                        <label key={s.id} className="flex items-start gap-2.5 p-2 rounded-lg border border-border/40 hover:border-border cursor-pointer transition-colors" htmlFor={`scope-key-${s.id}`}>
+                          <Checkbox id={`scope-key-${s.id}`} checked={newKeyScopes.includes(s.id)} onCheckedChange={() => toggleScope(s.id)} className="mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-xs font-medium leading-none">{s.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setKeyDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={async () => { await createKey(); if (!creatingKey) setKeyDialogOpen(false); }} disabled={creatingKey} className="bg-violet-600 hover:bg-violet-700">
+                    {creatingKey && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Create key
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+          {/* ── Webhooks ─────────────────────────────────────────────── */}
+          <TabsContent value="webhooks" className="space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Awa Biz Suite will POST real-time events to your HTTPS endpoint. Payloads are HMAC-SHA256 signed with your secret.
+            </p>
+
+            {/* Revealed secret banner */}
+            {revealedSecret && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3 space-y-2">
+                <p className="text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> Webhook created — copy the signing secret now
+                </p>
+                <div className="flex items-center gap-2 bg-background/50 rounded px-3 py-1.5 border border-border/40">
+                  <code className="flex-1 text-xs font-mono break-all text-foreground/90">{revealedSecret}</code>
+                  <CopyBtn text={revealedSecret} />
+                </div>
+                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setRevealedSecret(null)}>Dismiss</Button>
+              </div>
+            )}
+
+            {/* Existing webhooks */}
+            {hooksLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading webhooks…</div>
+            ) : hooks.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No webhooks yet. Register one below.</p>
+            ) : (
+              <div className="space-y-2">
+                {hooks.map((h) => (
+                  <div key={h.id} className="p-3 rounded-lg border border-border/40 bg-muted/20 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Webhook className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <code className="text-xs font-mono text-foreground/90 truncate max-w-xs">{h.url}</code>
+                          {h.isActive
+                            ? <Badge variant="secondary" className="text-xs py-0 px-1.5 bg-green-500/10 text-green-400 border-green-500/20">Active</Badge>
+                            : <Badge variant="secondary" className="text-xs py-0 px-1.5">Inactive</Badge>}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {h.events.map((e) => (
+                            <code key={e} className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded border border-border/40 text-muted-foreground">{e}</code>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => testHook(h.id)} disabled={testingHook === h.id}>
+                          {testingHook === h.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Test"}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 w-7 p-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remove webhook?</AlertDialogTitle>
+                              <AlertDialogDescription>Events will no longer be sent to {h.url}.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteHook(h.id)} className="bg-destructive hover:bg-destructive/90">Remove</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Register webhook */}
+            <Dialog open={hookDialogOpen} onOpenChange={setHookDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <Plus className="w-4 h-4" /> Register webhook
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Register webhook endpoint</DialogTitle>
+                  <DialogDescription>Awa Biz Suite will POST signed JSON payloads to this HTTPS URL.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Endpoint URL (HTTPS only)</Label>
+                    <Input
+                      placeholder="https://yourapp.com/webhooks/awa"
+                      value={newHookUrl}
+                      onChange={(e) => setNewHookUrl(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Events to receive</Label>
+                    <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {WEBHOOK_EVENTS.map((ev) => (
+                        <label key={ev} className="flex items-center gap-2 p-1.5 rounded border border-border/40 hover:border-border cursor-pointer transition-colors text-xs" htmlFor={`event-${ev}`}>
+                          <Checkbox id={`event-${ev}`} checked={newHookEvents.includes(ev) || (ev !== "*" && newHookEvents.includes("*"))} onCheckedChange={() => toggleEvent(ev)} />
+                          <code className="font-mono text-xs">{ev}</code>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setHookDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={async () => { await createHook(); setHookDialogOpen(false); }} disabled={creatingHook} className="bg-violet-600 hover:bg-violet-700">
+                    {creatingHook && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Register
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
