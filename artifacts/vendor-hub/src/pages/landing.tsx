@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import WhatsAppButton from "@/components/whatsapp-button";
 import { Button } from "@/components/ui/button";
 import { 
   MessageSquareText, Zap, ChevronRight, 
@@ -304,24 +305,56 @@ export default function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section className="py-24 relative border-t border-border/50 bg-background/50">
+        <section className="py-28 relative border-t border-border/50 bg-background/50 overflow-hidden">
+          {/* Slow-breathing ambient orb */}
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(var(--primary)/0.07) 0%, transparent 70%)" }}
+            animate={{ scale: [1, 1.18, 1], opacity: [0.45, 0.85, 0.45] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          />
+          {/* Subtle grid texture overlay */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.025]"
+            style={{ backgroundImage: "linear-gradient(to right,currentColor 1px,transparent 1px),linear-gradient(to bottom,currentColor 1px,transparent 1px)", backgroundSize: "48px 48px" }} />
+
           <div className="container mx-auto px-6 max-w-6xl relative z-10">
-            <div className="text-center mb-16">
-              <motion.h2 
-                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
+            <div className="text-center mb-18">
+              {/* Animated badge */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.7, y: 16 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ type: "spring", stiffness: 320, damping: 18 }}
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-7 select-none"
+              >
+                <motion.span animate={{ rotate: [0, 15, -10, 0] }} transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 4 }}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                </motion.span>
+                Full Platform
+              </motion.div>
+
+              <motion.h2
+                initial={{ opacity: 0, y: 40, scale: 0.93, filter: "blur(4px)" }}
+                whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                viewport={{ once: true }}
+                transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.08 }}
+                className="text-3xl md:text-5xl font-extrabold tracking-tight mb-5"
               >
                 {features?.heading ?? "Everything you need to scale"}
               </motion.h2>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+
+              <motion.p
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.2, duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
                 className="text-muted-foreground max-w-2xl mx-auto text-lg font-medium"
               >
-                {features?.subheading ?? "We've collapsed 9 different SaaS products into one cohesive, blazing-fast experience."}
+                {features?.subheading ?? "We've collapsed a dozen different SaaS products into one cohesive, blazing-fast experience."}
               </motion.p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-14">
               {featuresList.map((f, i) => (
                 <FeatureCard key={f.title} title={f.title} description={f.description} index={i} />
               ))}
@@ -634,6 +667,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* WhatsApp floating button — visible to all visitors */}
+      <WhatsAppButton />
     </div>
   );
 }
@@ -646,21 +682,98 @@ function Badge({ children, className }: { children: React.ReactNode, className?:
   )
 }
 
-function FeatureCard({ title, description, index }: { title: string, description: string, index: number }) {
+// Per-column entry animation: left-slide → zoom-bounce → right-slide
+const CARD_ENTRY = [
+  { hidden: { opacity: 0, x: -60, rotateY: -12 }, visible: { opacity: 1, x: 0, rotateY: 0 } },
+  { hidden: { opacity: 0, y: 64, scale: 0.7  }, visible: { opacity: 1, y: 0, scale: 1  } },
+  { hidden: { opacity: 0, x:  60, rotateY:  12 }, visible: { opacity: 1, x: 0, rotateY: 0 } },
+] as const;
+
+const CARD_ACCENT = [
+  "from-violet-500/20 via-primary/10 to-transparent",
+  "from-blue-500/20 via-cyan-500/10 to-transparent",
+  "from-emerald-500/20 via-teal-500/10 to-transparent",
+  "from-rose-500/20 via-orange-500/10 to-transparent",
+  "from-amber-500/20 via-yellow-500/10 to-transparent",
+  "from-fuchsia-500/20 via-pink-500/10 to-transparent",
+];
+
+function FeatureCard({ title, description, index }: { title: string; description: string; index: number }) {
   const Icon = getFeatureIcon(title);
+  const col = index % 3;
+  const row = Math.floor(index / 3);
+  const delay = col * 0.11 + row * 0.07;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.5, delay: index * 0.1 }}
-      className="p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm hover:bg-card/80 hover:border-primary/50 transition-all duration-300 group relative overflow-hidden"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-60px" }}
+      variants={CARD_ENTRY[col]}
+      transition={{
+        type: "spring",
+        stiffness: col === 1 ? 170 : 210,
+        damping: col === 1 ? 15 : 21,
+        delay,
+      }}
+      whileHover={{ y: -8, scale: 1.025, transition: { type: "spring", stiffness: 380, damping: 18 } }}
+      className="p-6 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm hover:border-primary/40 transition-colors duration-300 group relative overflow-hidden cursor-default"
+      style={{ perspective: 900 }}
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors" />
-      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground shadow-sm shadow-primary/0 group-hover:shadow-md group-hover:shadow-primary/30 transition-all duration-300 relative z-10">
-        <Icon className="w-6 h-6" />
-      </div>
-      <h3 className="text-xl font-bold mb-3 text-foreground tracking-tight relative z-10">{title}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed font-medium relative z-10">{description}</p>
+      {/* Hover gradient fill */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${CARD_ACCENT[index % CARD_ACCENT.length]} opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl`} />
+
+      {/* Ambient glow orb */}
+      <div className="absolute -top-8 -right-8 w-36 h-36 bg-primary/6 rounded-full blur-2xl group-hover:bg-primary/14 transition-colors duration-500 pointer-events-none" />
+
+      {/* Card number */}
+      <motion.span
+        initial={{ opacity: 0, scale: 0.5 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        viewport={{ once: true }}
+        transition={{ type: "spring", stiffness: 350, damping: 18, delay: delay + 0.28 }}
+        className="absolute top-4 right-4 text-[11px] font-black text-muted-foreground/20 tabular-nums select-none relative z-10"
+      >
+        {String(index + 1).padStart(2, "0")}
+      </motion.span>
+
+      {/* Icon — bounce-in with spring, wobble on hover */}
+      <motion.div
+        initial={{ scale: 0, rotate: -28 }}
+        whileInView={{ scale: 1, rotate: 0 }}
+        viewport={{ once: true }}
+        transition={{ type: "spring", stiffness: 500, damping: 13, delay: delay + 0.22 }}
+        className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-lg group-hover:shadow-primary/30 transition-all duration-300 relative z-10 shrink-0"
+      >
+        <motion.div whileHover={{ rotate: [0, -10, 10, -5, 0], transition: { duration: 0.45 } }}>
+          <Icon className="w-6 h-6" />
+        </motion.div>
+      </motion.div>
+
+      <motion.h3
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: delay + 0.3, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="text-xl font-bold mb-3 text-foreground tracking-tight relative z-10"
+      >
+        {title}
+      </motion.h3>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: delay + 0.4, duration: 0.55 }}
+        className="text-sm text-muted-foreground leading-relaxed font-medium relative z-10"
+      >
+        {description}
+      </motion.p>
+
+      {/* Bottom shimmer bar on hover */}
+      <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-gradient-to-r from-transparent via-primary/60 to-transparent transition-all duration-700 ease-out pointer-events-none rounded-b-2xl" />
     </motion.div>
-  )
+  );
 }
 
 function StatCard({ value, label, delay = 0 }: { value: string, label: string, delay?: number }) {

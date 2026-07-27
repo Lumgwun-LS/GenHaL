@@ -142,6 +142,7 @@ export const Scene8 = () => {
             backgroundColor: 'rgba(10,8,20,0.85)',
             borderColor: 'rgba(255,255,255,0.08)',
             backdropFilter: 'blur(20px)',
+            transformPerspective: 1200,
           }}
           initial={{ scale: 0.85, opacity: 0, rotateY: 15, rotateX: 8 }}
           animate={
@@ -149,8 +150,7 @@ export const Scene8 = () => {
             phase >= 1 ? { scale: 1, opacity: 1, rotateY: -4, rotateX: 3 } :
             { scale: 0.85, opacity: 0, rotateY: 15, rotateX: 8 }
           }
-          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
-          style2={{ transformPerspective: 1200 }}
+          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] as never }}
         >
           {/* Browser top bar */}
           <div className="flex items-center gap-[0.8vw] px-[1.5vw] py-[1vw] border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>

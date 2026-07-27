@@ -262,10 +262,9 @@ export const Scene9 = () => {
                   <motion.div
                     key={i}
                     className="flex-1 rounded-t-[0.3vw]"
-                    style={{ background: 'linear-gradient(to top, #7F50FF, #FF7F50)' }}
+                    style={{ background: 'linear-gradient(to top, #7F50FF, #FF7F50)', originY: 1 }}
                     initial={{ scaleY: 0 }}
                     animate={phase >= 4 ? { scaleY: 1 } : { scaleY: 0 }}
-                    style2={{ originY: 1 }}
                     transition={{ duration: 0.4, delay: i * 0.06, ease: 'easeOut' }}
                   >
                     <div style={{ height: `${h}%`, background: 'linear-gradient(to top, #7F50FF, #FF7F50)', borderRadius: '0.3vw 0.3vw 0 0' }} />

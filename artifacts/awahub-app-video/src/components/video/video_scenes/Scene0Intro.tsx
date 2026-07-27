@@ -28,7 +28,7 @@ export function Scene0Intro() {
   return (
     <motion.div
       className="absolute inset-0 w-full h-full flex flex-col items-center justify-center z-10"
-      variants={containerVariants}
+      variants={containerVariants as never}
       initial="hidden"
       animate="visible"
       exit="exit"
@@ -56,7 +56,7 @@ export function Scene0Intro() {
 
       <div className="relative z-10 flex flex-col items-center">
         <motion.div 
-          variants={itemVariants}
+          variants={itemVariants as never}
           className="mb-8 relative"
         >
           <div className="w-24 h-24 rounded-3xl bg-primary flex items-center justify-center shadow-2xl shadow-primary/30 relative overflow-hidden">
@@ -75,16 +75,16 @@ export function Scene0Intro() {
         </motion.div>
 
         <motion.h1 
-          variants={itemVariants}
+          variants={itemVariants as never}
           className="font-outfit text-7xl md:text-8xl font-bold tracking-tight text-white mb-6 text-center drop-shadow-lg"
         >
           AWA HUB
         </motion.h1>
         
-        <motion.div variants={itemVariants} className="h-px w-24 bg-gradient-to-r from-transparent via-primary to-transparent mb-6" />
+        <motion.div variants={itemVariants as never} className="h-px w-24 bg-gradient-to-r from-transparent via-primary to-transparent mb-6" />
 
         <motion.h2 
-          variants={itemVariants}
+          variants={itemVariants as never}
           className="text-2xl md:text-3xl font-medium text-foreground/80 tracking-wide text-center"
         >
           <span className="text-primary font-semibold">Africa's</span> Premier
