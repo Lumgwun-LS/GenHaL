@@ -185,10 +185,9 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Real Estate & Design",
+    label: "Design Studio",
     items: [
-      { href: "/real-estate", label: "Properties", icon: Building2 },
-      { href: "/architect", label: "Architect Studio", icon: Ruler },
+      { href: "/architect", label: "AI Design Studio", icon: Ruler },
     ],
   },
   {

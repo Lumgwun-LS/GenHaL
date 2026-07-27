@@ -63,6 +63,17 @@ export const contractorTasksTable = pgTable("contractor_tasks", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const designGenerationsTable = pgTable("design_generations", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  category: text("category").notNull(), // architecture, branding, fashion, interior
+  prompt: text("prompt").notNull(),
+  style: text("style").default("realistic"),
+  imageUrl: text("image_url"),
+  revisedPrompt: text("revised_prompt"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const floorPlansTable = pgTable("floor_plans", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => architectProjectsTable.id, { onDelete: "cascade" }),

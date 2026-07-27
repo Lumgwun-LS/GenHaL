@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
+import { openai } from "@workspace/integrations-openai-ai-server";
 import {
   db, vendorsTable,
   architectProjectsTable, projectMilestonesTable,
   drawingRevisionsTable, contractorTasksTable, floorPlansTable,
+  designGenerationsTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -279,4 +281,87 @@ router.delete("/architect/floor-plans/:id", async (req, res): Promise<void> => {
   res.status(204).end();
 });
 
+// ─── AI DESIGN GENERATION ────────────────────────────────────────────────────
+
+const CATEGORY_CONTEXT: Record<string, string> = {
+  architecture: "Professional architectural visualization, building design exterior render",
+  branding: "Professional business branding design, logo and visual identity concept on clean white background",
+  fashion: "Fashion design illustration, clothing design with fabric pattern details, style sketch",
+  interior: "Professional interior design rendering, room decoration and furniture layout, staged presentation",
+};
+
+const STYLE_CONTEXT: Record<string, string> = {
+  realistic: "photorealistic, high detail, professional photography lighting, ultra realistic",
+  "3d": "high quality 3D render, studio lighting, modern architectural visualization",
+  sketch: "detailed pencil sketch, technical illustration, hand-drawn architectural style",
+  watercolor: "watercolor painting illustration, artistic, soft color palette, beautiful rendering",
+  minimalist: "minimalist aesthetic, clean lines, simple color palette, modern flat design",
+  blueprint: "technical blueprint drawing, white technical lines on deep blue background, precise",
+};
+
+router.get("/architect/designs", async (req, res): Promise<void> => {
+  const { vendorId } = req.query as Record<string, string>;
+  if (!vendorId) { res.status(400).json({ error: "vendorId required" }); return; }
+  const check = await resolveVendorAccess(req, parseInt(vendorId));
+  if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+  const rows = await db.select().from(designGenerationsTable)
+    .where(eq(designGenerationsTable.vendorId, parseInt(vendorId)))
+    .orderBy(desc(designGenerationsTable.createdAt))
+    .limit(60);
+  res.json(rows.map((r) => ser(r as unknown as Record<string, unknown>)));
+});
+
+router.post("/architect/generate-design", async (req, res): Promise<void> => {
+  const { vendorId, prompt, category, style } = req.body;
+  if (!vendorId || !prompt?.trim() || !category) {
+    res.status(400).json({ error: "vendorId, prompt, and category are required" });
+    return;
+  }
+  const check = await resolveVendorAccess(req, vendorId);
+  if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+
+  const catCtx = CATEGORY_CONTEXT[category] ?? "Professional design rendering";
+  const styleCtx = STYLE_CONTEXT[style ?? "realistic"] ?? "high quality, detailed";
+  const fullPrompt = `${catCtx}, ${styleCtx}: ${String(prompt).trim()}. No text labels or watermarks in the image.`;
+
+  const response = await openai.images.generate({
+    model: "dall-e-3",
+    prompt: fullPrompt,
+    n: 1,
+    size: "1024x1024",
+    quality: "standard",
+    response_format: "url",
+  });
+
+  const imageUrl = response.data?.[0]?.url ?? null;
+  const revisedPrompt = response.data?.[0]?.revised_prompt ?? null;
+
+  const [row] = await db.insert(designGenerationsTable).values({
+    vendorId, category, prompt: String(prompt).trim(),
+    style: style ?? "realistic", imageUrl, revisedPrompt,
+  }).returning();
+
+  res.status(201).json(ser(row as unknown as Record<string, unknown>));
+});
+
+// Proxy the image server-side so the frontend can draw it on Canvas without CORS issues
+router.get("/architect/designs/:id/image", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  const [design] = await db.select().from(designGenerationsTable).where(eq(designGenerationsTable.id, id));
+  if (!design?.imageUrl) { res.status(404).json({ error: "Not found" }); return; }
+  const check = await resolveVendorAccess(req, design.vendorId);
+  if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+  try {
+    const imgRes = await fetch(design.imageUrl);
+    if (!imgRes.ok) { res.status(502).json({ error: "Image expired — please regenerate" }); return; }
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(buffer);
+  } catch {
+    res.status(502).json({ error: "Failed to fetch image" });
+  }
+});
+
 export default router;
+
