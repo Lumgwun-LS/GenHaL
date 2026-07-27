@@ -138,6 +138,14 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Insights",
+    items: [
+      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
+      { href: "/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
+    ],
+  },
+  {
     label: "Marketing",
     items: [
       { href: "/social", label: "Social Hub", icon: Share2 },
@@ -165,14 +173,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/sales", label: "Sales", icon: DollarSign },
       { href: "/expenses", label: "Expenses", icon: Receipt },
       { href: "/investments", label: "Investments", icon: PiggyBank },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { href: "/data-analysis", label: "Data Analysis", icon: BarChart2 },
-      { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/finance-analytics", label: "Finance Analytics", icon: LineChart },
     ],
   },
   {
@@ -214,7 +214,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex-col transition-transform duration-200 ease-in-out md:relative md:translate-x-0 md:flex",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3 border-b">
