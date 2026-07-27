@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -194,6 +195,7 @@ const NAV_FEATURE_GROUPS = [
 ];
 
 export default function LandingPage() {
+  const { isSignedIn } = useAuth();
   const { data } = useQuery({ queryKey: ["site-content"], queryFn: fetchSiteContent, staleTime: 60_000 });
   const [activeVideo, setActiveVideo] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -295,12 +297,21 @@ export default function LandingPage() {
             </Link>
 
             <div className="ml-4 flex items-center gap-3">
-              <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-md hover:bg-muted/50">
-                Sign In
-              </Link>
-              <Link href="/sign-up" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all">
-                Start Free Trial
-              </Link>
+              {isSignedIn ? (
+                <Link href="/dashboard" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
+                  Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/sign-in" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-md hover:bg-muted/50">
+                    Sign In
+                  </Link>
+                  <Link href="/sign-up" className="text-sm font-bold text-primary-foreground bg-primary px-5 py-2 rounded-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/40 transition-all">
+                    Start Free Trial
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
 
@@ -361,18 +372,29 @@ export default function LandingPage() {
                   <BookOpen className="w-4 h-4 text-muted-foreground" />
                   Documentation
                 </Link>
-                <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-muted-foreground">
-                  Sign In
-                </Link>
-
-                <div className="pt-2">
-                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center justify-center w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
-                    Start Free Trial
-                    <ChevronRight className="ml-2 w-4 h-4" />
-                  </Link>
-                </div>
+                {isSignedIn ? (
+                  <div className="pt-2">
+                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
+                      <Layers className="w-4 h-4" />
+                      Go to Dashboard
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-muted-foreground">
+                      Sign In
+                    </Link>
+                    <div className="pt-2">
+                      <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center justify-center w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
+                        Start Free Trial
+                        <ChevronRight className="ml-2 w-4 h-4" />
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           )}

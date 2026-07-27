@@ -361,16 +361,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         "md:sticky md:top-0 md:h-screen md:translate-x-0 md:transition-none md:shadow-none"
       )}>
 
-        {/* Sidebar header */}
+        {/* Sidebar header — click logo to go to landing page */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50 shrink-0">
-          <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover" />
-          <div className="flex-1 min-w-0">
-            <span className="font-bold text-sm tracking-tight block truncate">Awa Biz Suite</span>
-            <span className="text-[10px] text-muted-foreground/60 font-medium">Business Platform</span>
-          </div>
+          <Link
+            href="/home"
+            className="flex items-center gap-3 flex-1 min-w-0 group/logo"
+            onClick={() => setIsMobileOpen(false)}
+          >
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover shrink-0 group-hover/logo:opacity-80 transition-opacity" />
+            <div className="min-w-0">
+              <span className="font-bold text-sm tracking-tight block truncate group-hover/logo:text-primary transition-colors">Awa Biz Suite</span>
+              <span className="text-[10px] text-muted-foreground/60 font-medium">Business Platform</span>
+            </div>
+          </Link>
           {/* Mobile close */}
           <button
-            className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0"
             onClick={() => setIsMobileOpen(false)}
           >
             <X className="w-4 h-4" />
