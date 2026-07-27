@@ -2,6 +2,9 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 import {
   db, vendorsTable,
   architectProjectsTable, projectMilestonesTable,
@@ -339,6 +342,86 @@ router.post("/architect/generate-design", async (req, res): Promise<void> => {
   const [row] = await db.insert(designGenerationsTable).values({
     vendorId, category, prompt: String(prompt).trim(),
     style: style ?? "realistic", imageUrl, revisedPrompt,
+  }).returning();
+
+  res.status(201).json(ser(row as unknown as Record<string, unknown>));
+});
+
+// Edit an existing design using GPT-4o vision analysis + DALL·E 3 regeneration
+router.post("/architect/edit-design", upload.single("image"), async (req, res): Promise<void> => {
+  const { vendorId, editPrompt, category, style } = req.body as Record<string, string>;
+  const file = req.file;
+
+  if (!vendorId || !editPrompt?.trim()) {
+    res.status(400).json({ error: "vendorId and editPrompt are required" });
+    return;
+  }
+  if (!file) {
+    res.status(400).json({ error: "An image file is required" });
+    return;
+  }
+
+  const check = await resolveVendorAccess(req, parseInt(vendorId));
+  if (!check.ok) { res.status(check.status).json({ error: check.error }); return; }
+
+  const imageBase64 = file.buffer.toString("base64");
+  const mimeType = file.mimetype || "image/jpeg";
+
+  // Step 1: GPT-4o analyzes the uploaded design and writes an edit-aware DALL·E 3 prompt
+  const visionRes = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: "high" },
+          },
+          {
+            type: "text",
+            text: `You are a professional design AI. Carefully analyze this design image and write a highly detailed DALL-E 3 image-generation prompt that recreates it faithfully but applies the following modifications: "${editPrompt}".
+
+Requirements:
+- Describe all key visual elements, colors, materials, composition, and style of the original
+- Incorporate the requested changes seamlessly
+- Be specific and rich in detail to get the best DALL-E 3 result
+- Do NOT mention text, watermarks, or labels
+
+Return ONLY the DALL-E 3 prompt — no explanation, no preamble.`,
+          },
+        ],
+      },
+    ],
+    max_tokens: 600,
+  });
+
+  const dallePrompt = visionRes.choices[0]?.message?.content?.trim() ?? editPrompt.trim();
+
+  // Step 2: Generate the edited design with DALL·E 3
+  const catCtx = CATEGORY_CONTEXT[category ?? "architecture"] ?? "Professional design rendering";
+  const styleCtx = STYLE_CONTEXT[style ?? "realistic"] ?? "high quality, detailed";
+  const fullPrompt = `${catCtx}, ${styleCtx}: ${dallePrompt}. No text labels or watermarks in the image.`;
+
+  const imgResponse = await openai.images.generate({
+    model: "dall-e-3",
+    prompt: fullPrompt,
+    n: 1,
+    size: "1024x1024",
+    quality: "standard",
+    response_format: "url",
+  });
+
+  const imageUrl = imgResponse.data?.[0]?.url ?? null;
+  const revisedPrompt = imgResponse.data?.[0]?.revised_prompt ?? null;
+
+  const [row] = await db.insert(designGenerationsTable).values({
+    vendorId: parseInt(vendorId),
+    category: category ?? "architecture",
+    prompt: `[Edited] ${String(editPrompt).trim()}`,
+    style: style ?? "realistic",
+    imageUrl,
+    revisedPrompt,
   }).returning();
 
   res.status(201).json(ser(row as unknown as Record<string, unknown>));

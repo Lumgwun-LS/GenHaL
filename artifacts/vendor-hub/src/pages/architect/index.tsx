@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -21,6 +21,7 @@ import {
   Building2, Calendar, DollarSign, CheckCircle2, Clock, AlertCircle,
   Download, ExternalLink, RefreshCw, Users,
   Sparkles, Wand2, Palette, Shirt, Sofa, ImageIcon, RotateCcw, Loader2,
+  Share2, Mic, MicOff, Upload, PenLine, X as XIcon, Link2,
 } from "lucide-react";
 import { FloorPlanEditor } from "./floor-plan-editor";
 
@@ -33,6 +34,16 @@ async function apiFetch(path: string, opts?: RequestInit) {
     throw new Error(body || res.statusText);
   }
   if (res.status === 204) return null;
+  return res.json();
+}
+
+// Multipart upload — do NOT set Content-Type; browser sets it with the correct boundary
+async function apiUpload(path: string, formData: FormData) {
+  const res = await fetch(`/api${path}`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || res.statusText);
+  }
   return res.json();
 }
 
@@ -437,12 +448,30 @@ const STYLES = [
 ];
 
 function AIDesignTab({ vendorId }: { vendorId: number }) {
+  // ── Shared state ──────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<"generate" | "edit">("generate");
   const [category, setCategory] = useState("architecture");
-  const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("realistic");
-  const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<Record<string, string> | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  // ── Generate mode state ───────────────────────────────────────────────────
+  const [prompt, setPrompt] = useState("");
+  const [generating, setGenerating] = useState(false);
+
+  // ── Edit mode state ───────────────────────────────────────────────────────
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [editPrompt, setEditPrompt] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Voice state ───────────────────────────────────────────────────────────
+  const [isListening, setIsListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
 
   const { data: history = [], refetch: refetchHistory } = useQuery<Record<string, string>[]>({
     queryKey: ["arch-designs", vendorId],
@@ -451,26 +480,70 @@ function AIDesignTab({ vendorId }: { vendorId: number }) {
   });
 
   const cat = CATEGORIES.find((c) => c.id === category)!;
+  const isBusy = generating || editing;
 
+  // ── Generate ──────────────────────────────────────────────────────────────
   async function generate() {
     if (!prompt.trim()) { toast.error("Please describe your design first"); return; }
-    setGenerating(true);
-    setResult(null);
+    setGenerating(true); setResult(null);
     try {
       const data = await apiFetch("/architect/generate-design", {
         method: "POST",
         body: JSON.stringify({ vendorId, prompt: prompt.trim(), category, style }),
       });
-      setResult(data);
-      refetchHistory();
-      toast.success("Design generated!");
-    } catch (e) {
-      toast.error(`Generation failed: ${String(e)}`);
-    } finally {
-      setGenerating(false);
-    }
+      setResult(data); refetchHistory(); toast.success("Design generated!");
+    } catch (e) { toast.error(`Generation failed: ${String(e)}`); }
+    finally { setGenerating(false); }
   }
 
+  // ── Edit ──────────────────────────────────────────────────────────────────
+  function handleImageFile(file: File) {
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    setEditImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setEditImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  async function editDesign() {
+    if (!editImageFile) { toast.error("Please upload a design image first"); return; }
+    if (!editPrompt.trim()) { toast.error("Please describe the changes you want"); return; }
+    setEditing(true); setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("image", editImageFile);
+      fd.append("vendorId", String(vendorId));
+      fd.append("editPrompt", editPrompt.trim());
+      fd.append("category", category);
+      fd.append("style", style);
+      const data = await apiUpload("/architect/edit-design", fd);
+      setResult(data); refetchHistory(); toast.success("Design edited!");
+    } catch (e) { toast.error(`Edit failed: ${String(e)}`); }
+    finally { setEditing(false); }
+  }
+
+  // ── Voice ─────────────────────────────────────────────────────────────────
+  function toggleVoice(setter: (v: string) => void) {
+    if (isListening) { recognitionRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast.error("Voice input isn't supported in this browser. Try Chrome."); return; }
+    const rec = new SR();
+    rec.lang = "en-US"; rec.continuous = false; rec.interimResults = true;
+    rec.onstart = () => setIsListening(true);
+    rec.onend = () => setIsListening(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (event: any) => {
+      const transcript = Array.from(event.results as ArrayLike<{ 0: { transcript: string } }>)
+        .map((r) => r[0].transcript).join("");
+      setter(transcript);
+    };
+    rec.onerror = () => { setIsListening(false); toast.error("Voice recognition error — check microphone permissions"); };
+    recognitionRef.current = rec;
+    rec.start();
+  }
+
+  // ── Download ──────────────────────────────────────────────────────────────
   async function downloadWithWatermark(designId: string, catId: string) {
     setDownloading(true);
     try {
@@ -481,31 +554,22 @@ function AIDesignTab({ vendorId }: { vendorId: number }) {
         img.src = `/api/architect/designs/${designId}/image`;
       });
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = img.width; canvas.height = img.height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0);
-
-      // Watermark pill — bottom right
       const text = "Powered by Awajimaa AI";
       ctx.font = "bold 17px Arial, sans-serif";
       const tw = ctx.measureText(text).width;
-      const px = 16, bh = 40;
-      const bw = tw + px * 2;
-      const bx = img.width - bw - 18;
-      const by = img.height - bh - 18;
+      const px = 16, bh = 40, bw = tw + px * 2;
+      const bx = img.width - bw - 18, by = img.height - bh - 18;
       ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.beginPath();
-      if ((ctx as unknown as { roundRect?: (...a: unknown[]) => void }).roundRect) {
-        (ctx as unknown as { roundRect: (...a: unknown[]) => void }).roundRect(bx, by, bw, bh, 8);
-      } else {
-        ctx.rect(bx, by, bw, bh);
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((ctx as any).roundRect) (ctx as any).roundRect(bx, by, bw, bh, 8);
+      else ctx.rect(bx, by, bw, bh);
       ctx.fill();
-      ctx.fillStyle = "#FFFFFF";
-      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#FFFFFF"; ctx.textBaseline = "middle";
       ctx.fillText(text, bx + px, by + bh / 2);
-
       canvas.toBlob((blob) => {
         if (!blob) { toast.error("Download failed"); return; }
         const a = document.createElement("a");
@@ -513,57 +577,170 @@ function AIDesignTab({ vendorId }: { vendorId: number }) {
         a.download = `awajimaa-${catId}-design-${designId}.png`;
         a.click();
       });
-    } catch (e) {
-      toast.error(String(e));
-    } finally {
-      setDownloading(false);
-    }
+    } catch (e) { toast.error(String(e)); }
+    finally { setDownloading(false); }
   }
 
+  // ── Share ─────────────────────────────────────────────────────────────────
+  async function shareDesign(designId: string, promptText: string) {
+    setSharing(true);
+    try {
+      const imgUrl = `/api/architect/designs/${designId}/image`;
+      if (navigator.share) {
+        try {
+          const res = await fetch(imgUrl);
+          const blob = await res.blob();
+          const file = new File([blob], "awajimaa-design.png", { type: "image/png" });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: "AI Design by Awajimaa", text: promptText });
+            return;
+          }
+          // Share without file attachment (link only)
+          await navigator.share({ title: "AI Design by Awajimaa", text: promptText, url: window.location.href });
+          return;
+        } catch (e) {
+          if ((e as Error).name === "AbortError") return; // user cancelled
+        }
+      }
+      // Clipboard fallback
+      await navigator.clipboard.writeText(`${window.location.origin}${imgUrl}`);
+      toast.success("Image link copied to clipboard!");
+    } catch { toast.error("Could not share this design"); }
+    finally { setSharing(false); }
+  }
+
+  // ── Shared result card ────────────────────────────────────────────────────
+  function ResultCard() {
+    if (!result) return null;
+    return (
+      <Card className="overflow-hidden border-violet-500/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles size={14} className="text-violet-400" />
+            {result.prompt?.startsWith("[Edited]") ? "Edited Design" : "Generated Design"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-shrink-0 rounded-lg overflow-hidden self-start max-w-[512px] w-full">
+              <img src={result.imageUrl} alt="Design" className="w-full rounded-lg" />
+              <div className="absolute bottom-3 right-3 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm select-none pointer-events-none">
+                Powered by Awajimaa AI
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{CATEGORIES.find((c) => c.id === result.category)?.emoji}</span>
+                <div>
+                  <p className="font-semibold text-sm">{CATEGORIES.find((c) => c.id === result.category)?.label}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{STYLES.find((s) => s.id === result.style)?.label}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Prompt</p>
+                <p className="text-xs bg-muted rounded-md p-2 leading-relaxed">{result.prompt}</p>
+              </div>
+
+              {result.revisedPrompt && result.revisedPrompt !== result.prompt && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">AI-enhanced prompt</p>
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 leading-relaxed line-clamp-4">{result.revisedPrompt}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap mt-auto pt-2">
+                <Button onClick={() => downloadWithWatermark(result.id, result.category)} disabled={downloading} className="gap-1.5 h-8 text-xs">
+                  {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  Download PNG
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs"
+                  onClick={() => shareDesign(result.id, result.prompt)} disabled={sharing}>
+                  {sharing ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
+                  Share
+                </Button>
+                {mode === "generate" && (
+                  <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs text-muted-foreground"
+                    onClick={() => { setPrompt(result.prompt.replace(/^\[Edited\]\s*/i, "")); setResult(null); }}>
+                    <RotateCcw size={12} /> Regenerate
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs text-muted-foreground"
+                  onClick={() => { setMode("edit"); setEditPrompt(""); setResult(null); }}>
+                  <PenLine size={12} /> Edit this
+                </Button>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground/60">
+                Download includes watermark. Preview link expires in ~1 hour.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Voice mic button ──────────────────────────────────────────────────────
+  function MicButton({ setter }: { setter: (v: string) => void }) {
+    return (
+      <button
+        type="button"
+        title={isListening ? "Stop recording" : "Record voice prompt"}
+        onClick={() => toggleVoice(setter)}
+        className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all shrink-0 ${
+          isListening
+            ? "bg-red-500/20 border-red-500/50 text-red-400 animate-pulse"
+            : "bg-muted border-border hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+      </button>
+    );
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Category selector */}
-      <div>
-        <p className="text-sm font-medium mb-3 text-muted-foreground">Choose a design category</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {CATEGORIES.map((c) => (
-            <button key={c.id} onClick={() => { setCategory(c.id); setPrompt(""); }}
-              className={`p-3 rounded-xl border text-left transition-all ${category === c.id ? c.activeAccent : c.accent + " bg-card/60"}`}>
-              <div className="text-2xl mb-1">{c.emoji}</div>
-              <p className="font-semibold text-sm">{c.label}</p>
-              <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{c.desc}</p>
-            </button>
-          ))}
-        </div>
+
+      {/* Mode toggle */}
+      <div className="flex gap-2 p-1 bg-muted/50 rounded-xl w-fit">
+        <button
+          onClick={() => { setMode("generate"); setResult(null); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            mode === "generate" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Sparkles size={14} /> Generate New
+        </button>
+        <button
+          onClick={() => { setMode("edit"); setResult(null); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            mode === "edit" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <PenLine size={14} /> Edit / Import
+        </button>
       </div>
 
-      {/* Prompt area */}
-      <div className="space-y-3">
-        <Label className="text-sm font-medium">Describe your design</Label>
-        <Textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`e.g. ${cat.examples[0]}`}
-          rows={3}
-          className="resize-none text-sm"
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generate(); }}
-        />
-
-        {/* Example chips */}
-        <div className="flex flex-wrap gap-2">
-          <span className="text-[11px] text-muted-foreground self-center">Quick ideas:</span>
-          {cat.examples.map((ex) => (
-            <button key={ex} onClick={() => setPrompt(ex)}
-              className="text-[11px] px-2.5 py-1 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors border border-border/40">
-              {ex.length > 50 ? ex.slice(0, 50) + "…" : ex}
-            </button>
-          ))}
+      {/* Shared: category + style row */}
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-medium mb-3 text-muted-foreground">Design category</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {CATEGORIES.map((c) => (
+              <button key={c.id} onClick={() => { setCategory(c.id); if (mode === "generate") setPrompt(""); }}
+                className={`p-3 rounded-xl border text-left transition-all ${category === c.id ? c.activeAccent : c.accent + " bg-card/60"}`}>
+                <div className="text-2xl mb-1">{c.emoji}</div>
+                <p className="font-semibold text-sm">{c.label}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{c.desc}</p>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Style + Generate */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-        <div className="flex flex-col gap-1 min-w-[180px]">
+        <div className="flex flex-col gap-1 w-full sm:max-w-[220px]">
           <Label className="text-xs text-muted-foreground">Rendering style</Label>
           <Select value={style} onValueChange={setStyle}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
@@ -572,124 +749,217 @@ function AIDesignTab({ vendorId }: { vendorId: number }) {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={generate} disabled={generating || !prompt.trim()} className="gap-2 h-9 bg-violet-600 hover:bg-violet-500 px-5">
-          {generating ? <><Loader2 size={15} className="animate-spin" /> Generating…</> : <><Sparkles size={15} /> Generate Design</>}
-        </Button>
-        {prompt && <Button variant="ghost" size="sm" onClick={() => setPrompt("")} className="h-9 text-muted-foreground">Clear</Button>}
       </div>
 
-      {/* Loading state */}
-      {generating && (
+      {/* ── GENERATE MODE ─────────────────────────────────────────── */}
+      {mode === "generate" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Describe your design</Label>
+            <div className="flex gap-2 items-start">
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={`e.g. ${cat.examples[0]}`}
+                rows={3}
+                className="resize-none text-sm flex-1"
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generate(); }}
+              />
+              <MicButton setter={setPrompt} />
+            </div>
+            {isListening && (
+              <p className="text-[11px] text-red-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse inline-block" />
+                Listening… speak your design prompt
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <span className="text-[11px] text-muted-foreground self-center">Quick ideas:</span>
+              {cat.examples.map((ex) => (
+                <button key={ex} onClick={() => setPrompt(ex)}
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors border border-border/40">
+                  {ex.length > 50 ? ex.slice(0, 50) + "…" : ex}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            <Button onClick={generate} disabled={isBusy || !prompt.trim()} className="gap-2 h-9 bg-violet-600 hover:bg-violet-500 px-5">
+              {generating ? <><Loader2 size={15} className="animate-spin" /> Generating…</> : <><Sparkles size={15} /> Generate Design</>}
+            </Button>
+            {prompt && <Button variant="ghost" size="sm" onClick={() => setPrompt("")} className="h-9 text-muted-foreground">Clear</Button>}
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT / IMPORT MODE ────────────────────────────────────── */}
+      {mode === "edit" && (
+        <div className="space-y-4">
+          {/* Image upload dropzone */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Import your design</Label>
+            <p className="text-xs text-muted-foreground">Upload any design image — a sketch, screenshot, or existing artwork — and describe how you want it changed.</p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }}
+            />
+
+            {editImagePreview ? (
+              <div className="relative rounded-xl overflow-hidden border border-border/60 bg-muted/20 max-w-sm">
+                <img src={editImagePreview} alt="Uploaded design" className="w-full object-cover max-h-64" />
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 hover:opacity-100">
+                  <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-7"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <Upload size={11} /> Replace
+                  </Button>
+                  <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-7"
+                    onClick={() => { setEditImageFile(null); setEditImagePreview(null); }}>
+                    <XIcon size={11} /> Remove
+                  </Button>
+                </div>
+                <div className="absolute bottom-2 left-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full">
+                  {editImageFile?.name}
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault(); setIsDragOver(false);
+                  const f = e.dataTransfer.files?.[0]; if (f) handleImageFile(f);
+                }}
+                className={`flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                  isDragOver ? "border-violet-500/70 bg-violet-500/10" : "border-border/50 hover:border-violet-500/40 hover:bg-violet-500/5"
+                }`}
+              >
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <Upload size={20} className="text-muted-foreground" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">Drop your design here or click to upload</p>
+                  <p className="text-xs text-muted-foreground mt-1">Supports JPG, PNG, WebP, SVG — up to 15 MB</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Edit prompt */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Describe the changes</Label>
+            <div className="flex gap-2 items-start">
+              <Textarea
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                placeholder="e.g. Change the color scheme to warm earthy tones, add more natural light, make the style more minimalist…"
+                rows={3}
+                className="resize-none text-sm flex-1"
+              />
+              <MicButton setter={setEditPrompt} />
+            </div>
+            {isListening && (
+              <p className="text-[11px] text-red-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse inline-block" />
+                Listening… describe the changes you want
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            <Button onClick={editDesign} disabled={isBusy || !editImageFile || !editPrompt.trim()}
+              className="gap-2 h-9 bg-violet-600 hover:bg-violet-500 px-5">
+              {editing ? <><Loader2 size={15} className="animate-spin" /> Editing…</> : <><PenLine size={15} /> Apply Edit</>}
+            </Button>
+            {(editImageFile || editPrompt) && (
+              <Button variant="ghost" size="sm" className="h-9 text-muted-foreground"
+                onClick={() => { setEditImageFile(null); setEditImagePreview(null); setEditPrompt(""); }}>
+                Clear
+              </Button>
+            )}
+          </div>
+
+          <p className="text-[11px] text-muted-foreground/60 flex items-start gap-1.5">
+            <Link2 size={11} className="mt-0.5 shrink-0" />
+            GPT-4o analyzes your uploaded design and combines it with your instructions to generate an edited version via DALL·E 3.
+          </p>
+        </div>
+      )}
+
+      {/* ── Loading ────────────────────────────────────────────────── */}
+      {isBusy && (
         <Card className="border-violet-500/30 bg-violet-500/5">
           <CardContent className="py-10 flex flex-col items-center gap-3">
-            <div className="relative">
-              <Wand2 size={32} className="text-violet-400 animate-pulse" />
-            </div>
-            <p className="text-sm font-medium">Creating your {cat.label.toLowerCase()}…</p>
-            <p className="text-xs text-muted-foreground text-center max-w-xs">DALL·E 3 is rendering your design. This usually takes 10–20 seconds.</p>
+            <Wand2 size={32} className="text-violet-400 animate-pulse" />
+            <p className="text-sm font-medium">
+              {editing ? "Analyzing your design and applying edits…" : `Creating your ${cat.label.toLowerCase()}…`}
+            </p>
+            <p className="text-xs text-muted-foreground text-center max-w-xs">
+              {editing
+                ? "GPT-4o is reading your image, then DALL·E 3 is rendering the edit. This usually takes 20–35 seconds."
+                : "DALL·E 3 is rendering your design. This usually takes 10–20 seconds."}
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Result */}
-      {result && !generating && (
-        <Card className="overflow-hidden border-violet-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Generated Design</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Image with CSS watermark overlay */}
-              <div className="relative flex-shrink-0 rounded-lg overflow-hidden self-start max-w-[512px] w-full">
-                <img src={result.imageUrl} alt="Generated design" className="w-full rounded-lg" />
-                {/* Always-visible watermark overlay */}
-                <div className="absolute bottom-3 right-3 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm select-none pointer-events-none">
-                  Powered by Awajimaa AI
-                </div>
-              </div>
+      {/* ── Result ────────────────────────────────────────────────── */}
+      {result && !isBusy && <ResultCard />}
 
-              {/* Meta + actions */}
-              <div className="flex flex-col gap-3 flex-1 min-w-0">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{CATEGORIES.find((c) => c.id === result.category)?.emoji}</span>
-                    <div>
-                      <p className="font-semibold text-sm">{CATEGORIES.find((c) => c.id === result.category)?.label}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{STYLES.find((s) => s.id === result.style)?.label}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">Your prompt</p>
-                  <p className="text-xs bg-muted rounded-md p-2 leading-relaxed">{result.prompt}</p>
-                </div>
-
-                {result.revisedPrompt && result.revisedPrompt !== result.prompt && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">AI-enhanced prompt</p>
-                    <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 leading-relaxed line-clamp-4">{result.revisedPrompt}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-2 flex-wrap mt-auto pt-2">
-                  <Button onClick={() => downloadWithWatermark(result.id, result.category)} disabled={downloading} className="gap-1.5 h-8 text-xs">
-                    {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                    Download PNG
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs"
-                    onClick={() => { setPrompt(result.prompt); setResult(null); }}>
-                    <RotateCcw size={12} /> Generate again
-                  </Button>
-                </div>
-
-                <p className="text-[10px] text-muted-foreground/60">
-                  Download includes "Powered by Awajimaa AI" watermark. Preview link expires after ~1 hour.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* History */}
+      {/* ── History ───────────────────────────────────────────────── */}
       {history.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">Recent designs ({history.length})</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {history.map((d) => (
-              <div key={d.id} className="group relative rounded-lg overflow-hidden border bg-muted/30 aspect-square cursor-pointer hover:border-violet-500/40 transition-colors"
+              <div key={d.id}
+                className="group relative rounded-lg overflow-hidden border bg-muted/30 aspect-square cursor-pointer hover:border-violet-500/40 transition-colors"
                 onClick={() => setResult(d)}>
-                {d.imageUrl ? (
-                  <img src={d.imageUrl} alt={d.prompt} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="text-muted-foreground/30" /></div>
-                )}
+                {d.imageUrl
+                  ? <img src={d.imageUrl} alt={d.prompt} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="text-muted-foreground/30" /></div>
+                }
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="text-[10px] text-white line-clamp-2 leading-tight">{d.prompt}</p>
                 </div>
-                <div className="absolute top-1.5 left-1.5">
+                <div className="absolute top-1.5 left-1.5 flex gap-1">
                   <span className="text-xs bg-black/60 text-white px-1.5 py-0.5 rounded-full">
                     {CATEGORIES.find((c) => c.id === d.category)?.emoji}
                   </span>
+                  {d.prompt?.startsWith("[Edited]") && (
+                    <span className="text-[9px] bg-violet-600/80 text-white px-1.5 py-0.5 rounded-full font-medium">Edit</span>
+                  )}
                 </div>
-                <button
-                  className="absolute top-1.5 right-1.5 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                  onClick={(e) => { e.stopPropagation(); downloadWithWatermark(d.id, d.category); }}>
-                  <Download size={10} />
-                </button>
+                {/* Hover action buttons */}
+                <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button title="Download"
+                    className="bg-black/60 text-white p-1 rounded-full hover:bg-black/80 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); downloadWithWatermark(d.id, d.category); }}>
+                    <Download size={10} />
+                  </button>
+                  <button title="Share"
+                    className="bg-black/60 text-white p-1 rounded-full hover:bg-black/80 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); shareDesign(d.id, d.prompt); }}>
+                    <Share2 size={10} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {history.length === 0 && !generating && !result && (
+      {history.length === 0 && !isBusy && !result && (
         <Card className="border-dashed">
           <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
             <Wand2 size={28} className="text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">Your generated designs will appear here</p>
-            <p className="text-xs text-muted-foreground/60">All designs are watermarked with "Powered by Awajimaa AI"</p>
+            <p className="text-sm text-muted-foreground">Your designs will appear here</p>
+            <p className="text-xs text-muted-foreground/60">Generate a new design or import one to edit</p>
           </CardContent>
         </Card>
       )}
