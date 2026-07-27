@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListLeads,
   useGetLeadsStats,
   useCreateLead,
-  useListVendors,
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -28,11 +27,8 @@ const STATUSES = ["new", "contacted", "qualified", "converted", "lost"];
 const SOURCES = ["manual", "web_scrape", "linkedin", "google_maps", "referral", "other"];
 
 export default function Leads() {
-  const { user } = useUser();
-  const { data: vendors } = useListVendors();
-  const myVendor = vendors?.find(v => v.clerkUserId === user?.id);
-  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
-  const vendorId = myVendor?.id ?? adminVendorId;
+  const { vendor: myVendor } = useCurrentVendor();
+  const vendorId = myVendor?.id;
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -126,16 +122,6 @@ export default function Leads() {
           </Button>
         </div>
       </div>
-
-      {!myVendor && vendors && vendors.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
-          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 shrink-0">Admin mode — operating as:</span>
-          <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
-            <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
-            <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Leads</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold tracking-tight">{stats?.totalLeads || 0}</div></CardContent></Card>

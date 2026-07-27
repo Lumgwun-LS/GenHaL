@@ -12,8 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, Plus, PlayCircle, BarChart2, Clock, CheckCircle2, AlertCircle, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useListVendors } from "@workspace/api-client-react";
-import { useUser } from "@clerk/react";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -51,14 +50,10 @@ function formatScheduledAt(iso: string | null): string {
 }
 
 export default function VoiceCampaignsPage() {
-  const { user } = useUser();
-  const { data: vendors } = useListVendors();
   const qc = useQueryClient();
 
-  // Find the vendor that belongs to this user
-  const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
-  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
-  const vendorId = myVendor?.id ?? adminVendorId;
+  const { vendor: myVendor } = useCurrentVendor();
+  const vendorId = myVendor?.id;
 
   const { data: campaigns, isLoading } = useQuery<Campaign[]>({
     queryKey: ["voice-campaigns", vendorId],
@@ -193,16 +188,6 @@ export default function VoiceCampaignsPage() {
           <Plus className="w-4 h-4" /> New Campaign
         </Button>
       </div>
-
-      {!myVendor && vendors && vendors.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
-          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 shrink-0">Admin mode — operating as:</span>
-          <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
-            <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
-            <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      )}
 
       {/* Twilio status callout — only shown when not configured */}
       {voiceStatus && !voiceStatus.configured && (

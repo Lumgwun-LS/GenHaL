@@ -1,4 +1,5 @@
-import { useListOrders, useGetOrdersSummary, useCreateOrder, useListVendors, useListBranches, useListWorkers, useListProducts, getListBranchesQueryKey, getListWorkersQueryKey, getListOrdersQueryKey } from "@workspace/api-client-react";
+import { useListOrders, useGetOrdersSummary, useCreateOrder, useListBranches, useListWorkers, useListProducts, getListBranchesQueryKey, getListWorkersQueryKey, getListOrdersQueryKey } from "@workspace/api-client-react";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,11 +22,8 @@ import { DateRangeFilterControl, BranchWorkerFilterControl } from "@/components/
 const STATUSES = ["pending", "completed", "cancelled"];
 
 export default function Orders() {
-  const { user } = useUser();
-  const { data: vendors } = useListVendors();
-  const myVendor = vendors?.find((v) => v.clerkUserId === user?.id);
-  const [adminVendorId, setAdminVendorId] = useState<number | undefined>(undefined);
-  const vendorId = myVendor?.id ?? adminVendorId;
+  const { vendor: myVendor } = useCurrentVendor();
+  const vendorId = myVendor?.id;
 
   const qc = useQueryClient();
   const createOrder = useCreateOrder();
@@ -126,16 +124,6 @@ export default function Orders() {
           <Plus className="w-4 h-4 mr-2" /> New Order
         </Button>
       </div>
-
-      {!myVendor && vendors && vendors.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
-          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 shrink-0">Admin mode — operating as:</span>
-          <Select value={adminVendorId ? String(adminVendorId) : ""} onValueChange={(v) => setAdminVendorId(Number(v))}>
-            <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Select a vendor…" /></SelectTrigger>
-            <SelectContent>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
