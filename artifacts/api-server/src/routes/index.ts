@@ -55,6 +55,9 @@ import mediaRouter from "./media";
 import vendorAddonsRouter from "./vendor-addons";
 import adsRouter from "./ads";
 import mediaLibraryRouter from "./media-library";
+import realEstatePublicRouter from "./real-estate-public";
+import realEstateRouter from "./real-estate";
+import architectRouter from "./architect";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -101,6 +104,9 @@ router.use(invoicesPublicRouter);
 // Public site pages — no auth required
 router.use(sitesRouter);
 
+// Public real-estate: listings page, inquiry form, view-count increment
+router.use(realEstatePublicRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -146,5 +152,7 @@ router.use(websiteRouter);
 router.use(dataAnalysisRouter);
 router.use(aiQuickCreateRouter);
 router.use(invoicesRouter);
+router.use(realEstateRouter);
+router.use(architectRouter);
 
 export default router;

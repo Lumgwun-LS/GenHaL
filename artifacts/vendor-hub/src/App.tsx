@@ -51,6 +51,9 @@ import PublicSitePage from "@/pages/site/index";
 import DataAnalysisPage from "@/pages/data-analysis/index";
 import InvoicesPage from "@/pages/invoices/index";
 import InvoicePublicPage from "@/pages/invoice-public/index";
+import RealEstatePage from "@/pages/real-estate/index";
+import PublicPropertyListings from "@/pages/real-estate/public";
+import ArchitectPage from "@/pages/architect/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -305,6 +308,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
           <Route path="/invoice/:token" component={InvoicePublicPage} />
+          <Route path="/properties/:vendorId" component={PublicPropertyListings} />
 
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />
@@ -335,6 +339,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/invoices" component={() => <AuthenticatedRoute component={InvoicesPage} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
           <Route path="/data-analysis" component={() => <AuthenticatedRoute component={DataAnalysisPage} />} />
+          <Route path="/real-estate" component={() => <AuthenticatedRoute component={RealEstatePage} />} />
+          <Route path="/architect" component={() => <AuthenticatedRoute component={ArchitectPage} />} />
           <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           

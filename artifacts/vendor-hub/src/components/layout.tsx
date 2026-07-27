@@ -36,6 +36,7 @@ import {
   Tag,
   Store,
   FileText,
+  Ruler,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState } from "react";
@@ -181,6 +182,13 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/branches", label: "Branches", icon: Building2 },
       { href: "/workers", label: "Workers", icon: Users },
       { href: "/website", label: "My Website", icon: Globe },
+    ],
+  },
+  {
+    label: "Real Estate & Design",
+    items: [
+      { href: "/real-estate", label: "Properties", icon: Building2 },
+      { href: "/architect", label: "Architect Studio", icon: Ruler },
     ],
   },
   {

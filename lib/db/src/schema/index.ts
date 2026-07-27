@@ -67,3 +67,5 @@ export * from "./vendor-websites";
 export * from "./vendor-content-library";
 export * from "./business-swot-reports";
 export * from "./invoices";
+export * from "./real-estate";
+export * from "./architect-tools";
