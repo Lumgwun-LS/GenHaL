@@ -48,3 +48,9 @@ id = "L8XP9vDT0sZrmkntaMKGp"
 uri = "file://awajimaa-app-store.zip"
 type = "unspecified"
 title = "Awajimaa App Store — Latest Code"
+
+[[outputs]]
+id = "Ttr8gZ70FH4fePdtZ1FRk"
+uri = "file://artifacts/awajimaa-tools-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "cinematic orchestral background music"

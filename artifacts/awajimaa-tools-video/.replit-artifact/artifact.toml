@@ -1,0 +1,27 @@
+kind = "video"
+previewPath = "/awajimaa-tools-video/"
+title = "Awajimaa AI — Creative Tools Platform Video"
+version = "1.0.0"
+id = "artifacts/awajimaa-tools-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-tools-video/" ]
+localPort = 25241
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-tools-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-tools-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-tools-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25241"
+BASE_PATH = "/awajimaa-tools-video/"
