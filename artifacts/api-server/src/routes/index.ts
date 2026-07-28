@@ -61,6 +61,7 @@ import architectRouter from "./architect";
 import developerRouter from "./developer";
 import oauthRouter from "./oauth";
 import platformPartnersRouter from "./platform-partners";
+import connectedBusinessRouter from "./connected-business";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -122,6 +123,7 @@ router.use(requireAuth);
 // Platform Partner authenticated routes (marketplace, admin CRUD, analytics)
 // mounted again after requireAuth — the public-only routes above return before next()
 router.use(platformPartnersRouter);
+router.use(connectedBusinessRouter);
 
 router.use(vendorsRouter);
 router.use(socialAccountsRouter);

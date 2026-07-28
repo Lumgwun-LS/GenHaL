@@ -21,7 +21,7 @@ import { logger } from "./logger";
 export const REFUND_WINDOW_DAYS = 10;
 
 export const TIER_RANK: Record<string, number> = {
-  free: 0, starter: 1, pro: 2, enterprise: 3,
+  free: 0, basic: 0, starter: 1, pro: 2, connected: 3, enterprise: 4,
 };
 
 const TIER_BY_RANK: Record<number, string> = {

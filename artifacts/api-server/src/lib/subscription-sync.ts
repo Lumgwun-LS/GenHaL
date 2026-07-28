@@ -22,7 +22,7 @@ import { canAddPaymentKeys } from "./vendor-keys";
 import { insertTierChangeNotification, sendSubscriptionCancelledEmail } from "./subscription-notifications";
 
 const VALID_TIERS = ["starter", "pro", "enterprise"];
-const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
+const TIER_RANK: Record<string, number> = { free: 0, basic: 0, starter: 1, pro: 2, connected: 3, enterprise: 4 };
 
 export interface ApplyUpgradeResult {
   applied: boolean;

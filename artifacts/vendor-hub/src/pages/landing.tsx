@@ -295,9 +295,9 @@ export default function LandingPage() {
               <BookOpen className="w-3.5 h-3.5" />
               Docs
             </Link>
-            <Link href="/become-a-partner" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
+            <Link href="/become-a-connected-business" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
               <Globe2 className="w-3.5 h-3.5" />
-              Partners
+              Connected Business
             </Link>
 
             <div className="ml-4 flex items-center gap-3">
@@ -1178,7 +1178,7 @@ function PlatformPartnersSection() {
           <motion.span className="w-2 h-2 rounded-full bg-blue-400"
             animate={{ scale: [1, 1.5, 1], opacity: [1, 0.6, 1] }}
             transition={{ duration: 2, repeat: Infinity }} />
-          Platform Ecosystem
+          Connected Businesses
         </motion.div>
 
         <motion.h2
@@ -1188,7 +1188,7 @@ function PlatformPartnersSection() {
           transition={{ delay: 0.1 }}
           className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4"
         >
-          Connect with <span className="text-primary">integrated platforms</span>
+          Built on top of <span className="text-primary">Awa Biz Suite</span>
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 12 }}
@@ -1197,7 +1197,7 @@ function PlatformPartnersSection() {
           transition={{ delay: 0.2 }}
           className="text-muted-foreground text-base max-w-xl mx-auto"
         >
-          Platform partners plug into Awa Biz Suite so your vendors can discover, connect, and integrate with them — no dev work required.
+          These platforms and websites connected their codebases — now their API documentation is live, and thousands of vendors can discover and integrate with them in one click.
         </motion.p>
       </div>
 
@@ -1224,11 +1224,11 @@ function PlatformPartnersSection() {
       >
         <p className="text-sm text-muted-foreground mb-4">
           Own a website, app, or SaaS?{" "}
-          <span className="text-foreground font-semibold">Join as a Platform Partner</span> — our AI generates your docs automatically.
+          <span className="text-foreground font-semibold">Become a Connected Business</span> — sign up as a vendor, connect your repo, and our AI generates your full API documentation automatically.
         </p>
-        <a href={`${BASE}/become-a-partner`}
+        <a href={`${BASE}/become-a-connected-business`}
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-opacity no-underline">
-          Become a Partner →
+          Become a Connected Business →
         </a>
       </motion.div>
     </section>
@@ -1271,8 +1271,8 @@ function TrustedBySection() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // Gate: only show when 10+ vendors have uploaded their logo
-  if (!data || data.count < 10) return null;
+  // Gate: show as soon as at least one vendor has a logo
+  if (!data || data.count < 1) return null;
 
   const vendors = data.vendors;
   // Split into two rows; each row duplicated for seamless infinite loop

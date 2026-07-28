@@ -161,6 +161,23 @@ export const DEFAULT_SITE_CONTENT = {
         highlight: false,
         quotas: { aiImages: 40, aiVideos: 20, aiCaptions: 300, voiceMinutes: 120, sms: 300, email: 1500 },
       },
+      {
+        tier: "connected",
+        name: "Connected Business",
+        pricing: { usd: 49, ngn: 76000 },
+        description: "For platform and website owners who want an AI-generated API system",
+        features: [
+          "Connect GitHub, GitLab, or Bitbucket",
+          "AI-generated API documentation from your codebase",
+          "Custom base URL or use https://awajimaaai.com",
+          "Shareable docs link for your website or social",
+          "Unlimited doc regeneration on every update",
+          "Listed in the Trusted By section on our homepage",
+          "All Pro vendor features included",
+        ],
+        highlight: true,
+        quotas: { aiImages: 15, aiVideos: 7, aiCaptions: 100, voiceMinutes: 40, sms: 100, email: 500 },
+      },
     ],
   },
   // Which payment gateways vendors may use to pay for their PLATFORM

@@ -46,8 +46,11 @@ export const platformPartnersTable = pgTable("platform_partners", {
   docVersion:       integer("doc_version").notNull().default(0),
   docChangelog:     text("doc_changelog"),                     // AI-written diff summary of last spec update
 
+  // Connected Business — vendor who owns this profile (null = admin-created, non-vendor entry)
+  vendorId:         integer("vendor_id"),        // FK → vendors.id (set null on delete)
+
   // Self-service application fields
-  applicationStatus: text("application_status").notNull().default("admin_created"), // admin_created | pending | approved | rejected
+  applicationStatus: text("application_status").notNull().default("admin_created"), // admin_created | pending | approved | rejected | vendor_connected
   applicantName:    text("applicant_name"),     // person who submitted the registration
   rejectionReason:  text("rejection_reason"),   // set when admin rejects
 

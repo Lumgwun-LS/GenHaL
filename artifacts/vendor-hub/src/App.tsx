@@ -58,8 +58,9 @@ import ArchitectPage from "@/pages/architect/index";
 import DevelopersPage from "@/pages/developers";
 import MarketplacePage from "@/pages/marketplace";
 import DocsPage from "@/pages/docs";
-import BecomeAPartnerPage from "@/pages/become-a-partner";
+import BecomeAConnectedBusinessPage from "@/pages/become-a-connected-business";
 import PartnerToolkitPage from "@/pages/partner-toolkit";
+import ConnectedBusinessPage from "@/pages/connected-business";
 import OAuthConsent from "@/pages/oauth-consent";
 
 const clerkPubKey = publishableKeyFromHost(
@@ -327,7 +328,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/invoice/:token" component={InvoicePublicPage} />
           <Route path="/properties/:vendorId" component={PublicPropertyListings} />
           <Route path="/docs/:slug" component={DocsPage} />
-          <Route path="/become-a-partner" component={BecomeAPartnerPage} />
+          <Route path="/become-a-connected-business" component={BecomeAConnectedBusinessPage} />
           <Route path="/partner/:slug" component={PartnerToolkitPage} />
 
           {/* Authenticated Routes */}
@@ -364,6 +365,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           <Route path="/marketplace" component={() => <AuthenticatedRoute component={MarketplacePage} />} />
+          <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />
           
           <Route path="/:rest*">
             <div className="flex h-screen items-center justify-center">
