@@ -21,7 +21,7 @@
 
 import { Router, type Request } from "express";
 import { createHash } from "node:crypto";
-import { eq, and, desc, asc, sql, count as drizzleCount, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, count as drizzleCount, inArray, gte } from "drizzle-orm";
 import {
   db,
   vendorApiKeysTable,
@@ -31,6 +31,7 @@ import {
   ordersTable,
   orderItemsTable,
   paymentsTable,
+  embedVisitsTable,
 } from "@workspace/db";
 import { resolvePaystackKey } from "../lib/vendor-keys";
 
@@ -107,9 +108,74 @@ for (const path of [
   "/embed/checkout",
   "/embed/order-status",
   "/embed/checkout-return",
+  "/embed/track",
+  "/embed/visits/summary",
 ]) {
   router.options(path, (_req, res) => { embedCors(res); res.sendStatus(204); });
 }
+
+// ─── POST /embed/track ────────────────────────────────────────────────────────
+// Lightweight visit ping. Always returns 200 (fire-and-forget).
+// No cookies, no PII — just vendor key + referrer domain + sessionId.
+
+router.post("/embed/track", async (req, res): Promise<void> => {
+  embedCors(res);
+  const { key, sessionId, referrerDomain } = req.body as {
+    key?: string;
+    sessionId?: string;
+    referrerDomain?: string;
+  };
+
+  // Always respond 200 immediately (fire-and-forget pattern)
+  res.json({ ok: true });
+
+  if (!key) return;
+  const ctx = await resolveKey(key).catch(() => null);
+  if (!ctx) return;
+
+  // Deduplicate: skip if this session was seen in the last 30 minutes
+  if (sessionId) {
+    const since = new Date(Date.now() - 30 * 60 * 1000);
+    const [existing] = await db
+      .select({ id: embedVisitsTable.id })
+      .from(embedVisitsTable)
+      .where(and(
+        eq(embedVisitsTable.vendorId, ctx.vendorId),
+        eq(embedVisitsTable.sessionId, sessionId),
+        gte(embedVisitsTable.visitedAt, since),
+      ))
+      .limit(1);
+    if (existing) return;
+  }
+
+  await db.insert(embedVisitsTable).values({
+    vendorId:       ctx.vendorId,
+    sessionId:      sessionId ?? null,
+    referrerDomain: referrerDomain ? referrerDomain.slice(0, 253) : null,
+  }).catch(() => {}); // never let a failed insert propagate
+});
+
+// ─── GET /embed/visits/summary ────────────────────────────────────────────────
+// Returns unique visitor count for a given period (e.g. "this week" badge in the embed).
+
+router.get("/embed/visits/summary", async (req, res): Promise<void> => {
+  embedCors(res);
+  const rawKey = (req.query.key as string) || "";
+  const ctx = await resolveKey(rawKey);
+  if (!ctx) { res.status(401).json({ error: "Invalid or revoked API key" }); return; }
+
+  const period = (req.query.period as string) || "week";
+  const ms = period === "month" ? 30 * 86400_000 : period === "year" ? 365 * 86400_000 : 7 * 86400_000;
+  const since = new Date(Date.now() - ms);
+
+  const rows = await db
+    .select({ sessionId: embedVisitsTable.sessionId, visitedAt: embedVisitsTable.visitedAt })
+    .from(embedVisitsTable)
+    .where(and(eq(embedVisitsTable.vendorId, ctx.vendorId), gte(embedVisitsTable.visitedAt, since)));
+
+  const unique = new Set(rows.map((r, i) => r.sessionId ?? `anon-${i}-${r.visitedAt?.getTime?.() ?? 0}`)).size;
+  res.json({ period, visitors: unique, since: since.toISOString() });
+});
 
 // ─── GET /embed.js ────────────────────────────────────────────────────────────
 
@@ -1275,6 +1341,20 @@ function buildWidgetScript(): string {
         var msg = document.getElementById("awa-poll-msg");
         if (msg) msg.textContent = "Checking…";
       });
+  }
+
+  // ── Visit tracking ping (fire-and-forget) ────────────────────────────────
+  if (globalKey) {
+    try {
+      var _sid = sessionStorage.getItem("_awa_sid");
+      if (!_sid) { _sid = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem("_awa_sid", _sid); }
+    } catch(e) { var _sid = ""; }
+    fetch(host + "/api/embed/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: globalKey, sessionId: _sid, referrerDomain: window.location.hostname }),
+      keepalive: true,
+    }).catch(function() {});
   }
 
   // ── Services panel rendering ──────────────────────────────────────────────

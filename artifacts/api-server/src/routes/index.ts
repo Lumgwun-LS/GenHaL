@@ -67,6 +67,7 @@ import customerRouter from "./customer";
 import vendorMessagesRouter from "./vendor-messages";
 import vendorVirtualAccountsRouter from "./vendor-virtual-accounts";
 import walletRouter, { walletPublicRouter } from "./wallet";
+import analyticsVisitsRouter from "./analytics-visits";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -148,6 +149,7 @@ router.use(leadsRouter);
 router.use(emailCampaignsRouter);
 router.use(smsCampaignsRouter);
 router.use(analyticsRouter);
+router.use(analyticsVisitsRouter);
 router.use(branchesRouter);
 router.use(workersRouter);
 router.use(apiKeysRouter);
