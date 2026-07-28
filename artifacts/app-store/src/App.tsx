@@ -5,6 +5,7 @@ import { ClerkProvider, useUser } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
+import Footer from "./components/footer";
 import { CrossAppBanner } from "./components/cross-app-banner";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -97,6 +98,7 @@ export default function App() {
               <Route component={NotFound} />
             </Switch>
           </ErrorBoundary>
+          <Footer />
         </div>
       </WouterRouter>
     </ClerkProvider>

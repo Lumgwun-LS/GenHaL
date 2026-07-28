@@ -41,6 +41,7 @@ import {
   GitBranch,
   Inbox,
   Landmark,
+  MapPin,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState, useCallback } from "react";
@@ -69,10 +70,37 @@ const PLATFORM_LINKS = [
   { name: "Awajimaa Hosting",      href: "https://www.awajimaahosting.com" },
 ];
 
+const DASHBOARD_OFFICES = [
+  { label: "Nigeria HQ", address: "Pyale Workhub, 21 Bekwere Wosu Street, D-Line, Diobu, Port Harcourt, Rivers State, Nigeria" },
+  { label: "United States", address: "16501 Shady Grove Road, Suite 8885, Gaithersburg, MD 20898, USA" },
+];
+
 function DashboardFooter() {
   return (
     <footer className="border-t border-border/50 bg-card/30 mt-auto">
       <div className="px-6 py-5 space-y-4">
+        {/* Office Maps */}
+        <div className="space-y-2">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/50">Our Offices</p>
+          {DASHBOARD_OFFICES.map((office) => (
+            <div key={office.label} className="rounded-lg overflow-hidden border border-border/30">
+              <div className="bg-muted/20 px-2 py-1 flex items-center gap-1.5">
+                <MapPin className="h-2.5 w-2.5 text-primary shrink-0" />
+                <span className="text-[9px] font-semibold text-foreground">{office.label}</span>
+              </div>
+              <iframe
+                title={`Map — ${office.label}`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(office.address)}&output=embed`}
+                width="100%"
+                height="130"
+                style={{ border: 0, display: "block" }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+          ))}
+        </div>
         {/* Platforms row */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Our Platforms</p>
