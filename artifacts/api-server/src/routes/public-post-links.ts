@@ -185,7 +185,7 @@ async function chargeProvider(params: {
 
     if (provider === "interswitch") {
       try {
-        const creds = resolveInterswitchCreds();
+        const creds = await resolveInterswitchCreds();
         const transactionRef = `IS-${vendor.id}-${Date.now()}`;
         const amountKobo = Math.round(amount * 100);
         const currencyCode = currency === "USD" ? "840" : "566";
@@ -194,15 +194,14 @@ async function chargeProvider(params: {
           callbackUrl: redirectUrl, currencyCode,
         });
         // Record the pending payment for webhook / requery reconciliation
-        await _db2.insert(_pt2).values({
+        await db.insert(paymentsTable).values({
           vendorId: vendor.id, orderId,
           provider: "interswitch",
           providerReference: transactionRef,
           amount: String(amount),
           currency,
           status: "pending",
-          checkoutUrl,
-          metadata: { email },
+          metadata: { email, checkoutUrl },
         }).onConflictDoNothing();
         return { ok: true, body: { orderId, provider: "interswitch", url: checkoutUrl } };
       } catch (err: unknown) {
@@ -579,7 +578,7 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
     customerEmail:   email,
     customerName:    name,
     orderId:         order!.id,
-    vendorName:      link.vendor.businessName ?? link.vendor.name ?? "Your vendor",
+    vendorName:      link.vendor.name ?? "Your vendor",
     items:           orderItems.map((i) => ({ name: i.productName, quantity: i.quantity, unitPrice: i.unitPrice })),
     totalAmount,
     currency,

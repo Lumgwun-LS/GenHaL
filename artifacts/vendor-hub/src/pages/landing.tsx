@@ -82,23 +82,24 @@ const getFeatureIcon = (title: string) => {
 };
 
 const DEFAULT_FEATURES = [
+  { title: "Quick E-Commerce Website", description: "Launch a beautiful, animated storefront with a built-in cart, live checkout, and multi-gateway payments — Paystack, Stripe, Interswitch, Flutterwave, and more — in minutes. Rated by customers. Fully mobile-ready." },
+  { title: "Interswitch Payment Suite", description: "Accept payments, send bank transfers, pay utility bills (airtime, DSTV, electricity, data), verify accounts and BVNs, create dedicated virtual accounts, and process partial or full refunds — all from one dashboard." },
   { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer." },
   { title: "AI Content & Video Studio", description: "Generate product imagery, captions, and fully animated multi-scene marketing videos with AI voiceover and music." },
   { title: "Sales & Leads CRM", description: "Track every lead from first touch to closed order. Visualize pipelines and revenue." },
   { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range, exportable anytime." },
   { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale." },
   { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, full order fulfillment, and transaction histories." },
-  { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI — describe your vision and get a professional design in seconds." },
-  { title: "Interior Design Studio", description: "Visualize room layouts, furniture arrangements, color palettes, and full interior renders for any space — residential, commercial, or retail." },
-  { title: "Fashion & Tailoring AI", description: "Create fashion illustrations, outfit concepts, fabric pattern ideas, and tailoring spec sheets with AI — built for designers, boutiques, and bespoke tailors." },
+  { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI." },
+  { title: "Interior Design Studio", description: "Visualize room layouts, furniture arrangements, color palettes, and full interior renders for any space." },
+  { title: "Fashion & Tailoring AI", description: "Create fashion illustrations, outfit concepts, fabric pattern ideas, and tailoring spec sheets with AI." },
   { title: "Data Analytics", description: "Upload any CSV or Excel file, connect your sales data, and interrogate it with AI — get interactive charts, trend summaries, and actionable insights instantly." },
   { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
   { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
   { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
   { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
-  { title: "Business Website Builder", description: "Launch a professional storefront in minutes with customizable templates, live preview, and one-click publish." },
-  { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library — pick any asset directly from your social composer or website builder." },
-  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard — connect your ad account and launch in minutes." },
+  { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library." },
+  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard." },
 ];
 
 const ADDON_PLANS = [
@@ -133,16 +134,18 @@ const ADDON_PLANS = [
     border: "border-blue-500/30",
   },
   {
-    name: "Business Website Builder",
-    badge: null,
+    name: "E-Commerce Website Builder",
+    badge: "New",
     price: { usd: 9, ngn: 5500 },
-    description: "A full website editor with 4 professional templates, custom branding, SEO controls, and live public hosting.",
+    description: "A full animated storefront: beautiful templates, live shop with cart & checkout, multi-gateway payments, customer ratings, and one-click publish.",
     features: [
-      "4 professional templates",
-      "Custom theme color & logo",
-      "8 section types (hero, gallery, menu…)",
+      "Beautiful animated templates with sliders & gradients",
+      "Live shop — cart, checkout & order tracking",
+      "Multi-gateway: Paystack, Stripe, Interswitch, Flutterwave",
+      "Customer star ratings shown publicly",
+      "Partial & full refund support built in",
+      "Business address & contact info always visible",
       "Live public URL at your custom slug",
-      "SEO title & meta description controls",
     ],
     color: "from-emerald-500/20 to-teal-500/10",
     border: "border-emerald-500/30",
@@ -1237,16 +1240,16 @@ function PlatformPartnersSection() {
 
 // ─── Trusted By ──────────────────────────────────────────────────────────────
 
-type TrustedVendor = { id: number; name: string; logoUrl: string | null; industry: string | null };
+type TrustedVendor = { id: number; name: string; logoUrl: string | null; industry: string | null; website: string | null };
 
 function VendorLogoCard({ vendor }: { vendor: TrustedVendor }) {
   const initial = vendor.name.trim().charAt(0).toUpperCase();
-  return (
-    <motion.div
-      whileHover={{ scale: 1.07, y: -3 }}
-      transition={{ type: "spring", stiffness: 380, damping: 18 }}
-      className="flex items-center gap-3 shrink-0 px-5 py-3 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 backdrop-blur-sm cursor-default select-none transition-colors"
-    >
+  const hasLink = !!vendor.website?.trim();
+  // External URLs open in a new tab; /awajimaaai/* relative paths open in the same tab
+  const isExternal = !!vendor.website && (vendor.website.startsWith("http://") || vendor.website.startsWith("https://"));
+
+  const inner = (
+    <>
       {vendor.logoUrl ? (
         <img
           src={vendor.logoUrl}
@@ -1260,19 +1263,52 @@ function VendorLogoCard({ vendor }: { vendor: TrustedVendor }) {
         </div>
       )}
       <span className="text-sm font-semibold text-foreground/80 whitespace-nowrap max-w-[140px] truncate">{vendor.name}</span>
+      {hasLink && (
+        <svg className="w-3 h-3 shrink-0 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      )}
+    </>
+  );
+
+  const sharedClass = "group flex items-center gap-3 shrink-0 px-5 py-3 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 backdrop-blur-sm select-none transition-colors";
+
+  if (hasLink) {
+    return (
+      <motion.a
+        href={vendor.website!}
+        target={isExternal ? "_blank" : "_self"}
+        rel={isExternal ? "noopener noreferrer" : undefined}
+        whileHover={{ scale: 1.07, y: -3 }}
+        transition={{ type: "spring", stiffness: 380, damping: 18 }}
+        className={sharedClass + " cursor-pointer no-underline"}
+        title={`Visit ${vendor.name}`}
+      >
+        {inner}
+      </motion.a>
+    );
+  }
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.04, y: -2 }}
+      transition={{ type: "spring", stiffness: 380, damping: 18 }}
+      className={sharedClass + " cursor-default"}
+    >
+      {inner}
     </motion.div>
   );
 }
 
 function TrustedBySection() {
-  const { data } = useQuery<{ count: number; vendors: TrustedVendor[] }>({
+  const { data } = useQuery<{ totalCount: number; vendors: TrustedVendor[] }>({
     queryKey: ["trusted-vendors"],
-    queryFn: () => fetch("/api/public/trusted-vendors").then((r) => r.json()),
+    queryFn: () => fetch(`${BASE}/api/public/trusted-vendors`).then((r) => r.json()),
     staleTime: 10 * 60 * 1000,
   });
 
   // Gate: show as soon as at least one vendor has a logo
-  if (!data || data.count < 1) return null;
+  if (!data || (data.totalCount ?? 0) < 1) return null;
 
   const vendors = data.vendors;
   // Split into two rows; each row duplicated for seamless infinite loop
@@ -1326,7 +1362,7 @@ function TrustedBySection() {
             animate={{ scale: [1, 1.5, 1], opacity: [1, 0.6, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          Trusted by {data.count}+ businesses
+          Trusted by {data.totalCount.toLocaleString()}+ businesses
         </motion.div>
 
         <motion.h2

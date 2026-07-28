@@ -76,8 +76,7 @@ router.post("/payments/squad/initialize", async (req, res): Promise<void> => {
     amount: String(amount),
     currency,
     status: "pending",
-    checkoutUrl: result.data.checkout_url,
-    metadata: { squadTransactionRef: transactionRef },
+    metadata: { squadTransactionRef: transactionRef, checkoutUrl: result.data.checkout_url },
   }).returning();
 
   res.json({ paymentId: payment!.id, reference: result.data.transaction_ref, url: result.data.checkout_url });

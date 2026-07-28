@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 export type SiteSectionType =
   | "hero" | "about" | "products" | "gallery"
-  | "testimonials" | "contact" | "social" | "whatsapp_cta" | "shop";
+  | "testimonials" | "contact" | "social" | "whatsapp_cta" | "shop" | "ratings";
 
 export type SiteSection = {
   id: string;
@@ -33,6 +33,7 @@ export type SiteData = {
   sections: SiteSection[];
   template?: { palette: SiteTemplatePalette; primaryFont: string; name: string };
   vendor?: { name: string; email?: string | null; phone?: string | null; address?: string | null };
+  vendorId?: number | null;
   // Shop section integration
   slug?: string | null;
   enabledGateways?: string[];
@@ -63,6 +64,9 @@ const SITE_CSS = `
   @keyframes siteSlideDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:none} }
   @keyframes siteFadeIn    { from{opacity:0} to{opacity:1} }
   @keyframes siteShimmer   { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  @keyframes siteSlideLeft  { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:none} }
+  @keyframes siteSlideRight { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:none} }
+  @keyframes siteStarPop    { 0%{transform:scale(0.5);opacity:0} 70%{transform:scale(1.25)} 100%{transform:scale(1);opacity:1} }
 
   .sv-obs{opacity:0;transform:translateY(36px);transition:opacity .75s cubic-bezier(.4,0,.2,1),transform .75s cubic-bezier(.4,0,.2,1)}
   .sv-obs.sv-vis{opacity:1;transform:none}
@@ -110,29 +114,42 @@ function HeroSection({ content, palette, themeColor, logoUrl, vendorName }: {
   logoUrl?: string | null;
   vendorName: string;
 }) {
-  const bg = str(content.backgroundImage);
-  const opacity = Math.min(1, Math.max(0, parseFloat(str(content.overlayOpacity) || "0.45")));
-  const rgb = hexToRgb(themeColor);
-  const hasImage = !!bg;
+  const bg        = str(content.backgroundImage);
+  const bgVideo   = str(content.backgroundVideo);
+  const opacity   = Math.min(1, Math.max(0, parseFloat(str(content.overlayOpacity) || "0.5")));
+  const hasImage  = !!bg;
+  const hasVideo  = !!bgVideo;
+  const hasMedia  = hasImage || hasVideo;
 
   return (
     <section style={{
       position: "relative",
-      minHeight: 540,
+      minHeight: 580,
       overflow: "hidden",
-      background: hasImage
-        ? `url(${bg}) center/cover no-repeat`
+      background: hasMedia
+        ? "#000"
         : `linear-gradient(135deg, ${themeColor}, ${themeColor}cc 40%, ${palette.secondary || "#FF7F50"})`,
       backgroundSize: hasImage ? "cover" : "200% 200%",
-      animation: hasImage ? undefined : "siteGradient 8s ease infinite",
+      animation: hasMedia ? undefined : "siteGradient 8s ease infinite",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
+      {/* Video background */}
+      {hasVideo && (
+        <video autoPlay muted loop playsInline
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+          src={bgVideo}
+        />
+      )}
+      {/* Image background */}
+      {hasImage && !hasVideo && (
+        <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }} />
+      )}
       {/* Overlay */}
-      {hasImage && <div style={{ position: "absolute", inset: 0, background: `rgba(0,0,0,${opacity})` }} />}
-      {!hasImage && <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.08)" }} />}
+      {hasMedia && <div style={{ position: "absolute", inset: 0, background: `rgba(0,0,0,${opacity})`, zIndex: 1 }} />}
+      {!hasMedia && <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.08)", zIndex: 1 }} />}
 
-      {/* Decorative floating shapes (no-image mode) */}
-      {!hasImage && (
+      {/* Decorative floating shapes (no-media mode) */}
+      {!hasMedia && (
         <>
           <div style={{
             position: "absolute", top: "8%", right: "12%",
@@ -165,7 +182,7 @@ function HeroSection({ content, palette, themeColor, logoUrl, vendorName }: {
 
       {/* Content */}
       <div className="sv-hero-inner" style={{
-        position: "relative", zIndex: 1, textAlign: "center",
+        position: "relative", zIndex: 2, textAlign: "center",
         padding: "6rem 2rem 4rem", maxWidth: 760,
       }}>
         {/* Tagline badge */}
@@ -223,7 +240,7 @@ function HeroSection({ content, palette, themeColor, logoUrl, vendorName }: {
       <div style={{
         position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)",
         color: "rgba(255,255,255,0.6)", fontSize: "0.75rem", fontWeight: 500, letterSpacing: "0.1em",
-        animation: "siteHeroText 1s ease 1.2s both",
+        animation: "siteHeroText 1s ease 1.2s both", zIndex: 2,
         display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
       }}>
         <div style={{
@@ -322,9 +339,19 @@ function ProductsSection({ content, palette, themeColor }: { content: Record<str
 
 function GallerySection({ content, palette, themeColor }: { content: Record<string, unknown>; palette: SiteTemplatePalette; themeColor: string }) {
   const images = parseItems(content.images);
+  const [current, setCurrent] = useState(0);
+  const [lightbox, setLightbox] = useState<number | null>(null);
   if (images.length === 0) return null;
+
+  const COLS = 3;
+  const total = images.length;
+  const hasPrev = current > 0;
+  const hasNext = current + COLS < total;
+
+  const visible = images.slice(current, current + COLS);
+
   return (
-    <section className="sv-section-pad" style={{ background: palette.accent, padding: "5.5rem 2rem" }}>
+    <section className="sv-section-pad" style={{ background: palette.accent, padding: "5.5rem 2rem", overflow: "hidden" }}>
       <div style={{ maxWidth: 1140, margin: "0 auto" }}>
         <div className="sv-obs" style={{ textAlign: "center", marginBottom: "3rem" }}>
           <div style={{
@@ -336,19 +363,58 @@ function GallerySection({ content, palette, themeColor }: { content: Record<stri
             {str(content.title) || "Our Gallery"}
           </h2>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "1rem" }}>
-          {images.map((img, i) => (
-            <div key={i} className="sv-obs sv-obs-s sv-card" style={{
-              borderRadius: 14, overflow: "hidden", aspectRatio: "1",
-              boxShadow: "0 2px 12px rgba(0,0,0,.08)",
-              transitionDelay: `${i * 60}ms`,
-            }}>
-              <img src={str(img.url || img as unknown as string)} alt={`Gallery ${i + 1}`} className="sv-img-zoom"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+
+        {/* Slider */}
+        <div style={{ position: "relative" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "1rem" }}>
+            {visible.map((img, i) => {
+              const src = str((img as Record<string,unknown>).url ?? (img as unknown as string));
+              return (
+                <div key={current + i} className="sv-obs-s sv-card" onClick={() => setLightbox(current + i)}
+                  style={{ borderRadius: 14, overflow: "hidden", aspectRatio: "1", boxShadow: "0 2px 12px rgba(0,0,0,.08)", cursor: "pointer", animation: "siteSlideLeft 0.38s ease both", animationDelay: `${i * 70}ms` }}>
+                  <img src={src} alt={`Gallery ${current + i + 1}`} className="sv-img-zoom"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Nav buttons */}
+          {total > COLS && (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "2rem" }}>
+              <button onClick={() => setCurrent(c => Math.max(0, c - COLS))} disabled={!hasPrev}
+                style={{ width: 44, height: 44, borderRadius: "50%", background: hasPrev ? themeColor : themeColor + "30", color: "#fff", border: "none", cursor: hasPrev ? "pointer" : "default", fontSize: 18, fontWeight: 700, transition: "all .2s" }}>
+                ‹
+              </button>
+              {/* Dots */}
+              <div style={{ display: "flex", gap: 6 }}>
+                {Array.from({ length: Math.ceil(total / COLS) }).map((_, di) => (
+                  <button key={di} onClick={() => setCurrent(di * COLS)}
+                    style={{ width: current === di * COLS ? 20 : 8, height: 8, borderRadius: 4, background: current === di * COLS ? themeColor : themeColor + "44", border: "none", cursor: "pointer", transition: "all .3s", padding: 0 }} />
+                ))}
+              </div>
+              <button onClick={() => setCurrent(c => Math.min(total - COLS, c + COLS))} disabled={!hasNext}
+                style={{ width: 44, height: 44, borderRadius: "50%", background: hasNext ? themeColor : themeColor + "30", color: "#fff", border: "none", cursor: hasNext ? "pointer" : "default", fontSize: 18, fontWeight: 700, transition: "all .2s" }}>
+                ›
+              </button>
             </div>
-          ))}
+          )}
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightbox !== null && (
+        <>
+          <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 900, cursor: "pointer" }} />
+          <div style={{ position: "fixed", inset: 0, zIndex: 901, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <img src={str((images[lightbox] as Record<string,unknown>)?.url ?? (images[lightbox] as unknown as string))} alt={`Gallery ${lightbox + 1}`}
+              style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,.5)", animation: "siteFadeIn .2s ease" }} />
+            <button onClick={() => setLightbox(null)} style={{ position: "fixed", top: 20, right: 24, background: "rgba(255,255,255,.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer" }}>✕</button>
+            {lightbox > 0 && <button onClick={() => setLightbox(l => l! - 1)} style={{ position: "fixed", left: 16, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,.15)", border: "none", color: "#fff", width: 48, height: 48, borderRadius: "50%", fontSize: 24, cursor: "pointer" }}>‹</button>}
+            {lightbox < total - 1 && <button onClick={() => setLightbox(l => l! + 1)} style={{ position: "fixed", right: 16, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,.15)", border: "none", color: "#fff", width: 48, height: 48, borderRadius: "50%", fontSize: 24, cursor: "pointer" }}>›</button>}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -498,6 +564,110 @@ function WhatsAppSection({ content }: { content: Record<string, unknown> }) {
         {str(content.buttonText) || "Chat on WhatsApp"}
       </a>
     </div>
+  );
+}
+
+// ── Ratings Section ───────────────────────────────────────────────────────────
+
+const BASE_RATINGS = (typeof import.meta !== "undefined" ? (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL?.replace(/\/$/, "") : "") ?? "";
+
+type PublicRating = {
+  id: number; customerName?: string | null; rating: number; review?: string | null;
+  isVerifiedPurchase: boolean; createdAt: string;
+};
+
+function StarDisplay({ rating, size = 16, color = "#f59e0b" }: { rating: number; size?: number; color?: string }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 2 }}>
+      {[1,2,3,4,5].map(s => (
+        <span key={s} style={{ fontSize: size, color: s <= Math.round(rating) ? color : "#e5e7eb" }}>★</span>
+      ))}
+    </span>
+  );
+}
+
+function RatingsSection({ content, palette, themeColor, vendorId }: {
+  content: Record<string, unknown>;
+  palette: SiteTemplatePalette;
+  themeColor: string;
+  vendorId?: number | null;
+}) {
+  const [ratings, setRatings] = useState<PublicRating[]>([]);
+  const [summary, setSummary] = useState<{ average: string | null; count: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!vendorId) { setLoading(false); return; }
+    Promise.all([
+      fetch(`${BASE_RATINGS}/api/ratings/summary/${vendorId}`).then(r => r.json()),
+      fetch(`${BASE_RATINGS}/api/ratings/${vendorId}`).then(r => r.json()),
+    ]).then(([s, r]) => {
+      setSummary(s);
+      setRatings(r.ratings ?? []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [vendorId]);
+
+  const title = str(content.title) || "Customer Reviews";
+
+  return (
+    <section className="sv-section-pad" style={{ background: palette.bg, padding: "5.5rem 2rem" }}>
+      <div style={{ maxWidth: 1060, margin: "0 auto" }}>
+        <div className="sv-obs" style={{ textAlign: "center", marginBottom: "3rem" }}>
+          <div style={{ display: "inline-block", background: themeColor + "18", color: themeColor, borderRadius: 999, padding: "0.3rem 0.9rem", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: ".9rem" }}>Reviews</div>
+          <h2 style={{ fontSize: "clamp(1.6rem,3.5vw,2.3rem)", fontWeight: 800, color: palette.text }}>{title}</h2>
+          {summary && summary.count > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginTop: "1rem" }}>
+              <StarDisplay rating={parseFloat(summary.average ?? "0")} size={22} color={themeColor} />
+              <span style={{ fontSize: "1.5rem", fontWeight: 900, color: palette.text }}>{summary.average}</span>
+              <span style={{ fontSize: "0.95rem", color: palette.text + "88" }}>out of 5 · {summary.count} review{summary.count !== 1 ? "s" : ""}</span>
+            </div>
+          )}
+        </div>
+
+        {loading && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "1.5rem" }}>
+            {[1,2,3].map(i => <div key={i} style={{ borderRadius: 16, height: 160, background: palette.accent, animation: "siteShimmer 1.5s infinite linear", backgroundImage: `linear-gradient(90deg,${palette.bg} 0%,${palette.accent} 50%,${palette.bg} 100%)`, backgroundSize: "200% 100%" }} />)}
+          </div>
+        )}
+
+        {!loading && ratings.length === 0 && (
+          <div style={{ textAlign: "center", padding: "3rem", background: palette.accent, borderRadius: 20, border: `2px dashed ${themeColor}30` }}>
+            <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⭐</div>
+            <p style={{ fontWeight: 700, color: palette.text }}>No reviews yet</p>
+            <p style={{ fontSize: ".9rem", color: palette.text + "88", marginTop: "0.5rem" }}>Be the first to leave a review after your purchase.</p>
+          </div>
+        )}
+
+        {!loading && ratings.length > 0 && (
+          <div className="sv-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "1.5rem" }}>
+            {ratings.map((r, i) => (
+              <div key={r.id} className="sv-obs sv-card" style={{
+                background: palette.accent, borderRadius: 16, padding: "1.75rem",
+                boxShadow: "0 2px 12px rgba(0,0,0,.06)", borderTop: `3px solid ${themeColor}`,
+                transitionDelay: `${i * 70}ms`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                  <StarDisplay rating={r.rating} size={18} color={themeColor} />
+                  {r.isVerifiedPurchase && (
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#10b981", background: "#10b98118", padding: "2px 8px", borderRadius: 999 }}>✓ Verified</span>
+                  )}
+                </div>
+                {r.review && <p style={{ color: palette.text + "cc", fontStyle: "italic", lineHeight: 1.7, marginBottom: "1.1rem", fontSize: ".95rem" }}>"{r.review}"</p>}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: themeColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: "1rem", flexShrink: 0 }}>
+                    {(r.customerName || "A")?.[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: palette.text, fontSize: ".9rem" }}>{r.customerName || "Anonymous"}</div>
+                    <div style={{ color: palette.text + "66", fontSize: ".78rem" }}>{new Date(r.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short" })}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1004,33 +1174,65 @@ export function SiteRenderer({ data, className, immediateReveal }: {
             {s.type === "contact" && <ContactSection {...props} />}
             {s.type === "social" && <SocialSection {...props} />}
             {s.type === "whatsapp_cta" && <WhatsAppSection content={s.content} />}
+            {s.type === "ratings" && <RatingsSection {...props} vendorId={data.vendorId} />}
           </div>
         );
       })}
 
       {/* ── Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="sv-obs" style={{ background: palette.text, color: "#fff", padding: "3rem 2rem" }}>
+      <footer className="sv-obs" style={{ background: palette.text, color: "#fff", padding: "3.5rem 2rem 2rem" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div className="sv-footer-inner" style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            flexWrap: "wrap", gap: "1rem",
+            display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "2rem", marginBottom: "2rem",
           }}>
-            <div>
+            {/* Brand column */}
+            <div style={{ maxWidth: 300 }}>
               {data.logoUrl
-                ? <img src={data.logoUrl} alt={vendorName} style={{ height: 32, objectFit: "contain", filter: "brightness(0) invert(1)", marginBottom: "0.5rem" }} />
-                : <div style={{ fontWeight: 900, fontSize: "1.15rem", marginBottom: "0.5rem" }}>{vendorName}</div>
+                ? <img src={data.logoUrl} alt={vendorName} style={{ height: 36, objectFit: "contain", filter: "brightness(0) invert(1)", marginBottom: "0.75rem" }} />
+                : <div style={{ fontWeight: 900, fontSize: "1.25rem", marginBottom: "0.75rem", color: themeColor }}>{vendorName}</div>
               }
-              {data.vendor?.email && <p style={{ opacity: 0.6, fontSize: ".85rem", margin: 0 }}>{data.vendor.email}</p>}
+              {data.vendor?.address && (
+                <p style={{ opacity: 0.75, fontSize: ".87rem", margin: "0 0 6px", display: "flex", alignItems: "flex-start", gap: "0.5rem", lineHeight: 1.5 }}>
+                  <span>📍</span>{data.vendor.address}
+                </p>
+              )}
+              {data.vendor?.phone && (
+                <p style={{ opacity: 0.7, fontSize: ".87rem", margin: "0 0 6px", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span>📞</span>
+                  <a href={`tel:${data.vendor.phone}`} style={{ color: "inherit", textDecoration: "none" }}>{data.vendor.phone}</a>
+                </p>
+              )}
+              {data.vendor?.email && (
+                <p style={{ opacity: 0.7, fontSize: ".87rem", margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span>✉️</span>
+                  <a href={`mailto:${data.vendor.email}`} style={{ color: "inherit", textDecoration: "none" }}>{data.vendor.email}</a>
+                </p>
+              )}
             </div>
-            <div style={{ textAlign: "right" }}>
-              <p style={{ opacity: 0.45, fontSize: ".75rem", margin: 0 }}>
-                Powered by{" "}
-                <span style={{ color: themeColor, fontWeight: 700 }}>Awa Biz Suite</span>
-              </p>
-              <p style={{ opacity: 0.3, fontSize: ".7rem", marginTop: 4 }}>
-                © {new Date().getFullYear()} {vendorName}. All rights reserved.
-              </p>
-            </div>
+
+            {/* Quick links */}
+            {navSections.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: ".85rem", letterSpacing: ".08em", textTransform: "uppercase", opacity: 0.5, marginBottom: "0.85rem" }}>Navigation</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {navSections.map(s => (
+                    <a key={s.id} href={`#${s.id}`} style={{ opacity: 0.65, fontSize: ".88rem", fontWeight: 600, textDecoration: "none", color: "#fff", transition: "opacity .18s" }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = "0.65")}>
+                      {s.type === "products" ? str(s.content.title) || "Products" : s.type.charAt(0).toUpperCase() + s.type.slice(1)}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom bar */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.5rem", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+            <p style={{ opacity: 0.3, fontSize: ".7rem", margin: 0 }}>© {new Date().getFullYear()} {vendorName}. All rights reserved.</p>
+            <p style={{ opacity: 0.45, fontSize: ".75rem", margin: 0 }}>
+              Powered by <span style={{ color: themeColor, fontWeight: 700 }}>Awa Biz Suite</span>
+            </p>
           </div>
         </div>
       </footer>

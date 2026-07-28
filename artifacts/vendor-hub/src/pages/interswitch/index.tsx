@@ -546,7 +546,7 @@ function BillsTab() {
                     <SelectContent>
                       {items.map(i => (
                         <SelectItem key={i.paymentCode} value={i.paymentCode}>
-                          {i.name} {i.amount !== "0" ? `— ${i.currencySymbol ?? "₦"}${(parseFloat(i.amount) / 100).toLocaleString()}` : "(variable)"}
+                          {i.name} {i.amount !== "0" ? `— ₦${(parseFloat(i.amount) / 100).toLocaleString()}` : "(variable)"}
                         </SelectItem>
                       ))}
                     </SelectContent>

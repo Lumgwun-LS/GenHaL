@@ -810,8 +810,8 @@ export default function ConnectedBusinessPage() {
               Connect your repository and let Awajimaa AI generate your API documentation automatically.
             </p>
           </div>
-          {profile?.docVersion > 0 && (
-            <a href={`${BASE}/docs/${profile.slug}`} target="_blank" rel="noopener noreferrer">
+          {(profile?.docVersion ?? 0) > 0 && (
+            <a href={`${BASE}/docs/${profile?.slug}`} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
                 <BookOpen className="w-3.5 h-3.5" /> View Docs
               </Button>

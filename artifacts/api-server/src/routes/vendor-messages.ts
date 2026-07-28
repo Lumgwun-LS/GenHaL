@@ -202,13 +202,11 @@ router.post("/vendor-messages/send", async (req, res): Promise<void> => {
   // Send email notification if requested
   if (sendEmailNotification !== false) {
     const subjectLine = subject?.trim() || `Message from ${vendor.name}`;
-    const html = wrapVendorEmail(
-      vendor.name,
-      vendor.logoUrl ?? null,
+    const html = wrapVendorEmail({ bodyHtml:
       `<p style="font-size:16px;margin:0 0 16px">Hi ${customerName?.trim() || customer?.name || "there"},</p>
        <p style="font-size:15px;line-height:1.7;margin:0 0 20px;white-space:pre-wrap">${body.trim()}</p>
        <p style="font-size:13px;color:#9ca3af;margin:0">This message was sent to you by ${vendor.name} via Awa Biz Suite.</p>`
-    );
+    });
     sendEmail({
       to:      email,
       subject: subjectLine,

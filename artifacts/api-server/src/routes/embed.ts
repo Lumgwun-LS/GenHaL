@@ -466,13 +466,13 @@ router.post("/embed/checkout", async (req, res): Promise<void> => {
 
   // Fire-and-forget order confirmation email with profile completion CTA
   const [vendorForEmail] = await db
-    .select({ businessName: vendorsTable.businessName })
+    .select({ name: vendorsTable.name })
     .from(vendorsTable).where(eq(vendorsTable.id, ctx.vendorId)).limit(1);
   sendCustomerOrderConfirmationEmail({
     customerEmail:   customer.email.trim().toLowerCase(),
     customerName:    customer.name.trim(),
     orderId:         order.id,
-    vendorName:      vendorForEmail?.businessName ?? "Your vendor",
+    vendorName:      vendorForEmail?.name ?? "Your vendor",
     items:           orderItemPayloads.map(i => ({
       name:      i.productName,
       quantity:  i.quantity,
@@ -487,7 +487,7 @@ router.post("/embed/checkout", async (req, res): Promise<void> => {
   if (gateway === "paystack") {
     let secretKey: string;
     try {
-      secretKey = await resolvePaystackKey(ctx.vendorId, vendor as Parameters<typeof resolvePaystackKey>[1]);
+      secretKey = await resolvePaystackKey(ctx.vendorId, vendor as unknown as Parameters<typeof resolvePaystackKey>[1]);
     } catch (err) {
       res.status(503).json({ error: err instanceof Error ? err.message : "Paystack key unavailable" });
       return;

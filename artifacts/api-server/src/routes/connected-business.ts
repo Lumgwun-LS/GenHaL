@@ -42,7 +42,7 @@ export default router;
 
 async function resolveVendor(userId: string) {
   const [v] = await db
-    .select({ id: vendorsTable.id, name: vendorsTable.businessName, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
+    .select({ id: vendorsTable.id, name: vendorsTable.name, email: vendorsTable.email, subscriptionTier: vendorsTable.subscriptionTier })
     .from(vendorsTable)
     .where(eq(vendorsTable.clerkUserId, userId))
     .limit(1);
@@ -75,13 +75,14 @@ async function fetchRawSpec(profile: typeof platformPartnersTable.$inferSelect):
     case "git": {
       if (!profile.gitRepo) throw new Error("No git repository configured");
       const token = profile.gitInstallToken ? decrypt(profile.gitInstallToken) : undefined;
-      return fetchSpecFromGit(
-        profile.gitProvider ?? "github",
-        profile.gitRepo,
-        profile.gitBranch ?? "main",
-        profile.gitSpecPath ?? undefined,
+      if (!token) throw new Error("Git authentication token is required. Reconnect your repository under VCS settings.");
+      return fetchSpecFromGit({
+        provider: (profile.gitProvider as "github" | "gitlab") ?? "github",
+        repo:     profile.gitRepo,
+        branch:   profile.gitBranch ?? "main",
+        path:     profile.gitSpecPath ?? "openapi.yaml",
         token,
-      );
+      });
     }
     case "upload":
       if (!profile.specRawContent) throw new Error("No uploaded spec found");
@@ -342,7 +343,7 @@ router.post("/connected-business/generate-docs", async (req, res): Promise<void>
     const previousDoc = profile.docContent ?? undefined;
     const [docPortal, changelog] = await Promise.all([
       generateDocPortal(profile.name, profile.description ?? "", rawSpec),
-      previousDoc ? generateChangelog(previousDoc, rawSpec) : Promise.resolve(null),
+      previousDoc ? generateChangelog(previousDoc, rawSpec, profile.name) : Promise.resolve(null),
     ]);
 
     await db.update(platformPartnersTable).set({

@@ -83,3 +83,5 @@ export * from "./vendor-customer-messages";
 export * from "./vendor-virtual-accounts";
 export * from "./vendor-wallets";
 export * from "./embed-visits";
+export * from "./vendor-ratings";
+export * from "./customer-complaints";

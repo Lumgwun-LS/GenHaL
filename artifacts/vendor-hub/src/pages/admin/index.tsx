@@ -43,6 +43,7 @@ import BillingEnforcementPanel from "./billing-enforcement";
 import PlatformFinancialsPanel from "./platform-financials";
 import PlatformPartnersPanel from "./platform-partners";
 import WalletAdminPanel from "./wallet-admin";
+import RatingsComplaintsPanel from "./ratings-complaints";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2356,6 +2357,9 @@ export default function AdminPanel() {
           <TabsTrigger value="wallet-admin" className="flex items-center gap-2">
             <Banknote className="w-4 h-4" /> Wallet &amp; Payouts
           </TabsTrigger>
+          <TabsTrigger value="ratings-complaints" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" /> Ratings &amp; Complaints
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -3691,6 +3695,11 @@ export default function AdminPanel() {
         {/* ── Wallet & Payouts admin tab ───────────────────────────────── */}
         <TabsContent value="wallet-admin">
           <WalletAdminPanel />
+        </TabsContent>
+
+        {/* ── Ratings & Complaints tab ─────────────────────────────────── */}
+        <TabsContent value="ratings-complaints">
+          <RatingsComplaintsPanel />
         </TabsContent>
       </Tabs>
     </div>

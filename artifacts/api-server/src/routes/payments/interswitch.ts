@@ -72,7 +72,7 @@ router.post("/payments/interswitch/initialize", async (req, res): Promise<void> 
   const [v] = await db.select({ interswitchEnabled: vendorsTable.interswitchEnabled }).from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!v?.interswitchEnabled) { res.status(403).json({ error: "Interswitch is not enabled for this vendor" }); return; }
 
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const transactionRef = `IS-${vendorId}-${Date.now()}`;
   const amountKobo = Math.round(amount * 100);
   const currencyCode = currency === "USD" ? "840" : "566";
@@ -90,8 +90,7 @@ router.post("/payments/interswitch/initialize", async (req, res): Promise<void> 
     amount: String(amount),
     currency,
     status: "pending",
-    checkoutUrl,
-    metadata: { email },
+    metadata: { email, checkoutUrl },
   }).returning();
 
   res.json({ paymentId: payment!.id, reference: transactionRef, url: checkoutUrl });
@@ -102,7 +101,7 @@ router.post("/payments/interswitch/initialize", async (req, res): Promise<void> 
 router.get("/payments/interswitch/verify/:ref", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const result = await interswitchQueryTransaction(creds, req.params.ref);
   const paid = result.ResponseCode === "00";
   res.json({ ...result, paid });
@@ -118,7 +117,7 @@ router.post("/payments/interswitch/callback", async (req, res): Promise<void> =>
 
   if (!txnref) { res.status(400).json({ error: "txnref is required" }); return; }
 
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
 
   // Verify hash if provided
   if (hash && !verifyInterswitchHash(creds, txnref, amount ?? "0", hash)) {
@@ -158,7 +157,7 @@ router.post("/payments/interswitch/transfer", async (req, res): Promise<void> =>
     res.status(400).json({ error: "amount, beneficiaryAccount, beneficiaryBankCode and beneficiaryName are required" }); return;
   }
 
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const requestRef = `IS-TRF-${vendor.id}-${Date.now()}`;
   const result = await interswitchSendMoney(creds, {
     requestRef, amount: Math.round(amount * 100),
@@ -173,7 +172,7 @@ router.post("/payments/interswitch/transfer", async (req, res): Promise<void> =>
 router.get("/payments/interswitch/transfer/:ref", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const result = await interswitchQueryTransfer(creds, req.params.ref);
   res.json(result);
 });
@@ -185,7 +184,7 @@ router.post("/payments/interswitch/verify-account", async (req, res): Promise<vo
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { bankCode, accountNumber } = req.body;
   if (!bankCode || !accountNumber) { res.status(400).json({ error: "bankCode and accountNumber are required" }); return; }
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const result = await interswitchVerifyAccount(creds, { bankCode, accountNumber });
   res.json(result);
 });
@@ -197,7 +196,7 @@ router.post("/payments/interswitch/verify-bvn", async (req, res): Promise<void> 
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { bvn } = req.body;
   if (!bvn) { res.status(400).json({ error: "bvn is required" }); return; }
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const result = await interswitchVerifyBVN(creds, bvn);
   res.json(result);
 });
@@ -209,7 +208,7 @@ router.post("/payments/interswitch/refund", async (req, res): Promise<void> => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { transactionRef, amount, reason } = req.body;
   if (!transactionRef || !amount) { res.status(400).json({ error: "transactionRef and amount are required" }); return; }
-  const creds = resolveInterswitchCreds();
+  const creds = await resolveInterswitchCreds();
   const requestRef = `IS-REF-${Date.now()}`;
   const result = await interswitchRefund(creds, { requestRef, transactionRef, amount: Math.round(amount * 100), reason });
   res.json(result);
@@ -222,7 +221,7 @@ router.get("/payments/interswitch/bills/billers", async (req, res): Promise<void
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const creds = resolveInterswitchCreds();
+    const creds = await resolveInterswitchCreds();
     const result = await interswitchGetBillers(creds);
     res.json(result);
   } catch (err: unknown) {
@@ -236,7 +235,7 @@ router.get("/payments/interswitch/bills/billers/:billerId/items", async (req, re
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const creds = resolveInterswitchCreds();
+    const creds = await resolveInterswitchCreds();
     const result = await interswitchGetBillerItems(creds, req.params.billerId);
     res.json(result);
   } catch (err: unknown) {
@@ -254,7 +253,7 @@ router.post("/payments/interswitch/bills/validate", async (req, res): Promise<vo
     res.status(400).json({ error: "paymentCode and customerId are required" }); return;
   }
   try {
-    const creds = resolveInterswitchCreds();
+    const creds = await resolveInterswitchCreds();
     const result = await interswitchValidateBillPayment(creds, { paymentCode, customerId });
     res.json(result);
   } catch (err: unknown) {
@@ -283,7 +282,7 @@ router.post("/payments/interswitch/bills/pay", async (req, res): Promise<void> =
   }
 
   try {
-    const creds = resolveInterswitchCreds();
+    const creds = await resolveInterswitchCreds();
     const requestRef = `IS-BILL-${vendor.id}-${Date.now()}`;
     const result = await interswitchPayBill(creds, {
       requestRef,
@@ -304,7 +303,7 @@ router.get("/payments/interswitch/bills/status/:requestRef", async (req, res): P
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const creds = resolveInterswitchCreds();
+    const creds = await resolveInterswitchCreds();
     const result = await interswitchQueryBillPayment(creds, req.params.requestRef);
     res.json(result);
   } catch (err: unknown) {

@@ -104,3 +104,4 @@
 - [Orders product ownership validation](orders-product-ownership.md) — POST /orders now validates productIds belong to the order's vendorId before inserting; also resolves real product names instead of placeholder strings.
 - [Subscription refund + blacklist](subscription-refund-blacklist.md) — 10-day refund window on cancellation; blacklist gates re-subscribe to higher tier only; Stripe uses latest paid invoice → payment_intent (cast via unknown due to SDK v22 type gap).
 - [VendorHub Media Library](vendorhub-media-library.md) — unified image/video browsing (AI + uploads), image/video editors, POST /media/upload-url for auth-based upload (no vendorId needed), MediaPickerDialog for website builder + social create.
+- [VendorHub ratings & complaints](vendorhub-ratings-complaints.md) — post-order star ratings + complaint submission; partial/full refund; gallery carousel; video/image hero bg; admin Ratings & Complaints tab.

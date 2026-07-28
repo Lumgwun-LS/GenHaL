@@ -68,6 +68,8 @@ import vendorMessagesRouter from "./vendor-messages";
 import vendorVirtualAccountsRouter from "./vendor-virtual-accounts";
 import walletRouter, { walletPublicRouter } from "./wallet";
 import analyticsVisitsRouter from "./analytics-visits";
+import ratingsRouter from "./ratings";
+import complaintsRouter from "./complaints";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -129,6 +131,10 @@ router.use(embedRouter);
 // Public: wallet exchange-rate — no auth needed
 router.use(walletPublicRouter);
 
+// Public: customer ratings + complaints (no auth required to submit)
+router.use(ratingsRouter);
+router.use(complaintsRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -187,5 +193,8 @@ router.use(customerRouter);
 router.use(vendorMessagesRouter);
 router.use(vendorVirtualAccountsRouter);
 router.use(walletRouter);
+// Admin rating/complaint management (auth-gated inside the router)
+router.use(ratingsRouter);
+router.use(complaintsRouter);
 
 export default router;

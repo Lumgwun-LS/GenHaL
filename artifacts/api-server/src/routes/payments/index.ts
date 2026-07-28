@@ -49,6 +49,13 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid payment id" });
     return;
   }
+
+  // Optional partial refund amount (in the payment's original currency, e.g. 25.00)
+  const partialAmount: number | undefined =
+    req.body.amount != null && !isNaN(parseFloat(req.body.amount))
+      ? parseFloat(req.body.amount)
+      : undefined;
+
   try {
 
   // Atomic claim: flip status to "refunding" only if currently "paid".
@@ -100,7 +107,10 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
         throw Object.assign(new Error("Could not resolve Stripe PaymentIntent from session"), { statusCode: 502 });
       }
 
-      await stripe.refunds.create({ payment_intent: paymentIntentId });
+      await stripe.refunds.create({
+        payment_intent: paymentIntentId,
+        ...(partialAmount != null ? { amount: Math.round(partialAmount * 100) } : {}),
+      });
     });
   } else if (payment.provider === "paystack") {
     const paystackKey = await resolveGatewayField("paystack", "secretKey");
@@ -115,7 +125,10 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
         Authorization: `Bearer ${paystackKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ transaction: payment.providerReference }),
+      body: JSON.stringify({
+        transaction: payment.providerReference,
+        ...(partialAmount != null ? { amount: Math.round(partialAmount * 100) } : {}),
+      }),
     });
 
     const data = (await response.json()) as { status: boolean; message: string };
@@ -152,7 +165,7 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
         Authorization: `Bearer ${flutterwaveKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(partialAmount != null ? { amount: partialAmount } : {}),
     });
     const refundData = (await refundResponse.json().catch(() => ({}))) as { status?: string; message?: string };
     if (refundData.status !== "success") {
@@ -232,7 +245,10 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     const refundRes = await fetch(`${base}/v2/payments/captures/${captureId}/refund`, {
       method: "POST",
       headers: { Authorization: `Bearer ${ppToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify(partialAmount != null
+        ? { amount: { value: partialAmount.toFixed(2), currency_code: (payment.currency ?? "USD").toUpperCase() } }
+        : {}
+      ),
     });
     if (!refundRes.ok) {
       const text = await refundRes.text().catch(() => "(no body)");
@@ -240,7 +256,7 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       return;
     }
   } else if (payment.provider === "squad") {
-    const { resolveSquadKey, squadRefundTransaction, squadVerifyTransaction } = await import("../lib/squad");
+    const { resolveSquadKey, squadRefundTransaction, squadVerifyTransaction } = await import("../../lib/squad");
     const squadKey = await resolveSquadKey().catch(() => null);
     if (!squadKey) {
       res.status(503).json({ error: "Squad is not configured. Add a Squad key in Admin → Payment Gateways." });
@@ -252,12 +268,13 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     await squadRefundTransaction(squadKey, {
       gatewayTransactionRef: gatewayRef,
       transactionRef:        payment.providerReference,
-      refundType:            "full",
+      refundType:            partialAmount != null ? "partial" : "full",
       reasonForRefund:       "Refund requested",
+      ...(partialAmount != null ? { refundAmount: String(Math.round(partialAmount * 100)) } : {}),
     });
   } else if (payment.provider === "interswitch") {
-    const { resolveInterswitchCreds: resolveISCreds } = await import("../lib/vendor-keys");
-    const { interswitchRefund: isRefund } = await import("../lib/interswitch");
+    const { resolveInterswitchCreds: resolveISCreds } = await import("../../lib/vendor-keys");
+    const { interswitchRefund: isRefund } = await import("../../lib/interswitch");
     const isCreds = await resolveISCreds().catch(() => null);
     if (!isCreds) {
       res.status(503).json({ error: "Interswitch is not configured. Add credentials in Admin → Payment Gateways." });
@@ -267,7 +284,7 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     await isRefund(isCreds, {
       requestRef,
       transactionRef: payment.providerReference,
-      amount: Math.round(parseFloat(payment.amount) * 100),
+      amount: Math.round((partialAmount ?? parseFloat(payment.amount)) * 100),
       reason: "Refund requested",
     });
   } else if (payment.provider === "remita") {
@@ -285,10 +302,11 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     return;
   }
 
-  // Mark payment as refunded
+  // Mark payment as fully or partially refunded
+  const isPartial = partialAmount != null && partialAmount < parseFloat(payment.amount);
   await db
     .update(paymentsTable)
-    .set({ status: "refunded", updatedAt: new Date() })
+    .set({ status: isPartial ? "partially_refunded" : "refunded", updatedAt: new Date() })
     .where(eq(paymentsTable.id, paymentId));
 
   // Mark associated order as refunded if present
@@ -304,11 +322,11 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       customerName = order.customerName ?? null;
       await db
         .update(ordersTable)
-        .set({ paymentStatus: "refunded", updatedAt: new Date() })
+        .set({ paymentStatus: isPartial ? "partially_refunded" : "refunded", updatedAt: new Date() })
         .where(eq(ordersTable.id, payment.orderId));
 
-      // Restore stock for each item in the refunded order.
-      try {
+      // Restore stock for each item in the fully refunded order (not for partials).
+      if (!isPartial) try {
         const items = await db
           .select({ productId: orderItemsTable.productId, quantity: orderItemsTable.quantity })
           .from(orderItemsTable)
