@@ -408,40 +408,37 @@ function ProfilePanel({ profile, onRefresh }: { profile: Profile; onRefresh: () 
 
 // ─── Integration Panel ───────────────────────────────────────────────────────
 
-type EmbedKey = {
-  id: number;
-  prefix: string;
-  masked: string;
-  isActive: boolean;
-  createdAt: string;
-};
+type EmbedKey = { id: number; prefix: string; masked: string; isActive: boolean; createdAt: string };
 type EmbedKeyResponse = { key: EmbedKey; rawKey?: string; isNew?: boolean };
 
-function IntegrationPanel({ profile }: { profile: Profile }) {
-  const [keyData, setKeyData] = useState<EmbedKeyResponse | null>(null);
-  const [rawKey, setRawKey] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [rotating, setRotating] = useState(false);
-  const [pushing, setPushing] = useState(false);
-  const [pushResult, setPushResult] = useState<{ ok?: boolean; prUrl?: string; error?: string } | null>(null);
-  const [snippetTab, setSnippetTab] = useState<"html" | "react" | "rn">("html");
-  const [copied, setCopied] = useState<string | null>(null);
+type ProductView = "grid" | "slider" | "featured";
+type WidgetSnippetLang = "html" | "react" | "rn";
 
-  const host = typeof window !== "undefined" ? (import.meta.env.VITE_API_URL ?? window.location.origin) : "";
+function IntegrationPanel({ profile }: { profile: Profile }) {
+  const [keyData, setKeyData]         = useState<EmbedKeyResponse | null>(null);
+  const [rawKey, setRawKey]           = useState<string | null>(null);
+  const [revealed, setRevealed]       = useState(false);
+  const [loading, setLoading]         = useState(true);
+  const [rotating, setRotating]       = useState(false);
+  const [pushing, setPushing]         = useState(false);
+  const [pushResult, setPushResult]   = useState<{ ok?: boolean; prUrl?: string; error?: string } | null>(null);
+  const [productView, setProductView] = useState<ProductView>("grid");
+  const [widgetLang, setWidgetLang]   = useState<WidgetSnippetLang>("html");
+  const [copied, setCopied]           = useState<string | null>(null);
+
+  const host    = typeof window !== "undefined" ? (import.meta.env.VITE_API_URL ?? window.location.origin) : "";
   const apiBase = `${host}/api`;
 
   useEffect(() => {
     fetch(`${apiBase}/connected-business/embed-key`, { credentials: "include" })
       .then(r => r.json())
-      .then((data: EmbedKeyResponse) => {
-        setKeyData(data);
-        if (data.rawKey) setRawKey(data.rawKey);
-      })
+      .then((data: EmbedKeyResponse) => { setKeyData(data); if (data.rawKey) setRawKey(data.rawKey); })
       .finally(() => setLoading(false));
   }, []);
 
   const displayKey = rawKey ?? keyData?.key?.masked ?? "";
+  const keyVal     = rawKey ?? keyData?.key?.masked ?? "awa_sk_your_key_here";
+  const scriptSrc  = `${host}/api/embed.js`;
 
   function copyText(text: string, id: string) {
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 1800); });
@@ -451,7 +448,7 @@ function IntegrationPanel({ profile }: { profile: Profile }) {
     if (!window.confirm("Rotate your embed API key? Your current key will stop working immediately.")) return;
     setRotating(true);
     try {
-      const r = await fetch(`${apiBase}/connected-business/embed-key/rotate`, { method: "POST", credentials: "include" });
+      const r    = await fetch(`${apiBase}/connected-business/embed-key/rotate`, { method: "POST", credentials: "include" });
       const data: EmbedKeyResponse = await r.json();
       setKeyData(data);
       if (data.rawKey) { setRawKey(data.rawKey); setRevealed(true); }
@@ -460,88 +457,147 @@ function IntegrationPanel({ profile }: { profile: Profile }) {
 
   async function pushToRepo() {
     if (!rawKey && !displayKey.startsWith("awa_sk_")) {
-      alert("Reveal or copy your API key first, then push so the integration files can include it.");
+      alert("Reveal your API key first so it can be embedded in the integration files.");
       return;
     }
-    setPushing(true);
-    setPushResult(null);
+    setPushing(true); setPushResult(null);
     try {
-      const r = await fetch(`${apiBase}/connected-business/push-integration`, {
-        method: "POST",
-        credentials: "include",
+      const r    = await fetch(`${apiBase}/connected-business/push-integration`, {
+        method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ embedKey: rawKey ?? displayKey }),
       });
-      const data = await r.json();
-      setPushResult(data);
+      setPushResult(await r.json());
     } finally { setPushing(false); }
   }
 
-  const scriptSrc = `${host}/api/embed.js`;
-  const keyVal = rawKey ?? keyData?.key?.masked ?? "awa_sk_your_key_here";
+  // ── Product showcase snippets ─────────────────────────────────────────────
+  const productHtmlSnippets: Record<ProductView, string> = {
+    grid: `<!-- Product Grid — drop anywhere in your HTML -->
+<div
+  data-awa="products"
+  data-key="${keyVal}"
+  data-view="grid"
+  data-columns="3"
+  data-limit="9"
+  data-title="Our Products"
+  data-cta="Buy Now"
+  data-loadmore="true">
+</div>
 
-  const htmlSnippet = `<script
+<!-- Place this once, just before </body> -->
+<script
+  src="${scriptSrc}"
+  data-key="${keyVal}"
+  data-hide-widget="true">
+</script>`,
+    slider: `<!-- Product Carousel — place at the top of your page -->
+<div
+  data-awa="products"
+  data-key="${keyVal}"
+  data-view="slider"
+  data-limit="8"
+  data-title="Featured Products">
+</div>
+
+<script
+  src="${scriptSrc}"
+  data-key="${keyVal}"
+  data-hide-widget="true">
+</script>`,
+    featured: `<!-- Featured Layout — hero card + product grid -->
+<div
+  data-awa="products"
+  data-key="${keyVal}"
+  data-view="featured"
+  data-columns="3"
+  data-limit="7"
+  data-title="Our Products"
+  data-subtitle="Fresh stock, updated in real time."
+  data-cta="Order Now">
+</div>
+
+<script
+  src="${scriptSrc}"
+  data-key="${keyVal}"
+  data-hide-widget="true">
+</script>`,
+  };
+
+  const productReactSnippet = `// Install: just paste AwaProducts.jsx from your pushed repo
+import { AwaProducts } from './awa-integration/products/AwaProducts';
+
+// Grid
+<AwaProducts apiKey="${keyVal}" view="grid" columns={3} title="Our Products" />
+
+// Carousel / Slider
+<AwaProducts apiKey="${keyVal}" view="slider" title="Featured Products" />
+
+// Featured (hero + grid)
+<AwaProducts apiKey="${keyVal}" view="featured" title="Our Products"
+  subtitle="Fresh stock, updated in real time." />`;
+
+  const productRnSnippet = `// React Native / Expo — from pushed AwaProductList.native.jsx
+import { AwaProductList } from './awa-integration/products/AwaProductList.native';
+
+// In your screen component:
+<AwaProductList apiKey="${keyVal}" host="${host}" />`;
+
+  // ── Services widget snippets ──────────────────────────────────────────────
+  const widgetSnippets: Record<WidgetSnippetLang, string> = {
+    html: `<!-- Floating Services Button — place just before </body> -->
+<script
   src="${scriptSrc}"
   data-key="${keyVal}"
   data-theme="dark"
   data-label="Services"
   data-position="bottom-right">
-</script>`;
+</script>`,
+    react: `import AwaWidget from './awa-integration/AwaWidget';
 
-  const reactSnippet = `import { useEffect } from 'react';
+// In your root layout / App.jsx (renders once):
+<AwaWidget apiKey="${keyVal}" theme="dark" label="Services" />`,
+    rn: `import AwaServicesPanel from './awa-integration/AwaWidget.native';
 
-export default function AwaWidget() {
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = '${scriptSrc}';
-    script.setAttribute('data-key', '${keyVal}');
-    script.setAttribute('data-theme', 'dark');
-    script.setAttribute('data-label', 'Services');
-    document.body.appendChild(script);
-    return () => { script.remove(); };
-  }, []);
-  return null;
-}`;
-
-  const rnSnippet = `import { TouchableOpacity, Text, Linking, StyleSheet } from 'react-native';
-
-// Full component: see the pushed file AwaWidget.native.jsx in your repo.
-// Or fetch services directly:
-const getServices = async () => {
-  const res = await fetch(
-    '${host}/api/embed/manifest?key=${keyVal}'
-  );
-  return res.json(); // { vendor, services }
-};`;
-
-  const TIER_FEATURES: Record<string, string[]> = {
-    free:       ["🛍️ Shop (storefront only)"],
-    basic:      ["🛍️ Shop", "📦 Order Tracking"],
-    starter:    ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support Form"],
-    pro:        ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback"],
-    connected:  ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback", "📱 Social Feed", "🔗 Developer API"],
-    enterprise: ["Everything in Connected + White-label customisation"],
+// In your root navigator or layout:
+<AwaServicesPanel apiKey="${keyVal}" host="${host}" />`,
   };
-  const tier = profile.subscriptionTier ?? "free";
+
+  // ── Tier features ─────────────────────────────────────────────────────────
+  const TIER_FEATURES: Record<string, string[]> = {
+    free:       ["🛍️ Product Showcase"],
+    basic:      ["🛍️ Product Showcase", "📦 Order Tracking"],
+    starter:    ["🛍️ Product Showcase", "💳 Payments", "📦 Order Tracking", "💬 Support Form"],
+    pro:        ["🛍️ Product Showcase", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback"],
+    connected:  ["🛍️ Product Showcase", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback", "📱 Social Feed", "🔗 Developer API"],
+    enterprise: ["Everything in Connected + white-label"],
+  };
+  const tier         = profile.subscriptionTier ?? "free";
   const tierServices = TIER_FEATURES[tier] ?? TIER_FEATURES.free;
+
+  const VIEW_META: Record<ProductView, { label: string; icon: string; desc: string }> = {
+    grid:     { label: "Grid",     icon: "⊞", desc: "Responsive card grid with hover animations" },
+    slider:   { label: "Carousel", icon: "◁▷", desc: "Auto-advancing slide carousel with arrows" },
+    featured: { label: "Featured", icon: "★", desc: "Hero card + compact grid for a bold look" },
+  };
 
   if (loading) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="space-y-6">
-      {/* API Key card */}
+    <div className="space-y-7">
+
+      {/* ── API Key ───────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <KeyRound className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-bold">Embed API Key</h3>
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5">read + embed scope</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
-          This key authenticates your embedded widget. It only has read + embed scope — safe to use in frontend code.
-        </p>
+        <p className="text-xs text-muted-foreground">Safe to use in frontend code. Does not expose admin features or pricing data.</p>
         {rawKey && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-300">Save this key — it won't be shown again after you leave this page.</p>
+            <p className="text-xs text-amber-300">Copy this key now — it won't be shown again after you navigate away.</p>
           </div>
         )}
         <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 p-3">
@@ -563,39 +619,105 @@ const getServices = async () => {
         </div>
       </div>
 
-      {/* Snippet tabs */}
+      {/* ── Product Showcase ──────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Smartphone className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-bold">Product Showcase</h3>
+            <Badge className="text-[10px] h-4 px-1.5 bg-primary/15 text-primary border-primary/20">New</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your live Awa product catalog — beautiful cards, carousels, and featured layouts — on any website, app, or platform with a single line of HTML.
+          </p>
+        </div>
+
+        {/* View picker */}
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.entries(VIEW_META) as [ProductView, typeof VIEW_META.grid][]).map(([v, meta]) => (
+            <button key={v} onClick={() => setProductView(v)}
+              className={`rounded-xl border p-3 text-left transition-all ${productView === v ? "border-primary bg-primary/10" : "border-border/40 bg-muted/20 hover:border-border"}`}>
+              <span className="block text-lg mb-1">{meta.icon}</span>
+              <p className="text-xs font-bold mb-0.5">{meta.label}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{meta.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Snippet with lang tabs */}
+        <div className="rounded-xl border border-border/40 overflow-hidden">
+          <div className="flex border-b border-border/40 text-xs">
+            {(["html", "react", "rn"] as const).map(lang => (
+              <button key={lang} onClick={() => setWidgetLang(lang)}
+                className={`flex-1 py-2 font-semibold transition-colors ${widgetLang === lang ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:text-foreground"}`}>
+                {lang === "html" ? "HTML" : lang === "react" ? "React" : "React Native"}
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <pre className="p-4 text-xs font-mono overflow-x-auto whitespace-pre leading-relaxed max-h-56 overflow-y-auto">
+              {widgetLang === "html" ? productHtmlSnippets[productView]
+                : widgetLang === "react" ? productReactSnippet
+                : productRnSnippet}
+            </pre>
+            <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-7 w-7"
+              onClick={() => copyText(widgetLang === "html" ? productHtmlSnippets[productView] : widgetLang === "react" ? productReactSnippet : productRnSnippet, `prod-${widgetLang}`)}>
+              {copied === `prod-${widgetLang}` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </Button>
+          </div>
+        </div>
+
+        {/* How it works */}
+        <div className="rounded-xl border border-border/40 bg-muted/10 p-4">
+          <p className="text-xs font-bold mb-3 text-muted-foreground uppercase tracking-wide">How it works</p>
+          <div className="space-y-2.5">
+            {[
+              { n: "1", text: "Paste the snippet where you want products to appear on your website." },
+              { n: "2", text: "The script loads your live product catalog from Awa Biz Suite." },
+              { n: "3", text: "Beautiful animated cards render automatically — no backend or database needed." },
+            ].map(s => (
+              <div key={s.n} className="flex items-start gap-3">
+                <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{s.n}</span>
+                <p className="text-xs text-muted-foreground leading-relaxed">{s.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Services Widget ───────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Code2 className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold">Embed Snippets</h3>
+          <Plug2 className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold">Services Widget</h3>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Floating button that gives your visitors access to payments, orders, support, and more without leaving your website.
+        </p>
         <div className="flex rounded-lg border border-border/40 overflow-hidden text-xs">
-          {(["html", "react", "rn"] as const).map(t => (
-            <button key={t} onClick={() => setSnippetTab(t)}
-              className={`flex-1 py-2 font-semibold transition-colors ${snippetTab === t ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:text-foreground"}`}>
-              {t === "html" ? "HTML" : t === "react" ? "React" : "React Native"}
+          {(["html", "react", "rn"] as const).map(lang => (
+            <button key={lang} onClick={() => setWidgetLang(lang)}
+              className={`flex-1 py-2 font-semibold transition-colors ${widgetLang === lang ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:text-foreground"}`}>
+              {lang === "html" ? "HTML" : lang === "react" ? "React" : "React Native"}
             </button>
           ))}
         </div>
         <div className="relative rounded-lg border border-border/40 bg-muted/30">
-          <pre className="p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
-            {snippetTab === "html" ? htmlSnippet : snippetTab === "react" ? reactSnippet : rnSnippet}
+          <pre className="p-4 text-xs font-mono overflow-x-auto whitespace-pre leading-relaxed">
+            {widgetSnippets[widgetLang]}
           </pre>
           <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-7 w-7"
-            onClick={() => copyText(snippetTab === "html" ? htmlSnippet : snippetTab === "react" ? reactSnippet : rnSnippet, snippetTab)}>
-            {copied === snippetTab ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            onClick={() => copyText(widgetSnippets[widgetLang], `widget-${widgetLang}`)}>
+            {copied === `widget-${widgetLang}` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
           </Button>
         </div>
-        {snippetTab === "rn" && (
-          <p className="text-xs text-muted-foreground">Push to your repo to get the full <code className="font-mono">AwaWidget.native.jsx</code> component with a bottom-sheet modal.</p>
-        )}
       </div>
 
-      {/* Services included on this tier */}
+      {/* ── Services on this plan ─────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Plug2 className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-bold">Services on Your Plan</h3>
+          <CheckCircle2 className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold">Included on Your Plan</h3>
           <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize">{tier}</Badge>
         </div>
         <div className="rounded-lg border border-border/40 divide-y divide-border/30">
@@ -613,7 +735,7 @@ const getServices = async () => {
         )}
       </div>
 
-      {/* Push to repo */}
+      {/* ── Push to repo ──────────────────────────────────────────────── */}
       {profile.gitRepo && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -621,25 +743,34 @@ const getServices = async () => {
             <h3 className="text-sm font-bold">Push to Repository</h3>
           </div>
           <p className="text-xs text-muted-foreground">
-            Automatically create a branch <code className="font-mono bg-muted/40 px-1 rounded">awa-integration</code> in{" "}
-            <strong>{profile.gitRepo}</strong> with ready-to-use integration files and a Pull Request.
+            Push complete React and React Native product + services components to{" "}
+            <strong>{profile.gitRepo}</strong> as a Pull Request — ready to import with zero extra setup.
           </p>
+          <div className="rounded-lg border border-border/40 bg-muted/10 p-3 grid grid-cols-2 gap-2 text-xs">
+            {["AwaProducts.jsx", "AwaProductSlider.jsx", "AwaProductList.native.jsx", "AwaWidget.jsx", "AwaWidget.native.jsx", "README.md + embed.html"].map(f => (
+              <div key={f} className="flex items-center gap-1.5 text-muted-foreground">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                <code className="text-[10px]">{f}</code>
+              </div>
+            ))}
+          </div>
           <Button className="w-full h-9 font-bold gap-2" onClick={pushToRepo} disabled={pushing}>
             {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitPullRequest className="w-4 h-4" />}
-            {pushing ? "Creating PR…" : "Push Integration Files & Open PR"}
+            {pushing ? "Creating PR…" : "Push All Files & Open PR"}
           </Button>
           {pushResult && (
             <div className={`rounded-lg p-3 text-xs flex items-start gap-2 ${pushResult.ok ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300" : "bg-destructive/10 border border-destructive/20 text-destructive"}`}>
               {pushResult.ok ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
               <span>
                 {pushResult.ok
-                  ? <>PR created! <a href={pushResult.prUrl} target="_blank" rel="noopener noreferrer" className="underline font-semibold">View Pull Request →</a></>
+                  ? <><a href={pushResult.prUrl} target="_blank" rel="noopener noreferrer" className="underline font-semibold">View Pull Request →</a> — merge it to add product showcase to your codebase.</>
                   : pushResult.error}
               </span>
             </div>
           )}
         </div>
       )}
+
     </div>
   );
 }
