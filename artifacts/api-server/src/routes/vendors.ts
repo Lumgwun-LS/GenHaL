@@ -6,6 +6,7 @@ import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
 import { syncVendorToAwajimaa } from "../lib/awajimaa-sync";
 import { notifyAdminSignup } from "../lib/signup-notify";
+import { addVendorToCache } from "../lib/trusted-vendors-cache";
 import {
   ListVendorsQueryParams,
   CreateVendorBody,
@@ -196,7 +197,8 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
       .returning();
 
     res.status(201).json(OnboardVendorResponse.parse(serializeVendor(vendor)));
-    // Dual-run identity bridge: best-effort, never blocks or fails onboarding.
+    // Best-effort side-effects — none of these must block or fail the response.
+    addVendorToCache(vendor);
     void syncVendorToAwajimaa(vendor);
     notifyAdminSignup({ platform: "vendor-hub", name: vendor.name, email: vendor.email, phone: vendor.phone, country: vendor.country });
   } catch (err: any) {

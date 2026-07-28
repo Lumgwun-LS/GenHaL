@@ -22,6 +22,7 @@ import { startWebhookEventsCleanup } from "./lib/webhook-events-cleanup";
 import { runSchemaDriftGuard } from "./lib/schema-guard";
 import { startStockAlertScheduler } from "./lib/stock-alert-scheduler";
 import { startOverdueInvoiceScheduler } from "./lib/overdue-invoice-scheduler";
+import { initTrustedVendorsCache } from "./lib/trusted-vendors-cache";
 
 const rawPort = process.env["PORT"];
 
@@ -66,4 +67,5 @@ app.listen(port, (err) => {
   startWebhookEventsCleanup();
   startStockAlertScheduler();
   startOverdueInvoiceScheduler();
+  void initTrustedVendorsCache();
 });

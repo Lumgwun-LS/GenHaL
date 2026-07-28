@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import WhatsAppButton from "@/components/whatsapp-button";
 import { Button } from "@/components/ui/button";
 import { 
@@ -1240,116 +1240,255 @@ function PlatformPartnersSection() {
 
 // ─── Trusted By ──────────────────────────────────────────────────────────────
 
-type TrustedVendor = { id: number; name: string; logoUrl: string | null; industry: string | null; website: string | null };
+type TrustedVendor = {
+  id: number; name: string; logoUrl: string | null;
+  industry: string | null; website: string | null; addedAt: number;
+};
 
-function VendorLogoCard({ vendor }: { vendor: TrustedVendor }) {
+const INDUSTRY_COLORS: Record<string, string> = {
+  "Food & Beverage":   "#F97316",
+  "Fashion & Apparel": "#EC4899",
+  "Technology":        "#3B82F6",
+  "Handmade Goods":    "#10B981",
+  "Health & Wellness": "#8B5CF6",
+  "Home Decor":        "#F59E0B",
+  "Media & Creative":  "#06B6D4",
+  "General":           "#6B7280",
+};
+function industryColor(ind: string | null) {
+  return INDUSTRY_COLORS[ind ?? ""] ?? "#7F50FF";
+}
+
+/** Single vendor pill with 3-D tilt, glass blur, clickable when vendor has a website. */
+function VendorLogoCard({ vendor, isNew = false }: { vendor: TrustedVendor; isNew?: boolean }) {
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const rotateX = useTransform(my, [-0.5, 0.5], [10, -10]);
+  const rotateY = useTransform(mx, [-0.5, 0.5], [-10, 10]);
+
+  function onMouseMove(e: React.MouseEvent<HTMLElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width - 0.5);
+    my.set((e.clientY - r.top) / r.height - 0.5);
+  }
+  function onMouseLeave() { mx.set(0); my.set(0); }
+
   const initial = vendor.name.trim().charAt(0).toUpperCase();
   const hasLink = !!vendor.website?.trim();
-  // External URLs open in a new tab; /awajimaaai/* relative paths open in the same tab
-  const isExternal = !!vendor.website && (vendor.website.startsWith("http://") || vendor.website.startsWith("https://"));
+  const isExternal = hasLink && (vendor.website!.startsWith("http://") || vendor.website!.startsWith("https://"));
+  const dot = industryColor(vendor.industry);
 
-  const inner = (
-    <>
-      {vendor.logoUrl ? (
-        <img
-          src={vendor.logoUrl}
-          alt={vendor.name}
-          className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/5"
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-        />
-      ) : (
-        <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
-          <span className="text-xs font-black text-primary">{initial}</span>
-        </div>
-      )}
-      <span className="text-sm font-semibold text-foreground/80 whitespace-nowrap max-w-[140px] truncate">{vendor.name}</span>
-      {hasLink && (
-        <svg className="w-3 h-3 shrink-0 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-      )}
-    </>
-  );
+  const Tag = hasLink ? motion.a : motion.div;
+  const linkProps = hasLink
+    ? { href: vendor.website!, target: isExternal ? "_blank" : "_self", rel: isExternal ? "noopener noreferrer" : undefined }
+    : {};
 
-  const sharedClass = "group flex items-center gap-3 shrink-0 px-5 py-3 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 backdrop-blur-sm select-none transition-colors";
-
-  if (hasLink) {
-    return (
-      <motion.a
-        href={vendor.website!}
-        target={isExternal ? "_blank" : "_self"}
-        rel={isExternal ? "noopener noreferrer" : undefined}
-        whileHover={{ scale: 1.07, y: -3 }}
-        transition={{ type: "spring", stiffness: 380, damping: 18 }}
-        className={sharedClass + " cursor-pointer no-underline"}
-        title={`Visit ${vendor.name}`}
+  return (
+    <div style={{ perspective: 900 }} className="shrink-0">
+      <Tag
+        {...(linkProps as any)}
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+        style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+        whileHover={{ scale: 1.06 }}
+        transition={{ type: "spring", stiffness: 420, damping: 22 }}
+        className={[
+          "group relative flex items-center gap-3 px-4 py-2.5 rounded-2xl select-none",
+          "bg-card/70 border border-border/50 backdrop-blur-md",
+          "hover:border-primary/50 hover:shadow-xl hover:shadow-primary/15",
+          "transition-[border-color,box-shadow] duration-200",
+          hasLink ? "cursor-pointer no-underline" : "cursor-default",
+          isNew ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-background" : "",
+        ].join(" ")}
+        title={hasLink ? `Visit ${vendor.name}` : vendor.name}
       >
-        {inner}
-      </motion.a>
-    );
-  }
+        {/* Shimmer overlay on hover */}
+        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+          style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 60%)" }} />
+
+        {/* Logo or initial avatar */}
+        {vendor.logoUrl ? (
+          <img src={vendor.logoUrl} alt={vendor.name}
+            className="w-8 h-8 rounded-lg object-contain shrink-0"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: `${dot}22`, border: `1px solid ${dot}44` }}>
+            <span className="text-xs font-black" style={{ color: dot }}>{initial}</span>
+          </div>
+        )}
+
+        {/* Name + industry */}
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-bold text-foreground/90 whitespace-nowrap truncate max-w-[130px] leading-tight">
+            {vendor.name}
+          </span>
+          {vendor.industry && (
+            <span className="text-[10px] font-semibold whitespace-nowrap leading-tight mt-0.5"
+              style={{ color: dot }}>{vendor.industry}</span>
+          )}
+        </div>
+
+        {/* Link icon */}
+        {hasLink && (
+          <svg className="w-3 h-3 shrink-0 opacity-30 group-hover:opacity-70 transition-opacity ml-0.5"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        )}
+
+        {/* "New" badge */}
+        {isNew && (
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-lg"
+          >NEW</motion.span>
+        )}
+      </Tag>
+    </div>
+  );
+}
+
+/** Animated counter that counts up when totalCount changes. */
+function AnimatedCount({ target }: { target: number }) {
+  const mv = useMotionValue(0);
+  const display = useTransform(mv, v => `${Math.round(v).toLocaleString()}+`);
+
+  useEffect(() => {
+    const controls = animate(mv, target, { duration: 2.2, ease: [0.16, 1, 0.3, 1] });
+    return controls.stop;
+  }, [target]);
+
+  return <motion.span>{display}</motion.span>;
+}
+
+/** Sliding "just joined" notification bar. */
+function JoinNotification({ vendor, onDone }: { vendor: TrustedVendor; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 5200);
+    return () => clearTimeout(t);
+  }, []);
+
+  const initial = vendor.name.trim().charAt(0).toUpperCase();
+  const dot = industryColor(vendor.industry);
 
   return (
     <motion.div
-      whileHover={{ scale: 1.04, y: -2 }}
-      transition={{ type: "spring", stiffness: 380, damping: 18 }}
-      className={sharedClass + " cursor-default"}
+      initial={{ opacity: 0, y: -40, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -30, scale: 0.9 }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-card/90 border border-primary/30 shadow-lg shadow-primary/10 backdrop-blur-md text-sm font-semibold text-foreground/90"
     >
-      {inner}
+      <motion.span
+        className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+        animate={{ scale: [1, 1.6, 1], opacity: [1, 0.5, 1] }}
+        transition={{ duration: 1.2, repeat: Infinity }}
+      />
+      {vendor.logoUrl
+        ? <img src={vendor.logoUrl} alt="" className="w-5 h-5 rounded-md object-contain" />
+        : <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black shrink-0"
+            style={{ background: `${dot}33`, color: dot }}>{initial}</div>
+      }
+      <span className="text-primary font-bold">{vendor.name}</span>
+      <span className="text-muted-foreground font-medium">just joined 🎉</span>
     </motion.div>
   );
 }
 
 function TrustedBySection() {
-  const { data } = useQuery<{ totalCount: number; vendors: TrustedVendor[] }>({
+  const lastFetchTime = useRef(Date.now());
+
+  const [newIds, setNewIds] = useState<Set<number>>(new Set());
+  const [notifications, setNotifications] = useState<TrustedVendor[]>([]);
+
+  const { data } = useQuery<{ totalCount: number; vendors: TrustedVendor[]; lastRefreshedAt: number }>({
     queryKey: ["trusted-vendors"],
-    queryFn: () => fetch(`${BASE}/api/public/trusted-vendors`).then((r) => r.json()),
-    staleTime: 10 * 60 * 1000,
+    queryFn: () => fetch(`${BASE_URL}/api/public/trusted-vendors`).then((r) => r.json()),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
-  // Gate: show as soon as at least one vendor has a logo
+  // Detect new arrivals on every refetch
+  useEffect(() => {
+    if (!data?.vendors) return;
+    const now = Date.now();
+    const arrivals = data.vendors.filter(v => v.addedAt > lastFetchTime.current);
+    if (arrivals.length > 0) {
+      setNewIds(prev => new Set([...prev, ...arrivals.map(v => v.id)]));
+      setNotifications(prev => [...arrivals, ...prev].slice(0, 3));
+      // Clear the NEW badge from cards after 8s
+      setTimeout(() => setNewIds(prev => {
+        const next = new Set(prev);
+        arrivals.forEach(v => next.delete(v.id));
+        return next;
+      }), 8000);
+    }
+    lastFetchTime.current = now;
+  }, [data]);
+
   if (!data || (data.totalCount ?? 0) < 1) return null;
 
   const vendors = data.vendors;
-  // Split into two rows; each row duplicated for seamless infinite loop
-  const mid = Math.ceil(vendors.length / 2);
-  const row1 = [...vendors.slice(0, mid), ...vendors.slice(0, mid)];
-  const row2 = [...vendors.slice(mid), ...vendors.slice(mid)];
-  // Ensure row2 is never empty
-  const safeRow2 = row2.length >= 2 ? row2 : [...vendors, ...vendors];
+  // Split into 3 rows — different speeds create a sense of depth
+  const t1 = Math.ceil(vendors.length / 3);
+  const t2 = Math.ceil((2 * vendors.length) / 3);
+  const r1raw = vendors.slice(0, t1);
+  const r2raw = vendors.slice(t1, t2);
+  const r3raw = vendors.slice(t2);
+  // Each row doubled for seamless infinite scroll; fall back to full list if a row is too small
+  const makeRow = (arr: TrustedVendor[]) => {
+    const safe = arr.length >= 2 ? arr : vendors;
+    return [...safe, ...safe];
+  };
+  const row1 = makeRow(r1raw);
+  const row2 = makeRow(r2raw);
+  const row3 = makeRow(r3raw);
 
   return (
     <section className="py-20 border-t border-border/50 relative overflow-hidden bg-gradient-to-b from-card/20 to-background/60">
-      {/* CSS for marquee animations */}
+      {/* CSS marquee keyframes — 3 speeds */}
       <style>{`
-        @keyframes awa-marquee-ltr {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-        @keyframes awa-marquee-rtl {
-          from { transform: translateX(-50%); }
-          to   { transform: translateX(0); }
-        }
-        .awa-marquee-ltr { animation: awa-marquee-ltr 40s linear infinite; }
-        .awa-marquee-rtl { animation: awa-marquee-rtl 32s linear infinite; }
-        .awa-marquee-wrap:hover .awa-marquee-ltr,
-        .awa-marquee-wrap:hover .awa-marquee-rtl { animation-play-state: paused; }
+        @keyframes awa-ltr  { from{transform:translateX(0)}    to{transform:translateX(-50%)} }
+        @keyframes awa-rtl  { from{transform:translateX(-50%)} to{transform:translateX(0)}    }
+        .awa-s1 { animation: awa-ltr 50s linear infinite; }
+        .awa-s2 { animation: awa-rtl 38s linear infinite; }
+        .awa-s3 { animation: awa-ltr 28s linear infinite; }
+        .awa-wrap:hover .awa-s1,
+        .awa-wrap:hover .awa-s2,
+        .awa-wrap:hover .awa-s3 { animation-play-state: paused; }
       `}</style>
 
-      {/* Ambient glow */}
-      <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full pointer-events-none"
-        style={{ background: "radial-gradient(ellipse, hsl(var(--primary)/0.06) 0%, transparent 70%)" }}
-        animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0.9, 0.5] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-      />
+      {/* Pulsing ambient glow */}
+      <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(ellipse, hsl(var(--primary)/0.07) 0%, transparent 68%)" }}
+        animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.85, 0.4] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} />
+
+      {/* Secondary glow — offset for richness */}
+      <motion.div className="absolute top-1/3 right-1/4 w-[400px] h-[300px] rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(ellipse, hsl(var(--primary)/0.04) 0%, transparent 70%)" }}
+        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.7, 0.3] }}
+        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 3 }} />
 
       {/* Edge fade masks */}
-      <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
-      <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 left-0 w-44 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 right-0 w-44 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
 
-      {/* Heading */}
-      <div className="container mx-auto px-6 max-w-4xl relative z-10 text-center mb-12">
+      {/* ── Heading ──────────────────────────────────────────────────────── */}
+      <div className="container mx-auto px-6 max-w-4xl relative z-10 text-center mb-10">
+        {/* Live "just joined" notifications */}
+        <div className="flex justify-center mb-5 min-h-[38px]">
+          <AnimatePresence mode="popLayout">
+            {notifications.slice(0, 1).map(v => (
+              <JoinNotification key={v.id} vendor={v}
+                onDone={() => setNotifications(prev => prev.filter(x => x.id !== v.id))} />
+            ))}
+          </AnimatePresence>
+        </div>
+
         <motion.div
           initial={{ opacity: 0, scale: 0.75, y: 10 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
@@ -1357,19 +1496,17 @@ function TrustedBySection() {
           transition={{ type: "spring", stiffness: 300, damping: 18 }}
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-border/60 bg-muted/60 text-muted-foreground text-xs font-bold uppercase tracking-widest mb-6"
         >
-          <motion.span
-            className="w-2 h-2 rounded-full bg-emerald-400"
-            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.6, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          Trusted by {data.totalCount.toLocaleString()}+ businesses
+          <motion.span className="w-2 h-2 rounded-full bg-emerald-400"
+            animate={{ scale: [1, 1.6, 1], opacity: [1, 0.5, 1] }}
+            transition={{ duration: 1.8, repeat: Infinity }} />
+          Trusted by <AnimatedCount target={data.totalCount} /> businesses
         </motion.div>
 
         <motion.h2
-          initial={{ opacity: 0, y: 24, filter: "blur(4px)" }}
+          initial={{ opacity: 0, y: 24, filter: "blur(6px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true }}
-          transition={{ delay: 0.1, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4"
         >
           Growing businesses run on{" "}
@@ -1387,35 +1524,46 @@ function TrustedBySection() {
         </motion.p>
       </div>
 
-      {/* Marquee rows */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.3, duration: 0.7 }}
-        className="space-y-4 awa-marquee-wrap relative z-[5]"
-      >
-        {/* Row 1 — scrolls left */}
-        <div className="overflow-hidden">
-          <div className="awa-marquee-ltr flex gap-4">
-            {row1.map((v, i) => <VendorLogoCard key={`r1-${v.id}-${i}`} vendor={v} />)}
+      {/* ── Three-speed marquee ───────────────────────────────────────────── */}
+      <div className="awa-wrap space-y-3 relative z-[5]">
+        {/* Row 1 — slow LTR */}
+        <motion.div className="overflow-hidden"
+          initial={{ opacity: 0, x: -40 }} whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }}>
+          <div className="awa-s1 flex gap-3">
+            {row1.map((v, i) => (
+              <VendorLogoCard key={`r1-${v.id}-${i}`} vendor={v} isNew={newIds.has(v.id)} />
+            ))}
           </div>
-        </div>
+        </motion.div>
 
-        {/* Row 2 — scrolls right */}
-        <div className="overflow-hidden">
-          <div className="awa-marquee-rtl flex gap-4">
-            {safeRow2.map((v, i) => <VendorLogoCard key={`r2-${v.id}-${i}`} vendor={v} />)}
+        {/* Row 2 — medium RTL */}
+        <motion.div className="overflow-hidden"
+          initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.35 }}>
+          <div className="awa-s2 flex gap-3">
+            {row2.map((v, i) => (
+              <VendorLogoCard key={`r2-${v.id}-${i}`} vendor={v} isNew={newIds.has(v.id)} />
+            ))}
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
 
-      {/* Bottom CTA nudge */}
+        {/* Row 3 — fast LTR */}
+        <motion.div className="overflow-hidden"
+          initial={{ opacity: 0, x: -40 }} whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.5 }}>
+          <div className="awa-s3 flex gap-3">
+            {row3.map((v, i) => (
+              <VendorLogoCard key={`r3-${v.id}-${i}`} vendor={v} isNew={newIds.has(v.id)} />
+            ))}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ── Bottom CTA ───────────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.5 }}
+        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }}
+        viewport={{ once: true }} transition={{ delay: 0.6 }}
         className="text-center mt-10 relative z-10"
       >
         <p className="text-xs text-muted-foreground/50 font-medium">
