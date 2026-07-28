@@ -1473,15 +1473,32 @@ export interface Lead {
   location?: string | null;
   status: string;
   /** @nullable */
+  channel?: string | null;
+  /** @nullable */
   source?: string | null;
   /** @nullable */
   notes?: string | null;
   /** @nullable */
   score?: number | null;
   /** @nullable */
-  linkedinUrl?: string | null;
+  utmSource?: string | null;
   /** @nullable */
-  websiteUrl?: string | null;
+  utmMedium?: string | null;
+  /** @nullable */
+  utmCampaign?: string | null;
+  /** @nullable */
+  utmContent?: string | null;
+  /** @nullable */
+  referrerUrl?: string | null;
+  /** @nullable */
+  landingPage?: string | null;
+  /** @nullable */
+  visitorToken?: string | null;
+  pageViews: number;
+  /** @nullable */
+  firstSeenAt?: string | null;
+  /** @nullable */
+  lastSeenAt?: string | null;
   createdAt: string;
 }
 
@@ -1493,10 +1510,12 @@ export interface LeadInput {
   company?: string;
   industry?: string;
   location?: string;
+  channel?: string;
   source?: string;
   notes?: string;
-  linkedinUrl?: string;
-  websiteUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }
 
 export interface LeadUpdate {
@@ -1509,6 +1528,89 @@ export interface LeadUpdate {
   status?: string;
   notes?: string;
   score?: number;
+  channel?: string;
+}
+
+export type PersonActivityData = { [key: string]: unknown };
+
+export interface PersonActivity {
+  id: number;
+  vendorId: number;
+  personId: number;
+  type: string;
+  data?: PersonActivityData;
+  createdAt: string;
+}
+
+export type LeadFormFieldsItem = { [key: string]: unknown };
+
+export interface LeadForm {
+  id: number;
+  vendorId: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  fields: LeadFormFieldsItem[];
+  /** @nullable */
+  redirectUrl?: string | null;
+  buttonText: string;
+  /** @nullable */
+  thankYouMessage?: string | null;
+  status: string;
+  submissionsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LeadFormInputFieldsItem = { [key: string]: unknown };
+
+export interface LeadFormInput {
+  name: string;
+  description?: string;
+  fields?: LeadFormInputFieldsItem[];
+  redirectUrl?: string;
+  buttonText?: string;
+  thankYouMessage?: string;
+}
+
+export type LeadFormUpdateFieldsItem = { [key: string]: unknown };
+
+export interface LeadFormUpdate {
+  name?: string;
+  description?: string;
+  fields?: LeadFormUpdateFieldsItem[];
+  redirectUrl?: string;
+  buttonText?: string;
+  thankYouMessage?: string;
+  status?: string;
+}
+
+export interface UtmLink {
+  id: number;
+  vendorId: number;
+  name: string;
+  destinationUrl: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  /** @nullable */
+  utmContent?: string | null;
+  /** @nullable */
+  utmTerm?: string | null;
+  shortCode: string;
+  clicks: number;
+  fullUrl: string;
+  createdAt: string;
+}
+
+export interface UtmLinkInput {
+  name: string;
+  destinationUrl: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent?: string;
+  utmTerm?: string;
 }
 
 export interface LeadScrapeRequest {
@@ -1518,6 +1620,14 @@ export interface LeadScrapeRequest {
   businessType?: string;
   keywords?: string;
   maxResults?: number;
+}
+
+export interface AddPersonNoteInput {
+  note: string;
+}
+
+export interface DataFileUploadInput {
+  file?: Blob;
 }
 
 export interface LeadScrapeResult {
@@ -2603,10 +2713,6 @@ export type PostWebsiteUploadImage200 = {
 };
 
 export type AiQuickCreateParse200 = { [key: string]: unknown };
-
-export type UploadDataFileBody = {
-  file?: Blob;
-};
 
 export type ListOrdersParams = {
 vendorId?: number;

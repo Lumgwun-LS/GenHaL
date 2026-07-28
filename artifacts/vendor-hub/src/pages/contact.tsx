@@ -266,7 +266,7 @@ export default function ContactPage() {
 
           <div className="grid gap-4 sm:grid-cols-3">
             <EmailCard
-              email="support@awajimaaapp.io"
+              email="admin@lumgwunsolutions.com"
               label="General Support"
               description="Platform questions, billing, and technical issues"
               delay={0.0}
@@ -278,7 +278,7 @@ export default function ContactPage() {
               delay={0.1}
             />
             <EmailCard
-              email="admin@Lumgwunsolutions.com"
+              email="admin@lumgwunsolutions.com"
               label="Business Enquiries"
               description="Partnerships, enterprise, and corporate accounts"
               delay={0.2}
@@ -394,7 +394,7 @@ export default function ContactPage() {
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </a>
-            <a href="mailto:support@awajimaaapp.io">
+            <a href="mailto:admin@lumgwunsolutions.com">
               <Button size="lg" variant="outline" className="gap-2">
                 <Mail className="w-4 h-4" />
                 Email us directly

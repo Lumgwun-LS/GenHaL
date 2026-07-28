@@ -14,8 +14,10 @@ export interface LeadInput {
   company?: string;
   industry?: string;
   location?: string;
+  channel?: string;
   source?: string;
   notes?: string;
-  linkedinUrl?: string;
-  websiteUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }

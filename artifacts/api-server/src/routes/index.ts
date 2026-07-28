@@ -70,6 +70,10 @@ import walletRouter, { walletPublicRouter } from "./wallet";
 import analyticsVisitsRouter from "./analytics-visits";
 import ratingsRouter from "./ratings";
 import complaintsRouter from "./complaints";
+import personActivitiesRouter from "./person-activities";
+import leadFormsRouter from "./lead-forms";
+import utmLinksRouter from "./utm-links";
+import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -135,6 +139,9 @@ router.use(walletPublicRouter);
 router.use(ratingsRouter);
 router.use(complaintsRouter);
 
+// Public: CRM tracking (website pixel, form submit, UTM redirect) — no auth
+router.use(crmTrackingRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -152,6 +159,9 @@ router.use(productsRouter);
 router.use(inventoryRouter);
 router.use(ordersRouter);
 router.use(leadsRouter);
+router.use(personActivitiesRouter);
+router.use(leadFormsRouter);
+router.use(utmLinksRouter);
 router.use(emailCampaignsRouter);
 router.use(smsCampaignsRouter);
 router.use(analyticsRouter);

@@ -454,8 +454,8 @@ router.post("/public/post-links/:token/interest", async (req, res): Promise<void
     email: email ?? null,
     phone: phone ?? null,
     notes: message ?? null,
+    channel: "form",
     source: "social_post",
-    productId: matchedProductId,
     status: "new",
   }).returning();
 

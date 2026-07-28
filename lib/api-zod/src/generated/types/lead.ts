@@ -22,14 +22,31 @@ export interface Lead {
   location?: string | null;
   status: string;
   /** @nullable */
+  channel?: string | null;
+  /** @nullable */
   source?: string | null;
   /** @nullable */
   notes?: string | null;
   /** @nullable */
   score?: number | null;
   /** @nullable */
-  linkedinUrl?: string | null;
+  utmSource?: string | null;
   /** @nullable */
-  websiteUrl?: string | null;
+  utmMedium?: string | null;
+  /** @nullable */
+  utmCampaign?: string | null;
+  /** @nullable */
+  utmContent?: string | null;
+  /** @nullable */
+  referrerUrl?: string | null;
+  /** @nullable */
+  landingPage?: string | null;
+  /** @nullable */
+  visitorToken?: string | null;
+  pageViews: number;
+  /** @nullable */
+  firstSeenAt?: string | null;
+  /** @nullable */
+  lastSeenAt?: string | null;
   createdAt: string;
 }

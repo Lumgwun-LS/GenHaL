@@ -795,7 +795,7 @@ export default function LandingPage() {
                   },
                   {
                     q: "Can I export my data?",
-                    a: "Yes. You can export orders, leads, products, expenses, and sales as CSV from the dashboard at any time. The API also gives programmatic access to all your data with no export quotas. If you need a full data extract for compliance or migration, contact support@awajimaaai.com."
+                    a: "Yes. You can export orders, leads, products, expenses, and sales as CSV from the dashboard at any time. The API also gives programmatic access to all your data with no export quotas. If you need a full data extract for compliance or migration, contact admin@lumgwunsolutions.com."
                   },
                   {
                     q: "How do I cancel my subscription?",
@@ -803,7 +803,7 @@ export default function LandingPage() {
                   },
                   {
                     q: "What support do you offer?",
-                    a: "All plans include email support (support@awajimaaai.com). Starter and above include priority response. Professional and Enterprise customers can schedule calls with the team. We also maintain a developer support line at developers@awajimaaai.com for API and integration questions."
+                    a: "All plans include email support (admin@lumgwunsolutions.com). Starter and above include priority response. Professional and Enterprise customers can schedule calls with the team. We also maintain a developer support line at awajimaaapps@gmail.com for API and integration questions."
                   },
                   {
                     q: "What countries is Awa Biz Suite available in?",
@@ -832,8 +832,8 @@ export default function LandingPage() {
               className="text-center mt-10 text-sm text-muted-foreground"
             >
               Still have questions?{" "}
-              <a href="mailto:support@awajimaaai.com" className="text-primary hover:underline font-medium">
-                Email us at support@awajimaaai.com
+              <a href="mailto:admin@lumgwunsolutions.com" className="text-primary hover:underline font-medium">
+                Email us at admin@lumgwunsolutions.com
               </a>
             </motion.div>
           </div>

@@ -1412,11 +1412,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
+              $ref: "#/components/schemas/DataFileUploadInput"
       responses:
         "200":
           description: Parsed file preview and column metadata
@@ -2272,6 +2268,169 @@ paths:
       operationId: deleteLead
       tags: [leads]
       summary: Delete a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /leads/{id}/activities:
+    get:
+      operationId: listPersonActivities
+      tags: [leads]
+      summary: Get activity timeline for a person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonActivity"
+    post:
+      operationId: createPersonActivity
+      tags: [leads]
+      summary: Add a manual note to a person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPersonNoteInput"
+      responses:
+        "201":
+          description: Created activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonActivity"
+
+  # ─── LEAD FORMS ───────────────────────────────────────────────────────────
+  /lead-forms:
+    get:
+      operationId: listLeadForms
+      tags: [leads]
+      summary: List lead capture forms
+      responses:
+        "200":
+          description: Forms list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadForm"
+    post:
+      operationId: createLeadForm
+      tags: [leads]
+      summary: Create a lead capture form
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadFormInput"
+      responses:
+        "201":
+          description: Created form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadForm"
+
+  /lead-forms/{id}:
+    patch:
+      operationId: updateLeadForm
+      tags: [leads]
+      summary: Update a lead capture form
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadFormUpdate"
+      responses:
+        "200":
+          description: Updated form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadForm"
+    delete:
+      operationId: deleteLeadForm
+      tags: [leads]
+      summary: Delete a lead capture form
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── UTM LINKS ────────────────────────────────────────────────────────────
+  /utm-links:
+    get:
+      operationId: listUtmLinks
+      tags: [leads]
+      summary: List UTM tracking links
+      responses:
+        "200":
+          description: UTM links list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UtmLink"
+    post:
+      operationId: createUtmLink
+      tags: [leads]
+      summary: Create a UTM tracking link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UtmLinkInput"
+      responses:
+        "201":
+          description: Created UTM link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UtmLink"
+
+  /utm-links/{id}:
+    delete:
+      operationId: deleteUtmLink
+      tags: [leads]
+      summary: Delete a UTM tracking link
       parameters:
         - name: id
           in: path
@@ -6916,7 +7075,7 @@ components:
     # ─── LEAD ───────────────────────────────────────────────────────────────
     Lead:
       type: object
-      required: [id, vendorId, name, status, createdAt]
+      required: [id, vendorId, name, status, pageViews, createdAt]
       properties:
         id:
           type: integer
@@ -6936,15 +7095,33 @@ components:
           type: ["string", "null"]
         status:
           type: string
+        channel:
+          type: ["string", "null"]
         source:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
         score:
           type: ["integer", "null"]
-        linkedinUrl:
+        utmSource:
           type: ["string", "null"]
-        websiteUrl:
+        utmMedium:
+          type: ["string", "null"]
+        utmCampaign:
+          type: ["string", "null"]
+        utmContent:
+          type: ["string", "null"]
+        referrerUrl:
+          type: ["string", "null"]
+        landingPage:
+          type: ["string", "null"]
+        visitorToken:
+          type: ["string", "null"]
+        pageViews:
+          type: integer
+        firstSeenAt:
+          type: ["string", "null"]
+        lastSeenAt:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -6967,13 +7144,17 @@ components:
           type: string
         location:
           type: string
+        channel:
+          type: string
         source:
           type: string
         notes:
           type: string
-        linkedinUrl:
+        utmSource:
           type: string
-        websiteUrl:
+        utmMedium:
+          type: string
+        utmCampaign:
           type: string
 
     LeadUpdate:
@@ -6997,6 +7178,149 @@ components:
           type: string
         score:
           type: integer
+        channel:
+          type: string
+
+    PersonActivity:
+      type: object
+      required: [id, vendorId, personId, type, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        personId:
+          type: integer
+        type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+
+    LeadForm:
+      type: object
+      required: [id, vendorId, name, fields, buttonText, status, submissionsCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        fields:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        redirectUrl:
+          type: ["string", "null"]
+        buttonText:
+          type: string
+        thankYouMessage:
+          type: ["string", "null"]
+        status:
+          type: string
+        submissionsCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    LeadFormInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        redirectUrl:
+          type: string
+        buttonText:
+          type: string
+        thankYouMessage:
+          type: string
+
+    LeadFormUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        redirectUrl:
+          type: string
+        buttonText:
+          type: string
+        thankYouMessage:
+          type: string
+        status:
+          type: string
+
+    UtmLink:
+      type: object
+      required: [id, vendorId, name, destinationUrl, utmSource, utmMedium, utmCampaign, shortCode, clicks, fullUrl, createdAt]
+      properties:
+        id:
+          type: integer
+        vendorId:
+          type: integer
+        name:
+          type: string
+        destinationUrl:
+          type: string
+        utmSource:
+          type: string
+        utmMedium:
+          type: string
+        utmCampaign:
+          type: string
+        utmContent:
+          type: ["string", "null"]
+        utmTerm:
+          type: ["string", "null"]
+        shortCode:
+          type: string
+        clicks:
+          type: integer
+        fullUrl:
+          type: string
+        createdAt:
+          type: string
+
+    UtmLinkInput:
+      type: object
+      required: [name, destinationUrl, utmSource, utmMedium, utmCampaign]
+      properties:
+        name:
+          type: string
+        destinationUrl:
+          type: string
+        utmSource:
+          type: string
+        utmMedium:
+          type: string
+        utmCampaign:
+          type: string
+        utmContent:
+          type: string
+        utmTerm:
+          type: string
 
     LeadScrapeRequest:
       type: object
@@ -7014,6 +7338,20 @@ components:
           type: string
         maxResults:
           type: integer
+
+    AddPersonNoteInput:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+
+    DataFileUploadInput:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
 
     LeadScrapeResult:
       type: object

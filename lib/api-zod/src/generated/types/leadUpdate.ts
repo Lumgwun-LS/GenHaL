@@ -16,4 +16,5 @@ export interface LeadUpdate {
   status?: string;
   notes?: string;
   score?: number;
+  channel?: string;
 }

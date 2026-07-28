@@ -121,11 +121,9 @@ function DashboardFooter() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[10px] text-muted-foreground/50">
             <span>© {new Date().getFullYear()} Lumgwun Solutions Group. All rights reserved.</span>
             <span className="hidden sm:inline">·</span>
-            <a href="mailto:support@awajimaaapp.io" className="hover:text-muted-foreground transition-colors">support@awajimaaapp.io</a>
+            <a href="mailto:admin@lumgwunsolutions.com" className="hover:text-muted-foreground transition-colors">admin@lumgwunsolutions.com</a>
             <span className="hidden sm:inline">·</span>
             <a href="mailto:awajimaaapps@gmail.com" className="hover:text-muted-foreground transition-colors">awajimaaapps@gmail.com</a>
-            <span className="hidden sm:inline">·</span>
-            <a href="mailto:admin@Lumgwunsolutions.com" className="hover:text-muted-foreground transition-colors">admin@Lumgwunsolutions.com</a>
             <span className="hidden sm:inline">·</span>
             <a href="/contact" className="hover:text-primary transition-colors font-medium">Contact Us</a>
           </div>

@@ -224,7 +224,7 @@ export default function DevelopersPage() {
           <Key className="w-3.5 h-3.5" /> Get API key
         </Button>
       </Link>
-      <a href="mailto:developers@awajimaaai.com" className="block mt-2">
+      <a href="mailto:awajimaaapps@gmail.com" className="block mt-2">
         <Button size="sm" variant="outline" className="w-full text-xs">Developer support</Button>
       </a>
     </nav>
@@ -416,7 +416,7 @@ data = resp.json()`} />
                   <p className="text-sm font-semibold text-green-300 mb-1">Best for: Zapier, HubSpot, Salesforce, Power Automate, public integrations</p>
                   <p className="text-xs text-muted-foreground leading-relaxed">Vendors authorize your app through a consent screen — your backend exchanges the code for a long-lived access token. No vendor passwords or keys are shared.</p>
                 </div>
-                <p className="text-sm text-muted-foreground">To register an OAuth client, email <a href="mailto:developers@awajimaaai.com" className="text-violet-400 hover:underline">developers@awajimaaai.com</a> with your app name, redirect URIs, and the scopes you need. You'll receive a <C>client_id</C> and <C>client_secret</C>.</p>
+                <p className="text-sm text-muted-foreground">To register an OAuth client, email <a href="mailto:awajimaaapps@gmail.com" className="text-violet-400 hover:underline">awajimaaapps@gmail.com</a> with your app name, redirect URIs, and the scopes you need. You'll receive a <C>client_id</C> and <C>client_secret</C>.</p>
                 <CodeBlock lang="bash" title="Step 1 — redirect vendor to consent screen" code={`${BASE}/oauth/authorize
   ?client_id=YOUR_CLIENT_ID
   &redirect_uri=https://yourapp.com/callback
@@ -922,7 +922,7 @@ def webhook():
               ))}
             </div>
             <H3 id="oauth-register">Registering an OAuth client</H3>
-            <p className="text-sm text-muted-foreground mb-3">Email <a href="mailto:developers@awajimaaai.com" className="text-violet-400 hover:underline">developers@awajimaaai.com</a> with:</p>
+            <p className="text-sm text-muted-foreground mb-3">Email <a href="mailto:awajimaaapps@gmail.com" className="text-violet-400 hover:underline">awajimaaapps@gmail.com</a> with:</p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1 mb-4">
               <li>Your application name and description</li>
               <li>Your website URL and logo URL</li>
@@ -955,7 +955,7 @@ def webhook():
                 { status: "409", meaning: "Conflict",         causes: "Duplicate order, post scheduling conflict" },
                 { status: "422", meaning: "Validation Error", causes: "Field value out of range or wrong format" },
                 { status: "429", meaning: "Too Many Requests",causes: "Rate limit exceeded — see Rate Limits section" },
-                { status: "500", meaning: "Server Error",     causes: "Unexpected server error — contact support@awajimaaai.com" },
+                { status: "500", meaning: "Server Error",     causes: "Unexpected server error — contact admin@lumgwunsolutions.com" },
               ].map(({ status, meaning, causes }) => (
                 <div key={status} className="grid grid-cols-4 gap-0 px-4 py-2.5 border-b border-border/30 last:border-0 text-xs">
                   <code className="font-mono font-bold text-red-400">{status}</code>
@@ -1105,7 +1105,7 @@ X-RateLimit-Reset: 1722081780
                       <ExternalLink className="w-3.5 h-3.5" /> Visit App Store
                     </Button>
                   </Link>
-                  <a href="mailto:developers@awajimaaai.com">
+                  <a href="mailto:awajimaaapps@gmail.com">
                     <Button size="sm" variant="outline" className="text-xs">Contact us</Button>
                   </a>
                 </div>
@@ -1119,7 +1119,7 @@ X-RateLimit-Reset: 1722081780
             <div className="flex gap-4">
               <Link href="/" className="hover:text-foreground">Home</Link>
               <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-              <a href="mailto:developers@awajimaaai.com" className="hover:text-foreground">developers@awajimaaai.com</a>
+              <a href="mailto:awajimaaapps@gmail.com" className="hover:text-foreground">awajimaaapps@gmail.com</a>
             </div>
           </div>
 

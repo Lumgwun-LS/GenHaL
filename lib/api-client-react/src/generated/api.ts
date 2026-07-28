@@ -36,6 +36,7 @@ import type {
   AdEmailCampaignInput,
   AdEmailSendResult,
   AdPublishResult,
+  AddPersonNoteInput,
   AdminDemographicsAnalytics,
   AdminFinanceRollupAnalytics,
   AdminMessageHistoryEntry,
@@ -67,6 +68,7 @@ import type {
   ContentLibraryItemInput,
   DataAnalysisRequest,
   DataAnalysisSession,
+  DataFileUploadInput,
   DataImportRequest,
   DataImportResult,
   DeleteVendorAdAccount200,
@@ -135,6 +137,9 @@ import type {
   InvestmentInput,
   InvestmentUpdate,
   Lead,
+  LeadForm,
+  LeadFormInput,
+  LeadFormUpdate,
   LeadInput,
   LeadScrapeRequest,
   LeadScrapeResult,
@@ -171,6 +176,7 @@ import type {
   OrderUpdate,
   OrdersSummary,
   Payment,
+  PersonActivity,
   Post,
   PostInput,
   PostPublication,
@@ -224,7 +230,8 @@ import type {
   StoreReview,
   StoreReviewFlagInput,
   StoreReviewInput,
-  UploadDataFileBody,
+  UtmLink,
+  UtmLinkInput,
   Vendor,
   VendorAdAccount,
   VendorAdAccountInput,
@@ -5302,10 +5309,10 @@ export const getUploadDataFileUrl = () => {
 /**
  * @summary Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
  */
-export const uploadDataFile = async (uploadDataFileBody: UploadDataFileBody, options?: RequestInit): Promise<DataAnalysisSession> => {
+export const uploadDataFile = async (dataFileUploadInput: DataFileUploadInput, options?: RequestInit): Promise<DataAnalysisSession> => {
     const formData = new FormData();
-if(uploadDataFileBody.file !== undefined) {
- formData.append(`file`, uploadDataFileBody.file);
+if(dataFileUploadInput.file !== undefined) {
+ formData.append(`file`, dataFileUploadInput.file);
  }
 
   return customFetch<DataAnalysisSession>(getUploadDataFileUrl(),
@@ -5321,8 +5328,8 @@ if(uploadDataFileBody.file !== undefined) {
 
 
 export const getUploadDataFileMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<DataFileUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<DataFileUploadInput>}, TContext> => {
 
 const mutationKey = ['uploadDataFile'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5334,7 +5341,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDataFile>>, {data: BodyType<UploadDataFileBody>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDataFile>>, {data: BodyType<DataFileUploadInput>}> = (props) => {
           const {data} = props ?? {};
 
           return  uploadDataFile(data,requestOptions)
@@ -5348,18 +5355,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UploadDataFileMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDataFile>>>
-    export type UploadDataFileMutationBody = BodyType<UploadDataFileBody>
+    export type UploadDataFileMutationBody = BodyType<DataFileUploadInput>
     export type UploadDataFileMutationError = ErrorType<void>
 
     /**
  * @summary Upload a spreadsheet (.xlsx, .xls, .csv) for analysis
  */
 export const useUploadDataFile = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<UploadDataFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDataFile>>, TError,{data: BodyType<DataFileUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof uploadDataFile>>,
         TError,
-        {data: BodyType<UploadDataFileBody>},
+        {data: BodyType<DataFileUploadInput>},
         TContext
       > => {
       return useMutation(getUploadDataFileMutationOptions(options));
@@ -8142,6 +8149,659 @@ export const useDeleteLead = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteLeadMutationOptions(options));
+    }
+
+export const getListPersonActivitiesUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/activities`
+}
+
+/**
+ * @summary Get activity timeline for a person
+ */
+export const listPersonActivities = async (id: number, options?: RequestInit): Promise<PersonActivity[]> => {
+
+  return customFetch<PersonActivity[]>(getListPersonActivitiesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPersonActivitiesQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/activities`
+    ] as const;
+    }
+
+
+export const getListPersonActivitiesQueryOptions = <TData = Awaited<ReturnType<typeof listPersonActivities>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonActivities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPersonActivitiesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPersonActivities>>> = ({ signal }) => listPersonActivities(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPersonActivities>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPersonActivitiesQueryResult = NonNullable<Awaited<ReturnType<typeof listPersonActivities>>>
+export type ListPersonActivitiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get activity timeline for a person
+ */
+
+export function useListPersonActivities<TData = Awaited<ReturnType<typeof listPersonActivities>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonActivities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPersonActivitiesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePersonActivityUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/activities`
+}
+
+/**
+ * @summary Add a manual note to a person
+ */
+export const createPersonActivity = async (id: number,
+    addPersonNoteInput: AddPersonNoteInput, options?: RequestInit): Promise<PersonActivity> => {
+
+  return customFetch<PersonActivity>(getCreatePersonActivityUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addPersonNoteInput)
+  }
+);}
+
+
+
+
+export const getCreatePersonActivityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPersonActivity>>, TError,{id: number;data: BodyType<AddPersonNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPersonActivity>>, TError,{id: number;data: BodyType<AddPersonNoteInput>}, TContext> => {
+
+const mutationKey = ['createPersonActivity'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPersonActivity>>, {id: number;data: BodyType<AddPersonNoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createPersonActivity(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePersonActivityMutationResult = NonNullable<Awaited<ReturnType<typeof createPersonActivity>>>
+    export type CreatePersonActivityMutationBody = BodyType<AddPersonNoteInput>
+    export type CreatePersonActivityMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a manual note to a person
+ */
+export const useCreatePersonActivity = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPersonActivity>>, TError,{id: number;data: BodyType<AddPersonNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPersonActivity>>,
+        TError,
+        {id: number;data: BodyType<AddPersonNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePersonActivityMutationOptions(options));
+    }
+
+export const getListLeadFormsUrl = () => {
+
+
+
+
+  return `/api/lead-forms`
+}
+
+/**
+ * @summary List lead capture forms
+ */
+export const listLeadForms = async ( options?: RequestInit): Promise<LeadForm[]> => {
+
+  return customFetch<LeadForm[]>(getListLeadFormsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadFormsQueryKey = () => {
+    return [
+    `/api/lead-forms`
+    ] as const;
+    }
+
+
+export const getListLeadFormsQueryOptions = <TData = Awaited<ReturnType<typeof listLeadForms>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadForms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadFormsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadForms>>> = ({ signal }) => listLeadForms({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadForms>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadFormsQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadForms>>>
+export type ListLeadFormsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List lead capture forms
+ */
+
+export function useListLeadForms<TData = Awaited<ReturnType<typeof listLeadForms>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadForms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadFormsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLeadFormUrl = () => {
+
+
+
+
+  return `/api/lead-forms`
+}
+
+/**
+ * @summary Create a lead capture form
+ */
+export const createLeadForm = async (leadFormInput: LeadFormInput, options?: RequestInit): Promise<LeadForm> => {
+
+  return customFetch<LeadForm>(getCreateLeadFormUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadFormInput)
+  }
+);}
+
+
+
+
+export const getCreateLeadFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadForm>>, TError,{data: BodyType<LeadFormInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLeadForm>>, TError,{data: BodyType<LeadFormInput>}, TContext> => {
+
+const mutationKey = ['createLeadForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLeadForm>>, {data: BodyType<LeadFormInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLeadForm(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLeadFormMutationResult = NonNullable<Awaited<ReturnType<typeof createLeadForm>>>
+    export type CreateLeadFormMutationBody = BodyType<LeadFormInput>
+    export type CreateLeadFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a lead capture form
+ */
+export const useCreateLeadForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadForm>>, TError,{data: BodyType<LeadFormInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLeadForm>>,
+        TError,
+        {data: BodyType<LeadFormInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLeadFormMutationOptions(options));
+    }
+
+export const getUpdateLeadFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/lead-forms/${id}`
+}
+
+/**
+ * @summary Update a lead capture form
+ */
+export const updateLeadForm = async (id: number,
+    leadFormUpdate: LeadFormUpdate, options?: RequestInit): Promise<LeadForm> => {
+
+  return customFetch<LeadForm>(getUpdateLeadFormUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadFormUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateLeadFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadForm>>, TError,{id: number;data: BodyType<LeadFormUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLeadForm>>, TError,{id: number;data: BodyType<LeadFormUpdate>}, TContext> => {
+
+const mutationKey = ['updateLeadForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLeadForm>>, {id: number;data: BodyType<LeadFormUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLeadForm(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLeadFormMutationResult = NonNullable<Awaited<ReturnType<typeof updateLeadForm>>>
+    export type UpdateLeadFormMutationBody = BodyType<LeadFormUpdate>
+    export type UpdateLeadFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a lead capture form
+ */
+export const useUpdateLeadForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadForm>>, TError,{id: number;data: BodyType<LeadFormUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLeadForm>>,
+        TError,
+        {id: number;data: BodyType<LeadFormUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateLeadFormMutationOptions(options));
+    }
+
+export const getDeleteLeadFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/lead-forms/${id}`
+}
+
+/**
+ * @summary Delete a lead capture form
+ */
+export const deleteLeadForm = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteLeadFormUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteLeadFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLeadForm>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLeadForm>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteLeadForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLeadForm>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteLeadForm(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLeadFormMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLeadForm>>>
+
+    export type DeleteLeadFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a lead capture form
+ */
+export const useDeleteLeadForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLeadForm>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLeadForm>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLeadFormMutationOptions(options));
+    }
+
+export const getListUtmLinksUrl = () => {
+
+
+
+
+  return `/api/utm-links`
+}
+
+/**
+ * @summary List UTM tracking links
+ */
+export const listUtmLinks = async ( options?: RequestInit): Promise<UtmLink[]> => {
+
+  return customFetch<UtmLink[]>(getListUtmLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUtmLinksQueryKey = () => {
+    return [
+    `/api/utm-links`
+    ] as const;
+    }
+
+
+export const getListUtmLinksQueryOptions = <TData = Awaited<ReturnType<typeof listUtmLinks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUtmLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUtmLinksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUtmLinks>>> = ({ signal }) => listUtmLinks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUtmLinks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUtmLinksQueryResult = NonNullable<Awaited<ReturnType<typeof listUtmLinks>>>
+export type ListUtmLinksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List UTM tracking links
+ */
+
+export function useListUtmLinks<TData = Awaited<ReturnType<typeof listUtmLinks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUtmLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUtmLinksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateUtmLinkUrl = () => {
+
+
+
+
+  return `/api/utm-links`
+}
+
+/**
+ * @summary Create a UTM tracking link
+ */
+export const createUtmLink = async (utmLinkInput: UtmLinkInput, options?: RequestInit): Promise<UtmLink> => {
+
+  return customFetch<UtmLink>(getCreateUtmLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(utmLinkInput)
+  }
+);}
+
+
+
+
+export const getCreateUtmLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUtmLink>>, TError,{data: BodyType<UtmLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUtmLink>>, TError,{data: BodyType<UtmLinkInput>}, TContext> => {
+
+const mutationKey = ['createUtmLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUtmLink>>, {data: BodyType<UtmLinkInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUtmLink(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUtmLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createUtmLink>>>
+    export type CreateUtmLinkMutationBody = BodyType<UtmLinkInput>
+    export type CreateUtmLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a UTM tracking link
+ */
+export const useCreateUtmLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUtmLink>>, TError,{data: BodyType<UtmLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUtmLink>>,
+        TError,
+        {data: BodyType<UtmLinkInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUtmLinkMutationOptions(options));
+    }
+
+export const getDeleteUtmLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/utm-links/${id}`
+}
+
+/**
+ * @summary Delete a UTM tracking link
+ */
+export const deleteUtmLink = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUtmLinkUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUtmLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUtmLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUtmLink>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteUtmLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUtmLink>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteUtmLink(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUtmLinkMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUtmLink>>>
+
+    export type DeleteUtmLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a UTM tracking link
+ */
+export const useDeleteUtmLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUtmLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUtmLink>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteUtmLinkMutationOptions(options));
     }
 
 export const getListEmailCampaignsUrl = (params?: ListEmailCampaignsParams,) => {

@@ -2636,11 +2636,20 @@ export const ListLeadsResponseItem = zod.object({
   "industry": zod.string().nullish(),
   "location": zod.string().nullish(),
   "status": zod.string(),
+  "channel": zod.string().nullish(),
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "linkedinUrl": zod.string().nullish(),
-  "websiteUrl": zod.string().nullish(),
+  "utmSource": zod.string().nullish(),
+  "utmMedium": zod.string().nullish(),
+  "utmCampaign": zod.string().nullish(),
+  "utmContent": zod.string().nullish(),
+  "referrerUrl": zod.string().nullish(),
+  "landingPage": zod.string().nullish(),
+  "visitorToken": zod.string().nullish(),
+  "pageViews": zod.number(),
+  "firstSeenAt": zod.string().nullish(),
+  "lastSeenAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
@@ -2657,10 +2666,12 @@ export const CreateLeadBody = zod.object({
   "company": zod.string().optional(),
   "industry": zod.string().optional(),
   "location": zod.string().optional(),
+  "channel": zod.string().optional(),
   "source": zod.string().optional(),
   "notes": zod.string().optional(),
-  "linkedinUrl": zod.string().optional(),
-  "websiteUrl": zod.string().optional()
+  "utmSource": zod.string().optional(),
+  "utmMedium": zod.string().optional(),
+  "utmCampaign": zod.string().optional()
 })
 
 export const CreateLeadResponse = zod.object({
@@ -2673,11 +2684,20 @@ export const CreateLeadResponse = zod.object({
   "industry": zod.string().nullish(),
   "location": zod.string().nullish(),
   "status": zod.string(),
+  "channel": zod.string().nullish(),
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "linkedinUrl": zod.string().nullish(),
-  "websiteUrl": zod.string().nullish(),
+  "utmSource": zod.string().nullish(),
+  "utmMedium": zod.string().nullish(),
+  "utmCampaign": zod.string().nullish(),
+  "utmContent": zod.string().nullish(),
+  "referrerUrl": zod.string().nullish(),
+  "landingPage": zod.string().nullish(),
+  "visitorToken": zod.string().nullish(),
+  "pageViews": zod.number(),
+  "firstSeenAt": zod.string().nullish(),
+  "lastSeenAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -2707,11 +2727,20 @@ export const ScrapeLeadsResponse = zod.object({
   "industry": zod.string().nullish(),
   "location": zod.string().nullish(),
   "status": zod.string(),
+  "channel": zod.string().nullish(),
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "linkedinUrl": zod.string().nullish(),
-  "websiteUrl": zod.string().nullish(),
+  "utmSource": zod.string().nullish(),
+  "utmMedium": zod.string().nullish(),
+  "utmCampaign": zod.string().nullish(),
+  "utmContent": zod.string().nullish(),
+  "referrerUrl": zod.string().nullish(),
+  "landingPage": zod.string().nullish(),
+  "visitorToken": zod.string().nullish(),
+  "pageViews": zod.number(),
+  "firstSeenAt": zod.string().nullish(),
+  "lastSeenAt": zod.string().nullish(),
   "createdAt": zod.string()
 }))
 })
@@ -2757,11 +2786,20 @@ export const GetLeadResponse = zod.object({
   "industry": zod.string().nullish(),
   "location": zod.string().nullish(),
   "status": zod.string(),
+  "channel": zod.string().nullish(),
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "linkedinUrl": zod.string().nullish(),
-  "websiteUrl": zod.string().nullish(),
+  "utmSource": zod.string().nullish(),
+  "utmMedium": zod.string().nullish(),
+  "utmCampaign": zod.string().nullish(),
+  "utmContent": zod.string().nullish(),
+  "referrerUrl": zod.string().nullish(),
+  "landingPage": zod.string().nullish(),
+  "visitorToken": zod.string().nullish(),
+  "pageViews": zod.number(),
+  "firstSeenAt": zod.string().nullish(),
+  "lastSeenAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -2782,7 +2820,8 @@ export const UpdateLeadBody = zod.object({
   "location": zod.string().optional(),
   "status": zod.string().optional(),
   "notes": zod.string().optional(),
-  "score": zod.number().optional()
+  "score": zod.number().optional(),
+  "channel": zod.string().optional()
 })
 
 export const UpdateLeadResponse = zod.object({
@@ -2795,11 +2834,20 @@ export const UpdateLeadResponse = zod.object({
   "industry": zod.string().nullish(),
   "location": zod.string().nullish(),
   "status": zod.string(),
+  "channel": zod.string().nullish(),
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "linkedinUrl": zod.string().nullish(),
-  "websiteUrl": zod.string().nullish(),
+  "utmSource": zod.string().nullish(),
+  "utmMedium": zod.string().nullish(),
+  "utmCampaign": zod.string().nullish(),
+  "utmContent": zod.string().nullish(),
+  "referrerUrl": zod.string().nullish(),
+  "landingPage": zod.string().nullish(),
+  "visitorToken": zod.string().nullish(),
+  "pageViews": zod.number(),
+  "firstSeenAt": zod.string().nullish(),
+  "lastSeenAt": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -2812,6 +2860,197 @@ export const DeleteLeadParams = zod.object({
 })
 
 export const DeleteLeadResponse = zod.void()
+
+
+/**
+ * @summary Get activity timeline for a person
+ */
+export const ListPersonActivitiesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListPersonActivitiesResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "personId": zod.number(),
+  "type": zod.string(),
+  "data": zod.record(zod.string(), zod.unknown()).optional(),
+  "createdAt": zod.string()
+})
+export const ListPersonActivitiesResponse = zod.array(ListPersonActivitiesResponseItem)
+
+
+/**
+ * @summary Add a manual note to a person
+ */
+export const CreatePersonActivityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreatePersonActivityBody = zod.object({
+  "note": zod.string()
+})
+
+export const CreatePersonActivityResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "personId": zod.number(),
+  "type": zod.string(),
+  "data": zod.record(zod.string(), zod.unknown()).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List lead capture forms
+ */
+export const ListLeadFormsResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "fields": zod.array(zod.record(zod.string(), zod.unknown())),
+  "redirectUrl": zod.string().nullish(),
+  "buttonText": zod.string(),
+  "thankYouMessage": zod.string().nullish(),
+  "status": zod.string(),
+  "submissionsCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListLeadFormsResponse = zod.array(ListLeadFormsResponseItem)
+
+
+/**
+ * @summary Create a lead capture form
+ */
+export const CreateLeadFormBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "fields": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "redirectUrl": zod.string().optional(),
+  "buttonText": zod.string().optional(),
+  "thankYouMessage": zod.string().optional()
+})
+
+export const CreateLeadFormResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "fields": zod.array(zod.record(zod.string(), zod.unknown())),
+  "redirectUrl": zod.string().nullish(),
+  "buttonText": zod.string(),
+  "thankYouMessage": zod.string().nullish(),
+  "status": zod.string(),
+  "submissionsCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a lead capture form
+ */
+export const UpdateLeadFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLeadFormBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "fields": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "redirectUrl": zod.string().optional(),
+  "buttonText": zod.string().optional(),
+  "thankYouMessage": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+export const UpdateLeadFormResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "fields": zod.array(zod.record(zod.string(), zod.unknown())),
+  "redirectUrl": zod.string().nullish(),
+  "buttonText": zod.string(),
+  "thankYouMessage": zod.string().nullish(),
+  "status": zod.string(),
+  "submissionsCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a lead capture form
+ */
+export const DeleteLeadFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLeadFormResponse = zod.void()
+
+
+/**
+ * @summary List UTM tracking links
+ */
+export const ListUtmLinksResponseItem = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "destinationUrl": zod.string(),
+  "utmSource": zod.string(),
+  "utmMedium": zod.string(),
+  "utmCampaign": zod.string(),
+  "utmContent": zod.string().nullish(),
+  "utmTerm": zod.string().nullish(),
+  "shortCode": zod.string(),
+  "clicks": zod.number(),
+  "fullUrl": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListUtmLinksResponse = zod.array(ListUtmLinksResponseItem)
+
+
+/**
+ * @summary Create a UTM tracking link
+ */
+export const CreateUtmLinkBody = zod.object({
+  "name": zod.string(),
+  "destinationUrl": zod.string(),
+  "utmSource": zod.string(),
+  "utmMedium": zod.string(),
+  "utmCampaign": zod.string(),
+  "utmContent": zod.string().optional(),
+  "utmTerm": zod.string().optional()
+})
+
+export const CreateUtmLinkResponse = zod.object({
+  "id": zod.number(),
+  "vendorId": zod.number(),
+  "name": zod.string(),
+  "destinationUrl": zod.string(),
+  "utmSource": zod.string(),
+  "utmMedium": zod.string(),
+  "utmCampaign": zod.string(),
+  "utmContent": zod.string().nullish(),
+  "utmTerm": zod.string().nullish(),
+  "shortCode": zod.string(),
+  "clicks": zod.number(),
+  "fullUrl": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a UTM tracking link
+ */
+export const DeleteUtmLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteUtmLinkResponse = zod.void()
 
 
 /**

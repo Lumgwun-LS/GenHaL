@@ -6,6 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UploadDataFileBody = {
-  file?: Blob;
-};
+export type PersonActivityData = { [key: string]: unknown };

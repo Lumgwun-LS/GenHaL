@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { db, ordersTable, orderItemsTable, productsTable, vendorsTable } from "@workspace/db";
+import { db, ordersTable, orderItemsTable, productsTable, vendorsTable, leadsTable, personActivitiesTable } from "@workspace/db";
 import {
   ListOrdersQueryParams,
   CreateOrderBody,
@@ -113,6 +113,52 @@ router.get("/orders", async (req, res): Promise<void> => {
   res.json(ListOrdersResponse.parse(ordersWithItems));
 });
 
+/** Fire-and-forget: upsert the order's customer as a CRM person */
+async function syncOrderToCrm(params: {
+  vendorId: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  orderId: number;
+  totalAmount: number;
+}) {
+  try {
+    const { vendorId, customerName, customerEmail, customerPhone, orderId, totalAmount } = params;
+    const [existing] = await db.select({ id: leadsTable.id }).from(leadsTable)
+      .where(and(eq(leadsTable.vendorId, vendorId), eq(leadsTable.email, customerEmail)));
+
+    let personId: number;
+    const now = new Date();
+
+    if (existing) {
+      await db.update(leadsTable).set({ lastSeenAt: now, pageViews: sql`${leadsTable.pageViews} + 1` })
+        .where(eq(leadsTable.id, existing.id));
+      personId = existing.id;
+    } else {
+      const [inserted] = await db.insert(leadsTable).values({
+        vendorId,
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone ?? undefined,
+        channel: "order",
+        source: "order",
+        status: "converted",
+        firstSeenAt: now,
+        lastSeenAt: now,
+        pageViews: 1,
+      }).returning({ id: leadsTable.id });
+      personId = inserted!.id;
+    }
+
+    await db.insert(personActivitiesTable).values({
+      vendorId,
+      personId,
+      type: "order_placed",
+      data: { orderId, totalAmount },
+    });
+  } catch { /* best-effort, never block the response */ }
+}
+
 router.post("/orders", async (req, res): Promise<void> => {
   const authed = await resolveAuthedVendor(req);
   if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -159,9 +205,11 @@ router.post("/orders", async (req, res): Promise<void> => {
         totalPrice: (item.quantity * item.unitPrice).toString(),
       })),
     ).returning();
+    const parsedAmount1 = parseFloat(order!.totalAmount);
+    void syncOrderToCrm({ vendorId: orderData.vendorId, customerName: orderData.customerName, customerEmail: orderData.customerEmail, customerPhone: orderData.customerPhone, orderId: order!.id, totalAmount: parsedAmount1 });
     res.status(201).json(CreateOrderResponse.parse({
       ...order!,
-      totalAmount: parseFloat(order!.totalAmount),
+      totalAmount: parsedAmount1,
       items: insertedItems.map(serializeItem),
     }));
     return;
@@ -179,9 +227,11 @@ router.post("/orders", async (req, res): Promise<void> => {
       totalPrice: (item.quantity * item.unitPrice).toString(),
     })),
   ).returning();
+  const parsedAmount2 = parseFloat(order!.totalAmount);
+  void syncOrderToCrm({ vendorId: orderData.vendorId, customerName: orderData.customerName, customerEmail: orderData.customerEmail, customerPhone: orderData.customerPhone, orderId: order!.id, totalAmount: parsedAmount2 });
   res.status(201).json(CreateOrderResponse.parse({
     ...order!,
-    totalAmount: parseFloat(order!.totalAmount),
+    totalAmount: parsedAmount2,
     items: insertedItems.map(serializeItem),
   }));
 });
