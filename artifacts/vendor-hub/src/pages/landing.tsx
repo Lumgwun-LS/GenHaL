@@ -295,6 +295,10 @@ export default function LandingPage() {
               <BookOpen className="w-3.5 h-3.5" />
               Docs
             </Link>
+            <Link href="/become-a-partner" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
+              <Globe2 className="w-3.5 h-3.5" />
+              Partners
+            </Link>
 
             <div className="ml-4 flex items-center gap-3">
               {isSignedIn ? (
@@ -689,6 +693,9 @@ export default function LandingPage() {
 
         {/* Trusted By Section */}
         <TrustedBySection />
+
+        {/* Platform Partners Section */}
+        <PlatformPartnersSection />
 
         {/* Ecosystem Section */}
         <section className="py-28 border-t border-border/50 relative overflow-hidden bg-background/50">
@@ -1097,6 +1104,134 @@ function FeatureCard({ title, description, index }: { title: string; description
       {/* Bottom shimmer bar on hover */}
       <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full bg-gradient-to-r from-transparent via-primary/60 to-transparent transition-all duration-700 ease-out pointer-events-none rounded-b-2xl" />
     </motion.div>
+  );
+}
+
+// ─── Platform Partners ────────────────────────────────────────────────────────
+
+type TrustedPartner = { id: number; name: string; slug: string; logoUrl: string | null; websiteUrl: string | null; description: string | null };
+
+function PartnerCard({ partner }: { partner: TrustedPartner }) {
+  const initial = partner.name.trim().charAt(0).toUpperCase();
+  const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  return (
+    <motion.a
+      href={`${BASE}/docs/${partner.slug}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      whileHover={{ scale: 1.06, y: -3 }}
+      transition={{ type: "spring", stiffness: 380, damping: 18 }}
+      className="flex items-center gap-3 shrink-0 px-5 py-3 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 backdrop-blur-sm cursor-pointer select-none transition-colors no-underline"
+    >
+      {partner.logoUrl ? (
+        <img src={partner.logoUrl} alt={partner.name} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/5"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
+          <span className="text-xs font-black text-primary">{initial}</span>
+        </div>
+      )}
+      <div>
+        <span className="text-sm font-semibold text-foreground/80 whitespace-nowrap block max-w-[130px] truncate">{partner.name}</span>
+        {partner.websiteUrl && (
+          <span className="text-xs text-muted-foreground/60 truncate block max-w-[130px]">{partner.websiteUrl.replace(/^https?:\/\//, "")}</span>
+        )}
+      </div>
+    </motion.a>
+  );
+}
+
+function PlatformPartnersSection() {
+  const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  const { data } = useQuery<{ count: number; partners: TrustedPartner[] }>({
+    queryKey: ["trusted-partners"],
+    queryFn: () => fetch(`${BASE}/api/public/trusted-partners`).then((r) => r.json()),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const partners = data?.partners ?? [];
+  // Always show the section with a CTA — hide marquee if no partners yet
+  const showMarquee = partners.length >= 2;
+  const row = showMarquee ? [...partners, ...partners] : [];
+
+  return (
+    <section className="py-20 border-t border-border/50 relative overflow-hidden bg-gradient-to-b from-background/60 to-card/20">
+      <style>{`
+        @keyframes awa-partner-ltr { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .awa-partner-ltr { animation: awa-partner-ltr 50s linear infinite; }
+        .awa-partner-wrap:hover .awa-partner-ltr { animation-play-state: paused; }
+      `}</style>
+
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] pointer-events-none"
+        style={{ background: "radial-gradient(ellipse, hsl(var(--primary)/0.05) 0%, transparent 70%)" }} />
+      <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+
+      <div className="container mx-auto px-6 max-w-4xl relative z-10 text-center mb-10">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.75, y: 10 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ type: "spring", stiffness: 300, damping: 18 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-border/60 bg-muted/60 text-muted-foreground text-xs font-bold uppercase tracking-widest mb-6"
+        >
+          <motion.span className="w-2 h-2 rounded-full bg-blue-400"
+            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.6, 1] }}
+            transition={{ duration: 2, repeat: Infinity }} />
+          Platform Ecosystem
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.1 }}
+          className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4"
+        >
+          Connect with <span className="text-primary">integrated platforms</span>
+        </motion.h2>
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="text-muted-foreground text-base max-w-xl mx-auto"
+        >
+          Platform partners plug into Awa Biz Suite so your vendors can discover, connect, and integrate with them — no dev work required.
+        </motion.p>
+      </div>
+
+      {showMarquee && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.3 }}
+          className="overflow-hidden awa-partner-wrap mb-8 relative z-[5]"
+        >
+          <div className="awa-partner-ltr flex gap-4">
+            {row.map((p, i) => <PartnerCard key={`pp-${p.id}-${i}`} partner={p} />)}
+          </div>
+        </motion.div>
+      )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.4 }}
+        className="text-center relative z-10"
+      >
+        <p className="text-sm text-muted-foreground mb-4">
+          Own a website, app, or SaaS?{" "}
+          <span className="text-foreground font-semibold">Join as a Platform Partner</span> — our AI generates your docs automatically.
+        </p>
+        <a href={`${BASE}/become-a-partner`}
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-opacity no-underline">
+          Become a Partner →
+        </a>
+      </motion.div>
+    </section>
   );
 }
 

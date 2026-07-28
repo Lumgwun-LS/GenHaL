@@ -201,6 +201,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Integrations",
+    defaultOpen: true,
+    items: [
+      { href: "/marketplace", label: "Marketplace", icon: Globe },
+    ],
+  },
+  {
     label: "Account",
     defaultOpen: true,
     items: [

@@ -74,3 +74,5 @@ export * from "./business-swot-reports";
 export * from "./invoices";
 export * from "./real-estate";
 export * from "./architect-tools";
+export * from "./platform-partners";
+export * from "./vendor-platform-connections";

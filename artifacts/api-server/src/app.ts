@@ -113,8 +113,11 @@ app.use(
     "/api/payments/flutterwave/webhook",
     "/api/payments/nomba/webhook",
     "/api/external/payments/webhook",
+    // Platform Partner Git push webhooks — need raw body for HMAC verification
+    "/api/platform-partners/webhook/github",
+    "/api/platform-partners/webhook/gitlab",
   ],
-  express.raw({ type: "application/json" }),
+  express.raw({ type: "*/*" }),
 );
 // ─────────────────────────────────────────────────────────────────────────────
 

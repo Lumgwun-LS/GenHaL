@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -41,6 +41,7 @@ import SocialAccountHealthPanel from "./social-account-health";
 import InfrastructureBillingPanel from "./infrastructure-billing";
 import BillingEnforcementPanel from "./billing-enforcement";
 import PlatformFinancialsPanel from "./platform-financials";
+import PlatformPartnersPanel from "./platform-partners";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2348,6 +2349,9 @@ export default function AdminPanel() {
           <TabsTrigger value="billing-enforcement" className="flex items-center gap-2">
             <ShieldOff className="w-4 h-4" /> Billing Enforcement
           </TabsTrigger>
+          <TabsTrigger value="platform-partners" className="flex items-center gap-2">
+            <Globe className="w-4 h-4" /> Platform Partners
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -3673,6 +3677,11 @@ export default function AdminPanel() {
         {/* ── Billing Enforcement tab ─────────────────────────────────── */}
         <TabsContent value="billing-enforcement">
           <BillingEnforcementPanel />
+        </TabsContent>
+
+        {/* ── Platform Partners tab ───────────────────────────────────── */}
+        <TabsContent value="platform-partners">
+          <PlatformPartnersPanel />
         </TabsContent>
       </Tabs>
     </div>

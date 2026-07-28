@@ -60,6 +60,7 @@ import realEstateRouter from "./real-estate";
 import architectRouter from "./architect";
 import developerRouter from "./developer";
 import oauthRouter from "./oauth";
+import platformPartnersRouter from "./platform-partners";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -112,8 +113,15 @@ router.use(sitesRouter);
 // Public real-estate: listings page, inquiry form, view-count increment
 router.use(realEstatePublicRouter);
 
+// Public: Platform Partner doc portals (/docs/:slug) + Git push webhooks (no auth)
+router.use(platformPartnersRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
+
+// Platform Partner authenticated routes (marketplace, admin CRUD, analytics)
+// mounted again after requireAuth — the public-only routes above return before next()
+router.use(platformPartnersRouter);
 
 router.use(vendorsRouter);
 router.use(socialAccountsRouter);
