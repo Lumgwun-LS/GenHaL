@@ -8,7 +8,7 @@ const AFRICA_CATEGORIES = [
   "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
   "Logistics & Delivery","Food & Restaurant","Entertainment & Music","Social & Community",
   "Business & Commerce","Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
-  "Fashion & Beauty","Real Estate",
+  "Fashion & Beauty","Real Estate","Emergencies","Community Engagements",
 ];
 
 const PLATFORMS = ["all","android","ios","web"];

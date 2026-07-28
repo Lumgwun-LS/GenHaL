@@ -659,7 +659,7 @@ const AFRICA_CATS = [
   "Education & E-Learning","Logistics & Delivery","Food & Restaurant",
   "Entertainment & Music","Social & Community","Business & Commerce",
   "Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
-  "Fashion & Beauty","Real Estate","Productivity & Tools",
+  "Fashion & Beauty","Real Estate","Productivity & Tools","Emergencies","Community Engagements",
 ];
 
 const PLATFORMS = [

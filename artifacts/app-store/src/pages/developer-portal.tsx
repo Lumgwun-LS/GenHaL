@@ -17,7 +17,7 @@ const AFRICA_CATEGORIES = [
   "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
   "Logistics & Delivery","Food & Restaurant","Entertainment & Music","Social & Community",
   "Business & Commerce","Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
-  "Fashion & Beauty","Real Estate",
+  "Fashion & Beauty","Real Estate","Emergencies","Community Engagements",
 ];
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
@@ -1350,7 +1350,7 @@ const AFRICA_CATS = [
   "Mobile Money & Fintech","Agriculture & Farming","Health & Telemedicine","Education & E-Learning",
   "Logistics & Delivery","Food & Restaurant","Entertainment & Music","Social & Community",
   "Business & Commerce","Government & E-Services","Transport & Ride-Hailing","Utilities & Infrastructure",
-  "Fashion & Beauty","Real Estate",
+  "Fashion & Beauty","Real Estate","Emergencies","Community Engagements",
 ];
 
 type LaunchStep = "upload" | "processing" | "review" | "done";
