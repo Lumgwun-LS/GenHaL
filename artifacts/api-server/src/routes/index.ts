@@ -66,6 +66,7 @@ import embedRouter from "./embed";
 import customerRouter from "./customer";
 import vendorMessagesRouter from "./vendor-messages";
 import vendorVirtualAccountsRouter from "./vendor-virtual-accounts";
+import walletRouter, { walletPublicRouter } from "./wallet";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -124,6 +125,9 @@ router.use(platformPartnersRouter);
 // Public: Embed widget JS + service manifest (key-based auth, no Clerk)
 router.use(embedRouter);
 
+// Public: wallet exchange-rate — no auth needed
+router.use(walletPublicRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -180,5 +184,6 @@ router.use(developerRouter);
 router.use(customerRouter);
 router.use(vendorMessagesRouter);
 router.use(vendorVirtualAccountsRouter);
+router.use(walletRouter);
 
 export default router;

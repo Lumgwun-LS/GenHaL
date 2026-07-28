@@ -17,7 +17,7 @@
 import express, { Router } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { db, paymentsTable, ordersTable, orderItemsTable, productsTable, vendorsTable, webhookEventsTable, vendorNotificationsTable, vendorAddonCreditsTable } from "@workspace/db";
+import { db, paymentsTable, ordersTable, orderItemsTable, productsTable, vendorsTable, webhookEventsTable, vendorNotificationsTable, vendorAddonCreditsTable, vendorWalletsTable, walletTransactionsTable, vendorPayoutsTable, vendorBankAccountsTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { sendSlackAlert } from "../../lib/slack";
 import {
@@ -287,6 +287,66 @@ type PaymentUpdateOutcome =
       payment: { vendorId: number; amount: string; currency: string; orderId: number | null };
     };
 
+// ── Wallet credit helper ──────────────────────────────────────────────────────
+
+async function creditVendorWallet(opts: {
+  vendorId: number;
+  amount: string;
+  currency: string;
+  orderId: number | null;
+  paymentId: number;
+}): Promise<void> {
+  // Fetch platform fee rate from site-content (default 2.5%)
+  const { getSiteContentBlock } = await import("../../lib/site-content");
+  const settings = await getSiteContentBlock("wallet.settings").catch(() => null) as { platformFeeRate?: number } | null;
+  const feeRate = settings?.platformFeeRate ?? 0.025;
+
+  const gross = parseFloat(opts.amount);
+  const net   = parseFloat((gross * (1 - feeRate)).toFixed(2));
+  const currency = (opts.currency ?? "USD").toUpperCase();
+  const ledgerCurrency = (currency === "NGN" ? "NGN" : "USD") as "NGN" | "USD";
+
+  await db.transaction(async (tx) => {
+    // Ensure the wallet row exists
+    await tx.insert(vendorWalletsTable)
+      .values({ vendorId: opts.vendorId })
+      .onConflictDoNothing();
+
+    // Idempotency: insert the ledger row with payment_id; the unique index on
+    // payment_id means a retried webhook delivery will hit the DO NOTHING path.
+    const inserted = await tx.insert(walletTransactionsTable)
+      .values({
+        vendorId:    opts.vendorId,
+        type:        "credit",
+        amount:      String(net),
+        currency:    ledgerCurrency,
+        orderId:     opts.orderId,
+        paymentId:   opts.paymentId,
+        description: `Payment #${opts.paymentId} credited (after ${(feeRate * 100).toFixed(1)}% platform fee)`,
+      })
+      .onConflictDoNothing()
+      .returning({ id: walletTransactionsTable.id });
+
+    // Only increment the balance when the ledger row was freshly inserted
+    if (inserted.length === 0) {
+      console.info(`[wallet] duplicate credit skipped — paymentId=${opts.paymentId} vendorId=${opts.vendorId}`);
+      return;
+    }
+
+    if (ledgerCurrency === "NGN") {
+      await tx.update(vendorWalletsTable)
+        .set({ ngnBalance: sql`${vendorWalletsTable.ngnBalance} + ${String(net)}`, updatedAt: new Date() })
+        .where(eq(vendorWalletsTable.vendorId, opts.vendorId));
+    } else {
+      await tx.update(vendorWalletsTable)
+        .set({ usdBalance: sql`${vendorWalletsTable.usdBalance} + ${String(net)}`, updatedAt: new Date() })
+        .where(eq(vendorWalletsTable.vendorId, opts.vendorId));
+    }
+
+    console.info(`[wallet] credited vendorId=${opts.vendorId} amount=${net} ${ledgerCurrency} paymentId=${opts.paymentId}`);
+  });
+}
+
 /**
  * Transitions a payment's status via providerReference, but refuses to resurrect a
  * payment the vendor has already cancelled (see POST /external/payments/:id/cancel
@@ -409,6 +469,18 @@ async function applyPaymentStatusTransition(
           console.error("[webhooks] invoice instalment reconcile failed:", e),
         );
       }
+
+      // ── Wallet credit ─────────────────────────────────────────────────────
+      // Credit net amount (after platform fee) to the vendor's wallet ledger.
+      // NOT best-effort: if this throws the webhook event is NOT acknowledged
+      // and the provider will retry it, ensuring the credit is never silently dropped.
+      await creditVendorWallet({
+        vendorId: updated.vendorId,
+        amount: updated.amount,
+        currency: updated.currency,
+        orderId: updated.orderId ?? null,
+        paymentId: paymentRow.id,
+      });
     }
   }
 
@@ -1377,6 +1449,136 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
     // Paystack retries automatically; no immediate downgrade — subscription.disable
     // fires once retries are exhausted. Just log for observability.
     console.info(`[paystack webhook] invoice.payment_failed — subscription=${event.data.subscription_code ?? "unknown"}`);
+    return { matched: true };
+  } else if (event.event === "transfer.success") {
+    // A payout transfer completed.
+    // completePayoutSettlement atomically claims the payout (processing→completed)
+    // AND debits the wallet in one transaction — so this is fully idempotent.
+    const eventData = event.data as Record<string, string>;
+    const transferCode = eventData.transfer_code;
+    if (!transferCode) return { matched: false };
+
+    // Lookup by transfer_code first; fall back to the deterministic PAYOUT-<id>
+    // reference we stamp before dispatch so crash-after-dispatch is always recoverable.
+    const deterministicRef = eventData.reference ?? null;
+    let [payout] = await db.select().from(vendorPayoutsTable)
+      .where(eq(vendorPayoutsTable.providerReference, transferCode));
+    if (!payout && deterministicRef) {
+      [payout] = await db.select().from(vendorPayoutsTable)
+        .where(eq(vendorPayoutsTable.providerReference, deterministicRef));
+    }
+    if (!payout) {
+      console.warn(`[paystack webhook] transfer.success — no payout found for transfer_code=${transferCode} ref=${deterministicRef}`);
+      return { matched: true }; // external transfer, not ours — ignore
+    }
+    // Ensure providerReference is updated to the actual transfer_code for future lookups.
+    if (payout.providerReference !== transferCode) {
+      await db.update(vendorPayoutsTable)
+        .set({ providerReference: transferCode, updatedAt: new Date() })
+        .where(eq(vendorPayoutsTable.id, payout.id))
+        .catch(() => null); // best-effort update; settlement proceeds regardless
+    }
+
+    const [vendor] = await db.select({ email: vendorsTable.email, name: vendorsTable.name })
+      .from(vendorsTable).where(eq(vendorsTable.id, payout.vendorId));
+
+    const { completePayoutSettlement } = await import("../wallet");
+    // If already completed, completePayoutSettlement returns false and is a no-op.
+    await completePayoutSettlement(payout.vendorId, payout.id, parseFloat(payout.amountNgn), vendor ?? null);
+
+    console.info(`[paystack webhook] transfer.success — payoutId=${payout.id} vendor=${payout.vendorId} amount=${payout.amountNgn}`);
+    return { matched: true };
+
+  } else if (event.event === "transfer.failed" || event.event === "transfer.reversed") {
+    const failEventData = event.data as Record<string, string>;
+    const transferCode = failEventData.transfer_code;
+    if (!transferCode) return { matched: false };
+
+    // Dual-identifier lookup: transfer_code first, deterministic PAYOUT-<id> reference as fallback.
+    const deterministicRefFail = failEventData.reference ?? null;
+    let [payout] = await db.select().from(vendorPayoutsTable)
+      .where(eq(vendorPayoutsTable.providerReference, transferCode));
+    if (!payout && deterministicRefFail) {
+      [payout] = await db.select().from(vendorPayoutsTable)
+        .where(eq(vendorPayoutsTable.providerReference, deterministicRefFail));
+    }
+    if (!payout) return { matched: true }; // not ours
+    if (payout.status === "failed" || payout.status === "rejected") return { matched: true }; // idempotent
+
+    const reason = event.event === "transfer.reversed" ? "Transfer reversed by bank" : "Transfer failed by Paystack";
+
+    // Idempotent atomic transition: claim the status change inside the transaction
+    // so concurrent/duplicate webhooks cannot both execute compensation.
+    let compensated = false;
+    await db.transaction(async (tx) => {
+      // Re-read with a lock; only proceed if status is still actionable.
+      const [locked] = await tx.execute(
+        sql`SELECT id, status, amount_ngn, vendor_id FROM vendor_payouts WHERE id = ${payout.id} FOR UPDATE`
+      ) as unknown as [{ id: number; status: string; amount_ngn: string; vendor_id: number } | undefined];
+
+      if (!locked) return; // disappeared — nothing to do
+      if (locked.status === "failed" || locked.status === "rejected") return; // already handled
+
+      const wasSettled = locked.status === "completed";
+
+      await tx.update(vendorPayoutsTable)
+        .set({ status: "failed", failureReason: reason, processedAt: new Date(), updatedAt: new Date() })
+        .where(eq(vendorPayoutsTable.id, payout.id));
+
+      if (wasSettled) {
+        // Payout was already settled (wallet already debited on transfer.success).
+        // Credit the funds back so the vendor doesn't lose money.
+        await tx.update(vendorWalletsTable)
+          .set({ ngnBalance: sql`${vendorWalletsTable.ngnBalance} + ${locked.amount_ngn}`, updatedAt: new Date() })
+          .where(eq(vendorWalletsTable.vendorId, locked.vendor_id));
+        await tx.insert(walletTransactionsTable).values({
+          vendorId:    locked.vendor_id,
+          type:        "credit",
+          amount:      locked.amount_ngn,
+          currency:    "NGN",
+          payoutId:    payout.id,
+          description: `Payout #${payout.id} reversed — funds returned to wallet`,
+        });
+      } else {
+        // Payout was still processing — just release the pending hold.
+        await tx.update(vendorWalletsTable)
+          .set({ pendingNgnPayout: sql`GREATEST(0, ${vendorWalletsTable.pendingNgnPayout} - ${locked.amount_ngn})`, updatedAt: new Date() })
+          .where(eq(vendorWalletsTable.vendorId, locked.vendor_id));
+      }
+
+      compensated = true;
+    });
+
+    if (!compensated) {
+      console.info(`[paystack webhook] ${event.event} — payoutId=${payout.id} already in terminal state, skipping compensation`);
+      return { matched: true };
+    }
+
+    // In-app notification + email
+    await db.insert(vendorNotificationsTable).values({
+      vendorId: payout.vendorId,
+      type: "payout_failed",
+      message: `Your payout of NGN ${parseFloat(payout.amountNgn).toLocaleString()} failed: ${reason}. The amount has been returned to your wallet.`,
+    }).catch(() => null);
+
+    const [vendor] = await db.select({ email: vendorsTable.email, name: vendorsTable.name })
+      .from(vendorsTable).where(eq(vendorsTable.id, payout.vendorId));
+    if (vendor?.email) {
+      const { sendEmail } = await import("../../lib/mailer");
+      const { wrapVendorEmail, escapeHtml } = await import("../../lib/email-branding");
+      sendEmail({
+        to: vendor.email,
+        subject: "Payout failed — funds returned to your wallet",
+        html: wrapVendorEmail({ bodyHtml: `
+          <h2 style="font-size:18px;margin:0 0 12px;">Payout Failed</h2>
+          <p>Hi ${escapeHtml(vendor.name ?? "")},</p>
+          <p>Your payout of <strong>NGN ${parseFloat(payout.amountNgn).toLocaleString()}</strong> could not be completed (${escapeHtml(reason)}).</p>
+          <p>The amount has been returned to your Awa wallet. Please check your bank details and try again.</p>
+        ` }),
+      }).catch(() => null);
+    }
+
+    console.info(`[paystack webhook] ${event.event} — payoutId=${payout.id} vendor=${payout.vendorId}`);
     return { matched: true };
   } else {
     console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${event.data.id ?? event.data.reference}`);

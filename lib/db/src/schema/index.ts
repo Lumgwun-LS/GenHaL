@@ -81,3 +81,4 @@ export * from "./customers";
 export * from "./customer-notifications";
 export * from "./vendor-customer-messages";
 export * from "./vendor-virtual-accounts";
+export * from "./vendor-wallets";

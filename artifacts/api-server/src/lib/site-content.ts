@@ -235,6 +235,11 @@ export const DEFAULT_SITE_CONTENT = {
   // subsequent charges fire at that level. Admins can reset a vendor's rung
   // back to null (= ladder[0]) via the billing-enforcement panel.
   "billing.deductionLadder": [10, 50, 100, 200],
+  // Wallet & payout settings
+  "wallet.settings": {
+    usdToNgnRate:    1650,
+    platformFeeRate: 0.025,
+  },
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -407,6 +412,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.platformCosts": platformCostsSchema,
   "admin.socialHealthSettings": socialHealthSettingsSchema,
   "billing.deductionLadder": deductionLadderSchema,
+  "wallet.settings": z.object({ usdToNgnRate: z.number().min(1), platformFeeRate: z.number().min(0).max(1) }),
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

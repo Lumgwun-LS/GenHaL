@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -42,6 +42,7 @@ import InfrastructureBillingPanel from "./infrastructure-billing";
 import BillingEnforcementPanel from "./billing-enforcement";
 import PlatformFinancialsPanel from "./platform-financials";
 import PlatformPartnersPanel from "./platform-partners";
+import WalletAdminPanel from "./wallet-admin";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2352,6 +2353,9 @@ export default function AdminPanel() {
           <TabsTrigger value="platform-partners" className="flex items-center gap-2">
             <Globe className="w-4 h-4" /> Platform Partners
           </TabsTrigger>
+          <TabsTrigger value="wallet-admin" className="flex items-center gap-2">
+            <Banknote className="w-4 h-4" /> Wallet &amp; Payouts
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -3682,6 +3686,11 @@ export default function AdminPanel() {
         {/* ── Platform Partners tab ───────────────────────────────────── */}
         <TabsContent value="platform-partners">
           <PlatformPartnersPanel />
+        </TabsContent>
+
+        {/* ── Wallet & Payouts admin tab ───────────────────────────────── */}
+        <TabsContent value="wallet-admin">
+          <WalletAdminPanel />
         </TabsContent>
       </Tabs>
     </div>
