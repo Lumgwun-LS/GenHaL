@@ -394,8 +394,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <aside className={cn(
         // shared
         "z-50 w-72 bg-card border-r border-border/60 flex flex-col",
-        // mobile: full-height fixed slide-in panel
-        "fixed inset-y-0 left-0 transition-transform duration-300 ease-in-out",
+        // mobile: full-height fixed slide-in panel — h-screen + overflow-hidden give flex a definite height so children can scroll
+        "fixed inset-y-0 left-0 h-screen overflow-hidden transition-transform duration-300 ease-in-out",
         isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
         // desktop: static sticky column — key fix for scroll
         "md:sticky md:top-0 md:h-screen md:translate-x-0 md:transition-none md:shadow-none"
@@ -423,8 +423,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Scrollable nav — takes all remaining height */}
-        <nav className="flex-1 overflow-y-auto overscroll-contain py-2 px-2 space-y-0.5
+        {/* Scrollable nav — min-h-0 overrides flex's default min-height:auto so the nav can actually shrink and scroll */}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-2 px-2 space-y-0.5
           [&::-webkit-scrollbar]:w-1
           [&::-webkit-scrollbar-track]:bg-transparent
           [&::-webkit-scrollbar-thumb]:rounded-full
