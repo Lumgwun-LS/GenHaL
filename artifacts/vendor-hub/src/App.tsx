@@ -71,6 +71,7 @@ import CustomerAIDashboard from "@/pages/customer/ai-dashboard";
 import CustomerProfile from "@/pages/customer/profile";
 import MessagesPage from "@/pages/messages/index";
 import WalletPage from "@/pages/wallet/index";
+import InterswitchPage from "@/pages/interswitch/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -377,7 +378,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />
 
           <Route path="/messages" component={() => <AuthenticatedRoute component={MessagesPage} />} />
-          <Route path="/wallet"   component={() => <AuthenticatedRoute component={WalletPage} />} />
+          <Route path="/wallet"      component={() => <AuthenticatedRoute component={WalletPage} />} />
+          <Route path="/interswitch" component={() => <AuthenticatedRoute component={InterswitchPage} />} />
 
           {/* Customer Portal — uses Clerk auth but has its own layout (no vendor sidebar) */}
           <Route path="/customer/dashboard"   component={CustomerDashboard} />

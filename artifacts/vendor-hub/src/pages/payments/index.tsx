@@ -101,8 +101,14 @@ function statusColor(status: string) {
 }
 
 function providerBadge(provider: string) {
-  if (provider === "stripe") return "bg-violet-500/10 text-violet-400 border-violet-500/20";
-  if (provider === "paystack") return "bg-teal-500/10 text-teal-400 border-teal-500/20";
+  if (provider === "stripe")      return "bg-violet-500/10 text-violet-400 border-violet-500/20";
+  if (provider === "paystack")    return "bg-teal-500/10 text-teal-400 border-teal-500/20";
+  if (provider === "interswitch") return "bg-orange-500/10 text-orange-400 border-orange-500/20";
+  if (provider === "flutterwave") return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
+  if (provider === "nomba")       return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+  if (provider === "squad")       return "bg-pink-500/10 text-pink-400 border-pink-500/20";
+  if (provider === "remita")      return "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+  if (provider === "paypal")      return "bg-sky-500/10 text-sky-400 border-sky-500/20";
   return "bg-muted text-muted-foreground";
 }
 
@@ -229,12 +235,14 @@ export default function Payments() {
   // Build chart data: revenue by day
   const chartData = (() => {
     if (!data?.payments) return [];
-    const dayMap: Record<string, { stripe: number; paystack: number }> = {};
+    const dayMap: Record<string, { stripe: number; paystack: number; interswitch: number; other: number }> = {};
     for (const p of data.payments.filter((p) => p.status === "paid")) {
       const day = new Date(p.createdAt).toISOString().split("T")[0]!;
-      if (!dayMap[day]) dayMap[day] = { stripe: 0, paystack: 0 };
+      if (!dayMap[day]) dayMap[day] = { stripe: 0, paystack: 0, interswitch: 0, other: 0 };
       if (p.provider === "stripe") dayMap[day]!.stripe += p.amount;
-      else dayMap[day]!.paystack += p.amount;
+      else if (p.provider === "paystack") dayMap[day]!.paystack += p.amount;
+      else if (p.provider === "interswitch") dayMap[day]!.interswitch += p.amount;
+      else dayMap[day]!.other += p.amount;
     }
     return Object.entries(dayMap)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -243,6 +251,8 @@ export default function Payments() {
         day: format(new Date(day), "MMM d"),
         Stripe: parseFloat(vals.stripe.toFixed(2)),
         Paystack: parseFloat(vals.paystack.toFixed(2)),
+        Interswitch: parseFloat(vals.interswitch.toFixed(2)),
+        Other: parseFloat(vals.other.toFixed(2)),
       }));
   })();
 
@@ -384,6 +394,8 @@ export default function Payments() {
                 <Legend />
                 <Bar dataKey="Stripe" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Paystack" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Interswitch" fill="#f97316" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Other" fill="#6b7280" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -455,6 +467,13 @@ export default function Payments() {
               <SelectItem value="all">All providers</SelectItem>
               <SelectItem value="stripe">Stripe</SelectItem>
               <SelectItem value="paystack">Paystack</SelectItem>
+              <SelectItem value="interswitch">Interswitch</SelectItem>
+              <SelectItem value="flutterwave">Flutterwave</SelectItem>
+              <SelectItem value="nomba">Nomba</SelectItem>
+              <SelectItem value="remita">Remita</SelectItem>
+              <SelectItem value="squad">Squad</SelectItem>
+              <SelectItem value="paypal">PayPal</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>

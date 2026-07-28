@@ -32,6 +32,7 @@ import { sendCustomerOrderConfirmationEmail } from "../lib/customer-emails";
 import { createRemitaCheckout } from "./payments/remita";
 import { createFlutterwaveCheckout } from "./payments/flutterwave";
 import { createNombaCheckout } from "./payments/nomba";
+import { buildInterswitchPaymentUrl, resolveInterswitchCreds } from "../lib/interswitch";
 import { getPayPalAccessToken, paypalBaseUrl } from "../lib/paypal-catalog";
 
 const router: IRouter = Router();
@@ -46,11 +47,12 @@ type GatewayVendor = TierCheckable & {
   flutterwaveEnabled: boolean;
   nombaEnabled: boolean;
   paypalEnabled: boolean;
+  interswitchEnabled: boolean;
 };
 
-type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba" | "paypal";
+type PostLinkProvider = "stripe" | "paystack" | "remita" | "flutterwave" | "nomba" | "paypal" | "interswitch";
 
-const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "paypal", "flutterwave", "nomba", "remita"];
+const ALL_PROVIDERS: PostLinkProvider[] = ["paystack", "stripe", "paypal", "flutterwave", "nomba", "remita", "interswitch"];
 
 /** Statuses from which a payment can still be superseded by a retry. Mirrors external/payments.ts. */
 const OPEN_PAYMENT_STATUSES = new Set(["pending", "failed"]);
@@ -179,6 +181,34 @@ async function chargeProvider(params: {
       const result = await createNombaCheckout({ orderId, vendorId: vendor.id, amount, currency, email, callbackUrl: redirectUrl, description });
       if (!result.ok) return { ok: false, status: result.status, error: result.error };
       return { ok: true, body: { orderId, provider: "nomba", url: result.url } };
+    }
+
+    if (provider === "interswitch") {
+      try {
+        const creds = resolveInterswitchCreds();
+        const transactionRef = `IS-${vendor.id}-${Date.now()}`;
+        const amountKobo = Math.round(amount * 100);
+        const currencyCode = currency === "USD" ? "840" : "566";
+        const { checkoutUrl } = buildInterswitchPaymentUrl(creds, {
+          transactionRef, amount: amountKobo, customerId: email, customerEmail: email,
+          callbackUrl: redirectUrl, currencyCode,
+        });
+        // Record the pending payment for webhook / requery reconciliation
+        await _db2.insert(_pt2).values({
+          vendorId: vendor.id, orderId,
+          provider: "interswitch",
+          providerReference: transactionRef,
+          amount: String(amount),
+          currency,
+          status: "pending",
+          checkoutUrl,
+          metadata: { email },
+        }).onConflictDoNothing();
+        return { ok: true, body: { orderId, provider: "interswitch", url: checkoutUrl } };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Interswitch is not configured";
+        return { ok: false, status: 503, error: msg };
+      }
     }
 
     if (provider === "paypal") {

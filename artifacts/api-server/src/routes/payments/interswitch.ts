@@ -23,6 +23,11 @@ import {
   interswitchVerifyBVN,
   interswitchRefund,
   verifyInterswitchHash,
+  interswitchGetBillers,
+  interswitchGetBillerItems,
+  interswitchValidateBillPayment,
+  interswitchPayBill,
+  interswitchQueryBillPayment,
 } from "../../lib/interswitch";
 import { resolveInterswitchCreds } from "../../lib/vendor-keys";
 import { findActivePendingPayment } from "../../lib/payment-guard";
@@ -208,6 +213,104 @@ router.post("/payments/interswitch/refund", async (req, res): Promise<void> => {
   const requestRef = `IS-REF-${Date.now()}`;
   const result = await interswitchRefund(creds, { requestRef, transactionRef, amount: Math.round(amount * 100), reason });
   res.json(result);
+});
+
+// ── Bills Payment ─────────────────────────────────────────────────────────────
+
+// GET /payments/interswitch/bills/billers
+router.get("/payments/interswitch/bills/billers", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const creds = resolveInterswitchCreds();
+    const result = await interswitchGetBillers(creds);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to fetch billers";
+    res.status((err as { statusCode?: number }).statusCode ?? 502).json({ error: msg });
+  }
+});
+
+// GET /payments/interswitch/bills/billers/:billerId/items
+router.get("/payments/interswitch/bills/billers/:billerId/items", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const creds = resolveInterswitchCreds();
+    const result = await interswitchGetBillerItems(creds, req.params.billerId);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to fetch biller items";
+    res.status((err as { statusCode?: number }).statusCode ?? 502).json({ error: msg });
+  }
+});
+
+// POST /payments/interswitch/bills/validate
+router.post("/payments/interswitch/bills/validate", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { paymentCode, customerId } = req.body;
+  if (!paymentCode || !customerId) {
+    res.status(400).json({ error: "paymentCode and customerId are required" }); return;
+  }
+  try {
+    const creds = resolveInterswitchCreds();
+    const result = await interswitchValidateBillPayment(creds, { paymentCode, customerId });
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Validation failed";
+    res.status((err as { statusCode?: number }).statusCode ?? 502).json({ error: msg });
+  }
+});
+
+// POST /payments/interswitch/bills/pay
+router.post("/payments/interswitch/bills/pay", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { vendor } = await resolveVendor(userId);
+  if (!vendor) { res.status(403).json({ error: "Vendor not found" }); return; }
+
+  const {
+    paymentCode, customerId, amount,
+    customerName, customerEmail, customerPhone, narration,
+  } = req.body as {
+    paymentCode: string; customerId: string; amount: number;
+    customerName?: string; customerEmail?: string; customerPhone?: string; narration?: string;
+  };
+
+  if (!paymentCode || !customerId || !amount) {
+    res.status(400).json({ error: "paymentCode, customerId and amount are required" }); return;
+  }
+
+  try {
+    const creds = resolveInterswitchCreds();
+    const requestRef = `IS-BILL-${vendor.id}-${Date.now()}`;
+    const result = await interswitchPayBill(creds, {
+      requestRef,
+      paymentCode,
+      customerId,
+      amount: Math.round(amount * 100),
+      customerName, customerEmail, customerPhone, narration,
+    });
+    res.json({ ...result, requestRef });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Bill payment failed";
+    res.status((err as { statusCode?: number }).statusCode ?? 502).json({ error: msg });
+  }
+});
+
+// GET /payments/interswitch/bills/status/:requestRef
+router.get("/payments/interswitch/bills/status/:requestRef", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const creds = resolveInterswitchCreds();
+    const result = await interswitchQueryBillPayment(creds, req.params.requestRef);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Status query failed";
+    res.status((err as { statusCode?: number }).statusCode ?? 502).json({ error: msg });
+  }
 });
 
 export default router;

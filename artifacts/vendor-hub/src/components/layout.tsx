@@ -174,7 +174,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/inventory", label: "Inventory",  icon: Archive },
       { href: "/orders",    label: "Orders",     icon: ShoppingCart },
       { href: "/messages",  label: "Messages",   icon: Inbox },
-      { href: "/wallet",    label: "Wallet",     icon: Landmark },
+      { href: "/wallet",        label: "Wallet",        icon: Landmark },
+      { href: "/interswitch",   label: "Interswitch",   icon: CreditCard },
     ],
   },
   {

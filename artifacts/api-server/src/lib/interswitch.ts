@@ -302,6 +302,144 @@ export async function interswitchRefund(creds: InterswitchCreds, params: {
   );
 }
 
+// ── Bills payment (Quickteller) ──────────────────────────────────────────────
+
+/**
+ * List all available billers (utilities, cable, airtime, etc.).
+ */
+export async function interswitchGetBillers(creds: InterswitchCreds) {
+  const token = await getInterswitchToken(creds);
+  return isFetch<{
+    responseCode: string;
+    responseDescription: string;
+    billers: Array<{
+      id: string;
+      name: string;
+      shortName: string;
+      categoryId: string;
+      categoryName: string;
+    }>;
+  }>("/api/v1/quickteller/billers", token, creds);
+}
+
+/**
+ * List payment items (packages / amounts) for a specific biller.
+ */
+export async function interswitchGetBillerItems(creds: InterswitchCreds, billerId: string) {
+  const token = await getInterswitchToken(creds);
+  return isFetch<{
+    responseCode: string;
+    responseDescription: string;
+    paymentItems: Array<{
+      id: string;
+      name: string;
+      paymentCode: string;
+      amount: string;     // may be "0" for variable-amount billers
+      isAmountFixed: boolean;
+      currencyCode: string;
+      currencySymbol: string;
+    }>;
+  }>(`/api/v1/quickteller/billers/${encodeURIComponent(billerId)}/items`, token, creds);
+}
+
+/**
+ * Validate / look up a bill payment customer before paying (e.g. confirm a
+ * DSTV smart-card number is valid before charging).
+ */
+export async function interswitchValidateBillPayment(creds: InterswitchCreds, params: {
+  terminalId?:     string;
+  paymentCode:     string;   // paymentItem.paymentCode from getBillerItems
+  customerId:      string;   // meter number, account number, smart-card, phone, etc.
+}) {
+  const token = await getInterswitchToken(creds);
+  return isFetch<{
+    responseCode: string;
+    responseDescription: string;
+    customerName: string;
+    amount: string;
+    currencyCode: string;
+    customerId: string;
+  }>(
+    "/api/v1/quickteller/payments/bills/validate",
+    token,
+    creds,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        terminalId: params.terminalId ?? creds.merchantCode,
+        paymentCode: params.paymentCode,
+        customerId:  params.customerId,
+      }),
+    },
+  );
+}
+
+export interface BillPaymentParams {
+  requestRef:    string;
+  paymentCode:   string;   // paymentItem.paymentCode from getBillerItems
+  customerId:    string;   // meter, account, smart-card, phone, etc.
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  amount:        number;   // in kobo (multiply Naira × 100)
+  currencyCode?: string;   // default "566" (NGN)
+  narration?:    string;
+  terminalId?:   string;
+}
+
+/**
+ * Post a bills payment (airtime, DSTV, electricity, data, water, etc.).
+ */
+export async function interswitchPayBill(creds: InterswitchCreds, params: BillPaymentParams) {
+  const token = await getInterswitchToken(creds);
+  return isFetch<{
+    responseCode: string;
+    responseDescription: string;
+    transactionRef:      string;
+    amount:              string;
+    paymentCode:         string;
+    customerId:          string;
+  }>(
+    "/api/v1/quickteller/payments/bills",
+    token,
+    creds,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        terminalId:    params.terminalId   ?? creds.merchantCode,
+        requestRef:    params.requestRef,
+        paymentCode:   params.paymentCode,
+        customerId:    params.customerId,
+        customerName:  params.customerName  ?? "",
+        customerEmail: params.customerEmail ?? "",
+        customerPhone: params.customerPhone ?? "",
+        amount:        String(params.amount),
+        currencyCode:  params.currencyCode  ?? "566",
+        narration:     params.narration     ?? "",
+      }),
+    },
+  );
+}
+
+/**
+ * Query the status of a bill payment by its requestRef.
+ */
+export async function interswitchQueryBillPayment(creds: InterswitchCreds, requestRef: string) {
+  const token = await getInterswitchToken(creds);
+  return isFetch<{
+    responseCode: string;
+    responseDescription: string;
+    transactionRef: string;
+    amount: string;
+    paymentCode: string;
+    customerId: string;
+  }>(
+    `/api/v1/quickteller/payments/bills/${encodeURIComponent(requestRef)}`,
+    token,
+    creds,
+  );
+}
+
 // ── Webhook signature verification ───────────────────────────────────────────
 
 /**

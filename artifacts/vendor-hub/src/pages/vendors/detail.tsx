@@ -85,6 +85,8 @@ export default function VendorDetail() {
   const [flutterwaveEnabled, setFlutterwaveEnabled] = useState(false);
   const [nombaEnabled, setNombaEnabled] = useState(false);
   const [paypalEnabled, setPaypalEnabled] = useState(false);
+  const [squadEnabled, setSquadEnabled] = useState(false);
+  const [interswitchEnabled, setInterswitchEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
@@ -135,6 +137,8 @@ export default function VendorDetail() {
       setFlutterwaveEnabled(vendor.flutterwaveEnabled ?? false);
       setNombaEnabled(vendor.nombaEnabled ?? false);
       setPaypalEnabled(vendor.paypalEnabled ?? false);
+      setSquadEnabled((vendor as any).squadEnabled ?? false);
+      setInterswitchEnabled((vendor as any).interswitchEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
       setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
@@ -201,6 +205,8 @@ export default function VendorDetail() {
           flutterwaveEnabled,
           nombaEnabled,
           paypalEnabled,
+          squadEnabled,
+          interswitchEnabled,
           defaultCurrency,
         }),
       });
@@ -504,6 +510,40 @@ export default function VendorDetail() {
                 </div>
                 {paypalEnabled && unavailableByProvider.has("paypal") && (
                   <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("paypal")}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="squad-toggle" className="text-sm font-medium">Squad</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments via Squad</p>
+                  </div>
+                  <Switch
+                    id="squad-toggle"
+                    checked={squadEnabled}
+                    onCheckedChange={setSquadEnabled}
+                  />
+                </div>
+                {squadEnabled && unavailableByProvider.has("squad") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("squad")}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="interswitch-toggle" className="text-sm font-medium">Interswitch</Label>
+                    <p className="text-xs text-muted-foreground">Accept payments, transfers &amp; bills via Interswitch</p>
+                  </div>
+                  <Switch
+                    id="interswitch-toggle"
+                    checked={interswitchEnabled}
+                    onCheckedChange={setInterswitchEnabled}
+                  />
+                </div>
+                {interswitchEnabled && unavailableByProvider.has("interswitch") && (
+                  <p className="text-xs text-destructive">Not offered to customers yet: {unavailableByProvider.get("interswitch")}</p>
                 )}
               </div>
 
