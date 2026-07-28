@@ -39,6 +39,8 @@ import {
   Ruler,
   ChevronDown,
   GitBranch,
+  Inbox,
+  Landmark,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState, useCallback } from "react";
@@ -171,6 +173,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/products",  label: "Products",   icon: Package },
       { href: "/inventory", label: "Inventory",  icon: Archive },
       { href: "/orders",    label: "Orders",     icon: ShoppingCart },
+      { href: "/messages",  label: "Messages",   icon: Inbox },
+      { href: "/wallet",    label: "Wallet",     icon: Landmark },
     ],
   },
   {

@@ -62,6 +62,15 @@ import BecomeAConnectedBusinessPage from "@/pages/become-a-connected-business";
 import PartnerToolkitPage from "@/pages/partner-toolkit";
 import ConnectedBusinessPage from "@/pages/connected-business";
 import OAuthConsent from "@/pages/oauth-consent";
+import CustomerDashboard from "@/pages/customer/dashboard";
+import CustomerOrders from "@/pages/customer/orders";
+import CustomerOrderDetail from "@/pages/customer/order-detail";
+import CustomerVendors from "@/pages/customer/vendors";
+import CustomerInbox from "@/pages/customer/inbox";
+import CustomerAIDashboard from "@/pages/customer/ai-dashboard";
+import CustomerProfile from "@/pages/customer/profile";
+import MessagesPage from "@/pages/messages/index";
+import WalletPage from "@/pages/wallet/index";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -366,7 +375,20 @@ function ClerkProviderWithRoutes() {
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           <Route path="/marketplace" component={() => <AuthenticatedRoute component={MarketplacePage} />} />
           <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />
-          
+
+          <Route path="/messages" component={() => <AuthenticatedRoute component={MessagesPage} />} />
+          <Route path="/wallet"   component={() => <AuthenticatedRoute component={WalletPage} />} />
+
+          {/* Customer Portal — uses Clerk auth but has its own layout (no vendor sidebar) */}
+          <Route path="/customer/dashboard"   component={CustomerDashboard} />
+          <Route path="/customer/orders/:id"  component={CustomerOrderDetail} />
+          <Route path="/customer/orders"      component={CustomerOrders} />
+          <Route path="/customer/vendors"     component={CustomerVendors} />
+          <Route path="/customer/inbox"       component={CustomerInbox} />
+          <Route path="/customer/ai"          component={CustomerAIDashboard} />
+          <Route path="/customer/profile"     component={CustomerProfile} />
+          <Route path="/customer"             component={CustomerDashboard} />
+
           <Route path="/:rest*">
             <div className="flex h-screen items-center justify-center">
               <div className="text-center">

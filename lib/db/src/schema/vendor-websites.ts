@@ -9,7 +9,8 @@ export type SiteSectionType =
   | "testimonials"
   | "contact"
   | "social"
-  | "whatsapp_cta";
+  | "whatsapp_cta"
+  | "shop"; // Live shop — pulls products from catalog, full cart+checkout
 
 export type SiteSection = {
   id: string;

@@ -14,11 +14,11 @@
  * Timed-out sentinels (handler crashed mid-run) are reset by the background
  * stale-sentinel cleanup so future retries can reclaim the event.
  */
-import { Router } from "express";
+import express, { Router } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { db, paymentsTable, ordersTable, vendorsTable, webhookEventsTable, vendorNotificationsTable, vendorAddonCreditsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { db, paymentsTable, ordersTable, orderItemsTable, productsTable, vendorsTable, webhookEventsTable, vendorNotificationsTable, vendorAddonCreditsTable } from "@workspace/db";
+import { and, eq, sql } from "drizzle-orm";
 import { sendSlackAlert } from "../../lib/slack";
 import {
   enqueueWebhookEvent,
@@ -366,6 +366,40 @@ async function applyPaymentStatusTransition(
         amount: updated.amount,
         currency: updated.currency,
       });
+
+      // Decrement stock for every order item when a linked order is paid.
+      // The claim + all decrements run inside a single DB transaction so that:
+      // - a decrement failure rolls back the claim, allowing the next webhook
+      //   retry to try again (no permanent under-decrement)
+      // - duplicate/retried webhook events that arrive after a successful run
+      //   see stock_applied=true and skip silently (exactly-once semantics)
+      if (updated.orderId) {
+        try {
+          await db.transaction(async (tx) => {
+            const claimed = await tx
+              .update(ordersTable)
+              .set({ stockApplied: true })
+              .where(and(eq(ordersTable.id, updated.orderId!), eq(ordersTable.stockApplied, false)))
+              .returning({ id: ordersTable.id });
+            if (claimed.length === 0) return; // already applied — skip
+            const items = await tx
+              .select({ productId: orderItemsTable.productId, quantity: orderItemsTable.quantity })
+              .from(orderItemsTable)
+              .where(eq(orderItemsTable.orderId, updated.orderId!));
+            for (const item of items) {
+              await tx
+                .update(productsTable)
+                .set({ stockQuantity: sql`GREATEST(0, ${productsTable.stockQuantity} - ${item.quantity})` })
+                .where(eq(productsTable.id, item.productId));
+            }
+          });
+        } catch (stockErr) {
+          // Transaction rolled back — stock_applied remains false; rethrow so the
+          // webhook event is NOT marked processed and the provider retries it.
+          console.error("[webhooks] stock decrement failed (will retry on next webhook):", stockErr);
+          throw stockErr;
+        }
+      }
 
       // If this payment is linked to an invoice instalment, reconcile it
       const meta = (existing?.metadata ?? {}) as Record<string, unknown>;
@@ -2561,4 +2595,81 @@ setTimeout(() => {
   setInterval(() => void checkStaleWebhookEvents(), POLL_INTERVAL_MS);
 }, 10_000);
 
+// ── Squad webhook ─────────────────────────────────────────────────────────────
+// Events: charge.success, virtual_account.credit
+// Signature: HMAC-SHA512 of raw body, sent as x-squad-signature header.
+
+router.post(
+  "/payments/squad/webhook",
+  express.raw({ type: "*/*" }),
+  async (req, res) => {
+    const rawBody    = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : JSON.stringify(req.body);
+    const sigHeader  = (req.headers["x-squad-signature"] ?? "") as string;
+
+    let payload: { Event?: string; data?: Record<string, unknown> };
+    try { payload = JSON.parse(rawBody); } catch { res.status(400).json({ error: "Invalid JSON" }); return; }
+
+    const eventType  = payload?.Event ?? "";
+    const data       = (payload?.data ?? {}) as Record<string, unknown>;
+    const eventId    = `squad-${eventType}-${(data.transaction_ref as string) ?? Date.now()}`;
+
+    // Signature verification — only enforce if a webhook secret is configured.
+    const { resolveGatewayField: rGF } = await import("../../lib/platform-gateways");
+    const webhookSecret = await rGF("squad" as never, "webhookSecret").catch(() => undefined)
+      ?? process.env.SQUAD_WEBHOOK_SECRET;
+
+    if (webhookSecret && sigHeader) {
+      const { verifySquadWebhookSignature } = await import("../../lib/squad");
+      if (!verifySquadWebhookSignature(webhookSecret, rawBody, sigHeader)) {
+        res.status(400).json({ error: "Invalid Squad webhook signature" });
+        return;
+      }
+    }
+
+    try {
+      // Claim idempotency
+      const existing = await db.select({ processedAt: webhookEventsTable.processedAt })
+        .from(webhookEventsTable).where(eq(webhookEventsTable.eventId, eventId)).limit(1);
+      if (existing.length > 0 && existing[0]!.processedAt) {
+        res.status(200).json({ skipped: "duplicate" });
+        return;
+      }
+
+      if (eventType === "charge.success") {
+        const ref = (data.transaction_ref as string) ?? "";
+        if (ref) {
+          await applyPaymentStatusTransition(ref, "paid", "squad");
+        }
+      } else if (eventType === "virtual_account.credit") {
+        // Money received on a Squad virtual account — log it for reconciliation
+        const ref = (data.transaction_ref as string) ?? `squad-va-${Date.now()}`;
+        await applyPaymentStatusTransition(ref, "paid", "squad").catch(() => null);
+        // Fire a Slack alert so admins are aware
+        await sendSlackAlert(
+          `:bank: *Squad virtual account credit*\n` +
+          `• Account: ${data.virtual_account_number ?? "(unknown)"}\n` +
+          `• Amount: NGN ${((data.transaction_amount as number) ?? 0) / 100}\n` +
+          `• Ref: ${ref}`,
+        ).catch(() => null);
+      }
+
+      await db.insert(webhookEventsTable).values({
+        eventId, provider: "squad", eventType, rawPayload: payload as Record<string, unknown>,
+        processedAt: new Date(),
+      }).onConflictDoNothing();
+
+      res.status(200).json({ received: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[squad webhook] handler error:", msg);
+      await db.insert(webhookEventsTable).values({
+        eventId, provider: "squad", eventType, rawPayload: payload as Record<string, unknown>,
+        errorMessage: msg,
+      }).onConflictDoNothing().catch(() => null);
+      res.status(500).json({ error: msg });
+    }
+  },
+);
+
+export { applyPaymentStatusTransition };
 export default router;

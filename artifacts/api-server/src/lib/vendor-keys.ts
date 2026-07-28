@@ -119,6 +119,30 @@ export async function resolveStripeKey(
   return platformKey;
 }
 
+/** Returns the Squad secret key (platform-level only — no per-vendor key routing yet). */
+export async function resolveSquadKey(): Promise<string> {
+  const adminCreds = await getPlatformCredentials("squad" as GatewayProvider);
+  if (adminCreds?.secretKey) return adminCreds.secretKey;
+  const envKey = process.env.SQUAD_SECRET_KEY;
+  if (!envKey) throw Object.assign(new Error("Squad is not configured. Add a Squad key in Admin → Payment Gateways."), { statusCode: 503 });
+  return envKey;
+}
+
+/** Returns the Interswitch credentials (platform-level). */
+export async function resolveInterswitchCreds(): Promise<{ clientId: string; secretKey: string; merchantCode: string; payItemId: string; env: string }> {
+  const adminCreds = await getPlatformCredentials("interswitch" as GatewayProvider);
+  if (adminCreds?.clientId && adminCreds?.secretKey) {
+    return { clientId: adminCreds.clientId, secretKey: adminCreds.secretKey, merchantCode: adminCreds.merchantCode ?? "", payItemId: adminCreds.payItemId ?? "", env: adminCreds.env ?? "sandbox" };
+  }
+  const clientId     = process.env.INTERSWITCH_CLIENT_ID;
+  const secretKey    = process.env.INTERSWITCH_SECRET_KEY;
+  const merchantCode = process.env.INTERSWITCH_MERCHANT_CODE ?? "";
+  const payItemId    = process.env.INTERSWITCH_PAY_ITEM_ID ?? "";
+  const env          = process.env.INTERSWITCH_ENV ?? "sandbox";
+  if (!clientId || !secretKey) throw Object.assign(new Error("Interswitch is not configured. Add credentials in Admin → Payment Gateways."), { statusCode: 503 });
+  return { clientId, secretKey, merchantCode, payItemId, env };
+}
+
 /** Returns the Paystack secret key to use for a vendor, or throws if none available. */
 export async function resolvePaystackKey(
   vendorId: number,

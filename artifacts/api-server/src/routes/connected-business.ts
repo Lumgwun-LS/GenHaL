@@ -1040,11 +1040,32 @@ function ProductSkeleton({ columns = 3, isDark = true }) {
 
 // ── Product Card ─────────────────────────────────────────────────────────────
 
-function ProductCard({ product, cta = 'Buy Now', isDark = true, style = {} }) {
-  const [hovered, setHovered] = useState(false);
-  const bg     = isDark ? '#1a1a24' : '#ffffff';
-  const fg     = isDark ? '#f8fafc' : '#0f172a';
-  const muted  = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+function ProductCard({ product, cta = 'Add to Cart', isDark = true, style = {}, onAddToCart }) {
+  const [hovered, setHovered]   = useState(false);
+  const [added, setAdded]       = useState(false);
+  const [fav, setFav]           = useState(() => {
+    try { const f = JSON.parse(localStorage.getItem('awa_fav') || '[]'); return f.includes(product.id); } catch { return false; }
+  });
+  const bg    = isDark ? '#1a1a24' : '#ffffff';
+  const fg    = isDark ? '#f8fafc' : '#0f172a';
+  const muted = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+
+  function toggleFav(e) {
+    e.stopPropagation();
+    const next = !fav;
+    setFav(next);
+    try {
+      const stored = JSON.parse(localStorage.getItem('awa_fav') || '[]');
+      const updated = next ? [...stored, product.id] : stored.filter(id => id !== product.id);
+      localStorage.setItem('awa_fav', JSON.stringify(updated));
+    } catch {}
+  }
+
+  function handleAddToCart() {
+    if (onAddToCart) { onAddToCart(product); }
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1400);
+  }
 
   return (
     <div
@@ -1059,15 +1080,18 @@ function ProductCard({ product, cta = 'Buy Now', isDark = true, style = {} }) {
         ...style,
       }}
     >
-      {/* Image */}
+      {/* Image + overlays */}
       <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
         {product.imageUrl
           ? <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: hovered ? 'scale(1.06)' : 'none', transition: 'transform .4s ease' }} loading="lazy" />
           : <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,rgba(124,58,237,.15),rgba(79,70,229,.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 52 }}>🛍️</div>
         }
+        {/* Stock badge */}
         <span style={{ position: 'absolute', top: 10, left: 10, fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 20, backdropFilter: 'blur(8px)', background: product.inStock ? 'rgba(16,185,129,.18)' : 'rgba(239,68,68,.18)', color: product.inStock ? '#10b981' : '#ef4444', border: '1px solid ' + (product.inStock ? 'rgba(16,185,129,.3)' : 'rgba(239,68,68,.3)') }}>
           {product.inStock ? '● In Stock' : '✕ Sold Out'}
         </span>
+        {/* Heart / favourite */}
+        <button onClick={toggleFav} title={fav ? 'Remove from favourites' : 'Add to favourites'} style={{ position: 'absolute', top: 8, right: 10, width: 32, height: 32, borderRadius: '50%', border: 'none', background: fav ? 'rgba(239,68,68,.75)' : 'rgba(0,0,0,.35)', backdropFilter: 'blur(6px)', color: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', transform: fav ? 'scale(1.1)' : 'none' }}>♥</button>
       </div>
 
       {/* Body */}
@@ -1080,7 +1104,7 @@ function ProductCard({ product, cta = 'Buy Now', isDark = true, style = {} }) {
         </p>
         {product.description && <p style={{ fontSize: 12, color: muted, margin: '0 0 14px', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{product.description}</p>}
         {product.inStock
-          ? <a href={product.buyUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', padding: 11, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 13, textAlign: 'center', textDecoration: 'none', border: 'none', cursor: 'pointer' }}>{cta}</a>
+          ? <button onClick={handleAddToCart} style={{ display: 'block', width: '100%', padding: 11, borderRadius: 12, background: added ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 13, textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'background .3s' }}>{added ? '✓ Added!' : cta}</button>
           : <span style={{ display: 'block', width: '100%', padding: 11, borderRadius: 12, background: isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)', color: muted, fontWeight: 800, fontSize: 13, textAlign: 'center' }}>Sold Out</span>
         }
       </div>
@@ -1090,7 +1114,7 @@ function ProductCard({ product, cta = 'Buy Now', isDark = true, style = {} }) {
 
 // ── Grid layout ──────────────────────────────────────────────────────────────
 
-function ProductGrid({ products, columns, cta, title, subtitle, isDark, showLoadMore, onLoadMore, loadingMore }) {
+function ProductGrid({ products, columns, cta, title, subtitle, isDark, showLoadMore, onLoadMore, loadingMore, onAddToCart }) {
   const fg    = isDark ? '#f8fafc' : '#0f172a';
   const muted = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
 
@@ -1106,7 +1130,7 @@ function ProductGrid({ products, columns, cta, title, subtitle, isDark, showLoad
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + columns + ', 1fr)', gap: 20 }}>
-        {products.map((p, i) => <ProductCard key={p.id} product={p} cta={cta} isDark={isDark} style={{ animation: 'awaFadeUp .45s ease ' + (i * 0.07) + 's both' }} />)}
+        {products.map((p, i) => <ProductCard key={p.id} product={p} cta={cta} isDark={isDark} onAddToCart={onAddToCart} style={{ animation: 'awaFadeUp .45s ease ' + (i * 0.07) + 's both' }} />)}
       </div>
       {showLoadMore && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
@@ -1122,7 +1146,7 @@ function ProductGrid({ products, columns, cta, title, subtitle, isDark, showLoad
 
 // ── Featured layout ───────────────────────────────────────────────────────────
 
-function ProductFeatured({ products, columns, cta, title, subtitle, isDark, showLoadMore, onLoadMore, loadingMore }) {
+function ProductFeatured({ products, columns, cta, title, subtitle, isDark, showLoadMore, onLoadMore, loadingMore, onAddToCart }) {
   if (!products.length) return null;
   const hero = products[0];
   const rest = products.slice(1);
@@ -1130,6 +1154,12 @@ function ProductFeatured({ products, columns, cta, title, subtitle, isDark, show
   const muted = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
   const heroBg = isDark ? '#1a1a24' : '#f8f8ff';
   const heroBorder = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  const [heroAdded, setHeroAdded] = useState(false);
+
+  function handleHeroAddToCart() {
+    if (onAddToCart) onAddToCart(hero);
+    setHeroAdded(true); setTimeout(() => setHeroAdded(false), 1400);
+  }
 
   return (
     <div>
@@ -1149,7 +1179,7 @@ function ProductFeatured({ products, columns, cta, title, subtitle, isDark, show
           {hero.description && <p style={{ fontSize: 14, color: muted, lineHeight: 1.65, margin: 0 }}>{hero.description}</p>}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {hero.inStock
-              ? <a href={hero.buyUrl} target="_blank" rel="noopener noreferrer" style={{ padding: '14px 28px', borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>{cta}</a>
+              ? <button onClick={handleHeroAddToCart} style={{ padding: '14px 28px', borderRadius: 12, background: heroAdded ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', cursor: 'pointer', transition: 'background .3s' }}>{heroAdded ? '✓ Added!' : cta}</button>
               : <span style={{ padding: '14px 28px', borderRadius: 12, background: isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)', color: muted, fontWeight: 800, fontSize: 14 }}>Sold Out</span>
             }
           </div>
@@ -1158,10 +1188,218 @@ function ProductFeatured({ products, columns, cta, title, subtitle, isDark, show
       {/* Rest as grid */}
       {rest.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + Math.min(columns, 3) + ', 1fr)', gap: 20 }}>
-          {rest.map((p, i) => <ProductCard key={p.id} product={p} cta={cta} isDark={isDark} style={{ animation: 'awaFadeUp .45s ease ' + (i * 0.07) + 's both' }} />)}
+          {rest.map((p, i) => <ProductCard key={p.id} product={p} cta={cta} isDark={isDark} onAddToCart={onAddToCart} style={{ animation: 'awaFadeUp .45s ease ' + (i * 0.07) + 's both' }} />)}
         </div>
       )}
       <style>{\`@keyframes awaFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}\`}</style>
+    </div>
+  );
+}
+
+// ── Cart sidebar ─────────────────────────────────────────────────────────────
+
+function CartSidebar({ cart, setCart, isDark, apiKey, host, onClose }) {
+  const [view, setView]       = useState('items'); // items | checkout | paying | success | failed
+  const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
+  const [phone, setPhone]     = useState('');
+  const [address, setAddress] = useState('');
+  const [gateway, setGateway] = useState('');
+  const [gateways, setGateways] = useState([]);
+  const [currency, setCurrency] = useState('USD');
+  const [orderId, setOrderId] = useState(null);
+  const [paying, setPaying]   = useState(false);
+  const [errMsg, setErrMsg]   = useState('');
+
+  const bg    = isDark ? '#0f0f13' : '#ffffff';
+  const fg    = isDark ? '#f8fafc' : '#0f172a';
+  const muted = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+  const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const cardBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCurrency = cart.length ? cart[0].currency : currency;
+
+  // Fetch manifest once to get gateways
+  useEffect(() => {
+    if (view === 'checkout' && !gateways.length) {
+      fetch(host + '/api/embed/manifest?key=' + encodeURIComponent(apiKey))
+        .then(r => r.json())
+        .then(d => {
+          setGateways(d.enabledGateways || []);
+          setCurrency(d.currency || 'USD');
+          if (d.enabledGateways && d.enabledGateways.length) setGateway(d.enabledGateways[0]);
+        }).catch(() => {});
+    }
+  }, [view]);
+
+  function updateQty(id, d) {
+    setCart(prev => {
+      const next = prev.map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + d) } : i).filter(i => i.qty > 0);
+      return next;
+    });
+  }
+
+  async function handleCheckout(e) {
+    e.preventDefault();
+    if (!gateway) { setErrMsg('Please select a payment method.'); return; }
+    setErrMsg(''); setPaying(true);
+    try {
+      const res = await fetch(host + '/api/embed/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: apiKey, items: cart.map(i => ({ productId: i.id, qty: i.qty })), customer: { name, email, phone, address }, gateway }),
+      });
+      const data = await res.json();
+      if (data.error) { setErrMsg(data.error); setPaying(false); return; }
+      setOrderId(data.orderId);
+      if (gateway === 'paystack' && data.accessCode) {
+        setView('paying');
+        // Load Paystack inline
+        const loadPs = () => {
+          if (window.PaystackPop) {
+            const popup = window.PaystackPop.setup({ key: '', access_code: data.accessCode, onSuccess: () => { setView('success'); setCart([]); }, onCancel: () => pollStatus(data.orderId) });
+            popup.openIframe();
+          }
+        };
+        if (!window.PaystackPop) {
+          const s = document.createElement('script'); s.src = 'https://js.paystack.co/v2/inline.js'; s.onload = loadPs; document.head.appendChild(s);
+        } else loadPs();
+      } else if (data.paymentUrl) {
+        setView('paying');
+        window.open(data.paymentUrl, '_blank', 'width=520,height=700');
+        pollStatus(data.orderId);
+      }
+    } catch { setErrMsg('Network error. Please try again.'); setPaying(false); }
+  }
+
+  function pollStatus(oid) {
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      try {
+        const r = await fetch(host + '/api/embed/order-status?key=' + encodeURIComponent(apiKey) + '&orderId=' + oid);
+        const d = await r.json();
+        if (d.paymentStatus === 'paid') { clearInterval(t); setView('success'); setCart([]); }
+        else if (d.paymentStatus === 'failed') { clearInterval(t); setView('failed'); }
+      } catch {}
+      if (tries >= 40) clearInterval(t);
+    }, 3000);
+  }
+
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, width: 400, maxWidth: '100vw', height: '100vh', background: bg, color: fg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 40px rgba(0,0,0,.4)', zIndex: 9999, animation: 'awaSlideIn .3s ease' }}>
+      <style>{\`@keyframes awaSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}\`}</style>
+      {/* Header */}
+      <div style={{ padding: '18px 16px', borderBottom: '1px solid ' + border, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 17 }}>A</div>
+        <div>
+          <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+            {view === 'items' ? 'Cart' + (cart.length ? ' (' + cart.length + ')' : '') : view === 'checkout' ? 'Checkout' : view === 'paying' ? 'Paying…' : view === 'success' ? 'Order Confirmed! 🎉' : 'Payment Failed'}
+          </p>
+          <p style={{ fontSize: 10, color: muted, margin: '2px 0 0' }}>Powered by Awa Biz Suite</p>
+        </div>
+        {view === 'checkout'
+          ? <button onClick={() => setView('items')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>← Back</button>
+          : <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 20 }}>✕</button>
+        }
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {view === 'items' && (
+          cart.length === 0
+            ? <div style={{ textAlign: 'center', paddingTop: 60 }}><div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div><p style={{ fontWeight: 700, margin: '0 0 6px' }}>Your cart is empty</p><p style={{ fontSize: 12, color: muted, margin: 0 }}>Add products to get started.</p></div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {cart.map(item => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, background: cardBg, border: '1px solid ' + border }}>
+                    {item.imageUrl ? <img src={item.imageUrl} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'linear-gradient(135deg,rgba(124,58,237,.15),rgba(79,70,229,.15))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🛍️</div>}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: '#7c3aed', margin: 0 }}>{formatPrice(item.price * item.qty, item.currency)}</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button onClick={() => updateQty(item.id, -1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid ' + border, background: 'none', color: fg, fontSize: 16, cursor: 'pointer' }}>−</button>
+                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{item.qty}</span>
+                      <button onClick={() => updateQty(item.id, 1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid ' + border, background: 'none', color: fg, fontSize: 16, cursor: 'pointer' }}>+</button>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderTop: '1px solid ' + border, marginTop: 6 }}>
+                  <span style={{ fontSize: 13, color: muted }}>Subtotal</span>
+                  <span style={{ fontSize: 20, fontWeight: 900, color: '#7c3aed' }}>{formatPrice(total, cartCurrency)}</span>
+                </div>
+              </div>
+        )}
+
+        {view === 'checkout' && (
+          <form onSubmit={handleCheckout} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[['Full Name *', name, setName, 'text', true], ['Email *', email, setEmail, 'email', true], ['Phone', phone, setPhone, 'tel', false], ['Delivery Address', address, setAddress, 'text', false]].map(([lbl, val, set, type, req]) => (
+              <div key={String(lbl)}>
+                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: muted, display: 'block', marginBottom: 5 }}>{String(lbl)}</label>
+                <input value={String(val)} onChange={e => (set as any)(e.target.value)} type={String(type)} required={Boolean(req)} style={{ width: '100%', padding: '11px 13px', borderRadius: 10, border: '1px solid ' + border, background: cardBg, color: fg, fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            {gateways.length > 0 && (
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: muted, display: 'block', marginBottom: 8 }}>Payment Method</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {gateways.map(gw => (
+                    <button key={gw} type="button" onClick={() => setGateway(gw)} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid ' + (gateway === gw ? '#7c3aed' : border), background: gateway === gw ? 'rgba(124,58,237,.12)' : 'none', color: gateway === gw ? fg : muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      {gw === 'paystack' ? '💳 Paystack' : gw === 'stripe' ? '💳 Stripe' : '💳 ' + gw}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {errMsg && <p style={{ color: '#ef4444', fontSize: 12, margin: '4px 0 0' }}>{errMsg}</p>}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid ' + border }}>
+              <span style={{ fontSize: 13, color: muted }}>Total</span>
+              <span style={{ fontSize: 20, fontWeight: 900, color: '#7c3aed' }}>{formatPrice(total, cartCurrency)}</span>
+            </div>
+            <button type="submit" disabled={paying} style={{ padding: 13, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', cursor: paying ? 'wait' : 'pointer', opacity: paying ? 0.7 : 1 }}>
+              {paying ? 'Processing…' : 'Pay ' + formatPrice(total, cartCurrency) + ' →'}
+            </button>
+          </form>
+        )}
+
+        {view === 'paying' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', textAlign: 'center' }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>💳</div>
+            <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>Waiting for payment…</p>
+            <p style={{ fontSize: 12, color: muted }}>Complete payment in the window that opened.<br />This page updates automatically.</p>
+          </div>
+        )}
+
+        {view === 'success' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', textAlign: 'center' }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg,#10b981,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: '#fff', marginBottom: 16 }}>✓</div>
+            <p style={{ fontSize: 18, fontWeight: 900, margin: '0 0 8px' }}>Payment Successful!</p>
+            <p style={{ fontSize: 13, color: muted, margin: 0 }}>Your order has been placed. The seller will be in touch shortly.</p>
+            {orderId && <p style={{ fontSize: 11, color: muted, marginTop: 12, padding: '6px 14px', borderRadius: 8, background: cardBg }}>Order #{orderId}</p>}
+            <button onClick={onClose} style={{ marginTop: 24, padding: '10px 24px', borderRadius: 50, border: '1px solid ' + border, background: 'none', color: fg, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Close</button>
+          </div>
+        )}
+
+        {view === 'failed' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', textAlign: 'center' }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(239,68,68,.15)', border: '2px solid rgba(239,68,68,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, marginBottom: 16 }}>✕</div>
+            <p style={{ fontSize: 18, fontWeight: 900, margin: '0 0 8px', color: '#ef4444' }}>Payment Failed</p>
+            <p style={{ fontSize: 13, color: muted }}>No charge was made. Please try again.</p>
+            <button onClick={() => setView('checkout')} style={{ marginTop: 20, padding: '11px 28px', borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, border: 'none', cursor: 'pointer' }}>Try Again</button>
+          </div>
+        )}
+      </div>
+
+      {/* Footer action */}
+      {view === 'items' && cart.length > 0 && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid ' + border }}>
+          <button onClick={() => setView('checkout')} style={{ width: '100%', padding: 13, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', cursor: 'pointer' }}>Proceed to Checkout →</button>
+        </div>
+      )}
+      <div style={{ padding: '10px 16px', borderTop: '1px solid ' + border, textAlign: 'center' }}>
+        <a href="https://awajimaaai.com" target="_blank" rel="noopener" style={{ fontSize: 10, color: muted, textDecoration: 'none' }}>Secure checkout powered by Awa Biz Suite</a>
+      </div>
     </div>
   );
 }
@@ -1175,7 +1413,7 @@ export function AwaProducts({
   limit = 12,
   title = 'Our Products',
   subtitle,
-  cta = 'Buy Now',
+  cta = 'Add to Cart',
   category,
   sort = 'newest',
   theme = 'dark',
@@ -1188,8 +1426,12 @@ export function AwaProducts({
   const [page, setPage]               = useState(1);
   const [hasMore, setHasMore]         = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [cart, setCart]               = useState([]);
+  const [cartOpen, setCartOpen]       = useState(false);
 
   const isDark = theme !== 'light';
+  const fg = isDark ? '#f8fafc' : '#0f172a';
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   useEffect(() => {
     setLoading(true); setError(null);
@@ -1215,17 +1457,44 @@ export function AwaProducts({
       .finally(() => setLoadingMore(false));
   }
 
-  const fg = isDark ? '#f8fafc' : '#0f172a';
+  function handleAddToCart(product) {
+    setCart(prev => {
+      const ex = prev.find(i => i.id === product.id);
+      if (ex) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: product.id, name: product.name, price: product.price, currency: product.currency, imageUrl: product.imageUrl || '', qty: 1 }];
+    });
+  }
 
   if (loading) return <ProductSkeleton columns={columns} isDark={isDark} />;
   if (error)   return <p style={{ color: '#ef4444', fontSize: 13 }}>⚠️ {error}</p>;
   if (!products.length) return <p style={{ color: isDark ? 'rgba(255,255,255,.4)' : 'rgba(0,0,0,.4)', fontSize: 13 }}>No products available yet.</p>;
 
-  const commonProps = { products, cta, title, subtitle, isDark, showLoadMore: showLoadMore && hasMore, onLoadMore: handleLoadMore, loadingMore };
+  const commonProps = { products, cta, title, subtitle, isDark, showLoadMore: showLoadMore && hasMore, onLoadMore: handleLoadMore, loadingMore, onAddToCart: handleAddToCart };
 
-  if (view === 'slider')   return <AwaProductSlider products={products} cta={cta} title={title} isDark={isDark} />;
-  if (view === 'featured') return <ProductFeatured {...commonProps} columns={columns} />;
-  return <ProductGrid {...commonProps} columns={columns} />;
+  return (
+    <div style={{ position: 'relative', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
+      {/* Cart FAB */}
+      {cartCount > 0 && (
+        <button onClick={() => setCartOpen(true)} style={{ position: 'fixed', bottom: 20, right: 20, width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 4px 24px rgba(124,58,237,.45)', zIndex: 9998, animation: 'awaFadeUp .3s ease' }}>
+          🛒
+          <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: '2px solid ' + (isDark ? '#0f0f13' : '#fff') }}>{cartCount > 9 ? '9+' : cartCount}</span>
+        </button>
+      )}
+
+      {/* Cart overlay */}
+      {cartOpen && (
+        <>
+          <div onClick={() => setCartOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9998 }} />
+          <CartSidebar cart={cart} setCart={setCart} isDark={isDark} apiKey={apiKey} host={host} onClose={() => setCartOpen(false)} />
+        </>
+      )}
+
+      {/* Product layout */}
+      {view === 'slider'   && <AwaProductSlider products={products} cta={cta} title={title} isDark={isDark} onAddToCart={handleAddToCart} />}
+      {view === 'featured' && <ProductFeatured {...commonProps} columns={columns} />}
+      {view !== 'slider' && view !== 'featured' && <ProductGrid {...commonProps} columns={columns} />}
+    </div>
+  );
 }
 
 export default AwaProducts;

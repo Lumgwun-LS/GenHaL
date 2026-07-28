@@ -38,11 +38,13 @@ const SECTION_LABELS: Record<string, string> = {
   contact: "Contact Info",
   social: "Social Links",
   whatsapp_cta: "WhatsApp Button",
+  shop: "Live Shop",
 };
 
 const SECTION_ICONS: Record<string, string> = {
   hero: "🌟", about: "👤", products: "🛍️", gallery: "🖼️",
   testimonials: "💬", contact: "📍", social: "🔗", whatsapp_cta: "📲",
+  shop: "🛒",
 };
 
 // Expanded colour palette — grouped by family
@@ -287,6 +289,26 @@ function SectionEditor({ section, onChange, onUploadImage, onPickFromLibrary }: 
       <div className="space-y-1.5"><Label>WhatsApp Number</Label><Input value={(c.number as string) ?? ""} onChange={e => setField("number", e.target.value)} placeholder="2348012345678 (with country code)" /></div>
       <div className="space-y-1.5"><Label>Pre-filled Message</Label><Textarea rows={2} value={(c.message as string) ?? ""} onChange={e => setField("message", e.target.value)} placeholder="Hi! I'd like to know more about your products." /></div>
       <div className="space-y-1.5"><Label>Button Text</Label><Input value={(c.buttonText as string) ?? ""} onChange={e => setField("buttonText", e.target.value)} placeholder="Chat on WhatsApp" /></div>
+    </div>
+  );
+
+  if (section.type === "shop") return (
+    <div className="space-y-3">
+      <div className="rounded-lg bg-violet-50 border border-violet-200 p-3 text-xs text-violet-800 leading-relaxed">
+        <span className="font-bold block mb-1">🛒 Live Shop</span>
+        Products are pulled <strong>live from your catalog</strong> — no manual entry needed. Customers can add items to cart and check out directly on your site. Inventory and prices always reflect what's in your dashboard.
+      </div>
+      <div className="space-y-1.5"><Label>Section Title</Label><Input value={(c.title as string) ?? ""} onChange={e => setField("title", e.target.value)} placeholder="Shop Our Products" /></div>
+      <div className="space-y-1.5"><Label>Subtitle</Label><Input value={(c.subtitle as string) ?? ""} onChange={e => setField("subtitle", e.target.value)} placeholder="Browse our full catalog and order directly" /></div>
+      <div className="space-y-1.5">
+        <Label>Columns</Label>
+        <select value={(c.columns as string) ?? "3"} onChange={e => setField("columns", e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-background">
+          <option value="2">2 columns</option>
+          <option value="3">3 columns</option>
+          <option value="4">4 columns</option>
+        </select>
+      </div>
+      <div className="space-y-1.5"><Label>Add to Cart Button Text</Label><Input value={(c.cta as string) ?? ""} onChange={e => setField("cta", e.target.value)} placeholder="Add to Cart" /></div>
     </div>
   );
 

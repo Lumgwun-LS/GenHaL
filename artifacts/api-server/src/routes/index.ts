@@ -63,6 +63,9 @@ import oauthRouter from "./oauth";
 import platformPartnersRouter from "./platform-partners";
 import connectedBusinessRouter from "./connected-business";
 import embedRouter from "./embed";
+import customerRouter from "./customer";
+import vendorMessagesRouter from "./vendor-messages";
+import vendorVirtualAccountsRouter from "./vendor-virtual-accounts";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -174,5 +177,8 @@ router.use(invoicesRouter);
 router.use(realEstateRouter);
 router.use(architectRouter);
 router.use(developerRouter);
+router.use(customerRouter);
+router.use(vendorMessagesRouter);
+router.use(vendorVirtualAccountsRouter);
 
 export default router;

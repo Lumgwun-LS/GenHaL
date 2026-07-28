@@ -27,6 +27,8 @@ export const vendorsTable = pgTable("vendors", {
   flutterwaveEnabled: boolean("flutterwave_enabled").notNull().default(false),
   nombaEnabled: boolean("nomba_enabled").notNull().default(false),
   paypalEnabled: boolean("paypal_enabled").notNull().default(false),
+  squadEnabled: boolean("squad_enabled").notNull().default(false),
+  interswitchEnabled: boolean("interswitch_enabled").notNull().default(false),
   defaultCurrency: text("default_currency").notNull().default("USD"),
   // Subscription & verification — controls which premium features are unlocked
   subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise

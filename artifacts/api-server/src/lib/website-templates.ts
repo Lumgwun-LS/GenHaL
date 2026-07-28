@@ -102,6 +102,19 @@ const socialSection = (): SiteSection => ({
   },
 });
 
+const shopSection = (): SiteSection => ({
+  id: "shop",
+  type: "shop",
+  enabled: false,
+  content: {
+    title: "Shop Our Products",
+    subtitle: "Browse our full catalog and order directly — fast, easy checkout",
+    view: "grid",
+    columns: "3",
+    cta: "Add to Cart",
+  },
+});
+
 const whatsappSection = (): SiteSection => ({
   id: "whatsapp_cta",
   type: "whatsapp_cta",
@@ -124,6 +137,7 @@ export const TEMPLATES: Record<TemplateId, TemplateDef> = {
       heroSection("Welcome to Our Store", "Discover quality products at great prices"),
       aboutSection("About Us", "We are dedicated to bringing you the best products with exceptional customer service. Our team works hard every day to exceed your expectations."),
       productsSection(),
+      shopSection(),
       gallerySection(),
       testimonialsSection(),
       contactSection(""),

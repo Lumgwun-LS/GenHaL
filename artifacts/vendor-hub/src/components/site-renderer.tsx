@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 export type SiteSectionType =
   | "hero" | "about" | "products" | "gallery"
-  | "testimonials" | "contact" | "social" | "whatsapp_cta";
+  | "testimonials" | "contact" | "social" | "whatsapp_cta" | "shop";
 
 export type SiteSection = {
   id: string;
@@ -33,6 +33,10 @@ export type SiteData = {
   sections: SiteSection[];
   template?: { palette: SiteTemplatePalette; primaryFont: string; name: string };
   vendor?: { name: string; email?: string | null; phone?: string | null; address?: string | null };
+  // Shop section integration
+  slug?: string | null;
+  enabledGateways?: string[];
+  currency?: string;
 };
 
 function str(v: unknown): string { return typeof v === "string" ? v : ""; }
@@ -497,6 +501,356 @@ function WhatsAppSection({ content }: { content: Record<string, unknown> }) {
   );
 }
 
+// ── Live Shop Section ─────────────────────────────────────────────────────────
+
+const BASE_URL_SHOP = (typeof import.meta !== "undefined" ? (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL?.replace(/\/$/, "") : "") ?? "";
+
+type ShopProduct = {
+  id: number; name: string; description?: string; price: number;
+  category?: string; imageUrl?: string | null; inStock: boolean;
+  stockQuantity?: number | null; unit?: string | null; currency: string;
+};
+type CartItem = { id: number; name: string; price: number; currency: string; imageUrl?: string | null; qty: number };
+
+function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, currency: siteCurrency }: {
+  content: Record<string, unknown>;
+  palette: SiteTemplatePalette;
+  themeColor: string;
+  siteSlug?: string | null;
+  enabledGateways?: string[];
+  currency?: string;
+}) {
+  const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [cart, setCart]         = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  // checkout flow state
+  const [checkoutView, setCheckoutView] = useState<"items" | "checkout" | "paying" | "success" | "failed">("items");
+  const [cName, setCName]   = useState("");
+  const [cEmail, setCEmail] = useState("");
+  const [cPhone, setCPhone] = useState("");
+  const [cAddr, setCAddr]   = useState("");
+  const [gateway, setGateway] = useState((enabledGateways ?? [])[0] ?? "");
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [paying, setPaying]  = useState(false);
+  const [errMsg, setErrMsg]  = useState("");
+  const [favs, setFavs]      = useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem("awa_site_fav") ?? "[]"); } catch { return []; }
+  });
+
+  const slug = siteSlug;
+  const currency = siteCurrency ?? "USD";
+  const title = str(content.title) || "Shop Our Products";
+  const subtitle = str(content.subtitle);
+  const cta = str(content.cta) || "Add to Cart";
+  const columns = parseInt(str(content.columns) || "3") || 3;
+
+  useEffect(() => {
+    if (!slug) { setLoading(false); return; }
+    fetch(`${BASE_URL_SHOP}/api/sites/${encodeURIComponent(slug)}/products?limit=24`)
+      .then(r => r.json())
+      .then(d => setProducts(d.products ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  function toggleFav(id: number) {
+    setFavs(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      try { localStorage.setItem("awa_site_fav", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function addToCart(p: ShopProduct) {
+    setCart(prev => {
+      const ex = prev.find(i => i.id === p.id);
+      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: p.id, name: p.name, price: p.price, currency: p.currency, imageUrl: p.imageUrl, qty: 1 }];
+    });
+  }
+  function updateQty(id: number, d: number) {
+    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + d) } : i).filter(i => i.qty > 0));
+  }
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCurrency = cart[0]?.currency ?? currency;
+
+  function fmtPrice(amount: number, cur: string) {
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(amount); } catch { return `${cur} ${amount.toFixed(2)}`; }
+  }
+
+  async function handleCheckout(e: React.FormEvent) {
+    e.preventDefault();
+    if (!slug) return;
+    if (!gateway) { setErrMsg("Please select a payment method."); return; }
+    setErrMsg(""); setPaying(true);
+    try {
+      const res = await fetch(`${BASE_URL_SHOP}/api/sites/${encodeURIComponent(slug)}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map(i => ({ productId: i.id, qty: i.qty })),
+          customer: { name: cName, email: cEmail, phone: cPhone, address: cAddr },
+          gateway,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) { setErrMsg(data.error); setPaying(false); return; }
+      setOrderId(data.orderId);
+      if (gateway === "paystack" && data.accessCode) {
+        setCheckoutView("paying");
+        const loadPs = () => {
+          if ((window as unknown as { PaystackPop?: { setup: (opts: unknown) => { openIframe: () => void } } }).PaystackPop) {
+            const ps = (window as unknown as { PaystackPop: { setup: (opts: unknown) => { openIframe: () => void } } }).PaystackPop.setup({
+              key: "", access_code: data.accessCode,
+              onSuccess: () => { setCheckoutView("success"); setCart([]); },
+              onCancel:  () => pollStatus(data.orderId),
+            });
+            ps.openIframe();
+          }
+        };
+        if (!(window as unknown as { PaystackPop?: unknown }).PaystackPop) {
+          const s = document.createElement("script"); s.src = "https://js.paystack.co/v2/inline.js"; s.onload = loadPs; document.head.appendChild(s);
+        } else loadPs();
+      } else if (data.paymentUrl) {
+        setCheckoutView("paying");
+        window.open(data.paymentUrl, "_blank", "width=520,height=700");
+        pollStatus(data.orderId);
+      }
+    } catch { setErrMsg("Network error. Please try again."); setPaying(false); }
+  }
+
+  function pollStatus(oid: number) {
+    if (!slug) return;
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      try {
+        const r = await fetch(`${BASE_URL_SHOP}/api/sites/${encodeURIComponent(slug)}/order-status?orderId=${oid}`);
+        const d = await r.json();
+        if (d.paymentStatus === "paid")   { clearInterval(t); setCheckoutView("success"); setCart([]); }
+        else if (d.paymentStatus === "failed") { clearInterval(t); setCheckoutView("failed"); }
+      } catch {}
+      if (tries >= 40) clearInterval(t);
+    }, 3000);
+  }
+
+  const border = `${themeColor}18`;
+  const cardBg = palette.accent;
+
+  // Editor preview placeholder (no slug = inside editor, products not loaded)
+  if (!slug || loading) {
+    return (
+      <section className="sv-section-pad" style={{ background: palette.bg, padding: "5.5rem 2rem" }}>
+        <div style={{ maxWidth: 1140, margin: "0 auto" }}>
+          <div className="sv-obs" style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <div style={{ display: "inline-block", background: themeColor + "18", color: themeColor, borderRadius: 999, padding: "0.3rem 0.9rem", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: ".9rem" }}>Live Shop</div>
+            <h2 style={{ fontSize: "clamp(1.6rem,3.5vw,2.3rem)", fontWeight: 800, color: palette.text, marginBottom: ".6rem" }}>{title}</h2>
+            {subtitle && <p style={{ color: palette.text + "88", fontSize: "1.05rem" }}>{subtitle}</p>}
+          </div>
+          {!slug ? (
+            <div style={{ textAlign: "center", padding: "3rem", background: cardBg, borderRadius: 20, border: `2px dashed ${themeColor}40` }}>
+              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🛍️</div>
+              <p style={{ fontWeight: 700, color: palette.text, marginBottom: ".5rem" }}>Live shop preview</p>
+              <p style={{ fontSize: ".9rem", color: palette.text + "88" }}>Your published products from the catalog will appear here with full cart &amp; checkout. Publish your site to see them live.</p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(columns, 3)}, 1fr)`, gap: "1.5rem" }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: cardBg, animation: "siteShimmer 1.5s infinite linear", backgroundImage: `linear-gradient(90deg,${palette.bg} 0%,${palette.accent} 50%,${palette.bg} 100%)`, backgroundSize: "200% 100%", height: 280 }} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="shop" className="sv-section-pad" style={{ background: palette.bg, padding: "5.5rem 2rem", position: "relative" }}>
+      {/* Cart FAB */}
+      {cartCount > 0 && (
+        <button onClick={() => { setCartOpen(true); setCheckoutView("items"); }}
+          style={{ position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, boxShadow: `0 4px 24px ${themeColor}55`, zIndex: 200 }}>
+          🛒
+          <span style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>{cartCount > 9 ? "9+" : cartCount}</span>
+        </button>
+      )}
+
+      {/* Cart drawer overlay */}
+      {cartOpen && (
+        <>
+          <div onClick={() => setCartOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 300 }} />
+          <div style={{ position: "fixed", top: 0, right: 0, width: 400, maxWidth: "100vw", height: "100vh", background: "#fff", color: "#111827", fontFamily: "inherit", display: "flex", flexDirection: "column", boxShadow: "-4px 0 40px rgba(0,0,0,.2)", zIndex: 400, overflowY: "auto" }}>
+            {/* Drawer header */}
+            <div style={{ padding: "18px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "#fff", zIndex: 10 }}>
+              <div>
+                <p style={{ fontSize: 16, fontWeight: 800, margin: 0, color: themeColor }}>
+                  {checkoutView === "items" ? `Cart (${cartCount})` : checkoutView === "checkout" ? "Checkout" : checkoutView === "paying" ? "Paying…" : checkoutView === "success" ? "Order Confirmed! 🎉" : "Payment Failed"}
+                </p>
+                <p style={{ fontSize: 11, color: "#9ca3af", margin: "2px 0 0" }}>Powered by Awa Biz Suite</p>
+              </div>
+              {checkoutView === "checkout"
+                ? <button onClick={() => setCheckoutView("items")} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>← Back</button>
+                : <button onClick={() => setCartOpen(false)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 22 }}>✕</button>}
+            </div>
+
+            {/* Drawer body */}
+            <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
+              {checkoutView === "items" && (
+                cart.length === 0
+                  ? <div style={{ textAlign: "center", paddingTop: 60 }}><div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div><p style={{ fontWeight: 700, marginBottom: 6 }}>Your cart is empty</p><p style={{ fontSize: 13, color: "#9ca3af" }}>Add products to get started.</p></div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {cart.map(item => (
+                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, background: "#f9f9ff", border: "1px solid #f0f0f0" }}>
+                          {item.imageUrl ? <img src={item.imageUrl} style={{ width: 50, height: 50, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} /> : <div style={{ width: 50, height: 50, borderRadius: 8, background: themeColor + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🛍️</div>}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
+                            <p style={{ fontSize: 14, fontWeight: 800, color: themeColor, margin: 0 }}>{fmtPrice(item.price * item.qty, item.currency)}</p>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button onClick={() => updateQty(item.id, -1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>−</button>
+                            <span style={{ minWidth: 20, textAlign: "center", fontWeight: 700, fontSize: 14 }}>{item.qty}</span>
+                            <button onClick={() => updateQty(item.id, 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>+</button>
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderTop: "1px solid #f0f0f0", marginTop: 8 }}>
+                        <span style={{ color: "#6b7280", fontSize: 13 }}>Subtotal</span>
+                        <span style={{ fontSize: 20, fontWeight: 900, color: themeColor }}>{fmtPrice(cartTotal, cartCurrency)}</span>
+                      </div>
+                    </div>
+              )}
+
+              {checkoutView === "checkout" && (
+                <form onSubmit={handleCheckout} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {([["Full Name *", cName, setCName, "text", true], ["Email *", cEmail, setCEmail, "email", true], ["Phone", cPhone, setCPhone, "tel", false], ["Delivery Address", cAddr, setCAddr, "text", false]] as const).map(([lbl, val, set, type, req]) => (
+                    <div key={String(lbl)}>
+                      <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#6b7280", display: "block", marginBottom: 5 }}>{lbl}</label>
+                      <input value={val} onChange={e => (set as (v: string) => void)(e.target.value)} type={type} required={req} style={{ width: "100%", padding: "11px 13px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#f9f9ff", color: "#111827", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                  {(enabledGateways ?? []).length > 0 && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#6b7280", display: "block", marginBottom: 8 }}>Payment Method</label>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {(enabledGateways ?? []).map(gw => (
+                          <button key={gw} type="button" onClick={() => setGateway(gw)} style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${gateway === gw ? themeColor : "#e5e7eb"}`, background: gateway === gw ? themeColor + "12" : "none", color: gateway === gw ? themeColor : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            {gw === "paystack" ? "💳 Paystack" : gw === "stripe" ? "💳 Stripe" : `💳 ${gw}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {errMsg && <p style={{ color: "#ef4444", fontSize: 12 }}>{errMsg}</p>}
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: "1px solid #f0f0f0" }}>
+                    <span style={{ color: "#6b7280", fontSize: 13 }}>Total</span>
+                    <span style={{ fontSize: 20, fontWeight: 900, color: themeColor }}>{fmtPrice(cartTotal, cartCurrency)}</span>
+                  </div>
+                  <button type="submit" disabled={paying} style={{ padding: 13, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: paying ? "wait" : "pointer", opacity: paying ? 0.7 : 1 }}>
+                    {paying ? "Processing…" : `Pay ${fmtPrice(cartTotal, cartCurrency)} →`}
+                  </button>
+                </form>
+              )}
+
+              {checkoutView === "paying" && (
+                <div style={{ textAlign: "center", paddingTop: 60 }}>
+                  <div style={{ fontSize: 52, marginBottom: 16 }}>💳</div>
+                  <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Waiting for payment…</p>
+                  <p style={{ fontSize: 13, color: "#9ca3af" }}>Complete payment in the window that opened. This page updates automatically.</p>
+                </div>
+              )}
+
+              {checkoutView === "success" && (
+                <div style={{ textAlign: "center", paddingTop: 48 }}>
+                  <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg,#10b981,#059669)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: "#fff", margin: "0 auto 16px" }}>✓</div>
+                  <p style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Payment Successful!</p>
+                  <p style={{ fontSize: 13, color: "#9ca3af" }}>Your order has been placed. The seller will be in touch shortly.</p>
+                  {orderId && <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 12, padding: "6px 14px", borderRadius: 8, background: "#f3f4f6", display: "inline-block" }}>Order #{orderId}</p>}
+                  {/* Track order CTA — links to the Awa Biz Suite customer portal */}
+                  <div style={{ marginTop: 24, padding: "16px", borderRadius: 16, background: `${themeColor}0d`, border: `1px solid ${themeColor}25` }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>📦 Want to track this order?</p>
+                    <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 12, lineHeight: 1.5 }}>Create a free Awa Biz Suite account to view your order history, get updates, and access AI tools.</p>
+                    <a href="/customer/profile" style={{ display: "inline-block", padding: "9px 20px", borderRadius: 10, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontSize: 12, fontWeight: 800, textDecoration: "none" }}>
+                      Create Free Account →
+                    </a>
+                    <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 8 }}>Already have an account?{" "}
+                      <a href="/customer/dashboard" style={{ color: themeColor, fontWeight: 700, textDecoration: "none" }}>Sign in</a>
+                    </p>
+                  </div>
+                  <button onClick={() => setCartOpen(false)} style={{ marginTop: 16, padding: "10px 24px", borderRadius: 50, border: "1px solid #e5e7eb", background: "none", color: "#374151", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Close</button>
+                </div>
+              )}
+
+              {checkoutView === "failed" && (
+                <div style={{ textAlign: "center", paddingTop: 60 }}>
+                  <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(239,68,68,.12)", border: "2px solid rgba(239,68,68,.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 16px" }}>✕</div>
+                  <p style={{ fontSize: 18, fontWeight: 900, marginBottom: 8, color: "#ef4444" }}>Payment Failed</p>
+                  <p style={{ fontSize: 13, color: "#9ca3af" }}>No charge was made. Please try again.</p>
+                  <button onClick={() => setCheckoutView("checkout")} style={{ marginTop: 20, padding: "11px 28px", borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, border: "none", cursor: "pointer" }}>Try Again</button>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer footer */}
+            {checkoutView === "items" && cart.length > 0 && (
+              <div style={{ padding: "12px 20px", borderTop: "1px solid #f0f0f0", position: "sticky", bottom: 0, background: "#fff" }}>
+                <button onClick={() => setCheckoutView("checkout")} style={{ width: "100%", padding: 13, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: "pointer" }}>Proceed to Checkout →</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Product grid */}
+      <div style={{ maxWidth: 1140, margin: "0 auto" }}>
+        <div className="sv-obs" style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+          <div style={{ display: "inline-block", background: themeColor + "18", color: themeColor, borderRadius: 999, padding: "0.3rem 0.9rem", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: ".9rem" }}>Live Shop</div>
+          <h2 style={{ fontSize: "clamp(1.6rem,3.5vw,2.3rem)", fontWeight: 800, color: palette.text, marginBottom: ".6rem" }}>{title}</h2>
+          {subtitle && <p style={{ color: palette.text + "88", fontSize: "1.05rem", maxWidth: 560, margin: "0 auto" }}>{subtitle}</p>}
+        </div>
+        {products.length === 0 ? (
+          <p style={{ textAlign: "center", color: palette.text + "55", fontSize: "1rem" }}>No products available yet.</p>
+        ) : (
+          <div className="sv-grid-3" style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${columns <= 2 ? "320px" : "270px"}, 1fr))`, gap: "1.75rem" }}>
+            {products.map((p, i) => {
+              const isFav = favs.includes(p.id);
+              return (
+                <div key={p.id} className="sv-obs sv-card" style={{ borderRadius: 18, overflow: "hidden", background: "#fff", border: `1px solid ${palette.text}0f`, boxShadow: "0 2px 12px rgba(0,0,0,.07)", transitionDelay: `${i * 60}ms` }}>
+                  <div style={{ position: "relative", aspectRatio: "1", overflow: "hidden" }}>
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} alt={p.name} className="sv-img-zoom" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" />
+                      : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${themeColor}18,${themeColor}08)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52 }}>🛍️</div>
+                    }
+                    <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 20, backdropFilter: "blur(8px)", background: p.inStock ? "rgba(16,185,129,.18)" : "rgba(239,68,68,.18)", color: p.inStock ? "#10b981" : "#ef4444", border: `1px solid ${p.inStock ? "rgba(16,185,129,.3)" : "rgba(239,68,68,.3)"}` }}>
+                      {p.inStock ? "● In Stock" : "✕ Sold Out"}
+                    </span>
+                    <button onClick={() => toggleFav(p.id)} style={{ position: "absolute", top: 8, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: isFav ? "rgba(239,68,68,.75)" : "rgba(0,0,0,.28)", backdropFilter: "blur(6px)", color: "#fff", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>♥</button>
+                  </div>
+                  <div style={{ padding: "1.25rem" }}>
+                    {p.category && <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: themeColor, margin: "0 0 6px" }}>{p.category}</p>}
+                    <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 6px", color: palette.text, lineHeight: 1.3 }}>{p.name}</h3>
+                    <p style={{ fontSize: 22, fontWeight: 900, color: themeColor, margin: "0 0 8px" }}>
+                      {fmtPrice(p.price, p.currency)}
+                      {p.unit && <span style={{ fontSize: 11, color: palette.text + "66", fontWeight: 500 }}> / {p.unit}</span>}
+                    </p>
+                    {p.description && <p style={{ fontSize: 12, color: palette.text + "88", margin: "0 0 14px", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>{p.description}</p>}
+                    {p.inStock
+                      ? <button onClick={() => { addToCart(p); }} style={{ display: "block", width: "100%", padding: 11, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 13, textAlign: "center", border: "none", cursor: "pointer" }}>{cta}</button>
+                      : <span style={{ display: "block", width: "100%", padding: 11, borderRadius: 12, background: palette.accent, color: palette.text + "55", fontWeight: 800, fontSize: 13, textAlign: "center" }}>Sold Out</span>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── Main SiteRenderer ─────────────────────────────────────────────────────────
 
 export function SiteRenderer({ data, className, immediateReveal }: {
@@ -644,6 +998,7 @@ export function SiteRenderer({ data, className, immediateReveal }: {
             {s.type === "hero" && <HeroSection {...props} logoUrl={data.logoUrl} vendorName={vendorName} />}
             {s.type === "about" && <AboutSection {...props} />}
             {s.type === "products" && <ProductsSection {...props} />}
+            {s.type === "shop" && <ShopSection {...props} siteSlug={data.slug} enabledGateways={data.enabledGateways} currency={data.currency} />}
             {s.type === "gallery" && <GallerySection {...props} />}
             {s.type === "testimonials" && <TestimonialsSection {...props} />}
             {s.type === "contact" && <ContactSection {...props} />}

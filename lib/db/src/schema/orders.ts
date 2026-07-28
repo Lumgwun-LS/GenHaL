@@ -1,14 +1,19 @@
-import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
 import { branchesTable } from "./branches";
 import { workersTable } from "./workers";
 import { postsTable } from "./posts";
+// Forward-reference — customersTable is defined after ordersTable in schema load order
+// so we reference the table name as a string to avoid circular imports.
+import { customersTable } from "./customers";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  /** Linked customer account — set when a customer claims or places the order while signed in */
+  customerId: integer("customer_id").references(() => customersTable.id, { onDelete: "set null" }),
   branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "set null" }),
   workerId: integer("worker_id").references(() => workersTable.id, { onDelete: "set null" }),
   // Set only for orders placed through a public "shop this post" link — scopes
@@ -25,6 +30,10 @@ export const ordersTable = pgTable("orders", {
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   notes: text("notes"),
   shippingAddress: text("shipping_address"),
+  /** Channel that created this order — 'embed' for embedded widget orders, null for dashboard-created */
+  source: text("source"),
+  /** True once stock has been decremented for this order — prevents double-decrement on webhook retries */
+  stockApplied: boolean("stock_applied").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

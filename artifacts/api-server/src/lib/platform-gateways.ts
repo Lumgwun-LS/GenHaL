@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "./encryption";
 import { sendSlackAlert } from "./slack";
 
-export const GATEWAY_PROVIDERS = ["stripe", "paystack", "paypal", "remita", "flutterwave", "nomba"] as const;
+export const GATEWAY_PROVIDERS = ["stripe", "paystack", "paypal", "remita", "flutterwave", "nomba", "squad", "interswitch"] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 export interface GatewayFieldDef {
@@ -137,6 +137,52 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
       }
     },
   },
+  squad: {
+    label: "Squad",
+    fields: [
+      { key: "secretKey", label: "Secret key", secret: true },
+      { key: "webhookSecret", label: "Webhook secret (optional — used for signature verification)", secret: true, optional: true },
+    ],
+    liveVerification: true,
+    test: async (creds) => {
+      const { squadBase } = await import("./squad");
+      const base = squadBase(creds.secretKey);
+      const res = await fetch(`${base}/bank/list`, {
+        headers: { Authorization: `Bearer ${creds.secretKey}` },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? `Squad rejected the key (HTTP ${res.status})`);
+      }
+    },
+  },
+  interswitch: {
+    label: "Interswitch",
+    fields: [
+      { key: "clientId",     label: "Client ID",      secret: false },
+      { key: "secretKey",    label: "Secret key",     secret: true },
+      { key: "merchantCode", label: "Merchant code",  secret: false },
+      { key: "payItemId",    label: "Pay item ID",    secret: false },
+      { key: "env",          label: "Environment (sandbox or production)", secret: false },
+    ],
+    liveVerification: true,
+    test: async (creds) => {
+      const { interswitchBase } = await import("./interswitch");
+      const base = interswitchBase(creds.env);
+      const res = await fetch(`${base}/passport/oauth/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(`${creds.clientId}:${creds.secretKey}`).toString("base64")}`,
+        },
+        body: "grant_type=client_credentials",
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "(no body)");
+        throw new Error(`Interswitch auth failed (${res.status}): ${body}`);
+      }
+    },
+  },
   remita: {
     label: "Remita",
     fields: [
@@ -167,7 +213,15 @@ const ENV_FALLBACK: Partial<Record<GatewayProvider, Record<string, string | unde
     fallbackSecretKey: process.env.STRIPE_SECRET_KEY_2,
   },
   paystack: { secretKey: process.env.PAYSTACK_SECRET_KEY, webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET },
-  paypal: { clientId: process.env.PAYPAL_CLIENT_ID, clientSecret: process.env.PAYPAL_CLIENT_SECRET },
+  paypal:   { clientId: process.env.PAYPAL_CLIENT_ID, clientSecret: process.env.PAYPAL_CLIENT_SECRET },
+  squad:    { secretKey: process.env.SQUAD_SECRET_KEY, webhookSecret: process.env.SQUAD_WEBHOOK_SECRET },
+  interswitch: {
+    clientId:     process.env.INTERSWITCH_CLIENT_ID,
+    secretKey:    process.env.INTERSWITCH_SECRET_KEY,
+    merchantCode: process.env.INTERSWITCH_MERCHANT_CODE,
+    payItemId:    process.env.INTERSWITCH_PAY_ITEM_ID,
+    env:          process.env.INTERSWITCH_ENV,
+  },
 };
 
 /**

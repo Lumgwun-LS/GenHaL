@@ -15,8 +15,12 @@ export const vendorPaymentCredentialsTable = pgTable("vendor_payment_credentials
     .references(() => vendorsTable.id, { onDelete: "cascade" }),
   stripeSecretEncrypted: text("stripe_secret_encrypted"),    // iv:authTag:ciphertext hex
   paystackSecretEncrypted: text("paystack_secret_encrypted"),
+  squadSecretEncrypted: text("squad_secret_encrypted"),
+  interswitchSecretEncrypted: text("interswitch_secret_encrypted"),
   stripeTestPassed: boolean("stripe_test_passed").notNull().default(false),
   paystackTestPassed: boolean("paystack_test_passed").notNull().default(false),
+  squadTestPassed: boolean("squad_test_passed").notNull().default(false),
+  interswitchTestPassed: boolean("interswitch_test_passed").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

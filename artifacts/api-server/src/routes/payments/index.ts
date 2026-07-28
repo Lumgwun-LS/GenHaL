@@ -10,6 +10,8 @@ import paypalRouter from "./paypal";
 import flutterwaveRouter, { FLUTTERWAVE_BASE } from "./flutterwave";
 import nombaRouter, { NOMBA_BASE, getNombaCreds, issueNombaToken } from "./nomba";
 import remitaRouter from "./remita";
+import squadRouter from "./squad";
+import interswitchRouter from "./interswitch";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField, callWithPlatformStripe, getPlatformCredentials } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
@@ -34,6 +36,8 @@ router.use(paypalRouter);
 router.use(flutterwaveRouter);
 router.use(nombaRouter);
 router.use(remitaRouter);
+router.use(squadRouter);
+router.use(interswitchRouter);
 
 /**
  * POST /payments/:id/refund
@@ -235,6 +239,37 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       res.status(502).json({ error: `PayPal refund failed (${refundRes.status}): ${text}` });
       return;
     }
+  } else if (payment.provider === "squad") {
+    const { resolveSquadKey, squadRefundTransaction, squadVerifyTransaction } = await import("../lib/squad");
+    const squadKey = await resolveSquadKey().catch(() => null);
+    if (!squadKey) {
+      res.status(503).json({ error: "Squad is not configured. Add a Squad key in Admin → Payment Gateways." });
+      return;
+    }
+    // Resolve the gateway transaction reference (Squad uses a separate gatewayTransactionRef)
+    const verifyResult = await squadVerifyTransaction(squadKey, payment.providerReference).catch(() => null);
+    const gatewayRef = (verifyResult?.data as { gateway_ref?: string })?.gateway_ref ?? payment.providerReference;
+    await squadRefundTransaction(squadKey, {
+      gatewayTransactionRef: gatewayRef,
+      transactionRef:        payment.providerReference,
+      refundType:            "full",
+      reasonForRefund:       "Refund requested",
+    });
+  } else if (payment.provider === "interswitch") {
+    const { resolveInterswitchCreds: resolveISCreds } = await import("../lib/vendor-keys");
+    const { interswitchRefund: isRefund } = await import("../lib/interswitch");
+    const isCreds = await resolveISCreds().catch(() => null);
+    if (!isCreds) {
+      res.status(503).json({ error: "Interswitch is not configured. Add credentials in Admin → Payment Gateways." });
+      return;
+    }
+    const requestRef = `IS-REF-${Date.now()}`;
+    await isRefund(isCreds, {
+      requestRef,
+      transactionRef: payment.providerReference,
+      amount: Math.round(parseFloat(payment.amount) * 100),
+      reason: "Refund requested",
+    });
   } else if (payment.provider === "remita") {
     // Remita has no generic refund API — reversals must be requested directly
     // with Remita/the bank and reconciled manually. Revert the "refunding" claim
