@@ -62,6 +62,7 @@ import developerRouter from "./developer";
 import oauthRouter from "./oauth";
 import platformPartnersRouter from "./platform-partners";
 import connectedBusinessRouter from "./connected-business";
+import embedRouter from "./embed";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -116,6 +117,9 @@ router.use(realEstatePublicRouter);
 
 // Public: Platform Partner doc portals (/docs/:slug) + Git push webhooks (no auth)
 router.use(platformPartnersRouter);
+
+// Public: Embed widget JS + service manifest (key-based auth, no Clerk)
+router.use(embedRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

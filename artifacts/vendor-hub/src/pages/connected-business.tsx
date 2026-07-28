@@ -5,14 +5,15 @@
  *
  * Accessed at /connected-business (auth-gated).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   GitBranch, Zap, Globe, Link2, RefreshCw, CheckCircle2,
-  AlertCircle, Loader2, ExternalLink, Eye, Copy, Settings,
-  Github, ArrowRight, BookOpen, Wifi, WifiOff,
+  AlertCircle, Loader2, ExternalLink, Eye, EyeOff, Copy, Settings,
+  Github, ArrowRight, BookOpen, Wifi, WifiOff, KeyRound, Code2,
+  Plug2, GitPullRequest, Smartphone,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ type Profile = {
   docGeneratedAt: string | null;
   docChangelog: string | null;
   createdAt: string;
+  subscriptionTier: string | null;
 };
 
 function copyToClipboard(text: string) {
@@ -404,6 +406,244 @@ function ProfilePanel({ profile, onRefresh }: { profile: Profile; onRefresh: () 
   );
 }
 
+// ─── Integration Panel ───────────────────────────────────────────────────────
+
+type EmbedKey = {
+  id: number;
+  prefix: string;
+  masked: string;
+  isActive: boolean;
+  createdAt: string;
+};
+type EmbedKeyResponse = { key: EmbedKey; rawKey?: string; isNew?: boolean };
+
+function IntegrationPanel({ profile }: { profile: Profile }) {
+  const [keyData, setKeyData] = useState<EmbedKeyResponse | null>(null);
+  const [rawKey, setRawKey] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [rotating, setRotating] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushResult, setPushResult] = useState<{ ok?: boolean; prUrl?: string; error?: string } | null>(null);
+  const [snippetTab, setSnippetTab] = useState<"html" | "react" | "rn">("html");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const host = typeof window !== "undefined" ? (import.meta.env.VITE_API_URL ?? window.location.origin) : "";
+  const apiBase = `${host}/api`;
+
+  useEffect(() => {
+    fetch(`${apiBase}/connected-business/embed-key`, { credentials: "include" })
+      .then(r => r.json())
+      .then((data: EmbedKeyResponse) => {
+        setKeyData(data);
+        if (data.rawKey) setRawKey(data.rawKey);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const displayKey = rawKey ?? keyData?.key?.masked ?? "";
+
+  function copyText(text: string, id: string) {
+    navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 1800); });
+  }
+
+  async function rotateKey() {
+    if (!window.confirm("Rotate your embed API key? Your current key will stop working immediately.")) return;
+    setRotating(true);
+    try {
+      const r = await fetch(`${apiBase}/connected-business/embed-key/rotate`, { method: "POST", credentials: "include" });
+      const data: EmbedKeyResponse = await r.json();
+      setKeyData(data);
+      if (data.rawKey) { setRawKey(data.rawKey); setRevealed(true); }
+    } finally { setRotating(false); }
+  }
+
+  async function pushToRepo() {
+    if (!rawKey && !displayKey.startsWith("awa_sk_")) {
+      alert("Reveal or copy your API key first, then push so the integration files can include it.");
+      return;
+    }
+    setPushing(true);
+    setPushResult(null);
+    try {
+      const r = await fetch(`${apiBase}/connected-business/push-integration`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embedKey: rawKey ?? displayKey }),
+      });
+      const data = await r.json();
+      setPushResult(data);
+    } finally { setPushing(false); }
+  }
+
+  const scriptSrc = `${host}/api/embed.js`;
+  const keyVal = rawKey ?? keyData?.key?.masked ?? "awa_sk_your_key_here";
+
+  const htmlSnippet = `<script
+  src="${scriptSrc}"
+  data-key="${keyVal}"
+  data-theme="dark"
+  data-label="Services"
+  data-position="bottom-right">
+</script>`;
+
+  const reactSnippet = `import { useEffect } from 'react';
+
+export default function AwaWidget() {
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = '${scriptSrc}';
+    script.setAttribute('data-key', '${keyVal}');
+    script.setAttribute('data-theme', 'dark');
+    script.setAttribute('data-label', 'Services');
+    document.body.appendChild(script);
+    return () => { script.remove(); };
+  }, []);
+  return null;
+}`;
+
+  const rnSnippet = `import { TouchableOpacity, Text, Linking, StyleSheet } from 'react-native';
+
+// Full component: see the pushed file AwaWidget.native.jsx in your repo.
+// Or fetch services directly:
+const getServices = async () => {
+  const res = await fetch(
+    '${host}/api/embed/manifest?key=${keyVal}'
+  );
+  return res.json(); // { vendor, services }
+};`;
+
+  const TIER_FEATURES: Record<string, string[]> = {
+    free:       ["🛍️ Shop (storefront only)"],
+    basic:      ["🛍️ Shop", "📦 Order Tracking"],
+    starter:    ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support Form"],
+    pro:        ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback"],
+    connected:  ["🛍️ Shop", "💳 Payments", "📦 Order Tracking", "💬 Support", "📧 Newsletter", "📞 Voice Callback", "📱 Social Feed", "🔗 Developer API"],
+    enterprise: ["Everything in Connected + White-label customisation"],
+  };
+  const tier = profile.subscriptionTier ?? "free";
+  const tierServices = TIER_FEATURES[tier] ?? TIER_FEATURES.free;
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-6">
+      {/* API Key card */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold">Embed API Key</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          This key authenticates your embedded widget. It only has read + embed scope — safe to use in frontend code.
+        </p>
+        {rawKey && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-300">Save this key — it won't be shown again after you leave this page.</p>
+          </div>
+        )}
+        <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 p-3">
+          <code className="flex-1 text-xs font-mono truncate text-primary">
+            {revealed || rawKey ? displayKey : keyData?.key?.masked ?? ""}
+          </code>
+          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setRevealed(v => !v)}>
+            {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copyText(displayKey, "key")}>
+            {copied === "key" ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive" onClick={rotateKey} disabled={rotating}>
+            {rotating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            Rotate Key
+          </Button>
+        </div>
+      </div>
+
+      {/* Snippet tabs */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Code2 className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold">Embed Snippets</h3>
+        </div>
+        <div className="flex rounded-lg border border-border/40 overflow-hidden text-xs">
+          {(["html", "react", "rn"] as const).map(t => (
+            <button key={t} onClick={() => setSnippetTab(t)}
+              className={`flex-1 py-2 font-semibold transition-colors ${snippetTab === t ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:text-foreground"}`}>
+              {t === "html" ? "HTML" : t === "react" ? "React" : "React Native"}
+            </button>
+          ))}
+        </div>
+        <div className="relative rounded-lg border border-border/40 bg-muted/30">
+          <pre className="p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+            {snippetTab === "html" ? htmlSnippet : snippetTab === "react" ? reactSnippet : rnSnippet}
+          </pre>
+          <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-7 w-7"
+            onClick={() => copyText(snippetTab === "html" ? htmlSnippet : snippetTab === "react" ? reactSnippet : rnSnippet, snippetTab)}>
+            {copied === snippetTab ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+        {snippetTab === "rn" && (
+          <p className="text-xs text-muted-foreground">Push to your repo to get the full <code className="font-mono">AwaWidget.native.jsx</code> component with a bottom-sheet modal.</p>
+        )}
+      </div>
+
+      {/* Services included on this tier */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Plug2 className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-bold">Services on Your Plan</h3>
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize">{tier}</Badge>
+        </div>
+        <div className="rounded-lg border border-border/40 divide-y divide-border/30">
+          {tierServices.map(s => (
+            <div key={s} className="flex items-center gap-2.5 px-3 py-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-xs">{s}</span>
+            </div>
+          ))}
+        </div>
+        {tier !== "enterprise" && (
+          <a href={`${host}/pricing`} className="text-xs text-primary hover:underline flex items-center gap-1">
+            <ArrowRight className="w-3 h-3" /> Upgrade to unlock more services
+          </a>
+        )}
+      </div>
+
+      {/* Push to repo */}
+      {profile.gitRepo && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <GitPullRequest className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-bold">Push to Repository</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Automatically create a branch <code className="font-mono bg-muted/40 px-1 rounded">awa-integration</code> in{" "}
+            <strong>{profile.gitRepo}</strong> with ready-to-use integration files and a Pull Request.
+          </p>
+          <Button className="w-full h-9 font-bold gap-2" onClick={pushToRepo} disabled={pushing}>
+            {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitPullRequest className="w-4 h-4" />}
+            {pushing ? "Creating PR…" : "Push Integration Files & Open PR"}
+          </Button>
+          {pushResult && (
+            <div className={`rounded-lg p-3 text-xs flex items-start gap-2 ${pushResult.ok ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300" : "bg-destructive/10 border border-destructive/20 text-destructive"}`}>
+              {pushResult.ok ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+              <span>
+                {pushResult.ok
+                  ? <>PR created! <a href={pushResult.prUrl} target="_blank" rel="noopener noreferrer" className="underline font-semibold">View Pull Request →</a></>
+                  : pushResult.error}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ConnectedBusinessPage() {
@@ -485,10 +725,11 @@ export default function ConnectedBusinessPage() {
             </div>
 
             <Tabs defaultValue="vcs">
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="vcs" className="gap-1.5 text-xs"><GitBranch className="w-3.5 h-3.5" />VCS</TabsTrigger>
-                <TabsTrigger value="docs" className="gap-1.5 text-xs"><Zap className="w-3.5 h-3.5" />Docs</TabsTrigger>
-                <TabsTrigger value="profile" className="gap-1.5 text-xs"><Settings className="w-3.5 h-3.5" />Profile</TabsTrigger>
+              <TabsList className="grid grid-cols-4 w-full">
+                <TabsTrigger value="vcs" className="gap-1 text-xs"><GitBranch className="w-3 h-3" />VCS</TabsTrigger>
+                <TabsTrigger value="docs" className="gap-1 text-xs"><Zap className="w-3 h-3" />Docs</TabsTrigger>
+                <TabsTrigger value="profile" className="gap-1 text-xs"><Settings className="w-3 h-3" />Profile</TabsTrigger>
+                <TabsTrigger value="integration" className="gap-1 text-xs"><Plug2 className="w-3 h-3" />Embed</TabsTrigger>
               </TabsList>
               <TabsContent value="vcs" className="mt-4">
                 <Card><CardHeader className="pb-3"><CardTitle className="text-base">Version Control</CardTitle><CardDescription>Connect your GitHub, GitLab, or Bitbucket repository so AI can read your codebase.</CardDescription></CardHeader>
@@ -501,6 +742,15 @@ export default function ConnectedBusinessPage() {
               <TabsContent value="profile" className="mt-4">
                 <Card><CardHeader className="pb-3"><CardTitle className="text-base">Profile Settings</CardTitle><CardDescription>Update your platform name, description, base URL, and logo.</CardDescription></CardHeader>
                   <CardContent><ProfilePanel profile={profile} onRefresh={refresh} /></CardContent></Card>
+              </TabsContent>
+              <TabsContent value="integration" className="mt-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2"><Plug2 className="w-4 h-4 text-primary" /> Embed & Integration</CardTitle>
+                    <CardDescription>Drop one script tag into your website or app and let your users access Awa services — no Awa account required.</CardDescription>
+                  </CardHeader>
+                  <CardContent><IntegrationPanel profile={profile} /></CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
 
