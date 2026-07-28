@@ -27,6 +27,7 @@ import {
   orderItemsTable,
   vendorsTable,
 } from "@workspace/db";
+import { sendCustomerProfileCompletionEmail } from "../lib/customer-emails";
 
 const router: IRouter = Router();
 export default router;
@@ -118,6 +119,14 @@ router.post("/customer/onboarding", async (req, res): Promise<void> => {
       title: "Welcome to Awa Biz Suite! 🎉",
       message: "Your customer account is ready. Browse your order history, discover vendors, and unlock the Awajimaa AI Dashboard by completing your profile.",
     }).catch(() => {});
+  }
+
+  // Send "complete your profile" email for Google/Gmail signups (profileCompleted=false)
+  if (!profileCompleted) {
+    sendCustomerProfileCompletionEmail({
+      customerEmail: created.email,
+      customerName:  created.name,
+    }).catch(() => {}); // best-effort
   }
 
   res.status(201).json({ customer: created });

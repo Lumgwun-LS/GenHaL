@@ -34,6 +34,7 @@ import {
   embedVisitsTable,
 } from "@workspace/db";
 import { resolvePaystackKey } from "../lib/vendor-keys";
+import { sendCustomerOrderConfirmationEmail } from "../lib/customer-emails";
 
 const router = Router();
 export default router;
@@ -350,6 +351,7 @@ router.post("/embed/checkout", async (req, res): Promise<void> => {
   if (!key)           { res.status(400).json({ error: "key is required" }); return; }
   if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ error: "items must be a non-empty array" }); return; }
   if (!customer?.name || !customer?.email) { res.status(400).json({ error: "customer name and email are required" }); return; }
+  if (!customer?.address?.trim()) { res.status(400).json({ error: "Delivery address is required" }); return; }
   if (!gateway)       { res.status(400).json({ error: "gateway is required" }); return; }
 
   // Strictly validate every item before any DB work
@@ -448,20 +450,38 @@ router.post("/embed/checkout", async (req, res): Promise<void> => {
   if (!order) { res.status(500).json({ error: "Failed to create order" }); return; }
 
   // Create order items (one row per deduplicated product)
-  await db.insert(orderItemsTable).values(
-    dedupedItems.map(item => {
-      const p = productMap.get(item.productId)!;
-      const unitPrice = parseFloat(p.price as string);
-      return {
-        orderId: order.id,
-        productId: item.productId,
-        productName: p.name,
-        quantity: item.qty,
-        unitPrice: unitPrice.toFixed(2),
-        totalPrice: (unitPrice * item.qty).toFixed(2),
-      };
-    }),
-  );
+  const orderItemPayloads = dedupedItems.map(item => {
+    const p = productMap.get(item.productId)!;
+    const unitPrice = parseFloat(p.price as string);
+    return {
+      orderId:     order.id,
+      productId:   item.productId,
+      productName: p.name,
+      quantity:    item.qty,
+      unitPrice:   unitPrice.toFixed(2),
+      totalPrice:  (unitPrice * item.qty).toFixed(2),
+    };
+  });
+  await db.insert(orderItemsTable).values(orderItemPayloads);
+
+  // Fire-and-forget order confirmation email with profile completion CTA
+  const [vendorForEmail] = await db
+    .select({ businessName: vendorsTable.businessName })
+    .from(vendorsTable).where(eq(vendorsTable.id, ctx.vendorId)).limit(1);
+  sendCustomerOrderConfirmationEmail({
+    customerEmail:   customer.email.trim().toLowerCase(),
+    customerName:    customer.name.trim(),
+    orderId:         order.id,
+    vendorName:      vendorForEmail?.businessName ?? "Your vendor",
+    items:           orderItemPayloads.map(i => ({
+      name:      i.productName,
+      quantity:  i.quantity,
+      unitPrice: parseFloat(i.unitPrice),
+    })),
+    totalAmount:     totalAmount,
+    currency,
+    shippingAddress: customer.address!.trim(),
+  }).catch(() => {});
 
   // ── Paystack ──────────────────────────────────────────────────────────────
   if (gateway === "paystack") {
@@ -1108,7 +1128,7 @@ function buildWidgetScript(): string {
       + '<div class="awa-form-field"><label>Full Name *</label><input name="name" required placeholder="John Doe" value="'+esc(cartCustomer.name)+'"></div>'
       + '<div class="awa-form-field"><label>Email *</label><input name="email" type="email" required placeholder="you@example.com" value="'+esc(cartCustomer.email)+'"></div>'
       + '<div class="awa-form-field"><label>Phone</label><input name="phone" placeholder="+234 800 000 0000" value="'+esc(cartCustomer.phone)+'"></div>'
-      + '<div class="awa-form-field"><label>Delivery Address</label><input name="address" placeholder="Optional" value="'+esc(cartCustomer.address)+'"></div>'
+      + '<div class="awa-form-field"><label>Delivery Address *</label><input name="address" required placeholder="Street address, City, State" value="'+esc(cartCustomer.address)+'"></div>'
       + gwHtml
       + '<div class="awa-cart-total" style="margin-top:0">'
       + '<span style="font-size:13px;color:'+muted+'">Total</span>'
@@ -1136,7 +1156,14 @@ function buildWidgetScript(): string {
         cartCustomer.name    = form.elements.namedItem("name").value;
         cartCustomer.email   = form.elements.namedItem("email").value;
         cartCustomer.phone   = form.elements.namedItem("phone").value || "";
-        cartCustomer.address = form.elements.namedItem("address").value || "";
+        cartCustomer.address = (form.elements.namedItem("address").value || "").trim();
+        if (!cartCustomer.address) {
+          var addrEl = form.elements.namedItem("address");
+          addrEl.style.border = "1.5px solid #ef4444";
+          addrEl.placeholder = "Delivery address is required";
+          addrEl.focus();
+          return;
+        }
         submitCheckout();
       });
     }

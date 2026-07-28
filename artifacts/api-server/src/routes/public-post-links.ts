@@ -28,6 +28,7 @@ import {
 } from "@workspace/db";
 import { resolveStripeKey, resolvePaystackKey, getPaymentMethodAvailability, type TierCheckable } from "../lib/vendor-keys";
 import { GATEWAY_DEFS, getPlatformCredentials } from "../lib/platform-gateways";
+import { sendCustomerOrderConfirmationEmail } from "../lib/customer-emails";
 import { createRemitaCheckout } from "./payments/remita";
 import { createFlutterwaveCheckout } from "./payments/flutterwave";
 import { createNombaCheckout } from "./payments/nomba";
@@ -437,16 +438,21 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   if (!link) { res.status(404).json({ error: "Link not found or no longer available" }); return; }
   if (link.post.linkMode !== "checkout") { res.status(400).json({ error: "This link does not accept checkout" }); return; }
 
-  const { name, email, phone, items, provider: requestedProvider } = req.body as {
+  const { name, email, phone, address, items, provider: requestedProvider } = req.body as {
     name?: string;
     email?: string;
     phone?: string;
+    address?: string;
     items?: { productId: number; quantity: number }[];
     provider?: string;
   };
 
   if (!name || !email || !items?.length) {
     res.status(400).json({ error: "name, email and items are required" });
+    return;
+  }
+  if (!address?.trim()) {
+    res.status(400).json({ error: "Delivery address is required" });
     return;
   }
 
@@ -514,16 +520,17 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
   }
 
   const [order] = await db.insert(ordersTable).values({
-    vendorId: link.vendor.id,
-    sourcePostId: link.post.id,
-    customerName: name,
-    customerEmail: email,
-    customerPhone: phone ?? null,
-    status: "pending",
-    paymentStatus: "unpaid",
-    currency: link.vendor.defaultCurrency ?? "USD",
-    totalAmount: totalAmount.toString(),
-    notes: `Placed via social post link`,
+    vendorId:        link.vendor.id,
+    sourcePostId:    link.post.id,
+    customerName:    name,
+    customerEmail:   email,
+    customerPhone:   phone ?? null,
+    shippingAddress: address!.trim(),
+    status:          "pending",
+    paymentStatus:   "unpaid",
+    currency:        link.vendor.defaultCurrency ?? "USD",
+    totalAmount:     totalAmount.toString(),
+    notes:           `Placed via social post link`,
   }).returning();
 
   await db.insert(orderItemsTable).values(
@@ -536,6 +543,18 @@ router.post("/public/post-links/:token/checkout", async (req, res): Promise<void
       totalPrice: (i.quantity * i.unitPrice).toString(),
     })),
   );
+
+  // Fire-and-forget order confirmation + profile CTA email
+  sendCustomerOrderConfirmationEmail({
+    customerEmail:   email,
+    customerName:    name,
+    orderId:         order!.id,
+    vendorName:      link.vendor.businessName ?? link.vendor.name ?? "Your vendor",
+    items:           orderItems.map((i) => ({ name: i.productName, quantity: i.quantity, unitPrice: i.unitPrice })),
+    totalAmount,
+    currency,
+    shippingAddress: address!.trim(),
+  }).catch(() => {});
 
   // Atomically decrement stock for every item in a transaction.
   // The WHERE stock_quantity >= quantity guard means two concurrent checkouts

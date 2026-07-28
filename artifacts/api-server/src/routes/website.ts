@@ -131,6 +131,12 @@ router.post("/website/publish", async (req, res): Promise<void> => {
     .where(eq(vendorWebsitesTable.vendorId, vendor.id))
     .returning();
 
+  // Mirror the live URL onto the vendor profile so it appears on their account page
+  await db
+    .update(vendorsTable)
+    .set({ website: `/awajimaaai/${updated!.slug}` })
+    .where(eq(vendorsTable.id, vendor.id));
+
   res.json({
     ...updated,
     createdAt: updated!.createdAt.toISOString(),
@@ -151,6 +157,12 @@ router.post("/website/unpublish", async (req, res): Promise<void> => {
     .returning();
 
   if (!updated) { res.status(404).json({ error: "No website found" }); return; }
+
+  // Clear the website URL from the vendor profile
+  await db
+    .update(vendorsTable)
+    .set({ website: null })
+    .where(eq(vendorsTable.id, vendor.id));
 
   res.json({
     ...updated,

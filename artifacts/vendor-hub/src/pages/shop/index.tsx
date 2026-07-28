@@ -97,6 +97,7 @@ export default function ShopLinkPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -186,6 +187,10 @@ export default function ShopLinkPage() {
       toast.error("Please enter your name and email");
       return;
     }
+    if (!address.trim()) {
+      toast.error("Please enter your delivery address");
+      return;
+    }
     if (!activeProvider) {
       toast.error("This vendor has no payment method configured yet.");
       return;
@@ -205,7 +210,8 @@ export default function ShopLinkPage() {
         body: JSON.stringify({
           name,
           email,
-          phone: phone || undefined,
+          phone:    phone   || undefined,
+          address:  address.trim(),
           items,
           provider: activeProvider,
         }),
@@ -496,6 +502,14 @@ export default function ShopLinkPage() {
               <Input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
               <Input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
               <Input placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              {link.linkMode === "checkout" && (
+                <Input
+                  placeholder="Delivery address *"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className={!address.trim() && submitting ? "border-destructive" : ""}
+                />
+              )}
               {link.linkMode === "interest" && (
                 <Textarea placeholder="Anything you'd like to add? (optional)" value={message} onChange={(e) => setMessage(e.target.value)} />
               )}

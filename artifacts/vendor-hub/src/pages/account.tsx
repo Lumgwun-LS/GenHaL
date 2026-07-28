@@ -9,6 +9,7 @@ import {
   useGetVendorDeletionEligibility,
   useRequestVendorDeletion,
   useVerifyVendorDeletion,
+  useGetWebsite,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, CheckCircle2, Loader2, Mic, Key, Webhook, Plus, Trash2, Copy, CheckCheck, ExternalLink, Eye, EyeOff, Code2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Mic, Key, Webhook, Plus, Trash2, Copy, CheckCheck, ExternalLink, Eye, EyeOff, Code2, Globe, Share2, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
@@ -103,6 +104,125 @@ function PostReminderLeadSection({ vendorId, currentLeadMinutes }: { vendorId: n
           {updateVendor.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           Save
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+function WebsiteSection() {
+  const { data: websiteData, isLoading } = useGetWebsite();
+  const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  const site = websiteData as unknown as Record<string, unknown> | undefined;
+  const isPublished = !!(site?.published);
+  const slug = site?.slug as string | undefined;
+  const publicUrl = slug
+    ? `${window.location.origin}${BASE_URL}/awajimaaai/${slug}`
+    : "";
+
+  function copyUrl() {
+    if (!publicUrl) return;
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function shareUrl() {
+    if (!publicUrl) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: (site?.pageTitle as string) || "My Website", url: publicUrl });
+        setShared(true);
+        setTimeout(() => setShared(false), 2000);
+      } catch {
+        // user cancelled — do nothing
+      }
+    } else {
+      // Fall back to copy on browsers without Web Share API
+      copyUrl();
+    }
+  }
+
+  if (isLoading) return null;
+  if (!site) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-violet-500" />
+            <CardTitle className="text-base">My Website</CardTitle>
+          </div>
+          {isPublished
+            ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/20">● Published</Badge>
+            : <Badge variant="secondary">Draft</Badge>
+          }
+        </div>
+        <CardDescription>
+          {isPublished
+            ? "Your website is live. Share it with customers."
+            : "Your website is saved as a draft. Publish it to make it live."}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        {isPublished && publicUrl && (
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={publicUrl}
+              className="text-xs font-mono bg-muted/40 flex-1 min-w-0"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5"
+              onClick={copyUrl}
+              title="Copy URL"
+            >
+              {copied
+                ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> Copied</>
+                : <><Copy className="w-3.5 h-3.5" /> Copy</>
+              }
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5"
+              onClick={shareUrl}
+              title="Share website"
+            >
+              {shared
+                ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> Shared</>
+                : <><Share2 className="w-3.5 h-3.5" /> Share</>
+              }
+            </Button>
+            <Button size="sm" variant="outline" className="shrink-0" asChild title="Open website">
+              <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </Button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" variant="outline" className="gap-1.5" asChild>
+            <a href={`${BASE_URL}/website`}>
+              <Globe className="w-3.5 h-3.5" />
+              {isPublished ? "Edit Website" : "Open Website Builder"}
+            </a>
+          </Button>
+          {!isPublished && (
+            <p className="text-xs text-muted-foreground">
+              Publish your site from the builder to get a shareable link.
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -356,6 +476,8 @@ export default function Account() {
         <h1 className="text-3xl font-bold tracking-tight">Account</h1>
         <p className="text-muted-foreground">Manage your profile details and account data.</p>
       </div>
+
+      <WebsiteSection />
 
       <PostReminderLeadSection
         vendorId={myVendor.id}
