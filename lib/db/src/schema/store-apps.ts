@@ -9,6 +9,8 @@ export const storeAppsTable = pgTable("store_apps", {
   tagline: text("tagline").notNull(),
   description: text("description").notNull(),
   category: text("category").notNull(),
+  // Multi-category support — up to 5; category above stays as the primary for search/filter compat
+  categories: jsonb("categories").$type<string[]>().notNull().default([]),
   // platform: android | ios | web | all
   platform: text("platform").notNull().default("android"),
   iconUrl: text("icon_url").notNull(),

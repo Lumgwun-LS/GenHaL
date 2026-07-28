@@ -678,11 +678,51 @@ const PLATFORM_STORE_LABEL: Record<string, string> = {
 
 function emptyForm() {
   return {
-    name: "", tagline: "", description: "", category: AFRICA_CATS[0],
+    name: "", tagline: "", description: "", categories: [AFRICA_CATS[0]] as string[],
     platform: "android", webUrl: "", currentVersion: "", packageName: "",
     iconUrl: "", downloadUrl: "", screenshots: [] as string[],
     isFeatured: false,
   };
+}
+
+function CategoryPicker({ selected, onChange, all, max = 5 }: {
+  selected: string[]; onChange: (v: string[]) => void; all: string[]; max?: number;
+}) {
+  function toggle(cat: string) {
+    if (selected.includes(cat)) onChange(selected.filter(c => c !== cat));
+    else if (selected.length < max) onChange([...selected, cat]);
+  }
+  const atMax = selected.length >= max;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#8892a4", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+          Categories * <span style={{ fontWeight: 400, textTransform: "none" as const }}>— up to {max}</span>
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: selected.length > 0 ? "#00c853" : "#8892a4" }}>{selected.length}/{max}</span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+        {all.map(cat => {
+          const active = selected.includes(cat);
+          const disabled = !active && atMax;
+          return (
+            <button key={cat} type="button" onClick={() => toggle(cat)} disabled={disabled} style={{
+              padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: active ? 700 : 500,
+              cursor: disabled ? "not-allowed" : "pointer",
+              border: `1px solid ${active ? "#00c853" : disabled ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)"}`,
+              background: active ? "rgba(0,200,83,0.12)" : "transparent",
+              color: active ? "#00c853" : disabled ? "#2e3848" : "#8892a4",
+            }}>{active ? `✓ ${cat}` : cat}</button>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <div style={{ fontSize: 11, color: "#5a6478", marginTop: 5 }}>
+          Primary: <span style={{ color: "#00c853" }}>{selected[0]}</span>{selected.length > 1 && ` + ${selected.length - 1} more`}
+        </div>
+      )}
+    </div>
+  );
 }
 
 async function uploadFile(file: File): Promise<string> {
@@ -908,7 +948,8 @@ function OurAppsTab() {
     setEditing(app);
     setForm({
       name: app.name, tagline: app.tagline, description: app.description,
-      category: app.category, platform: app.platform,
+      categories: (app as any).categories?.length ? (app as any).categories : [app.category],
+      platform: app.platform,
       webUrl: app.webUrl ?? "", currentVersion: app.currentVersion ?? "",
       packageName: app.packageName ?? "",
       iconUrl: app.iconUrl, downloadUrl: app.downloadUrl,
@@ -933,8 +974,8 @@ function OurAppsTab() {
   }
 
   async function save() {
-    if (!form.name || !form.tagline || !form.description || !form.category) {
-      alert("Please fill in all required fields.");
+    if (!form.name || !form.tagline || !form.description || !form.categories?.length) {
+      alert("Please fill in all required fields including at least one category.");
       return;
     }
     setSaving(true);
@@ -1140,12 +1181,9 @@ function OurAppsTab() {
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             ), true)}
 
+            <CategoryPicker selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} all={AFRICA_CATS} />
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              {field("Category", (
-                <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                  {AFRICA_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              ), true)}
               {field("Platform", (
                 <select className="input" value={form.platform} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}>
                   {PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}

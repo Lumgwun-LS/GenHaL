@@ -91,6 +91,66 @@ function WalletCard({ dev }: { dev: Developer }) {
   );
 }
 
+// ── CategoryPicker ────────────────────────────────────────────────────────────
+
+function CategoryPicker({ selected, onChange, all, max = 5, label = "Categories *" }: {
+  selected: string[];
+  onChange: (v: string[]) => void;
+  all: string[];
+  max?: number;
+  label?: string;
+}) {
+  function toggle(cat: string) {
+    if (selected.includes(cat)) {
+      onChange(selected.filter(c => c !== cat));
+    } else if (selected.length < max) {
+      onChange([...selected, cat]);
+    }
+  }
+  const atMax = selected.length >= max;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <label className="form-label" style={{ marginBottom: 0 }}>{label} <span style={{ color: "#8892a4", fontWeight: 400 }}>— select up to {max}</span></label>
+        <span style={{ fontSize: 12, fontWeight: 700, color: selected.length > 0 ? "#00c853" : "#8892a4" }}>
+          {selected.length}/{max}
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+        {all.map(cat => {
+          const active = selected.includes(cat);
+          const disabled = !active && atMax;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => toggle(cat)}
+              disabled={disabled}
+              style={{
+                padding: "5px 12px", borderRadius: 99, fontSize: 12, fontWeight: active ? 700 : 500,
+                cursor: disabled ? "not-allowed" : "pointer",
+                border: `1.5px solid ${active ? "#00c853" : disabled ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)"}`,
+                background: active ? "rgba(0,200,83,0.12)" : disabled ? "transparent" : "rgba(255,255,255,0.03)",
+                color: active ? "#00c853" : disabled ? "#2e3848" : "#8892a4",
+                transition: "all 0.15s",
+              }}
+            >{active ? `✓ ${cat}` : cat}</button>
+          );
+        })}
+      </div>
+      {selected.length === 0 && (
+        <div style={{ fontSize: 11, color: "#ff5252", marginTop: 6 }}>Select at least one category</div>
+      )}
+      {selected.length > 0 && (
+        <div style={{ fontSize: 11, color: "#5a6478", marginTop: 6 }}>
+          Primary: <span style={{ color: "#00c853", fontWeight: 600 }}>{selected[0]}</span>
+          {selected.length > 1 && ` + ${selected.length - 1} more`}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PublishOverlay ────────────────────────────────────────────────────────────
 
 const PUBLISH_STAGES = [
@@ -354,7 +414,8 @@ function PublishOverlay({
 // ── AppSubmitForm ─────────────────────────────────────────────────────────────
 
 function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: App) => void }) {
-  const [form, setForm] = useState({ name: "", tagline: "", description: "", category: AFRICA_CATEGORIES[0], platform: "android", iconUrl: "", downloadUrl: "", webUrl: "", currentVersion: "", screenshots: "", packageName: "" });
+  const [form, setForm] = useState({ name: "", tagline: "", description: "", platform: "android", iconUrl: "", downloadUrl: "", webUrl: "", currentVersion: "", screenshots: "", packageName: "" });
+  const [categories, setCategories] = useState<string[]>([AFRICA_CATEGORIES[0]]);
   const [phase, setPhase] = useState<"idle" | "publishing" | "success" | "error">("idle");
   const [stageIndex, setStageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -392,6 +453,9 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
     if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) {
       setError("All fields marked * are required, including a download link."); return;
     }
+    if (categories.length === 0) {
+      setError("Select at least one category."); return;
+    }
     if (form.packageName && !/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(form.packageName)) {
       setError("Package name must follow reverse-domain format, e.g. com.example.myapp"); return;
     }
@@ -422,6 +486,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         method: "POST",
         body: JSON.stringify({
           ...form,
+          categories,
           screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [],
           packageName: form.packageName || undefined,
         }),
@@ -440,6 +505,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
     setStageIndex(0);
     setProgress(0);
     setError("");
+    setCategories([AFRICA_CATEGORIES[0]]);
   }
 
   function handlePayFee() {
@@ -462,14 +528,8 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
           </div>
         </div>
         <div><label className="form-label">Tagline *</label><input className="input" value={form.tagline} onChange={e => set("tagline", e.target.value)} placeholder="One sentence that describes your app" required /></div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div><label className="form-label">Category *</label>
-            <select className="input" value={form.category} onChange={e => set("category", e.target.value)}>
-              {AFRICA_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div><label className="form-label">Version</label><input className="input" value={form.currentVersion} onChange={e => set("currentVersion", e.target.value)} placeholder="1.0.0" /></div>
-        </div>
+        <CategoryPicker selected={categories} onChange={setCategories} all={AFRICA_CATEGORIES} />
+        <div><label className="form-label">Version</label><input className="input" value={form.currentVersion} onChange={e => set("currentVersion", e.target.value)} placeholder="1.0.0" /></div>
         <div><label className="form-label">Description *</label><textarea className="input" value={form.description} onChange={e => set("description", e.target.value)} placeholder="Detailed description..." style={{ minHeight: 100 }} required /></div>
         <div>
           <label className="form-label">Package / Bundle ID <span style={{ color: "#a78bfa" }}>(strongly recommended)</span></label>
@@ -1359,6 +1419,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
   const [step, setStep] = useState<LaunchStep>("upload");
   const [session, setSession] = useState<AiLaunchSession | null>(null);
   const [form, setForm] = useState<AiLaunchGeneratedData>({});
+  const [aiCategories, setAiCategories] = useState<string[]>([AFRICA_CATS[0]]);
   const [keywords, setKeywords] = useState("");
   const [features, setFeatures] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -1380,6 +1441,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
     setForm(ai);
     setKeywords((ai.keywords ?? []).join(", "));
     setFeatures((ai.features ?? []).join("\n"));
+    if (ai.category) setAiCategories([ai.category]);
   }
 
   function startPolling(sid: number) {
@@ -1442,6 +1504,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
     try {
       const payload = {
         ...form,
+        categories: aiCategories,
         keywords: keywords.split(",").map(k => k.trim()).filter(Boolean),
         features: features.split("\n").map(f => f.trim()).filter(Boolean),
         screenshots: form.screenshots ?? [],
@@ -1670,17 +1733,15 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
             <input className="input" value={form.tagline ?? ""} onChange={e => setF("tagline", e.target.value)} placeholder="One powerful sentence about your app" />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <label className="form-label">Category *</label>
-              <select className="input" value={form.category ?? AFRICA_CATS[8]} onChange={e => setF("category", e.target.value)}>
-                {AFRICA_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Version</label>
-              <input className="input" value={form.currentVersion ?? ""} onChange={e => setF("currentVersion", e.target.value)} placeholder="1.0.0" />
-            </div>
+          <CategoryPicker
+            selected={aiCategories}
+            onChange={setAiCategories}
+            all={AFRICA_CATS}
+            label="Categories * ✨ AI-suggested"
+          />
+          <div>
+            <label className="form-label">Version</label>
+            <input className="input" value={form.currentVersion ?? ""} onChange={e => setF("currentVersion", e.target.value)} placeholder="1.0.0" />
           </div>
 
           <div>

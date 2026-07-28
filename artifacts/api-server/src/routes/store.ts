@@ -168,6 +168,7 @@ function serializeApp(app: any, developer?: any) {
     tagline: app.tagline,
     description: app.description,
     category: app.category,
+    categories: (app.categories as string[])?.length > 0 ? (app.categories as string[]) : [app.category],
     platform: app.platform,
     iconUrl: app.iconUrl,
     screenshots: (app.screenshots as string[]) ?? [],
@@ -986,9 +987,14 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
   try {
     const dev = await requireDeveloper(req, res);
     if (!dev) return;
-    const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
+    const { name, tagline, description, categories: rawCategories, category: singleCategory, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
+    // Accept either a `categories` array (new) or a legacy `category` string
+    const categories: string[] = Array.isArray(rawCategories) && rawCategories.length > 0
+      ? rawCategories.slice(0, 5).filter(Boolean)
+      : singleCategory ? [String(singleCategory)] : [];
+    const category = categories[0] ?? null;
     if (!name || !tagline || !description || !category || !platform || !iconUrl) {
-      return void res.status(400).json({ error: "name, tagline, description, category, platform, iconUrl are required" });
+      return void res.status(400).json({ error: "name, tagline, description, at least one category, platform, iconUrl are required" });
     }
     if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl is required — every app must have a direct download or install link" });
 
@@ -1006,7 +1012,7 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
     const clerkUserId = (req as any).auth?.userId;
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
-      name, slug, tagline, description, category, platform, iconUrl,
+      name, slug, tagline, description, category, categories, platform, iconUrl,
       screenshots: screenshots ?? [],
       downloadUrl,
       webUrl: webUrl ?? null,
@@ -1033,11 +1039,16 @@ router.patch("/developers/me/apps/:id", requireAuth(), async (req, res) => {
     const appId = parseInt(String(req.params.id));
     const app = await db.query.storeAppsTable.findFirst({ where: and(eq(storeAppsTable.id, appId), eq(storeAppsTable.developerId, dev.id)) });
     if (!app) return void res.status(404).json({ error: "Not found" });
-    const { tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
+    const { tagline, description, categories: rawCategories, category: singleCategory, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion } = req.body;
+    const newCats: string[] | undefined = Array.isArray(rawCategories) && rawCategories.length > 0
+      ? rawCategories.slice(0, 5).filter(Boolean)
+      : singleCategory ? [String(singleCategory)] : undefined;
+    const newCategory = newCats ? newCats[0] : undefined;
     const [updated] = await db.update(storeAppsTable).set({
       tagline: tagline ?? app.tagline,
       description: description ?? app.description,
-      category: category ?? app.category,
+      category: newCategory ?? app.category,
+      ...(newCats ? { categories: newCats } : {}),
       platform: platform ?? app.platform,
       iconUrl: iconUrl ?? app.iconUrl,
       screenshots: screenshots ?? app.screenshots,
@@ -2603,9 +2614,13 @@ router.get("/admin/platform-apps", requireAuth(), async (req: any, res: any) => 
 router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) => {
   try {
     if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
-    const { name, tagline, description, category, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
+    const { name, tagline, description, categories: rawCategories, category: singleCategory, platform, iconUrl, screenshots, downloadUrl, webUrl, currentVersion, packageName } = req.body;
+    const categories: string[] = Array.isArray(rawCategories) && rawCategories.length > 0
+      ? rawCategories.slice(0, 5).filter(Boolean)
+      : singleCategory ? [String(singleCategory)] : [];
+    const category = categories[0] ?? null;
     if (!name || !tagline || !description || !category || !iconUrl || !downloadUrl) {
-      return void res.status(400).json({ error: "name, tagline, description, category, iconUrl, and downloadUrl are required" });
+      return void res.status(400).json({ error: "name, tagline, description, at least one category, iconUrl, and downloadUrl are required" });
     }
     const dev = await getOrCreatePlatformDeveloper();
     let slug = _slugify(name);
@@ -2614,7 +2629,7 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
     const { userId: adminClerkId } = getAuth(req);
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
-      name, slug, tagline, description, category,
+      name, slug, tagline, description, category, categories,
       platform: platform ?? "android",
       iconUrl,
       screenshots: screenshots ?? [],
@@ -2662,7 +2677,7 @@ router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: an
     if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, id) });
     if (!app || !(app as any).isPlatformApp) return void res.status(404).json({ error: "Platform app not found" });
-    const allowed = ["name","tagline","description","category","platform","iconUrl","screenshots","downloadUrl","webUrl","currentVersion","packageName","isFeatured","status"] as const;
+    const allowed = ["name","tagline","description","category","categories","platform","iconUrl","screenshots","downloadUrl","webUrl","currentVersion","packageName","isFeatured","status"] as const;
     const updates: any = { updatedAt: new Date() };
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
     const [updated] = await db.update(storeAppsTable).set(updates).where(eq(storeAppsTable.id, id)).returning();
