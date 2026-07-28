@@ -125,8 +125,8 @@ app.use(
 // as base64 data: URIs in request bodies (e.g. post creation with a
 // generated image/video attached, /ai/render-video responses), which are
 // comfortably multiple megabytes before base64 overhead.
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+app.use(express.json({ limit: "250mb" }));
+app.use(express.urlencoded({ extended: true, limit: "250mb" }));
 
 app.use(
   clerkMiddleware((req) => ({

@@ -91,69 +91,435 @@ function WalletCard({ dev }: { dev: Developer }) {
   );
 }
 
+// ── PublishOverlay ────────────────────────────────────────────────────────────
+
+const PUBLISH_STAGES = [
+  { icon: "🔍", label: "Validating app details",       ms: 700  },
+  { icon: "📝", label: "Creating your store listing",  ms: 1100 },
+  { icon: "🎨", label: "Building your app page",       ms: 900  },
+  { icon: "🚀", label: "Preparing for launch",         ms: 700  },
+];
+const TOTAL_STAGE_MS = PUBLISH_STAGES.reduce((a, s) => a + s.ms, 0);
+
+const CONFETTI_COLORS = ["#00c853","#a78bfa","#ffb300","#38bdf8","#f472b6","#34d399"];
+
+function Confetti() {
+  const pieces = Array.from({ length: 28 }, (_, i) => ({
+    id: i,
+    angle: (i / 28) * 360,
+    distance: 80 + Math.random() * 140,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    size: 6 + Math.random() * 8,
+    delay: Math.random() * 0.3,
+    shape: i % 3 === 0 ? "circle" : i % 3 === 1 ? "rect" : "star",
+  }));
+  return (
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+      {pieces.map(p => {
+        const rad = (p.angle * Math.PI) / 180;
+        const tx = Math.cos(rad) * p.distance;
+        const ty = Math.sin(rad) * p.distance;
+        return (
+          <motion.div
+            key={p.id}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 0, rotate: 0 }}
+            animate={{ x: tx, y: ty, opacity: 0, scale: 1, rotate: 360 + Math.random() * 360 }}
+            transition={{ duration: 1.1 + Math.random() * 0.6, delay: p.delay, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              top: "50%", left: "50%",
+              width: p.size, height: p.size,
+              background: p.color,
+              borderRadius: p.shape === "circle" ? "50%" : p.shape === "rect" ? 2 : "50%",
+              transform: "translate(-50%,-50%)",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function PublishOverlay({
+  appName, iconUrl, downloadUrl, feeExempt, phase, stageIndex, progress, error,
+  onPayFee, onViewApps, onRetry,
+}: {
+  appName: string; iconUrl: string; downloadUrl: string; feeExempt: boolean;
+  phase: "publishing" | "success" | "error";
+  stageIndex: number; progress: number; error: string;
+  onPayFee: () => void; onViewApps: () => void; onRetry: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  function copyLink() {
+    navigator.clipboard.writeText(downloadUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(4,6,16,0.92)", backdropFilter: "blur(12px)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+    >
+      <motion.div
+        initial={{ scale: 0.88, y: 32, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 280, damping: 26 }}
+        style={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24, padding: "40px 36px", maxWidth: 520, width: "100%", position: "relative", overflow: "hidden" }}
+      >
+        {/* Ambient glow */}
+        <div style={{ position: "absolute", top: -80, left: "50%", transform: "translateX(-50%)", width: 320, height: 320, background: phase === "success" ? "radial-gradient(circle,rgba(0,200,83,0.12),transparent 70%)" : "radial-gradient(circle,rgba(124,77,255,0.1),transparent 70%)", pointerEvents: "none" }} />
+
+        <AnimatePresence mode="wait">
+
+          {/* ── Publishing phase ── */}
+          {phase === "publishing" && (
+            <motion.div key="publishing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {/* Animated icon */}
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <motion.div
+                  animate={{ rotate: [0, -8, 8, -8, 8, 0], scale: [1, 1.08, 1] }}
+                  transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}
+                  style={{ fontSize: 60, display: "inline-block", marginBottom: 16 }}
+                >🚀</motion.div>
+                <h2 style={{ fontWeight: 800, fontSize: 22, marginBottom: 6 }}>Publishing your app…</h2>
+                <p style={{ color: "#8892a4", fontSize: 14 }}>Hang tight — this only takes a few seconds.</p>
+              </div>
+
+              {/* Stages */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                {PUBLISH_STAGES.map((s, i) => {
+                  const done = i < stageIndex;
+                  const active = i === stageIndex;
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ x: -16, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      transition={{ delay: i * 0.1 }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12,
+                        background: done ? "rgba(0,200,83,0.06)" : active ? "rgba(124,77,255,0.08)" : "rgba(255,255,255,0.02)",
+                        border: `1px solid ${done ? "rgba(0,200,83,0.2)" : active ? "rgba(124,77,255,0.25)" : "rgba(255,255,255,0.04)"}`,
+                        transition: "all 0.4s ease",
+                      }}
+                    >
+                      <span style={{ fontSize: 20, width: 28, textAlign: "center" }}>
+                        {done ? "✅" : active ? (
+                          <motion.span
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                            style={{ display: "inline-block" }}
+                          >⚙️</motion.span>
+                        ) : s.icon}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: done ? "#00c853" : active ? "#c4b5fd" : "#5a6478" }}>
+                        {s.label}
+                      </span>
+                      {active && (
+                        <motion.div
+                          style={{ marginLeft: "auto", display: "flex", gap: 3 }}
+                        >
+                          {[0,1,2].map(d => (
+                            <motion.div key={d} animate={{ opacity: [0.3,1,0.3], scale: [0.8,1,0.8] }}
+                              transition={{ repeat: Infinity, duration: 0.8, delay: d * 0.2 }}
+                              style={{ width: 4, height: 4, borderRadius: "50%", background: "#a78bfa" }}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 99, height: 6, overflow: "hidden" }}>
+                <motion.div
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#7c4dff,#00c853)", boxShadow: "0 0 12px rgba(0,200,83,0.4)" }}
+                />
+              </div>
+              <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "#4a5568" }}>{Math.round(progress)}%</div>
+            </motion.div>
+          )}
+
+          {/* ── Success phase ── */}
+          {phase === "success" && (
+            <motion.div key="success" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 22 }} style={{ textAlign: "center" }}>
+              <Confetti />
+
+              {/* Trophy */}
+              <motion.div
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.1 }}
+                style={{ fontSize: 72, marginBottom: 8, display: "inline-block" }}
+              >🎉</motion.div>
+
+              <motion.h2
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                style={{ fontWeight: 800, fontSize: 26, marginBottom: 6, background: "linear-gradient(135deg,#00c853,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+              >App Submitted!</motion.h2>
+
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+                style={{ color: "#8892a4", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
+                {feeExempt
+                  ? "Your app is in the review queue — you'll get a notification once it's live."
+                  : "Complete the NGN 25,000 publishing fee to enter the review queue and go live."}
+              </motion.p>
+
+              {/* App card */}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "16px 20px", marginBottom: 20, textAlign: "left" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+                  {iconUrl ? (
+                    <img src={iconUrl} alt={appName} style={{ width: 52, height: 52, borderRadius: 12, objectFit: "cover", background: "#131920", flexShrink: 0 }}
+                      onError={e => { (e.target as HTMLImageElement).src = `https://placehold.co/52x52/0d1117/00c853?text=${appName[0]}`; }} />
+                  ) : (
+                    <div style={{ width: 52, height: 52, borderRadius: 12, background: "linear-gradient(135deg,#7c4dff,#00c853)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>
+                      {appName[0]}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 3 }}>{appName}</div>
+                    <span style={{ background: "rgba(255,179,0,0.1)", color: "#ffb300", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
+                      💳 Awaiting Payment
+                    </span>
+                  </div>
+                </div>
+
+                {/* Download link */}
+                <div style={{ marginBottom: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#5a6478", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Download / Install Link</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,0.3)", borderRadius: 10, padding: "8px 12px", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <span style={{ fontSize: 13, color: "#00c853", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                      {downloadUrl}
+                    </span>
+                    <button
+                      onClick={copyLink}
+                      style={{ background: copied ? "rgba(0,200,83,0.15)" : "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: copied ? "#00c853" : "#8892a4", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.2s" }}
+                    >{copied ? "✓ Copied!" : "Copy"}</button>
+                    <a href={downloadUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#8892a4", cursor: "pointer", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      Open ↗
+                    </a>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* CTAs */}
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {!feeExempt && (
+                  <button className="btn-green" onClick={onPayFee}
+                    style={{ width: "100%", padding: "13px 0", fontSize: 15, fontWeight: 700, borderRadius: 12 }}>
+                    💳 Pay NGN 25,000 Publishing Fee →
+                  </button>
+                )}
+                <button onClick={onViewApps}
+                  style={{ width: "100%", padding: "12px 0", fontSize: 14, fontWeight: 600, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#c0c8d8", cursor: "pointer" }}>
+                  📱 View My Apps
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* ── Error phase ── */}
+          {phase === "error" && (
+            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 60, marginBottom: 16 }}>😬</div>
+              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Something went wrong</h2>
+              <div style={{ background: "rgba(255,82,82,0.08)", border: "1px solid rgba(255,82,82,0.25)", borderRadius: 12, padding: "12px 16px", color: "#ff5252", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
+                {error}
+              </div>
+              <button className="btn-green" onClick={onRetry} style={{ width: "100%", padding: 12, fontSize: 14 }}>
+                ← Go Back & Try Again
+              </button>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ── AppSubmitForm ─────────────────────────────────────────────────────────────
 
 function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: App) => void }) {
   const [form, setForm] = useState({ name: "", tagline: "", description: "", category: AFRICA_CATEGORIES[0], platform: "android", iconUrl: "", downloadUrl: "", webUrl: "", currentVersion: "", screenshots: "", packageName: "" });
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "publishing" | "success" | "error">("idle");
+  const [stageIndex, setStageIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [submittedApp, setSubmittedApp] = useState<App | null>(null);
+  const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
 
+  function clearTimers() { stageTimers.current.forEach(clearTimeout); stageTimers.current = []; }
+
+  function startStageAnimation(onAllDone: () => void) {
+    setStageIndex(0);
+    setProgress(0);
+    let elapsed = 0;
+    let cumulative = 0;
+    PUBLISH_STAGES.forEach((stage, i) => {
+      const t1 = setTimeout(() => setStageIndex(i), elapsed);
+      const p1 = setTimeout(() => setProgress(Math.round(((cumulative + stage.ms * 0.5) / TOTAL_STAGE_MS) * 88)), elapsed + stage.ms * 0.3);
+      stageTimers.current.push(t1, p1);
+      elapsed += stage.ms;
+      cumulative += stage.ms;
+    });
+    const tDone = setTimeout(() => {
+      setStageIndex(PUBLISH_STAGES.length);
+      setProgress(90);
+      onAllDone();
+    }, elapsed);
+    stageTimers.current.push(tDone);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setError("");
-    if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) { setError("All fields marked * are required, including a download link."); return; }
-    // Package name format validation
+    e.preventDefault();
+    setError("");
+    if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) {
+      setError("All fields marked * are required, including a download link."); return;
+    }
     if (form.packageName && !/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(form.packageName)) {
       setError("Package name must follow reverse-domain format, e.g. com.example.myapp"); return;
     }
-    setLoading(true);
+
+    setPhase("publishing");
+    clearTimers();
+
+    // Run the cosmetic stage animation AND the real API call in parallel.
+    // Whichever finishes last determines when we transition to success/error.
+    let animationDone = false;
+    let apiResult: { ok: boolean; app?: App; err?: string } | null = null;
+
+    function tryFinish() {
+      if (!animationDone || !apiResult) return; // wait for both
+      if (apiResult.ok && apiResult.app) {
+        setProgress(100);
+        setTimeout(() => { setSubmittedApp(apiResult!.app!); setPhase("success"); }, 300);
+      } else {
+        setError(apiResult.err ?? "Failed to submit. Please try again.");
+        setPhase("error");
+      }
+    }
+
+    startStageAnimation(() => { animationDone = true; tryFinish(); });
+
     try {
-      const app = await apiFetch<App>("/developers/me/apps", { method: "POST", body: JSON.stringify({ ...form, screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [], packageName: form.packageName || undefined }) });
-      onCreated(app);
-    } catch (err: any) { setError(err.message ?? "Failed to submit."); } finally { setLoading(false); }
+      const app = await apiFetch<App>("/developers/me/apps", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [],
+          packageName: form.packageName || undefined,
+        }),
+      });
+      apiResult = { ok: true, app };
+    } catch (err: any) {
+      clearTimers();
+      apiResult = { ok: false, err: err.message ?? "Failed to submit. Please try again." };
+    }
+    tryFinish();
+  }
+
+  function handleRetry() {
+    clearTimers();
+    setPhase("idle");
+    setStageIndex(0);
+    setProgress(0);
+    setError("");
+  }
+
+  function handlePayFee() {
+    if (submittedApp) onCreated(submittedApp); // opens PaymentModal
+  }
+
+  function handleViewApps() {
+    if (submittedApp) onCreated(submittedApp); // navigates to apps tab
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div><label className="form-label">App Name *</label><input className="input" value={form.name} onChange={e => set("name", e.target.value)} placeholder="My App" required /></div>
-        <div><label className="form-label">Platform *</label>
-          <select className="input" value={form.platform} onChange={e => set("platform", e.target.value)}>
-            <option value="android">🤖 Android</option><option value="ios">🍎 iOS</option><option value="web">🌐 Web App</option><option value="all">📱 All Platforms</option>
-          </select>
+    <>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div><label className="form-label">App Name *</label><input className="input" value={form.name} onChange={e => set("name", e.target.value)} placeholder="My App" required /></div>
+          <div><label className="form-label">Platform *</label>
+            <select className="input" value={form.platform} onChange={e => set("platform", e.target.value)}>
+              <option value="android">🤖 Android</option><option value="ios">🍎 iOS</option><option value="web">🌐 Web App</option><option value="all">📱 All Platforms</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <div><label className="form-label">Tagline *</label><input className="input" value={form.tagline} onChange={e => set("tagline", e.target.value)} placeholder="One sentence that describes your app" required /></div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div><label className="form-label">Category *</label>
-          <select className="input" value={form.category} onChange={e => set("category", e.target.value)}>
-            {AFRICA_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+        <div><label className="form-label">Tagline *</label><input className="input" value={form.tagline} onChange={e => set("tagline", e.target.value)} placeholder="One sentence that describes your app" required /></div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div><label className="form-label">Category *</label>
+            <select className="input" value={form.category} onChange={e => set("category", e.target.value)}>
+              {AFRICA_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><label className="form-label">Version</label><input className="input" value={form.currentVersion} onChange={e => set("currentVersion", e.target.value)} placeholder="1.0.0" /></div>
         </div>
-        <div><label className="form-label">Version</label><input className="input" value={form.currentVersion} onChange={e => set("currentVersion", e.target.value)} placeholder="1.0.0" /></div>
-      </div>
-      <div><label className="form-label">Description *</label><textarea className="input" value={form.description} onChange={e => set("description", e.target.value)} placeholder="Detailed description..." style={{ minHeight: 100 }} required /></div>
-      <div>
-        <label className="form-label">Package / Bundle ID <span style={{ color: "#a78bfa" }}>(strongly recommended)</span></label>
-        <input className="input" value={form.packageName} onChange={e => set("packageName", e.target.value)} placeholder="com.example.myapp" />
-        <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>
-          Your app's unique identifier (e.g. <code>com.yourcompany.appname</code>). Once registered, this locks your app — only you can publish updates for it.
+        <div><label className="form-label">Description *</label><textarea className="input" value={form.description} onChange={e => set("description", e.target.value)} placeholder="Detailed description..." style={{ minHeight: 100 }} required /></div>
+        <div>
+          <label className="form-label">Package / Bundle ID <span style={{ color: "#a78bfa" }}>(strongly recommended)</span></label>
+          <input className="input" value={form.packageName} onChange={e => set("packageName", e.target.value)} placeholder="com.example.myapp" />
+          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>
+            Your app's unique identifier (e.g. <code>com.yourcompany.appname</code>). Once registered, this locks your app — only you can publish updates for it.
+          </div>
         </div>
-      </div>
-      <div><label className="form-label">Icon URL *</label><input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://..." required /></div>
-      <div>
-        <label className="form-label">Download / Install Link *</label>
-        <input className="input" type="url" value={form.downloadUrl} onChange={e => set("downloadUrl", e.target.value)} placeholder="https://..." required />
-        <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>APK link, App Store URL, Play Store URL, or web app URL</div>
-      </div>
-      <div><label className="form-label">Web App URL (optional)</label><input className="input" type="url" value={form.webUrl} onChange={e => set("webUrl", e.target.value)} placeholder="https://..." /></div>
-      <div><label className="form-label">Screenshot URLs (optional, one per line)</label><textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="https://..." style={{ minHeight: 72 }} /></div>
-      {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
-      <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-        💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
-      </div>
-      <button className="btn-green" type="submit" disabled={loading} style={{ fontSize: 15, padding: 12 }}>{loading ? "Submitting..." : "Submit App →"}</button>
-    </form>
+        <div><label className="form-label">Icon URL *</label><input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://..." required /></div>
+        <div>
+          <label className="form-label">Download / Install Link *</label>
+          <input className="input" type="url" value={form.downloadUrl} onChange={e => set("downloadUrl", e.target.value)} placeholder="https://..." required />
+          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>APK link, App Store URL, Play Store URL, or web app URL</div>
+        </div>
+        <div><label className="form-label">Web App URL (optional)</label><input className="input" type="url" value={form.webUrl} onChange={e => set("webUrl", e.target.value)} placeholder="https://..." /></div>
+        <div><label className="form-label">Screenshot URLs (optional, one per line)</label><textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="https://..." style={{ minHeight: 72 }} /></div>
+        {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
+        <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
+          💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
+        </div>
+        <motion.button
+          className="btn-green"
+          type="submit"
+          whileHover={{ scale: 1.02, boxShadow: "0 0 24px rgba(0,200,83,0.35)" }}
+          whileTap={{ scale: 0.97 }}
+          style={{ fontSize: 15, padding: 14, borderRadius: 12, fontWeight: 700, position: "relative", overflow: "hidden" }}
+        >
+          <span style={{ position: "relative", zIndex: 1 }}>🚀 Submit App →</span>
+        </motion.button>
+      </form>
+
+      {/* Animated publish overlay */}
+      <AnimatePresence>
+        {(phase === "publishing" || phase === "success" || phase === "error") && (
+          <PublishOverlay
+            appName={form.name}
+            iconUrl={form.iconUrl}
+            downloadUrl={form.downloadUrl}
+            feeExempt={dev.feeExempt ?? false}
+            phase={phase}
+            stageIndex={stageIndex}
+            progress={progress}
+            error={error}
+            onPayFee={handlePayFee}
+            onViewApps={handleViewApps}
+            onRetry={handleRetry}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
