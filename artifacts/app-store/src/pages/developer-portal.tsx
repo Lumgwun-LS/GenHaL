@@ -514,8 +514,12 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         doneBytes += f.size;
         newUrls.push(url);
       }
+      setSsProgress(100);
       setSsUrls(prev => [...prev, ...newUrls]);
+      // Keep the green "done" bar visible for 1.5 s before hiding
+      setTimeout(() => setSsProgress(0), 1500);
     } catch (err: any) {
+      setSsProgress(0);
       setError(`Screenshot upload failed: ${err.message ?? "Unknown error"}`);
     } finally {
       setSsUploading(false);
@@ -755,46 +759,63 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
             )}
           </div>
 
-          {/* Upload progress bar */}
-          {ssUploading && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${ssProgress}%`, height: "100%", background: "linear-gradient(90deg,#00bcd4,#80deea)", transition: "width 0.3s" }} />
+          {/* Upload progress bar — visible while uploading AND for 1.5 s after */}
+          {(ssUploading || ssProgress > 0) && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#8892a4", marginBottom: 5 }}>
+                <span>{ssUploading ? `Uploading ${ssUploadingCount} screenshot${ssUploadingCount > 1 ? "s" : ""}…` : "✅ Screenshots uploaded"}</span>
+                <span style={{ fontWeight: 700, color: ssUploading ? "#00bcd4" : "#00c853" }}>{ssProgress}%</span>
+              </div>
+              <div style={{ height: 7, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{
+                  width: `${ssProgress}%`, height: "100%",
+                  background: ssUploading ? "linear-gradient(90deg,#00bcd4,#80deea)" : "#00c853",
+                  transition: "width 0.25s ease-out",
+                }} />
               </div>
             </div>
           )}
 
           {/* Thumbnail grid */}
           {ssUrls.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 14 }}>
               {ssUrls.map((url, i) => (
-                <div key={url + i} style={{ position: "relative", borderRadius: 10, overflow: "hidden", aspectRatio: "9/16", background: "#0a0d13", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <img
-                    src={url}
-                    alt={`Screenshot ${i + 1}`}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  />
-                  {/* Remove button */}
+                /* Wrapper — NO overflow:hidden here so the remove button isn't clipped */
+                <div key={url + i} style={{ position: "relative", aspectRatio: "9/16" }}>
+                  {/* Clipped image area */}
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    borderRadius: 10, overflow: "hidden",
+                    background: "#0a0d13", border: "1px solid rgba(255,255,255,0.08)",
+                  }}>
+                    <img
+                      src={url}
+                      alt={`Screenshot ${i + 1}`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                    {/* Index badge */}
+                    <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(0,0,0,0.6)", borderRadius: 4, fontSize: 10, color: "#ccc", padding: "2px 5px" }}>
+                      {i + 1}
+                    </div>
+                  </div>
+                  {/* Remove button — OUTSIDE the overflow:hidden div so iOS Safari doesn't block it */}
                   <button
                     type="button"
-                    onClick={() => removeSsUrl(i)}
+                    onClick={(e) => { e.stopPropagation(); removeSsUrl(i); }}
                     title="Remove screenshot"
                     style={{
-                      position: "absolute", top: 5, right: 5,
-                      width: 22, height: 22, borderRadius: "50%",
-                      background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.2)",
-                      color: "#fff", fontSize: 13, lineHeight: 1,
+                      position: "absolute", top: -9, right: -9,
+                      width: 26, height: 26, borderRadius: "50%",
+                      background: "#ff5252", border: "2px solid #0b0f17",
+                      color: "#fff", fontSize: 14, lineHeight: "22px",
                       cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                      padding: 0,
+                      padding: 0, zIndex: 10,
+                      fontWeight: 700,
                     }}
                   >
                     ×
                   </button>
-                  {/* Index badge */}
-                  <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(0,0,0,0.6)", borderRadius: 4, fontSize: 10, color: "#ccc", padding: "2px 5px" }}>
-                    {i + 1}
-                  </div>
                 </div>
               ))}
             </div>

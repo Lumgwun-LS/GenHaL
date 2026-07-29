@@ -38,6 +38,36 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
+// ── Bucket CORS setup (once per process) ──────────────────────────────────────
+// Without this a browser XHR PUT to the GCS signed URL is rejected at preflight,
+// causing silent CORS failures that the user sees as 413 or "network error".
+const _corsDone = new Set<string>();
+
+async function ensureBucketCors(bucketName: string): Promise<void> {
+  if (_corsDone.has(bucketName)) return;
+  try {
+    await objectStorageClient.bucket(bucketName).setCorsConfiguration([
+      {
+        origin: ["*"],
+        method: ["PUT", "GET", "HEAD", "DELETE", "OPTIONS"],
+        responseHeader: [
+          "Content-Type",
+          "Content-MD5",
+          "Content-Disposition",
+          "Cache-Control",
+          "Authorization",
+          "X-Requested-With",
+        ],
+        maxAgeSeconds: 3600,
+      },
+    ]);
+    _corsDone.add(bucketName);
+  } catch (err) {
+    // Non-fatal — log and continue; upload will still work for same-origin paths.
+    console.warn("[objectStorage] Failed to set bucket CORS (non-fatal):", err);
+  }
+}
+
 export class ObjectStorageService {
   constructor() {}
 
@@ -124,6 +154,9 @@ export class ObjectStorageService {
     const fullPath = `${privateObjectDir}/uploads/${objectId}`;
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
+
+    // Ensure the bucket allows browser PUT via CORS before returning the URL.
+    await ensureBucketCors(bucketName);
 
     return signObjectURL({
       bucketName,
