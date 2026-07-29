@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import Stripe from "stripe";
 import { db } from "@workspace/db";
 import {
   storeAppsTable,
@@ -14,6 +15,7 @@ import {
   storeOfflinePaymentsTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray } from "drizzle-orm";
+import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { sendEmail } from "../lib/mailer";
@@ -69,7 +71,36 @@ const router = Router();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PUBLISHING_FEE_KOBO = 5_000_000; // NGN 50,000
+const PUBLISHING_FEE_KOBO     = 5_000_000; // NGN 50,000
+const PUBLISHING_FEE_USD_CENTS = 10_000;   // USD $100
+
+// All 54 African Union member states — full names and ISO-3166-1 alpha-2 codes
+const AFRICAN_COUNTRY_NAMES = new Set([
+  "Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi",
+  "Cabo Verde","Cape Verde","Cameroon","Central African Republic","Chad",
+  "Comoros","Congo","Democratic Republic of the Congo","DR Congo","DRC",
+  "Djibouti","Egypt","Equatorial Guinea","Eritrea","Eswatini","Swaziland",
+  "Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau",
+  "Ivory Coast","Côte d'Ivoire","Cote d'Ivoire","Kenya","Lesotho","Liberia","Libya",
+  "Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco",
+  "Mozambique","Namibia","Niger","Nigeria","Rwanda",
+  "São Tomé and Príncipe","Sao Tome and Principe","Senegal","Seychelles",
+  "Sierra Leone","Somalia","South Africa","South Sudan","Sudan",
+  "Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe",
+]);
+const AFRICAN_COUNTRY_CODES = new Set([
+  "DZ","AO","BJ","BW","BF","BI","CV","CM","CF","TD","KM","CG","CD","DJ",
+  "EG","GQ","ER","SZ","ET","GA","GM","GH","GN","GW","CI","KE","LS","LR",
+  "LY","MG","MW","ML","MR","MU","MA","MZ","NA","NE","NG","RW","ST","SN",
+  "SC","SL","SO","ZA","SS","SD","TZ","TG","TN","UG","ZM","ZW",
+]);
+/** Returns true for African countries (by full name or 2-letter code). Defaults to true (NGN) when unknown. */
+function isAfricanCountry(country: string | null | undefined): boolean {
+  if (!country) return true;
+  const t = country.trim();
+  return AFRICAN_COUNTRY_NAMES.has(t) || AFRICAN_COUNTRY_CODES.has(t.toUpperCase());
+}
+
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? "";
 const IS_MERCHANT_CODE = process.env.INTERSWITCH_MERCHANT_CODE ?? "";
 const IS_PAY_ITEM_ID = process.env.INTERSWITCH_PAY_ITEM_ID ?? "";
@@ -1147,7 +1178,7 @@ router.post("/developers/me/apps/:id/versions", requireAuth(), async (req, res) 
 
 // ─── PAYMENT ROUTES ─────────────────────────────────────────────────────────────
 
-// POST /store/payments/initiate — NGN 25,000 app publishing fee
+// POST /store/payments/initiate — NGN 50,000 (African devs) or $100 USD (non-African devs)
 router.post("/payments/initiate", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -1166,35 +1197,186 @@ router.post("/payments/initiate", requireAuth(), async (req, res) => {
     if (app.publishingFeePaid) return void res.status(400).json({ error: "Publishing fee already paid for this app" });
 
     const baseUrl = getBaseUrl(req);
+    const african = isAfricanCountry(dev.country);
 
-    if (gateway === "paystack") {
-      const callbackUrl = `${baseUrl}/app-store/developer?payment=paystack&appId=${app.id}`;
-      const txn = await initPaystackTransaction(
-        dev.email || `dev${dev.id}@africaappstore.com`,
-        PUBLISHING_FEE_KOBO,
-        { purpose: "africa_store_publishing_fee", appId: app.id, developerId: dev.id, appName: app.name },
-        callbackUrl,
-      );
-      if (!txn) return void res.status(500).json({ error: "Could not initialize Paystack payment" });
-      await db.update(storeAppsTable)
-        .set({ publishingFeeRef: txn.reference, publishingFeeGateway: "paystack", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
-        .where(eq(storeAppsTable.id, app.id));
-      res.json({ gateway: "paystack", authorizationUrl: txn.authorization_url, reference: txn.reference });
+    // ── African developers (NGN) ─────────────────────────────────────────────
+    if (african) {
+      if (gateway === "paystack") {
+        const callbackUrl = `${baseUrl}/app-store/developer?payment=paystack&appId=${app.id}`;
+        const txn = await initPaystackTransaction(
+          dev.email || `dev${dev.id}@africaappstore.com`,
+          PUBLISHING_FEE_KOBO,
+          { purpose: "africa_store_publishing_fee", appId: app.id, developerId: dev.id, appName: app.name },
+          callbackUrl,
+        );
+        if (!txn) return void res.status(500).json({ error: "Could not initialize Paystack payment" });
+        await db.update(storeAppsTable)
+          .set({ publishingFeeRef: txn.reference, publishingFeeGateway: "paystack", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+          .where(eq(storeAppsTable.id, app.id));
+        return void res.json({ gateway: "paystack", authorizationUrl: txn.authorization_url, reference: txn.reference });
 
-    } else if (gateway === "interswitch") {
-      const txnRef = `AFST-${app.id}-${Date.now()}`;
-      const redirectUrl = `${baseUrl}/api/store/payments/interswitch/callback`;
-      const { paymentUrl, formData } = buildInterswitchFormData(txnRef, redirectUrl);
-      await db.update(storeAppsTable)
-        .set({ publishingFeeRef: txnRef, publishingFeeGateway: "interswitch", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
-        .where(eq(storeAppsTable.id, app.id));
-      res.json({ gateway: "interswitch", paymentUrl, formData, appId: app.id });
+      } else if (gateway === "interswitch") {
+        const txnRef = `AFST-${app.id}-${Date.now()}`;
+        const redirectUrl = `${baseUrl}/api/store/payments/interswitch/callback`;
+        const { paymentUrl, formData } = buildInterswitchFormData(txnRef, redirectUrl);
+        await db.update(storeAppsTable)
+          .set({ publishingFeeRef: txnRef, publishingFeeGateway: "interswitch", publishingFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+          .where(eq(storeAppsTable.id, app.id));
+        return void res.json({ gateway: "interswitch", paymentUrl, formData, appId: app.id });
 
+      } else {
+        return void res.status(400).json({ error: "For African developers, gateway must be 'paystack' or 'interswitch'" });
+      }
+
+    // ── Non-African developers (USD) ─────────────────────────────────────────
     } else {
-      res.status(400).json({ error: "gateway must be 'paystack' or 'interswitch'" });
+      if (gateway === "squad") {
+        const squadKey = await resolveSquadKey();
+        const txnRef = `AFST-USD-${app.id}-${Date.now()}`;
+        const callbackUrl = `${baseUrl}/api/store/payments/squad/callback`;
+        const result = await squadInitiatePayment(squadKey, {
+          email: dev.email || `dev${dev.id}@africaappstore.com`,
+          amount: PUBLISHING_FEE_USD_CENTS,
+          currency: "USD",
+          initiateType: "redirect",
+          callbackUrl,
+          transactionRef: txnRef,
+          customerName: dev.displayName ?? undefined,
+          metadata: { purpose: "africa_store_publishing_fee", appId: app.id, developerId: dev.id, appName: app.name },
+        });
+        await db.update(storeAppsTable)
+          .set({ publishingFeeRef: txnRef, publishingFeeGateway: "squad", publishingFeeAmountKobo: PUBLISHING_FEE_USD_CENTS, updatedAt: new Date() } as any)
+          .where(eq(storeAppsTable.id, app.id));
+        return void res.json({ gateway: "squad", checkoutUrl: result.data.checkout_url, transactionRef: txnRef });
+
+      } else if (gateway === "stripe") {
+        const stripeKey = process.env.STRIPE_SECRET_KEY;
+        if (!stripeKey) return void res.status(503).json({ error: "Stripe is not configured on this platform" });
+        const stripe = new Stripe(stripeKey);
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          customer_email: dev.email ?? undefined,
+          line_items: [{
+            price_data: {
+              currency: "usd",
+              product_data: { name: `Africa App Store — Publishing Fee: ${app.name}` },
+              unit_amount: PUBLISHING_FEE_USD_CENTS,
+            },
+            quantity: 1,
+          }],
+          metadata: { purpose: "africa_store_publishing_fee", appId: String(app.id), developerId: String(dev.id), appName: app.name },
+          success_url: `${baseUrl}/app-store/developer?payment=stripe&appId=${app.id}&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${baseUrl}/app-store/developer?payment=stripe&status=cancelled`,
+        });
+        await db.update(storeAppsTable)
+          .set({ publishingFeeRef: session.id, publishingFeeGateway: "stripe", publishingFeeAmountKobo: PUBLISHING_FEE_USD_CENTS, updatedAt: new Date() } as any)
+          .where(eq(storeAppsTable.id, app.id));
+        return void res.json({ gateway: "stripe", checkoutUrl: session.url!, sessionId: session.id });
+
+      } else {
+        return void res.status(400).json({ error: "For non-African developers, gateway must be 'squad' or 'stripe'" });
+      }
     }
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "initiatePayment error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// POST /store/payments/squad/verify — client-side confirmation after Squad redirect
+router.post("/payments/squad/verify", requireAuth(), async (req, res) => {
+  try {
+    const { transactionRef } = req.body;
+    if (!transactionRef) return void res.status(400).json({ error: "transactionRef required" });
+    const squadKey = await resolveSquadKey();
+    const result = await squadVerifyTransaction(squadKey, transactionRef);
+    if (result.data.transaction_status !== "success") return void res.status(400).json({ error: "Payment not yet confirmed" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, transactionRef) } as any);
+    if (app && !app.publishingFeePaid) {
+      await db.update(storeAppsTable)
+        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, app.id));
+    }
+    res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
+  } catch (err: any) {
+    logger.error({ err }, "verifySquad error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// GET /store/payments/squad/callback — Squad redirect after payment
+router.get("/payments/squad/callback", async (req, res) => {
+  const { transaction_ref, status } = req.query as Record<string, string>;
+  const baseUrl = getBaseUrl(req);
+  try {
+    if (transaction_ref) {
+      const squadKey = await resolveSquadKey();
+      const result = await squadVerifyTransaction(squadKey, transaction_ref).catch(() => null);
+      if (result?.data?.transaction_status === "success") {
+        const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, transaction_ref) } as any);
+        if (app && !app.publishingFeePaid) {
+          await db.update(storeAppsTable)
+            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .where(eq(storeAppsTable.id, app.id));
+        }
+        return void res.redirect(`${baseUrl}/app-store/developer?payment=squad&status=success&appId=${app?.id ?? ""}`);
+      }
+    }
+    res.redirect(`${baseUrl}/app-store/developer?payment=squad&status=${status === "success" ? "failed" : (status ?? "failed")}`);
+  } catch (err) {
+    logger.error({ err }, "squadCallback error");
+    res.redirect(`${baseUrl}/app-store/developer?payment=squad&status=failed`);
+  }
+});
+
+// POST /store/payments/stripe/verify-usd — client-side confirmation after Stripe redirect
+router.post("/payments/stripe/verify-usd", requireAuth(), async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return void res.status(400).json({ error: "sessionId required" });
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) return void res.status(503).json({ error: "Stripe not configured" });
+    const stripe = new Stripe(stripeKey);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status !== "paid") return void res.status(400).json({ error: "Payment not confirmed" });
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, sessionId) } as any);
+    if (app && !app.publishingFeePaid) {
+      await db.update(storeAppsTable)
+        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, app.id));
+    }
+    res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
+  } catch (err: any) {
+    logger.error({ err }, "verifyStripeUsd error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// POST /store/webhooks/squad — async Squad payment confirmation (public, before auth)
+router.post("/webhooks/squad", async (req, res) => {
+  try {
+    const signature = (req.headers["x-squad-encrypted-body"] ?? req.headers["x-squad-signature"] ?? "") as string;
+    const squadKey = await resolveSquadKey().catch(() => process.env.SQUAD_SECRET_KEY ?? "");
+    if (squadKey && signature) {
+      const valid = verifySquadWebhookSignature(squadKey, JSON.stringify(req.body), signature);
+      if (!valid) return void res.status(401).send("Invalid signature");
+    }
+    const { Event, data } = req.body ?? {};
+    if (Event === "charge_successful" && data?.metadata?.purpose === "africa_store_publishing_fee") {
+      const ref: string | undefined = data.transaction_ref ?? data.transactionRef;
+      if (ref) {
+        const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, ref) } as any);
+        if (app && !app.publishingFeePaid) {
+          await db.update(storeAppsTable)
+            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .where(eq(storeAppsTable.id, app.id));
+        }
+      }
+    }
+    res.json({ status: "ok" });
+  } catch (err) {
+    logger.error({ err }, "squadWebhook error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

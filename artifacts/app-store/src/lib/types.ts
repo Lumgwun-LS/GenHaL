@@ -145,7 +145,19 @@ export interface InterswitchInitResult {
   appId: number;
 }
 
-export type PaymentInitResult = PaystackInitResult | InterswitchInitResult;
+export interface SquadInitResult {
+  gateway: "squad";
+  checkoutUrl: string;
+  transactionRef: string;
+}
+
+export interface StripeInitResult {
+  gateway: "stripe";
+  checkoutUrl: string;
+  sessionId: string;
+}
+
+export type PaymentInitResult = PaystackInitResult | InterswitchInitResult | SquadInitResult | StripeInitResult;
 
 // ── Platform linking ─────────────────────────────────────────────────────────
 

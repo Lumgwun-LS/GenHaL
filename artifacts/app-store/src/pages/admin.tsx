@@ -25,7 +25,7 @@ const PLATFORM_ICON: Record<string, string> = {
   heroku: "🚂", netlify: "🌐", vercel: "▲", render: "🎨",
 };
 
-type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "offline" | "our-apps";
+type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "traffic" | "offline" | "our-apps";
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 
@@ -59,6 +59,325 @@ const COUNTRY_FLAG: Record<string, string> = {
   UG: "🇺🇬", RW: "🇷🇼", SN: "🇸🇳", CM: "🇨🇲", US: "🇺🇸", GB: "🇬🇧",
   CA: "🇨🇦", DE: "🇩🇪", FR: "🇫🇷", IN: "🇮🇳",
 };
+
+// ── Traffic Analytics tab ──────────────────────────────────────────────────────
+
+interface VisitorIntelligence {
+  period: { from: string; to: string };
+  kpis: {
+    totalViews: number;
+    uniqueSessions: number;
+    authenticatedSessions: number;
+    anonymousSessions: number;
+    signupConversionRate: number;
+    totalMenuEvents: number;
+  };
+  trafficSources:    { source: string; count: number }[];
+  countriesFromVisits: { country: string; count: number }[];
+  byHour:            { hour: number; count: number }[];
+  byDayOfWeek:       { day: string; count: number }[];
+  byDevice:          { name: string; count: number }[];
+  byBrowser:         { name: string; count: number }[];
+  byOS:              { name: string; count: number }[];
+  topPages:          { path: string; count: number }[];
+  utmCampaigns:      { campaign: string; count: number }[];
+  visitorsOverTime:  { date: string; views: number; uniqueSessions: number }[];
+  byPlatform:        { platform: string; count: number }[];
+}
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  NG:"🇳🇬",GH:"🇬🇭",KE:"🇰🇪",ZA:"🇿🇦",ET:"🇪🇹",TZ:"🇹🇿",UG:"🇺🇬",RW:"🇷🇼",
+  SN:"🇸🇳",CM:"🇨🇲",US:"🇺🇸",GB:"🇬🇧",CA:"🇨🇦",DE:"🇩🇪",FR:"🇫🇷",IN:"🇮🇳",
+  EG:"🇪🇬",MA:"🇲🇦",CI:"🇨🇮",AO:"🇦🇴",MZ:"🇲🇿",ZW:"🇿🇼",ZM:"🇿🇲",BJ:"🇧🇯",
+  AU:"🇦🇺",BR:"🇧🇷",NG2:"🇳🇬",PH:"🇵🇭",SG:"🇸🇬",AE:"🇦🇪",
+};
+
+const PERIOD_OPTS = [
+  { label: "Today",    api: "custom", days: 1 },
+  { label: "7 days",   api: "week",   days: 7 },
+  { label: "30 days",  api: "month",  days: 30 },
+  { label: "90 days",  api: "custom", days: 90 },
+  { label: "1 year",   api: "year",   days: 365 },
+  { label: "All time", api: "custom", days: 3650 },
+] as const;
+
+function BarList({ items, valueKey, labelKey, color }: {
+  items: Record<string, unknown>[];
+  valueKey: string;
+  labelKey: string;
+  color: string;
+}) {
+  const max = (items[0]?.[valueKey] as number) || 1;
+  return (
+    <div>
+      {items.slice(0, 10).map((item) => {
+        const label = item[labelKey] as string;
+        const val   = item[valueKey] as number;
+        return (
+          <div key={label} style={{ marginBottom: 9 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+              <span style={{ color: "#c0c8d8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>{label}</span>
+              <span style={{ color: "#8892a4", flexShrink: 0 }}>{val.toLocaleString()}</span>
+            </div>
+            <div style={{ height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 4 }}>
+              <div style={{ height: 5, borderRadius: 4, background: color, width: `${(val / max) * 100}%`, transition: "width 0.4s" }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TrafficTab() {
+  const [periodIdx, setPeriodIdx] = useState(2); // default 30 days
+  const [data, setData] = useState<VisitorIntelligence | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const opt = PERIOD_OPTS[periodIdx]!;
+    let url = `/admin/analytics/visitor-intelligence?period=${opt.api}`;
+    if (opt.api === "custom") {
+      const to   = new Date();
+      const from = new Date(Date.now() - opt.days * 86400_000);
+      url += `&from=${from.toISOString()}&to=${to.toISOString()}`;
+    }
+    apiFetch<VisitorIntelligence>(url)
+      .then(setData).catch(() => {}).finally(() => setLoading(false));
+  }, [periodIdx]);
+
+  const section = (title: string) => (
+    <div style={{ fontWeight: 800, fontSize: 14, color: "#c0c8d8", marginTop: 32, marginBottom: 14, paddingBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>{title}</div>
+  );
+
+  const card = (children: React.ReactNode, style?: React.CSSProperties) => (
+    <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "18px 20px", ...style }}>{children}</div>
+  );
+
+  const cardTitle = (t: string) => <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>{t}</div>;
+
+  return (
+    <div>
+      {/* Period selector */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+        {PERIOD_OPTS.map((opt, i) => (
+          <button key={opt.label} onClick={() => setPeriodIdx(i)}
+            style={{ padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${periodIdx === i ? "#00c853" : "rgba(255,255,255,0.1)"}`,
+              background: periodIdx === i ? "rgba(0,200,83,0.1)" : "transparent",
+              color: periodIdx === i ? "#00c853" : "#8892a4" }}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {data && (
+        <div style={{ fontSize: 11, color: "#556070", marginBottom: 20 }}>
+          {new Date(data.period.from).toLocaleDateString()} – {new Date(data.period.to).toLocaleDateString()}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 80 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>
+      ) : !data ? (
+        <div style={{ color: "#8892a4", padding: 40 }}>Could not load traffic data.</div>
+      ) : (
+        <>
+          {/* ── KPI row ─────────────────────────────────────────────────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+            {[
+              { icon: "👁️",  label: "Page Views",       value: data.kpis.totalViews.toLocaleString(),       color: "#a78bfa" },
+              { icon: "🧑",  label: "Unique Visitors",   value: data.kpis.uniqueSessions.toLocaleString(),   color: "#00c853" },
+              { icon: "🔓",  label: "Signed-in",         value: data.kpis.authenticatedSessions.toLocaleString(), color: "#38bdf8" },
+              { icon: "👤",  label: "Anonymous",         value: data.kpis.anonymousSessions.toLocaleString(), color: "#8892a4" },
+              { icon: "🔄",  label: "Auth Rate",         value: `${data.kpis.signupConversionRate}%`,        color: "#ffb300" },
+            ].map(k => (
+              <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 22, marginBottom: 8 }}>{k.icon}</div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: k.color }}>{k.value}</div>
+                <div style={{ fontSize: 12, color: "#8892a4" }}>{k.label}</div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* ── Visitors over time ──────────────────────────────────────────── */}
+          {section("📈 Visitors Over Time")}
+          {card(
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={data.visitorsOverTime} margin={{ left: -20, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="date" tick={{ fill: "#8892a4", fontSize: 10 }}
+                    tickFormatter={d => {
+                      const [, m, day] = d.split("-");
+                      return `${m}/${day}`;
+                    }} />
+                  <YAxis tick={{ fill: "#8892a4", fontSize: 10 }} />
+                  <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: "#e8eaf0" }} />
+                  <Line type="monotone" dataKey="views"          stroke="#a78bfa" strokeWidth={2} dot={false} name="Page Views" />
+                  <Line type="monotone" dataKey="uniqueSessions" stroke="#00c853" strokeWidth={2} dot={false} name="Unique Visitors" />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
+                {[["#a78bfa","Page Views"],["#00c853","Unique Visitors"]].map(([color,label]) => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#8892a4" }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />{label}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── Country + Platform ─────────────────────────────────────────── */}
+          {section("🌍 Geography & Platform")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {card(
+              <>
+                {cardTitle("Top Countries")}
+                {data.countriesFromVisits.length === 0
+                  ? <div style={{ color: "#8892a4", fontSize: 13 }}>No data yet</div>
+                  : data.countriesFromVisits.slice(0, 12).map(({ country, count }) => {
+                    const max = data.countriesFromVisits[0]!.count;
+                    return (
+                      <div key={country} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                          <span style={{ color: "#c0c8d8" }}>{COUNTRY_FLAGS[country] ?? "🌍"} {country}</span>
+                          <span style={{ color: "#8892a4" }}>{count.toLocaleString()}</span>
+                        </div>
+                        <div style={{ height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 4 }}>
+                          <div style={{ height: 5, borderRadius: 4, background: "#00c853", width: `${(count / max) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </>
+            )}
+            {card(
+              <>
+                {cardTitle("Platform Breakdown")}
+                {data.byPlatform.length === 0
+                  ? <div style={{ color: "#8892a4", fontSize: 13 }}>No data yet</div>
+                  : <BarList items={data.byPlatform as any} labelKey="platform" valueKey="count" color="#7c4dff" />
+                }
+                <div style={{ marginTop: 20 }} />
+                {cardTitle("Traffic Sources")}
+                {data.trafficSources.length === 0
+                  ? <div style={{ color: "#8892a4", fontSize: 13 }}>No data yet</div>
+                  : <BarList items={data.trafficSources as any} labelKey="source" valueKey="count" color="#38bdf8" />
+                }
+              </>
+            )}
+          </div>
+
+          {/* ── Device / Browser / OS ─────────────────────────────────────── */}
+          {section("📱 Device, Browser & OS")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+            {[
+              { title: "Device Type",  items: data.byDevice,  color: "#a78bfa" },
+              { title: "Browser",      items: data.byBrowser, color: "#00bcd4" },
+              { title: "Operating System", items: data.byOS,  color: "#ffb300" },
+            ].map(({ title, items, color }) => card(
+              <>
+                {cardTitle(title)}
+                {items.length === 0
+                  ? <div style={{ color: "#8892a4", fontSize: 13 }}>No data</div>
+                  : <BarList items={items as any} labelKey="name" valueKey="count" color={color} />
+                }
+              </>,
+              {},
+            ))}
+          </div>
+
+          {/* ── Time of day / Day of week ─────────────────────────────────── */}
+          {section("🕐 When Visitors Come")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {card(
+              <>
+                {cardTitle("Hour of Day (UTC)")}
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={data.byHour} margin={{ left: -24, right: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="hour" tick={{ fill: "#8892a4", fontSize: 9 }} tickFormatter={h => `${h}h`} interval={3} />
+                    <YAxis tick={{ fill: "#8892a4", fontSize: 9 }} />
+                    <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }} labelFormatter={h => `${h}:00 UTC`} />
+                    <Bar dataKey="count" name="Views" radius={[3,3,0,0]}>
+                      {data.byHour.map((entry, i) => (
+                        <Cell key={i} fill={entry.count === Math.max(...data.byHour.map(h => h.count)) ? "#00c853" : "#a78bfa"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            )}
+            {card(
+              <>
+                {cardTitle("Day of Week")}
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={data.byDayOfWeek} margin={{ left: -24, right: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fill: "#8892a4", fontSize: 10 }} />
+                    <YAxis tick={{ fill: "#8892a4", fontSize: 9 }} />
+                    <Tooltip contentStyle={{ background: "#131920", border: "none", borderRadius: 8, fontSize: 12 }} />
+                    <Bar dataKey="count" name="Views" radius={[3,3,0,0]}>
+                      {data.byDayOfWeek.map((entry, i) => (
+                        <Cell key={i} fill={entry.count === Math.max(...data.byDayOfWeek.map(d => d.count)) ? "#00c853" : "#38bdf8"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            )}
+          </div>
+
+          {/* ── Top pages ─────────────────────────────────────────────────── */}
+          {section("📄 Top Pages")}
+          {card(
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ color: "#8892a4", fontSize: 11, textTransform: "uppercase" }}>
+                  <th style={{ textAlign: "left", paddingBottom: 10, fontWeight: 600, width: "60%" }}>Page</th>
+                  <th style={{ textAlign: "right", paddingBottom: 10, fontWeight: 600 }}>Views</th>
+                  <th style={{ textAlign: "right", paddingBottom: 10, fontWeight: 600 }}>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topPages.map(({ path, count }) => {
+                  const pct = data.kpis.totalViews > 0 ? ((count / data.kpis.totalViews) * 100).toFixed(1) : "0";
+                  return (
+                    <tr key={path} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "8px 0", color: "#c0c8d8", fontFamily: "monospace", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>
+                        {path}
+                      </td>
+                      <td style={{ padding: "8px 0", textAlign: "right", color: "#00c853", fontWeight: 700 }}>{count.toLocaleString()}</td>
+                      <td style={{ padding: "8px 0", textAlign: "right", color: "#8892a4" }}>{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {/* ── UTM Campaigns ─────────────────────────────────────────────── */}
+          {data.utmCampaigns.length > 0 && (
+            <>
+              {section("🎯 UTM Campaigns")}
+              {card(
+                <BarList
+                  items={data.utmCampaigns as any}
+                  labelKey="campaign"
+                  valueKey="count"
+                  color="#ffb300"
+                />
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function AnalyticsTab() {
   const [data, setData] = useState<EventAnalytics | null>(null);
@@ -1428,6 +1747,7 @@ export default function Admin() {
     { id: "our-apps",   label: "🚀 Our Apps" },
     { id: "overview",   label: "📊 Overview" },
     { id: "analytics",  label: "📈 Analytics" },
+    { id: "traffic",    label: "🌍 Traffic" },
     { id: "pending",    label: `🔍 Pending (${pending.length})` },
     { id: "all",        label: "📱 All Apps" },
     { id: "developers", label: "👥 Developers" },
@@ -1476,6 +1796,9 @@ export default function Admin() {
 
       {/* Analytics */}
       {tab === "analytics" && <AnalyticsTab />}
+
+      {/* Traffic */}
+      {tab === "traffic" && <TrafficTab />}
 
       {/* Pending review */}
       {tab === "pending" && (

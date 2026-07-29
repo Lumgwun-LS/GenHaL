@@ -821,7 +821,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         </div>
         {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
         <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-          💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 50,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
+          💳 After submission you'll pay the publishing fee (<strong style={{ color: "#ffb300" }}>NGN 50,000</strong> for African developers · <strong style={{ color: "#a78bfa" }}>$100 USD</strong> for international developers) via your preferred payment method.
         </div>
         <motion.button
           className="btn-green"
@@ -947,57 +947,142 @@ function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }
   );
 }
 
+// ── African-country helper (mirrors server-side isAfricanCountry) ─────────────
+
+const AFRICAN_NAMES = new Set([
+  "Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi",
+  "Cabo Verde","Cape Verde","Cameroon","Central African Republic","Chad",
+  "Comoros","Congo","Democratic Republic of the Congo","DR Congo","DRC",
+  "Djibouti","Egypt","Equatorial Guinea","Eritrea","Eswatini","Swaziland",
+  "Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau",
+  "Ivory Coast","Côte d'Ivoire","Cote d'Ivoire","Kenya","Lesotho","Liberia","Libya",
+  "Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco",
+  "Mozambique","Namibia","Niger","Nigeria","Rwanda",
+  "São Tomé and Príncipe","Sao Tome and Principe","Senegal","Seychelles",
+  "Sierra Leone","Somalia","South Africa","South Sudan","Sudan",
+  "Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe",
+]);
+const AFRICAN_CODES = new Set([
+  "DZ","AO","BJ","BW","BF","BI","CV","CM","CF","TD","KM","CG","CD","DJ",
+  "EG","GQ","ER","SZ","ET","GA","GM","GH","GN","GW","CI","KE","LS","LR",
+  "LY","MG","MW","ML","MR","MU","MA","MZ","NA","NE","NG","RW","ST","SN",
+  "SC","SL","SO","ZA","SS","SD","TZ","TG","TN","UG","ZM","ZW",
+]);
+function isAfricanCountry(country?: string | null): boolean {
+  if (!country) return true;
+  const t = country.trim();
+  return AFRICAN_NAMES.has(t) || AFRICAN_CODES.has(t.toUpperCase());
+}
+
 // ── PaymentModal ──────────────────────────────────────────────────────────────
 
-function PaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
-  const [gateway, setGateway] = useState<"paystack"|"interswitch"|"offline">("paystack");
+function PaymentModal({ app, devCountry, onClose }: { app: App; devCountry?: string; onClose: () => void }) {
+  const african = isAfricanCountry(devCountry);
+
+  type GwId = "paystack" | "interswitch" | "offline" | "squad" | "stripe";
+  const [gateway, setGateway] = useState<GwId>(african ? "paystack" : "squad");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showOffline, setShowOffline] = useState(false);
+
+  const feeLabel = african ? "NGN 50,000" : "$100 USD";
+  const accentColor = african ? "#00c853" : "#7c4dff";
 
   async function handlePay() {
     if (gateway === "offline") { setShowOffline(true); return; }
     setLoading(true); setError("");
     try {
-      const result = await apiFetch<PaymentInitResult>("/payments/initiate", { method: "POST", body: JSON.stringify({ appId: app.id, gateway }) });
-      if (result.gateway === "paystack") { window.location.href = result.authorizationUrl; }
-      else if (result.gateway === "interswitch") {
+      const result = await apiFetch<PaymentInitResult>("/payments/initiate", {
+        method: "POST",
+        body: JSON.stringify({ appId: app.id, gateway }),
+      });
+
+      if (result.gateway === "paystack") {
+        window.location.href = result.authorizationUrl;
+      } else if (result.gateway === "interswitch") {
         const form = document.createElement("form"); form.method = "POST"; form.action = result.paymentUrl;
-        Object.entries(result.formData).forEach(([k, v]) => { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; form.appendChild(i); });
+        Object.entries(result.formData).forEach(([k, v]) => {
+          const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; form.appendChild(i);
+        });
         document.body.appendChild(form); form.submit();
+      } else if (result.gateway === "squad" || result.gateway === "stripe") {
+        window.location.href = result.checkoutUrl;
       }
-    } catch (err: any) { setError(err.message ?? "Could not initiate payment."); setLoading(false); }
+    } catch (err: any) {
+      // Squad failed — surface a Stripe fallback prompt
+      if (gateway === "squad") {
+        setError("Squad checkout unavailable. Switch to Stripe (card) below.");
+      } else {
+        setError(err.message ?? "Could not initiate payment.");
+      }
+      setLoading(false);
+    }
   }
 
   if (showOffline) return <OfflinePaymentModal app={app} onClose={onClose} />;
 
-  const GATEWAYS = [
-    { id: "paystack" as const, icon: "💚", name: "Paystack", desc: "Card, bank transfer, USSD" },
-    { id: "interswitch" as const, icon: "🔵", name: "Interswitch", desc: "Card, bank transfer (Verve, Mastercard, Visa)" },
-    { id: "offline" as const, icon: "🏦", name: "Bank Transfer (Offline)", desc: "Pay directly to our account and upload proof" },
+  const AFRICAN_GATEWAYS = [
+    { id: "paystack"    as const, icon: "💚", name: "Paystack",              desc: "Card, bank transfer, USSD — NGN 50,000" },
+    { id: "interswitch" as const, icon: "🔵", name: "Interswitch",           desc: "Card, bank transfer (Verve, Mastercard, Visa) — NGN 50,000" },
+    { id: "offline"     as const, icon: "🏦", name: "Bank Transfer (Offline)",desc: "Transfer to our account and upload proof of payment" },
   ];
+  const INTL_GATEWAYS = [
+    { id: "squad"  as const, icon: "⚡", name: "Squad",  desc: "Card, bank transfer — $100 USD (recommended)" },
+    { id: "stripe" as const, icon: "💳", name: "Stripe", desc: "Credit / debit card — $100 USD (fallback if Squad unavailable)" },
+  ];
+  const GATEWAYS = african ? AFRICAN_GATEWAYS : INTL_GATEWAYS;
+
+  const payLabel = () => {
+    if (loading) return "Redirecting…";
+    if (gateway === "offline") return "Continue to Bank Transfer →";
+    const gwName = GATEWAYS.find(g => g.id === gateway)?.name ?? gateway;
+    return `Pay ${feeLabel} via ${gwName}`;
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%" }}>
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, maxWidth: 460, width: "100%" }}>
         <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Pay Publishing Fee</h3>
-        <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 24 }}>Publishing <strong style={{ color: "#e8eaf0" }}>"{app.name}"</strong> — one-time fee of <strong style={{ color: "#00c853" }}>NGN 50,000</strong>.</p>
-        <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", marginBottom: 10, textTransform: "uppercase" }}>Choose Payment Method</div>
+        <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 4 }}>
+          Publishing <strong style={{ color: "#e8eaf0" }}>"{app.name}"</strong> — one-time fee of{" "}
+          <strong style={{ color: accentColor }}>{feeLabel}</strong>.
+        </p>
+        {!african && (
+          <p style={{ fontSize: 12, color: "#8892a4", marginBottom: 20, lineHeight: 1.5 }}>
+            💡 We detected you're outside Africa. Your fee is <strong style={{ color: "#a78bfa" }}>$100 USD</strong>. Pay via Squad first — if that fails, switch to Stripe.
+          </p>
+        )}
+        {african && <div style={{ marginBottom: 20 }} />}
+
+        <div style={{ fontWeight: 700, fontSize: 12, color: "#8892a4", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Choose Payment Method</div>
         {GATEWAYS.map(g => (
-          <button key={g.id} onClick={() => setGateway(g.id)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", background: gateway===g.id?"rgba(0,200,83,0.08)":"rgba(255,255,255,0.03)", border: `1.5px solid ${gateway===g.id?"#00c853":"rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", marginBottom: 10, textAlign: "left" }}>
-            <span style={{ fontSize: 24 }}>{g.icon}</span>
+          <button key={g.id} onClick={() => setGateway(g.id)}
+            style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", background: gateway===g.id?`rgba(${african?"0,200,83":"124,77,255"},0.08)`:"rgba(255,255,255,0.03)", border: `1.5px solid ${gateway===g.id?accentColor:"rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", marginBottom: 10, textAlign: "left" }}>
+            <span style={{ fontSize: 22 }}>{g.icon}</span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#e8eaf0" }}>{g.name}</div>
               <div style={{ fontSize: 12, color: "#8892a4" }}>{g.desc}</div>
             </div>
-            <span style={{ marginLeft: "auto", fontSize: 16, color: gateway===g.id?"#00c853":"#2a3040" }}>{gateway===g.id?"●":"○"}</span>
+            <span style={{ marginLeft: "auto", fontSize: 16, color: gateway===g.id?accentColor:"#2a3040" }}>{gateway===g.id?"●":"○"}</span>
           </button>
         ))}
-        {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 13, marginBottom: 14 }}>❌ {error}</div>}
+
+        {error && (
+          <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 13, marginBottom: 14 }}>
+            ❌ {error}
+            {error.includes("Stripe") && gateway === "squad" && (
+              <button onClick={() => { setGateway("stripe"); setError(""); }}
+                style={{ display: "block", marginTop: 6, color: "#7c4dff", fontSize: 12, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                → Switch to Stripe
+              </button>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={onClose} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
-          <button onClick={handlePay} disabled={loading} className="btn-green" style={{ flex: 2, fontSize: 14 }}>
-            {loading ? "Redirecting..." : gateway === "offline" ? "Continue to Bank Transfer →" : `Pay NGN 50,000 via ${gateway === "paystack" ? "Paystack" : "Interswitch"}`}
+          <button onClick={handlePay} disabled={loading} className="btn-green" style={{ flex: 2, fontSize: 14, background: african ? undefined : "linear-gradient(135deg,#7c4dff,#a78bfa)", borderColor: african ? undefined : "#7c4dff" }}>
+            {payLabel()}
           </button>
         </div>
       </div>
@@ -1276,7 +1361,8 @@ function PlatformsTab({ dev }: { dev: Developer }) {
 
 // ── AppsTab (with repo link + request update) ─────────────────────────────────
 
-function AppsTab({ apps, onPayApp, onRefresh, feeExempt }: { apps: App[]; onPayApp: (a: App) => void; onRefresh: () => void; feeExempt?: boolean }) {
+function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: App[]; onPayApp: (a: App) => void; onRefresh: () => void; feeExempt?: boolean; devCountry?: string }) {
+  const feeLabel = isAfricanCountry(devCountry) ? "NGN 50K" : "$100";
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [repoLinks, setRepoLinks] = useState<Record<number, AppRepoLink | null>>({});
   const [linkingApp, setLinkingApp] = useState<App | null>(null);
@@ -1317,7 +1403,7 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt }: { apps: App[]; onPayA
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ background: s.bg, color: s.color, padding: "4px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay NGN 50K</button>}
+                  {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay {feeLabel}</button>}
                   {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
                 </div>
               </div>
@@ -1384,12 +1470,14 @@ const STATUS_COLORS: Record<string, string> = {
   draft:           "#556070",
 };
 
-function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
+function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt, devCountry }: {
   apps: App[];
   onPayApp: (a: App) => void;
   onSubmit: () => void;
   feeExempt?: boolean;
+  devCountry?: string;
 }) {
+  const feeLabel = isAfricanCountry(devCountry) ? "NGN 50,000" : "$100 USD";
   // Per-app download data for bar chart
   const downloadData = useMemo(
     () => apps.map(a => ({ name: a.name.length > 14 ? a.name.slice(0, 12) + "…" : a.name, downloads: a.totalDownloads }))
@@ -1444,7 +1532,7 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
           {apps.filter(a => a.status === "pending_payment").map(app => (
             <div key={app.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               <span style={{ fontSize: 14 }}>{app.name}</span>
-              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => onPayApp(app)}>Pay NGN 50,000</button>
+              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => onPayApp(app)}>Pay {feeLabel}</button>
             </div>
           ))}
         </div>
@@ -1453,7 +1541,7 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
       {apps.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
-          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for NGN 50,000.</div>
+          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for {feeLabel}.</div>
           <button className="btn-green" onClick={onSubmit}>Submit Your First App</button>
         </div>
       ) : (
@@ -2111,7 +2199,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
 
           {!dev.feeExempt && (
             <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-              💳 After launch you'll pay the <strong style={{ color: "#ffb300" }}>NGN 50,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer.
+              💳 After launch you'll pay the publishing fee (<strong style={{ color: "#ffb300" }}>NGN 50,000</strong> · Africa · <strong style={{ color: "#a78bfa" }}>$100 USD</strong> · International) via your preferred payment method.
             </div>
           )}
 
@@ -2138,7 +2226,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
       <p style={{ color: "#8892a4", fontSize: 14, maxWidth: 420, margin: "0 auto 28px", lineHeight: 1.7 }}>
         {dev.feeExempt
           ? "Your app is now in the review queue. An admin will approve it shortly."
-          : "Your app has been submitted. Complete the NGN 50,000 publishing fee from My Apps to go live."}
+          : "Your app has been submitted. Complete the publishing fee from My Apps to go live."}
       </p>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         <button className="btn-outline" onClick={() => { setStep("upload"); setSession(null); setForm({}); setError(""); }}>
@@ -2183,11 +2271,28 @@ export default function DeveloperPortal() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const paymentSessionId = searchParams.get("session_id");
+  const paymentTxnRef    = searchParams.get("transaction_ref") ?? searchParams.get("txnRef");
+
   useEffect(() => {
     if (paymentGateway === "paystack" && paymentRef) {
-      apiFetch("/payments/paystack/verify", { method: "POST", body: JSON.stringify({ reference: paymentRef }) }).then(() => loadData()).catch(() => {});
-    } else if (paymentGateway === "interswitch" && paymentStatus === "success") { loadData(); }
-  }, [paymentGateway, paymentRef, paymentStatus]);
+      apiFetch("/payments/paystack/verify", { method: "POST", body: JSON.stringify({ reference: paymentRef }) })
+        .then(() => loadData()).catch(() => {});
+    } else if (paymentGateway === "interswitch" && paymentStatus === "success") {
+      loadData();
+    } else if (paymentGateway === "squad" && paymentStatus === "success" && paymentTxnRef) {
+      // Squad redirected back — server already verified in the callback, just reload
+      loadData();
+    } else if (paymentGateway === "squad" && paymentTxnRef) {
+      // Squad callback without status=success — try explicit verify
+      apiFetch("/payments/squad/verify", { method: "POST", body: JSON.stringify({ transactionRef: paymentTxnRef }) })
+        .then(() => loadData()).catch(() => {});
+    } else if (paymentGateway === "stripe" && paymentSessionId) {
+      // Stripe redirected back — verify the session
+      apiFetch("/payments/stripe/verify-usd", { method: "POST", body: JSON.stringify({ sessionId: paymentSessionId }) })
+        .then(() => loadData()).catch(() => {});
+    }
+  }, [paymentGateway, paymentRef, paymentStatus, paymentTxnRef, paymentSessionId]);
 
   if (!isSignedIn) return (
     <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 20px", textAlign: "center" }}>
@@ -2204,7 +2309,7 @@ export default function DeveloperPortal() {
     <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 20px", textAlign: "center" }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
       <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Become a Developer</h2>
-      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store — free registration, then NGN 50,000 per app published.</p>
+      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store — free registration, then NGN 50,000 (African) / $100 USD (International) per app published.</p>
       <Link href="/developer/signup" className="btn-green" style={{ display: "inline-flex", fontSize: 15, padding: "12px 32px" }}>Create Developer Account →</Link>
     </div>
   );
@@ -2265,11 +2370,11 @@ export default function DeveloperPortal() {
 
       {/* Dashboard */}
       {view === "dashboard" && (
-        <DeveloperDashboard apps={apps} onPayApp={setPaymentApp} onSubmit={() => setView("submit")} feeExempt={dev.feeExempt} />
+        <DeveloperDashboard apps={apps} onPayApp={setPaymentApp} onSubmit={() => setView("submit")} feeExempt={dev.feeExempt} devCountry={dev.country} />
       )}
 
       {/* Apps */}
-      {view === "apps" && <AppsTab apps={apps} onPayApp={setPaymentApp} onRefresh={loadData} feeExempt={dev.feeExempt} />}
+      {view === "apps" && <AppsTab apps={apps} onPayApp={setPaymentApp} onRefresh={loadData} feeExempt={dev.feeExempt} devCountry={dev.country} />}
 
       {/* AI Launch */}
       {view === "ai-launch" && (
@@ -2286,7 +2391,7 @@ export default function DeveloperPortal() {
       {view === "platforms" && <PlatformsTab dev={dev} />}
 
       {/* Payment modal */}
-      {paymentApp && <PaymentModal app={paymentApp} onClose={() => { setPaymentApp(null); loadData(); }} />}
+      {paymentApp && <PaymentModal app={paymentApp} devCountry={dev?.country} onClose={() => { setPaymentApp(null); loadData(); }} />}
     </div>
   );
 }
