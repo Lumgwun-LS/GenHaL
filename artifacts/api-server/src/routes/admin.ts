@@ -1864,9 +1864,9 @@ router.get("/admin/vendors/search", async (req, res): Promise<void> => {
 });
 
 // ─── Feature Trial Routes ─────────────────────────────────────────────────────
+//  GET  /admin/feature-trials             — list active + recently-expired trials
 //  POST /admin/feature-trials/:vendorId  — grant a feature-tier trial
 //  DELETE /admin/feature-trials/:vendorId — revoke a feature-tier trial
-//  GET  /admin/feature-trials             — list all vendors with active trials
 
 const VALID_TRIAL_TIERS = ["starter", "pro", "enterprise"] as const;
 
@@ -1875,6 +1875,9 @@ router.get("/admin/feature-trials", async (req, res): Promise<void> => {
   if (!userId || !isAdmin(userId)) { res.status(403).json({ error: "Admin only" }); return; }
 
   const now = new Date();
+  // Return all vendors with a trial field set — includes active trials AND
+  // recently-expired ones that the hourly scheduler hasn't cleared yet.
+  // The `active` field in the response lets the UI render the right status.
   const rows = await db
     .select({
       id: vendorsTable.id,
@@ -1888,10 +1891,7 @@ router.get("/admin/feature-trials", async (req, res): Promise<void> => {
       featureTrialNote: vendorsTable.featureTrialNote,
     })
     .from(vendorsTable)
-    .where(and(
-      sql`${vendorsTable.featureTrialTier} IS NOT NULL`,
-      gte(vendorsTable.featureTrialExpiresAt, now),
-    ))
+    .where(sql`${vendorsTable.featureTrialTier} IS NOT NULL`)
     .orderBy(asc(vendorsTable.featureTrialExpiresAt));
 
   res.json(rows.map(r => ({
