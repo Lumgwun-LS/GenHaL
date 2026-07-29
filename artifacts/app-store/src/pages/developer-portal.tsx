@@ -56,25 +56,27 @@ function card(extra?: React.CSSProperties): React.CSSProperties {
 }
 
 /**
- * Upload a File via the same-origin streaming proxy endpoint.
- * The server pipes the raw bytes directly to GCS without buffering, so there
- * is no Replit proxy body-size cap and no CORS issue.
- * XHR is used so onprogress fires for real-time progress tracking.
+ * Upload a file to object storage via the same-origin streaming proxy.
+ *
+ * Replit's GCS sidecar credentials only have object-level IAM permissions
+ * (not storage.buckets.update), so bucket-level CORS can never be configured
+ * programmatically.  That means browser → GCS direct PUT is always blocked
+ * by CORS preflight, making the presigned-URL path permanently unavailable.
+ *
+ * This endpoint pipes the raw req stream straight to a GCS file.createWriteStream()
+ * without any buffering, so:
+ *   • No Replit proxy body-size cap (body is never collected by Express)
+ *   • No CORS issue (same-origin request)
+ *   • No memory spike for large APKs (stream, not buffer)
+ * XHR is used so onProgress fires in real time.
  */
 async function uploadFilePresigned(
   file: File,
   onProgress: (pct: number) => void,
 ): Promise<string> {
-  // Get a fresh Clerk session token for the Authorization header
-  const token = await (async () => {
-    try {
-      const clerk = (window as any).Clerk;
-      if (!clerk?.session) return null;
-      return await clerk.session.getToken();
-    } catch { return null; }
-  })();
+  const token = await getClerkToken();
 
-  const { fileUrl } = await new Promise<{ fileUrl: string }>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
     xhr.upload.onprogress = (e) => {
@@ -84,31 +86,28 @@ async function uploadFilePresigned(
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          resolve(JSON.parse(xhr.responseText));
+          const { fileUrl } = JSON.parse(xhr.responseText);
+          resolve(fileUrl);
         } catch {
           reject(new Error("Invalid response from upload endpoint"));
         }
       } else {
-        // Surface the actual error body so debugging is easier
-        const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : "";
+        const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 300)}` : "";
         reject(new Error(`Upload failed (HTTP ${xhr.status})${detail}`));
       }
     };
 
-    xhr.onerror = () => reject(new Error("Network error during file upload"));
+    xhr.onerror  = () => reject(new Error("Network error during upload"));
     xhr.ontimeout = () => reject(new Error("Upload timed out"));
 
-    // POST to same-origin streaming proxy — bypasses Replit proxy body cap
     xhr.open("POST", "/api/store/apps/stream-upload");
     xhr.timeout = 10 * 60 * 1000; // 10 min for large APKs
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    // Tell the server the file's MIME type without setting Content-Type
-    // (setting Content-Type to multipart would break the raw stream)
+    // Pass MIME type in a custom header; setting Content-Type here would
+    // override the raw-stream interpretation on the server side.
     xhr.setRequestHeader("X-File-Type", file.type || "application/octet-stream");
     xhr.send(file);
   });
-
-  return fileUrl;
 }
 
 function formatBytes(bytes: number): string {
