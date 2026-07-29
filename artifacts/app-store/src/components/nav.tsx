@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUser, SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import { useUser, UserButton } from "@clerk/react";
 import { apiFetch } from "../lib/api";
 
 const PLATFORMS = [
@@ -428,7 +428,7 @@ function MobileDrawer({
                   </div>
                 ) : (
                   <>
-                    <SignInButton mode="modal">
+                    <Link href="/sign-in" onClick={onClose}>
                       <button
                         style={{
                           width: "100%",
@@ -444,8 +444,8 @@ function MobileDrawer({
                       >
                         Sign In
                       </button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
+                    </Link>
+                    <Link href="/sign-up" onClick={onClose}>
                       <button
                         className="btn-green"
                         style={{
@@ -457,7 +457,7 @@ function MobileDrawer({
                       >
                         Create Account
                       </button>
-                    </SignUpButton>
+                    </Link>
                   </>
                 )}
               </div>
@@ -721,7 +721,7 @@ export default function Nav() {
                 </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <SignInButton mode="modal">
+                  <Link href="/sign-in">
                     <motion.button
                       style={{
                         fontSize: 13,
@@ -743,8 +743,8 @@ export default function Nav() {
                     >
                       Sign In
                     </motion.button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
+                  </Link>
+                  <Link href="/sign-up">
                     <motion.button
                       className="btn-green"
                       style={{ fontSize: 13, padding: "6px 18px" }}
@@ -754,7 +754,7 @@ export default function Nav() {
                     >
                       Create Account
                     </motion.button>
-                  </SignUpButton>
+                  </Link>
                 </div>
               )}
             </div>

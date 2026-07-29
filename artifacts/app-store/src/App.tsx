@@ -1,8 +1,9 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useEffect, useRef, Component, type ReactNode, type ErrorInfo } from "react";
 import { trackPageView } from "./lib/analytics";
-import { ClerkProvider, useUser } from "@clerk/react";
+import { ClerkProvider, useUser, SignIn, SignUp } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
+import { dark } from "@clerk/themes";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
 import Footer from "./components/footer";
@@ -64,43 +65,134 @@ function UserTracker() {
   return null;
 }
 
-const CLERK_KEY = publishableKeyFromHost(
+const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+const clerkAppearance = {
+  baseTheme: dark,
+  variables: {
+    colorPrimary: "#00c853",
+    colorBackground: "#0b0f17",
+    colorInputBackground: "#0d1420",
+    colorText: "#e8eaf0",
+    colorTextSecondary: "#8892a4",
+    colorNeutral: "#1e2530",
+    borderRadius: "12px",
+    fontFamily: "Inter, system-ui, sans-serif",
+  },
+  elements: {
+    rootBox: "w-full flex justify-center",
+    cardBox: "w-[440px] max-w-full overflow-hidden",
+    card: "!bg-[#0b0f17] !border !border-white/10 !shadow-2xl !rounded-2xl",
+    footer: "!bg-[#0b0f17] !border-t !border-white/10",
+    headerTitle: "!text-white",
+    headerSubtitle: "!text-[#8892a4]",
+    socialButtonsBlockButtonText: "!text-[#c0c8d8]",
+    formFieldLabel: "!text-[#8892a4]",
+    formFieldInput: "!bg-[#0d1420] !border-white/10 !text-white",
+    formButtonPrimary: "!bg-[#00c853] !text-black hover:!bg-[#00e060]",
+    footerActionLink: "!text-[#00c853]",
+    footerActionText: "!text-[#8892a4]",
+    dividerText: "!text-[#8892a4]",
+  },
+};
+
+function SignInPage() {
+  return (
+    <div style={{
+      minHeight: "100dvh",
+      background: "#060811",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+    }}>
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+        fallbackRedirectUrl={`${basePath}/my-apps`}
+        appearance={clerkAppearance}
+      />
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div style={{
+      minHeight: "100dvh",
+      background: "#060811",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+    }}>
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        fallbackRedirectUrl={`${basePath}/my-apps`}
+        appearance={clerkAppearance}
+      />
+    </div>
+  );
+}
+
+function AppRoutes() {
+  const [, setLocation] = useLocation();
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey!}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      signInFallbackRedirectUrl={`${basePath}/my-apps`}
+      signUpFallbackRedirectUrl={`${basePath}/my-apps`}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
+        <CrossAppBanner />
+        <PageViewTracker />
+        <UserTracker />
+        <Nav />
+        <ErrorBoundary>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/search" component={Search} />
+            <Route path="/apps/:slug" component={AppDetail} />
+            <Route path="/app/:publicId" component={AppPublicLanding} />
+            <Route path="/my-apps" component={MyApps} />
+            <Route path="/developer/signup" component={DeveloperSignup} />
+            <Route path="/developer" component={DeveloperPortal} />
+            <Route path="/admin" component={Admin} />
+            <Route path="/sign-in/*?" component={SignInPage} />
+            <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </ErrorBoundary>
+        <Footer />
+      </div>
+    </ClerkProvider>
+  );
+}
 
 export default function App() {
   return (
-    <ClerkProvider
-      publishableKey={CLERK_KEY}
-      proxyUrl={clerkProxyUrl}
-      signInFallbackRedirectUrl={`${basePath}/my-apps`}
-      signUpFallbackRedirectUrl={`${basePath}/my-apps`}
-    >
-      <WouterRouter base={basePath}>
-        <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
-          <CrossAppBanner />
-          <PageViewTracker />
-          <UserTracker />
-          <Nav />
-          <ErrorBoundary>
-            <Switch>
-              <Route path="/" component={Home} />
-              <Route path="/search" component={Search} />
-              <Route path="/apps/:slug" component={AppDetail} />
-              <Route path="/app/:publicId" component={AppPublicLanding} />
-              <Route path="/my-apps" component={MyApps} />
-              <Route path="/developer/signup" component={DeveloperSignup} />
-              <Route path="/developer" component={DeveloperPortal} />
-              <Route path="/admin" component={Admin} />
-              <Route component={NotFound} />
-            </Switch>
-          </ErrorBoundary>
-          <Footer />
-        </div>
-      </WouterRouter>
-    </ClerkProvider>
+    <WouterRouter base={basePath}>
+      <AppRoutes />
+    </WouterRouter>
   );
 }
