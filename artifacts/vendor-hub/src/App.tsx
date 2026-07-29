@@ -72,6 +72,7 @@ import CustomerProfile from "@/pages/customer/profile";
 import MessagesPage from "@/pages/messages/index";
 import WalletPage from "@/pages/wallet/index";
 import InterswitchPage from "@/pages/interswitch/index";
+import MobileAppPage from "@/pages/mobile-app";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -401,6 +402,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/real-estate" component={() => <AuthenticatedRoute component={RealEstatePage} />} />
           <Route path="/architect" component={() => <AuthenticatedRoute component={ArchitectPage} />} />
           <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />
+          <Route path="/mobile-app" component={() => <AuthenticatedRoute component={MobileAppPage} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           <Route path="/marketplace" component={() => <AuthenticatedRoute component={MarketplacePage} />} />
           <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />

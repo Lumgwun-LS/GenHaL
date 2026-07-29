@@ -24,6 +24,7 @@ import { startStockAlertScheduler } from "./lib/stock-alert-scheduler";
 import { startOverdueInvoiceScheduler } from "./lib/overdue-invoice-scheduler";
 import { startFeatureTrialExpiryScheduler } from "./lib/feature-trial-expiry-scheduler";
 import { startStoreUploadTrialScheduler } from "./lib/store-upload-trial-scheduler";
+import { startMobileAppBuildScheduler } from "./lib/mobile-app-build-scheduler";
 import { initTrustedVendorsCache } from "./lib/trusted-vendors-cache";
 
 const rawPort = process.env["PORT"];
@@ -71,5 +72,6 @@ app.listen(port, (err) => {
   startOverdueInvoiceScheduler();
   startFeatureTrialExpiryScheduler();
   startStoreUploadTrialScheduler();
+  startMobileAppBuildScheduler();
   void initTrustedVendorsCache();
 });

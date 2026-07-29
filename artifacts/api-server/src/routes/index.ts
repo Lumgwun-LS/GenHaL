@@ -76,6 +76,7 @@ import leadFormsRouter from "./lead-forms";
 import utmLinksRouter from "./utm-links";
 import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
+import mobileAppsRouter from "./mobile-apps";
 
 const router: IRouter = Router();
 
@@ -208,5 +209,6 @@ router.use(walletRouter);
 router.use(ratingsRouter);
 router.use(complaintsRouter);
 router.use(integrationErrorsRouter);
+router.use(mobileAppsRouter);
 
 export default router;

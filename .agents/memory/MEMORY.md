@@ -108,3 +108,4 @@
 - [CRM People Tracking](crm-people-tracking.md) — inbound CRM rebuilt from scraping→visitor tracking; pixel/form/UTM/order capture; person_activities timeline; api-zod needs dom lib; channel mirrors source for compat.
 - [Vendor Feature Trial System](vendor-feature-trial.md) — 5 cols on vendors table; getEffectiveTier() respects featureTrialTier; admin grant/revoke/list routes; dashboard banner; prod grant needs Publish first.
 - [Platform Users Registry](platform-users.md) — platform_users table captures all Clerk users (inc. pre-onboarding) via JIT upsert in login-ping + GET /vendors/me; admin list + detail routes; UI in admin/platform-users.tsx.
+- [Mobile App Builder](mobile-app-builder.md) — Website-to-App service: vendor_mobile_apps table, app-generator.ts (Expo WebView template + EAS build), mobile-app-build-scheduler.ts polls for completion; logger is named export not default; resolveAuthedVendor is local inline fn.

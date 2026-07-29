@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc, or } from "drizzle-orm";
-import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable } from "@workspace/db";
+import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable, storeDeveloperAccountsTable } from "@workspace/db";
 import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
@@ -202,6 +202,15 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
     addVendorToCache(vendor);
     void syncVendorToAwajimaa(vendor);
     notifyAdminSignup({ platform: "vendor-hub", name: vendor.name, email: vendor.email, phone: vendor.phone, country: vendor.country });
+    // Auto-create App Store developer account using the same details.
+    void db.insert(storeDeveloperAccountsTable).values({
+      clerkUserId:  userId,
+      displayName:  vendor.name,
+      email:        vendor.email,
+      country:      vendor.country ?? "Nigeria",
+      status:       "active",
+      feeExempt:    false,
+    }).onConflictDoNothing();
   } catch (err: any) {
     // Only swallow the specific clerk_user_id race — any other unique violation (or error)
     // is unexpected here and should surface rather than being masked as a successful onboard.

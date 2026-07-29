@@ -92,3 +92,4 @@ export * from "./vendor-ratings";
 export * from "./customer-complaints";
 export * from "./integration-error-logs";
 export * from "./integration-support-reports";
+export * from "./vendor-mobile-apps";
