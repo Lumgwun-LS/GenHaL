@@ -55,6 +55,42 @@ function card(extra?: React.CSSProperties): React.CSSProperties {
   return { background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 18, ...extra };
 }
 
+/**
+ * Upload a File directly to object storage via a presigned PUT URL.
+ * The file bypasses the API server + proxy entirely, so there is no size limit.
+ * Returns the permanent public URL the file is reachable at.
+ */
+async function uploadFilePresigned(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<string> {
+  const { uploadUrl, fileUrl } = await apiFetch<{ uploadUrl: string; fileUrl: string }>(
+    "/store/apps/upload-url",
+    { method: "POST", body: JSON.stringify({}) },
+  );
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Storage upload failed (HTTP ${xhr.status})`));
+    xhr.onerror = () => reject(new Error("Network error during file upload"));
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.send(file);
+  });
+  return fileUrl;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ── WalletCard ────────────────────────────────────────────────────────────────
 
 function WalletCard({ dev }: { dev: Developer }) {
@@ -423,6 +459,64 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   const [submittedApp, setSubmittedApp] = useState<App | null>(null);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Direct file upload state
+  const [apkFile, setApkFile] = useState<File | null>(null);
+  const [apkUploading, setApkUploading] = useState(false);
+  const [apkProgress, setApkProgress] = useState(0);
+  const [iconFileObj, setIconFileObj] = useState<File | null>(null);
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconProgress, setIconProgress] = useState(0);
+  const [ssFiles, setSsFiles] = useState<File[]>([]);
+  const [ssUploading, setSsUploading] = useState(false);
+  const [ssProgress, setSsProgress] = useState(0);
+  const apkInputRef = useRef<HTMLInputElement>(null);
+  const iconUploadRef = useRef<HTMLInputElement>(null);
+  const ssUploadRef = useRef<HTMLInputElement>(null);
+
+  async function uploadApk(file: File) {
+    setApkFile(file); setApkUploading(true); setApkProgress(0);
+    try {
+      const url = await uploadFilePresigned(file, setApkProgress);
+      set("downloadUrl", url);
+    } catch (err: any) {
+      setError(`APK upload failed: ${err.message ?? "Unknown error"}`);
+    } finally {
+      setApkUploading(false);
+    }
+  }
+
+  async function uploadIcon(file: File) {
+    setIconFileObj(file); setIconUploading(true); setIconProgress(0);
+    try {
+      const url = await uploadFilePresigned(file, setIconProgress);
+      set("iconUrl", url);
+    } catch (err: any) {
+      setError(`Icon upload failed: ${err.message ?? "Unknown error"}`);
+    } finally {
+      setIconUploading(false);
+    }
+  }
+
+  async function uploadScreenshots(files: File[]) {
+    setSsFiles(files); setSsUploading(true); setSsProgress(0);
+    try {
+      const totalBytes = files.reduce((s, f) => s + f.size, 0) || 1;
+      let doneBytes = 0;
+      const urls: string[] = [];
+      for (const f of files) {
+        const url = await uploadFilePresigned(f, (pct) =>
+          setSsProgress(Math.round(((doneBytes + (f.size * pct) / 100) / totalBytes) * 100)));
+        doneBytes += f.size;
+        urls.push(url);
+      }
+      set("screenshots", urls.join("\n"));
+    } catch (err: any) {
+      setError(`Screenshot upload failed: ${err.message ?? "Unknown error"}`);
+    } finally {
+      setSsUploading(false);
+    }
+  }
+
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
 
   function clearTimers() { stageTimers.current.forEach(clearTimeout); stageTimers.current = []; }
@@ -538,14 +632,79 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
             Your app's unique identifier (e.g. <code>com.yourcompany.appname</code>). Once registered, this locks your app — only you can publish updates for it.
           </div>
         </div>
-        <div><label className="form-label">Icon URL *</label><input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://..." required /></div>
+        {/* Icon field with optional upload */}
+        <div>
+          <label className="form-label">App Icon *</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://... or upload below" style={{ flex: 1 }} />
+            <button type="button" onClick={() => iconUploadRef.current?.click()}
+              style={{ flexShrink: 0, padding: "8px 14px", background: "rgba(124,77,255,0.15)", border: "1px solid rgba(124,77,255,0.35)", borderRadius: 8, color: "#a78bfa", fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {iconUploading ? `${iconProgress}%` : iconFileObj ? "✅ Uploaded" : "⬆ Upload"}
+            </button>
+          </div>
+          <input ref={iconUploadRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadIcon(f); }} />
+          {iconUploading && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${iconProgress}%`, height: "100%", background: "linear-gradient(90deg,#7c4dff,#a78bfa)", transition: "width 0.3s" }} />
+              </div>
+            </div>
+          )}
+          {iconFileObj && !iconUploading && <div style={{ fontSize: 11, color: "#00c853", marginTop: 4 }}>✓ {iconFileObj.name} uploaded — URL filled above</div>}
+        </div>
+
+        {/* Download/Install field with optional direct APK/IPA upload */}
         <div>
           <label className="form-label">Download / Install Link *</label>
-          <input className="input" type="url" value={form.downloadUrl} onChange={e => set("downloadUrl", e.target.value)} placeholder="https://..." required />
-          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>APK link, App Store URL, Play Store URL, or web app URL</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="input" type="url" value={form.downloadUrl} onChange={e => set("downloadUrl", e.target.value)} placeholder="https://... or upload APK/IPA below" style={{ flex: 1 }} />
+            <button type="button" onClick={() => apkInputRef.current?.click()}
+              style={{ flexShrink: 0, padding: "8px 14px", background: "rgba(0,200,83,0.12)", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 8, color: "#00c853", fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {apkUploading ? `${apkProgress}%` : apkFile ? "✅ Uploaded" : "⬆ Upload APK/IPA"}
+            </button>
+          </div>
+          <input ref={apkInputRef} type="file" accept=".apk,.ipa,.zip,.aab" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadApk(f); }} />
+          {apkUploading && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8892a4", marginBottom: 4 }}>
+                <span>Uploading {apkFile?.name} ({formatBytes(apkFile?.size ?? 0)}) directly to storage…</span>
+                <span>{apkProgress}%</span>
+              </div>
+              <div style={{ height: 6, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${apkProgress}%`, height: "100%", background: "linear-gradient(90deg,#00c853,#69f0ae)", transition: "width 0.3s" }} />
+              </div>
+              <div style={{ fontSize: 10, color: "#8892a4", marginTop: 4 }}>No size limit — file goes directly to storage, not through the server</div>
+            </div>
+          )}
+          {apkFile && !apkUploading && <div style={{ fontSize: 11, color: "#00c853", marginTop: 4 }}>✓ {apkFile.name} ({formatBytes(apkFile.size)}) uploaded — download URL filled above</div>}
+          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>Upload APK/IPA/AAB directly (up to 250 MB), or paste an external URL (Play Store, App Store, etc.)</div>
         </div>
+
         <div><label className="form-label">Web App URL (optional)</label><input className="input" type="url" value={form.webUrl} onChange={e => set("webUrl", e.target.value)} placeholder="https://..." /></div>
-        <div><label className="form-label">Screenshot URLs (optional, one per line)</label><textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="https://..." style={{ minHeight: 72 }} /></div>
+
+        {/* Screenshots field with optional direct upload */}
+        <div>
+          <label className="form-label">Screenshots (optional)</label>
+          <textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="One URL per line, or use the upload button →" style={{ minHeight: 72 }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+            <button type="button" onClick={() => ssUploadRef.current?.click()}
+              style={{ padding: "7px 14px", background: "rgba(0,188,212,0.1)", border: "1px solid rgba(0,188,212,0.3)", borderRadius: 8, color: "#00bcd4", fontSize: 12, cursor: "pointer" }}>
+              {ssUploading ? `Uploading… ${ssProgress}%` : ssFiles.length ? `✅ ${ssFiles.length} screenshot${ssFiles.length > 1 ? "s" : ""} uploaded` : "⬆ Upload Screenshots"}
+            </button>
+            <span style={{ fontSize: 11, color: "#8892a4" }}>Up to 8 images (PNG/JPG)</span>
+          </div>
+          <input ref={ssUploadRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={e => { const files = Array.from(e.target.files ?? []).slice(0, 8); if (files.length) uploadScreenshots(files); }} />
+          {ssUploading && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${ssProgress}%`, height: "100%", background: "linear-gradient(90deg,#00bcd4,#80deea)", transition: "width 0.3s" }} />
+              </div>
+            </div>
+          )}
+        </div>
         {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
         <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
           💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
@@ -1423,6 +1582,8 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
   const [keywords, setKeywords] = useState("");
   const [features, setFeatures] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -1468,26 +1629,50 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
       setError("Add a ZIP bundle, or at least an icon or screenshots.");
       return;
     }
-    setError(""); setUploading(true);
-    try {
-      const fd = new FormData();
-      if (bundleFile) fd.append("bundle", bundleFile);
-      if (iconFile) fd.append("icon", iconFile);
-      screenshotFiles.forEach(f => fd.append("screenshots", f));
+    setError(""); setUploading(true); setUploadProgress(0);
 
-      const token = await getClerkToken();
-      const res = await fetch("/api/store/ai-launch/upload", {
-        method: "POST",
-        body: fd,
-        credentials: "include",
-        // No Content-Type — browser sets it with multipart boundary automatically
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg || `HTTP ${res.status}`);
+    try {
+      // Build a list of all files with their weights for aggregate progress
+      type UploadItem = { file: File; label: string; key: string };
+      const items: UploadItem[] = [
+        ...(bundleFile ? [{ file: bundleFile, label: "bundle", key: "bundle" }] : []),
+        ...(iconFile   ? [{ file: iconFile,   label: "icon",   key: "icon"   }] : []),
+        ...screenshotFiles.map((f, i) => ({ file: f, label: `screenshot ${i + 1}`, key: "ss" })),
+      ];
+      const totalBytes = items.reduce((s, i) => s + i.file.size, 0) || 1;
+      let doneBytes = 0;
+
+      function weightedProgress(itemFile: File, pct: number) {
+        const partial = (doneBytes + (itemFile.size * pct) / 100) / totalBytes;
+        setUploadProgress(Math.round(partial * 92));
       }
-      const data = await res.json() as AiLaunchSession;
+
+      let bundleUrl: string | null = null;
+      let uploadedIconUrl: string | null = null;
+      const uploadedScreenshotUrls: string[] = [];
+
+      for (const item of items) {
+        setUploadStatus(`Uploading ${item.label} (${formatBytes(item.file.size)})…`);
+        const url = await uploadFilePresigned(item.file, (pct) => weightedProgress(item.file, pct));
+        doneBytes += item.file.size;
+        if (item.key === "bundle") bundleUrl = url;
+        else if (item.key === "icon") uploadedIconUrl = url;
+        else uploadedScreenshotUrls.push(url);
+      }
+
+      setUploadStatus("Starting AI analysis…");
+      setUploadProgress(96);
+
+      const data = await apiFetch<AiLaunchSession>("/store/ai-launch/upload", {
+        method: "POST",
+        body: JSON.stringify({
+          bundleUrl,
+          iconUrl: uploadedIconUrl,
+          screenshotUrls: uploadedScreenshotUrls,
+        }),
+      });
+
+      setUploadProgress(100);
       setSession(data);
       setStep("processing");
       startPolling(data.sessionId);
@@ -1495,6 +1680,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
       setError(err.message ?? "Upload failed.");
     } finally {
       setUploading(false);
+      setUploadStatus("");
     }
   }
 
@@ -1635,13 +1821,33 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
 
       {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14, marginBottom: 16 }}>❌ {error}</div>}
 
+      {/* Upload progress bar — shown while files are uploading */}
+      {uploading && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#8892a4", marginBottom: 6 }}>
+            <span>{uploadStatus || "Uploading…"}</span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div style={{ height: 8, background: "rgba(255,255,255,0.07)", borderRadius: 8, overflow: "hidden" }}>
+            <motion.div
+              animate={{ width: `${uploadProgress}%` }}
+              transition={{ ease: "linear", duration: 0.3 }}
+              style={{ height: "100%", background: "linear-gradient(90deg, #7c4dff, #a78bfa)", borderRadius: 8 }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 6, textAlign: "center" }}>
+            Files upload directly to storage — no size limit, no timeouts
+          </div>
+        </div>
+      )}
+
       <button
         className="btn-green"
         onClick={handleUpload}
         disabled={uploading || (!bundleFile && !iconFile && screenshotFiles.length === 0)}
         style={{ width: "100%", padding: 14, fontSize: 16, fontWeight: 700 }}
       >
-        {uploading ? "⏫ Uploading..." : "🤖 Analyze with AI →"}
+        {uploading ? `⏫ Uploading… ${uploadProgress}%` : "🤖 Analyze with AI →"}
       </button>
     </div>
   );

@@ -1,17 +1,16 @@
 /**
- * AI App Launcher — lets a developer upload a ZIP bundle (or individual files),
- * extract icon + screenshots, run GPT-4o Vision analysis, and auto-generate a
- * complete app-store listing ready for one-click submission.
+ * AI App Launcher — lets a developer upload assets (ZIP bundle or individual
+ * images) directly to object storage via presigned URLs, then POST just the
+ * resulting file URLs here for AI analysis and auto-listing generation.
  *
  * Endpoints (all under /store/ai-launch, mounted before requireAuth block):
- *   POST   /upload          — multipart: accepts .zip OR individual files
+ *   POST   /upload          — JSON: { bundleUrl?, iconUrl?, screenshotUrls?, manifest? }
  *   GET    /:sessionId      — poll session status + generated data
  *   POST   /:sessionId/submit — create app from reviewed AI data
  *   DELETE /:sessionId      — discard session
  */
 
 import { Router } from "express";
-import multer from "multer";
 import AdmZip from "adm-zip";
 import { db } from "@workspace/db";
 import {
@@ -28,13 +27,6 @@ import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
-
-// ─── Multer: in-memory, max 100 MB ────────────────────────────────────────────
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
-});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,14 +182,20 @@ Guidelines:
 }
 
 /**
- * The heavy lifting: extract files from ZIP (or use pre-uploaded files),
- * store images, call AI, update session. Runs async after returning session ID.
+ * The heavy lifting: if a bundleUrl was provided, download the ZIP and extract
+ * icon/screenshots from it. Then call GPT-4o Vision on the resolved images and
+ * update the session. Runs async after returning the session ID to the client.
+ *
+ * All images are expected to already be in object storage (uploaded by the
+ * browser via presigned PUT URLs). The ZIP bundle is downloaded here server-side
+ * so we can extract icon/screenshots/manifest without the file ever going through
+ * the API proxy.
  */
 async function processBundle(
   sessionId: number,
-  zipBuffer: Buffer | null,
-  iconBuffer: Buffer | null,
-  screenshotBuffers: Buffer[],
+  bundleUrl: string | null,
+  iconUrl: string | null,
+  screenshotUrls: string[],
   manifestRaw: string | null,
 ): Promise<void> {
   try {
@@ -209,66 +207,66 @@ async function processBundle(
       try { manifest = JSON.parse(manifestRaw); } catch { /* ignore */ }
     }
 
-    // ── Extract from ZIP ───────────────────────────────────────────────────
-    let iconBuf = iconBuffer;
-    let screenshotBufs = [...screenshotBuffers];
+    let resolvedIconUrl = iconUrl;
+    let resolvedScreenshotUrls = [...screenshotUrls];
 
-    if (zipBuffer) {
-      const zip = new AdmZip(zipBuffer);
-      const entries = zip.getEntries().sort((a, b) => a.entryName.localeCompare(b.entryName));
+    // ── Download + extract ZIP bundle ──────────────────────────────────────
+    // The ZIP contains only assets (icon, screenshots, app.json) — not the
+    // app binary. We download it back from storage and extract in memory.
+    if (bundleUrl) {
+      try {
+        const zipRes = await fetch(bundleUrl);
+        if (zipRes.ok) {
+          const zipBuf = Buffer.from(await zipRes.arrayBuffer());
+          const zip = new AdmZip(zipBuf);
+          const entries = zip.getEntries().sort((a, b) => a.entryName.localeCompare(b.entryName));
 
-      for (const entry of entries) {
-        if (entry.isDirectory) continue;
-        const name = entry.entryName.toLowerCase();
-        const basename = name.split("/").pop() ?? "";
+          for (const entry of entries) {
+            if (entry.isDirectory) continue;
+            const name = entry.entryName.toLowerCase();
+            const basename = name.split("/").pop() ?? "";
 
-        // Manifest
-        if (!manifest || Object.keys(manifest).length === 0) {
-          if (isManifestFile(entry.entryName)) {
-            try { manifest = JSON.parse(entry.getData().toString("utf8")); } catch { /* skip */ }
+            // Manifest
+            if (Object.keys(manifest).length === 0 && isManifestFile(entry.entryName)) {
+              try { manifest = JSON.parse(entry.getData().toString("utf8")); } catch { /* skip */ }
+            }
+
+            // Icon — first image with "icon" in the path
+            if (!resolvedIconUrl && isImageFile(basename) && (basename.includes("icon") || name.includes("icon"))) {
+              const url = await uploadImageToStorage(entry.getData(), "image/png");
+              if (url) resolvedIconUrl = url;
+            }
+
+            // Screenshots — all other images up to 8 total
+            if (isImageFile(basename) && !name.includes("icon") && resolvedScreenshotUrls.length < 8) {
+              const data = entry.getData();
+              if (data.length > 0) {
+                const url = await uploadImageToStorage(data, "image/png");
+                if (url) resolvedScreenshotUrls.push(url);
+              }
+            }
           }
+        } else {
+          logger.warn({ bundleUrl, status: zipRes.status }, "ai-launch: could not fetch ZIP bundle");
         }
-
-        // Icon
-        if (!iconBuf && (basename === "icon.png" || basename === "icon.jpg" || basename === "icon.jpeg" || basename === "icon.webp" || name.includes("icon"))) {
-          if (isImageFile(basename)) iconBuf = entry.getData();
-        }
-
-        // Screenshots — anything in a "screenshot" folder or matching pattern
-        if (isImageFile(basename) && !name.includes("icon") && screenshotBufs.length < 8) {
-          const data = entry.getData();
-          if (data.length > 0) screenshotBufs.push(data);
-        }
+      } catch (err) {
+        logger.warn({ err }, "ai-launch: ZIP extraction failed — continuing without bundle");
       }
     }
 
     extracted.manifest = manifest;
-
-    // ── Upload icon ────────────────────────────────────────────────────────
-    if (iconBuf) {
-      const ext = "png";
-      const url = await uploadImageToStorage(iconBuf, `image/${ext}`);
-      if (url) { extracted.iconUrl = url; }
-    }
-
-    // ── Upload screenshots ─────────────────────────────────────────────────
-    const screenshotUrls: string[] = [];
-    for (const buf of screenshotBufs.slice(0, 8)) {
-      const url = await uploadImageToStorage(buf, "image/png");
-      if (url) screenshotUrls.push(url);
-    }
-    extracted.screenshotUrls = screenshotUrls;
+    if (resolvedIconUrl) extracted.iconUrl = resolvedIconUrl;
+    extracted.screenshotUrls = resolvedScreenshotUrls;
 
     // ── AI analysis ────────────────────────────────────────────────────────
     const aiGenerated = await analyzeAppWithAI(
       manifest,
-      extracted.iconUrl ?? null,
-      screenshotUrls,
+      resolvedIconUrl ?? null,
+      resolvedScreenshotUrls,
     );
 
-    // Apply stored media URLs into the AI-generated data
-    if (extracted.iconUrl) aiGenerated.iconUrl = extracted.iconUrl;
-    aiGenerated.screenshots = screenshotUrls;
+    if (resolvedIconUrl) aiGenerated.iconUrl = resolvedIconUrl;
+    aiGenerated.screenshots = resolvedScreenshotUrls;
 
     // ── Update session → ready ─────────────────────────────────────────────
     await db.update(storeAiLaunchSessionsTable).set({
@@ -293,59 +291,60 @@ async function processBundle(
 
 /**
  * POST /store/ai-launch/upload
- * Accepts: multipart/form-data
- *   - bundle (optional): .zip file containing icon, screenshots, app.json
- *   - icon (optional): icon image file
- *   - screenshots (optional, multiple): screenshot image files
- *   - manifest (optional): raw JSON string
+ * Accepts: application/json
+ *   - bundleUrl      (optional): URL of a .zip already uploaded to object storage
+ *   - iconUrl        (optional): URL of icon image already in object storage
+ *   - screenshotUrls (optional): array of screenshot URLs already in object storage
+ *   - manifest       (optional): raw JSON string (app.json hints)
+ *
+ * Files should be uploaded directly to object storage first using
+ * POST /store/apps/upload-url (presigned PUT), which bypasses the API proxy
+ * entirely and allows files up to 250 MB.
  *
  * Returns: { sessionId, status: "processing" }
  */
-router.post(
-  "/upload",
-  requireAuth(),
-  upload.fields([
-    { name: "bundle", maxCount: 1 },
-    { name: "icon", maxCount: 1 },
-    { name: "screenshots", maxCount: 8 },
-  ]),
-  async (req: any, res: any) => {
-    try {
-      const dev = await requireDeveloper(req, res);
-      if (!dev) return;
+router.post("/upload", requireAuth(), async (req: any, res: any) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
 
-      const files = req.files as Record<string, Express.Multer.File[]> | undefined;
-      const bundleFile = files?.bundle?.[0];
-      const iconFile = files?.icon?.[0];
-      const screenshotFiles = files?.screenshots ?? [];
-      const manifestRaw: string | null = req.body?.manifest ?? null;
+    const {
+      bundleUrl,
+      iconUrl,
+      screenshotUrls,
+      manifest,
+    } = req.body as {
+      bundleUrl?: string;
+      iconUrl?: string;
+      screenshotUrls?: string[];
+      manifest?: string;
+    };
 
-      if (!bundleFile && !iconFile && screenshotFiles.length === 0 && !manifestRaw) {
-        return void res.status(400).json({ error: "Provide a ZIP bundle, or at least an icon/screenshots." });
-      }
-
-      // Create session
-      const [session] = await db.insert(storeAiLaunchSessionsTable).values({
-        developerId: dev.id,
-        status: "processing",
-      }).returning();
-
-      // Fire-and-forget background processing
-      processBundle(
-        session.id,
-        bundleFile?.buffer ?? null,
-        iconFile?.buffer ?? null,
-        screenshotFiles.map((f: Express.Multer.File) => f.buffer),
-        manifestRaw,
-      ).catch((err) => logger.error({ err }, "ai-launch: unhandled processBundle error"));
-
-      res.json({ sessionId: session.id, status: "processing" });
-    } catch (err) {
-      logger.error({ err }, "ai-launch: upload error");
-      res.status(500).json({ error: "Internal server error" });
+    if (!bundleUrl && !iconUrl && (!screenshotUrls || screenshotUrls.length === 0) && !manifest) {
+      return void res.status(400).json({ error: "Provide a bundleUrl, iconUrl, screenshotUrls, or manifest." });
     }
-  },
-);
+
+    // Create session
+    const [session] = await db.insert(storeAiLaunchSessionsTable).values({
+      developerId: dev.id,
+      status: "processing",
+    }).returning();
+
+    // Fire-and-forget background processing
+    processBundle(
+      session.id,
+      bundleUrl ?? null,
+      iconUrl ?? null,
+      Array.isArray(screenshotUrls) ? screenshotUrls : [],
+      manifest ?? null,
+    ).catch((err) => logger.error({ err }, "ai-launch: unhandled processBundle error"));
+
+    res.json({ sessionId: session.id, status: "processing" });
+  } catch (err) {
+    logger.error({ err }, "ai-launch: upload error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 /**
  * GET /store/ai-launch/:sessionId

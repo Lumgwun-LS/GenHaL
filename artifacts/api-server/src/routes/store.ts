@@ -896,6 +896,32 @@ router.get("/developers/me", requireAuth(), async (req, res) => {
   }
 });
 
+// POST /store/apps/upload-url — presigned direct-to-storage URL for any app file
+// The browser PUTs the file directly to `uploadUrl` (bypasses the API server + proxy
+// entirely, so there is no body-size limit). The caller then uses `fileUrl` as the
+// permanent public download / icon / screenshot link.
+router.post("/apps/upload-url", requireAuth(), async (req: any, res: any) => {
+  try {
+    const dev = await requireDeveloper(req, res);
+    if (!dev) return;
+
+    const _obj = new ObjectStorageService();
+    const uploadUrl = await _obj.getObjectEntityUploadURL();
+    const objectPath = _obj.normalizeObjectEntityPath(uploadUrl);
+    await _obj.trySetObjectEntityAclPolicy(objectPath, { owner: "system:store-app", visibility: "public" }).catch(() => {/* best-effort */});
+
+    const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+    const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+    if (!domain) { res.status(500).json({ error: "No public domain configured" }); return; }
+
+    const fileUrl = `https://${domain}/api/media/${objectId}`;
+    res.json({ uploadUrl, fileUrl });
+  } catch (err) {
+    logger.error({ err }, "store/apps/upload-url error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /store/developers/register — FREE registration + auto dedicated account
 router.post("/developers/register", requireAuth(), async (req, res) => {
   try {
