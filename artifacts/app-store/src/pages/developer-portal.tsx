@@ -554,8 +554,14 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!form.name || !form.tagline || !form.description || !form.iconUrl || !form.downloadUrl) {
-      setError("All fields marked * are required, including a download link."); return;
+    if (!form.name || !form.tagline || !form.description) {
+      setError("App Name, Tagline, and Description are required."); return;
+    }
+    if (!form.iconUrl) {
+      setError("Please upload an app icon before submitting."); return;
+    }
+    if (!form.downloadUrl) {
+      setError("Please upload your app file (APK / IPA / AAB) before submitting."); return;
     }
     if (categories.length === 0) {
       setError("Select at least one category."); return;
@@ -604,12 +610,13 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   }
 
   function handleRetry() {
+    // Only dismiss the error overlay — preserve every field the developer filled in
     clearTimers();
     setPhase("idle");
     setStageIndex(0);
     setProgress(0);
     setError("");
-    setCategories([AFRICA_CATEGORIES[0]]);
+    // Do NOT reset form, categories, uploaded files, or ssUrls
   }
 
   function handlePayFee() {
@@ -642,54 +649,94 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
             Your app's unique identifier (e.g. <code>com.yourcompany.appname</code>). Once registered, this locks your app — only you can publish updates for it.
           </div>
         </div>
-        {/* Icon field with optional upload */}
+        {/* App Icon — upload only, hosted on platform */}
         <div>
           <label className="form-label">App Icon *</label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input className="input" type="url" value={form.iconUrl} onChange={e => set("iconUrl", e.target.value)} placeholder="https://... or upload below" style={{ flex: 1 }} />
-            <button type="button" onClick={() => iconUploadRef.current?.click()}
-              style={{ flexShrink: 0, padding: "8px 14px", background: "rgba(124,77,255,0.15)", border: "1px solid rgba(124,77,255,0.35)", borderRadius: 8, color: "#a78bfa", fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
-              {iconUploading ? `${iconProgress}%` : iconFileObj ? "✅ Uploaded" : "⬆ Upload"}
-            </button>
-          </div>
-          <input ref={iconUploadRef} type="file" accept="image/*" style={{ display: "none" }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadIcon(f); }} />
-          {iconUploading && (
-            <div style={{ marginTop: 6 }}>
-              <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${iconProgress}%`, height: "100%", background: "linear-gradient(90deg,#7c4dff,#a78bfa)", transition: "width 0.3s" }} />
+          {iconFileObj && !iconUploading ? (
+            /* Uploaded state — show preview card with replace button */
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(124,77,255,0.08)", border: "1px solid rgba(124,77,255,0.25)", borderRadius: 10 }}>
+              <img src={form.iconUrl} alt="icon" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{iconFileObj.name}</div>
+                <div style={{ fontSize: 11, color: "#8892a4" }}>{formatBytes(iconFileObj.size)} · hosted on platform</div>
               </div>
+              <button type="button" onClick={() => { setIconFileObj(null); set("iconUrl", ""); iconUploadRef.current?.click(); }}
+                style={{ flexShrink: 0, padding: "6px 12px", background: "transparent", border: "1px solid rgba(124,77,255,0.3)", borderRadius: 7, color: "#a78bfa", fontSize: 12, cursor: "pointer" }}>
+                Replace
+              </button>
+            </div>
+          ) : (
+            /* Empty / uploading state */
+            <div
+              onClick={() => !iconUploading && iconUploadRef.current?.click()}
+              style={{ border: `2px dashed ${iconUploading ? "rgba(124,77,255,0.5)" : "rgba(124,77,255,0.25)"}`, borderRadius: 12, padding: "20px 16px", textAlign: "center", cursor: iconUploading ? "default" : "pointer", background: "rgba(124,77,255,0.03)" }}
+            >
+              {iconUploading ? (
+                <>
+                  <div style={{ fontSize: 13, color: "#a78bfa", marginBottom: 8 }}>Uploading icon… {iconProgress}%</div>
+                  <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${iconProgress}%`, height: "100%", background: "linear-gradient(90deg,#7c4dff,#a78bfa)", transition: "width 0.3s" }} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>🖼️</div>
+                  <div style={{ fontSize: 13, color: "#a78bfa", fontWeight: 600 }}>Click to upload your app icon</div>
+                  <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>PNG or JPG · recommended 512×512 px</div>
+                </>
+              )}
             </div>
           )}
-          {iconFileObj && !iconUploading && <div style={{ fontSize: 11, color: "#00c853", marginTop: 4 }}>✓ {iconFileObj.name} uploaded — URL filled above</div>}
+          <input ref={iconUploadRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadIcon(f); (e.target as HTMLInputElement).value = ""; }} />
         </div>
 
-        {/* Download/Install field with optional direct APK/IPA upload */}
+        {/* App File — upload only, hosted on platform */}
         <div>
-          <label className="form-label">Download / Install Link *</label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input className="input" type="url" value={form.downloadUrl} onChange={e => set("downloadUrl", e.target.value)} placeholder="https://... or upload APK/IPA below" style={{ flex: 1 }} />
-            <button type="button" onClick={() => apkInputRef.current?.click()}
-              style={{ flexShrink: 0, padding: "8px 14px", background: "rgba(0,200,83,0.12)", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 8, color: "#00c853", fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
-              {apkUploading ? `${apkProgress}%` : apkFile ? "✅ Uploaded" : "⬆ Upload APK/IPA"}
-            </button>
-          </div>
-          <input ref={apkInputRef} type="file" accept=".apk,.ipa,.zip,.aab" style={{ display: "none" }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadApk(f); }} />
-          {apkUploading && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8892a4", marginBottom: 4 }}>
-                <span>Uploading {apkFile?.name} ({formatBytes(apkFile?.size ?? 0)}) directly to storage…</span>
-                <span>{apkProgress}%</span>
+          <label className="form-label">App File (APK / IPA / AAB) *</label>
+          {apkFile && !apkUploading ? (
+            /* Uploaded state */
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(0,200,83,0.07)", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 10 }}>
+              <div style={{ fontSize: 32, flexShrink: 0 }}>
+                {/\.apk$/i.test(apkFile.name) ? "🤖" : /\.ipa$/i.test(apkFile.name) ? "🍎" : "📦"}
               </div>
-              <div style={{ height: 6, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${apkProgress}%`, height: "100%", background: "linear-gradient(90deg,#00c853,#69f0ae)", transition: "width 0.3s" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#00c853", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{apkFile.name}</div>
+                <div style={{ fontSize: 11, color: "#8892a4" }}>{formatBytes(apkFile.size)} · hosted on platform · download link set automatically</div>
               </div>
-              <div style={{ fontSize: 10, color: "#8892a4", marginTop: 4 }}>No size limit — file goes directly to storage, not through the server</div>
+              <button type="button" onClick={() => { setApkFile(null); set("downloadUrl", ""); apkInputRef.current?.click(); }}
+                style={{ flexShrink: 0, padding: "6px 12px", background: "transparent", border: "1px solid rgba(0,200,83,0.3)", borderRadius: 7, color: "#00c853", fontSize: 12, cursor: "pointer" }}>
+                Replace
+              </button>
+            </div>
+          ) : (
+            /* Empty / uploading state */
+            <div
+              onClick={() => !apkUploading && apkInputRef.current?.click()}
+              style={{ border: `2px dashed ${apkUploading ? "rgba(0,200,83,0.5)" : "rgba(0,200,83,0.2)"}`, borderRadius: 12, padding: "24px 16px", textAlign: "center", cursor: apkUploading ? "default" : "pointer", background: "rgba(0,200,83,0.03)" }}
+            >
+              {apkUploading ? (
+                <>
+                  <div style={{ fontSize: 13, color: "#00c853", marginBottom: 8 }}>
+                    Uploading {apkFile?.name} ({formatBytes(apkFile?.size ?? 0)})… {apkProgress}%
+                  </div>
+                  <div style={{ height: 6, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${apkProgress}%`, height: "100%", background: "linear-gradient(90deg,#00c853,#69f0ae)", transition: "width 0.3s" }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#8892a4", marginTop: 6 }}>Uploading directly to storage — no size limit</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
+                  <div style={{ fontSize: 14, color: "#00c853", fontWeight: 600 }}>Click to upload your app file</div>
+                  <div style={{ fontSize: 12, color: "#8892a4", marginTop: 4 }}>APK · IPA · AAB · ZIP · up to 250 MB</div>
+                  <div style={{ fontSize: 11, color: "#8892a4", marginTop: 2 }}>The download link is generated automatically and hosted on this platform</div>
+                </>
+              )}
             </div>
           )}
-          {apkFile && !apkUploading && <div style={{ fontSize: 11, color: "#00c853", marginTop: 4 }}>✓ {apkFile.name} ({formatBytes(apkFile.size)}) uploaded — download URL filled above</div>}
-          <div style={{ fontSize: 11, color: "#8892a4", marginTop: 4 }}>Upload APK/IPA/AAB directly (up to 250 MB), or paste an external URL (Play Store, App Store, etc.)</div>
+          <input ref={apkInputRef} type="file" accept=".apk,.ipa,.zip,.aab" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadApk(f); (e.target as HTMLInputElement).value = ""; }} />
         </div>
 
         <div><label className="form-label">Web App URL (optional)</label><input className="input" type="url" value={form.webUrl} onChange={e => set("webUrl", e.target.value)} placeholder="https://..." /></div>
