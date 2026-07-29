@@ -149,17 +149,29 @@ router.get("/admin/integration-errors/reports", async (req, res): Promise<void> 
       report: integrationSupportReportsTable,
       vendorName: vendorsTable.name,
       vendorEmail: vendorsTable.email,
+      // Pull linked error log data so the frontend can build the escalate prompt without a second request
+      logErrorCode:    integrationErrorLogsTable.errorCode,
+      logErrorMessage: integrationErrorLogsTable.errorMessage,
+      logMetadata:     integrationErrorLogsTable.metadata,
+      logCreatedAt:    integrationErrorLogsTable.createdAt,
     })
     .from(integrationSupportReportsTable)
     .leftJoin(vendorsTable, eq(integrationSupportReportsTable.vendorId, vendorsTable.id))
+    .leftJoin(integrationErrorLogsTable, eq(integrationSupportReportsTable.errorLogId, integrationErrorLogsTable.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(integrationSupportReportsTable.createdAt))
     .limit(500);
 
-  res.json(reports.map(({ report, vendorName, vendorEmail }) => ({
+  res.json(reports.map(({ report, vendorName, vendorEmail, logErrorCode, logErrorMessage, logMetadata, logCreatedAt }) => ({
     ...serializeReport(report),
     vendorName,
     vendorEmail,
+    linkedLog: report.errorLogId ? {
+      errorCode: logErrorCode,
+      errorMessage: logErrorMessage,
+      metadata: logMetadata,
+      createdAt: logCreatedAt?.toISOString() ?? null,
+    } : null,
   })));
 });
 
@@ -196,8 +208,21 @@ router.get("/admin/integration-errors/logs", async (req, res): Promise<void> => 
 // ── Admin: update report status / resolve ────────────────────────────────────
 
 const UpdateReportInput = z.object({
-  status: z.enum(["open", "in_progress", "resolved"]),
+  status: z.enum(["open", "in_progress", "fix_deployed", "resolved"]),
   adminNote: z.string().max(2000).optional(),
+  /**
+   * Required when status is "fix_deployed" or "resolved".
+   * Must describe what was actually changed in the code.
+   */
+  fixDescription: z.string().max(4000).optional(),
+}).superRefine((val, ctx) => {
+  if ((val.status === "fix_deployed" || val.status === "resolved") && !val.fixDescription?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "fixDescription is required when marking a report as fix_deployed or resolved. Describe what was actually fixed in the code.",
+      path: ["fixDescription"],
+    });
+  }
 });
 
 router.patch("/admin/integration-errors/reports/:id/status", async (req, res): Promise<void> => {
@@ -212,7 +237,9 @@ router.patch("/admin/integration-errors/reports/:id/status", async (req, res): P
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { status, adminNote } = parsed.data;
+  const { fixDescription } = parsed.data;
   const isResolving = status === "resolved";
+  const isFixDeployed = status === "fix_deployed";
 
   // Load the report + vendor info
   const [existing] = await db
@@ -242,8 +269,9 @@ router.patch("/admin/integration-errors/reports/:id/status", async (req, res): P
     .set({
       status,
       adminNote: adminNote ?? existing.report.adminNote,
-      resolvedByAdminId: isResolving ? userId : existing.report.resolvedByAdminId,
-      resolvedByAdminName: isResolving ? adminName : existing.report.resolvedByAdminName,
+      fixDescription: fixDescription ?? existing.report.fixDescription,
+      resolvedByAdminId: (isResolving || isFixDeployed) ? userId : existing.report.resolvedByAdminId,
+      resolvedByAdminName: (isResolving || isFixDeployed) ? adminName : existing.report.resolvedByAdminName,
       resolvedAt: isResolving ? now : existing.report.resolvedAt,
     })
     .where(eq(integrationSupportReportsTable.id, reportId))
@@ -254,6 +282,7 @@ router.patch("/admin/integration-errors/reports/:id/status", async (req, res): P
     const vendorId = existing.report.vendorId;
     const platformLabel = PLATFORM_LABELS[existing.report.platform] ?? existing.report.platform;
     const note = adminNote ?? "";
+    const fixDesc = fixDescription ?? existing.report.fixDescription ?? "";
 
     // In-app notification
     try {
@@ -277,7 +306,8 @@ router.patch("/admin/integration-errors/reports/:id/status", async (req, res): P
       const bodyHtml = `
         <p>Hi ${escapeHtml(existing.vendorName ?? "there")},</p>
         <p>Your support report for a <strong>${escapeHtml(platformLabel)}</strong> integration issue has been marked as <strong>resolved</strong>.</p>
-        ${note ? `<p><strong>Admin note:</strong> ${escapeHtml(note)}</p>` : ""}
+        ${note ? `<p><strong>Message from our team:</strong> ${escapeHtml(note)}</p>` : ""}
+        ${fixDesc ? `<p><strong>What was fixed:</strong> ${escapeHtml(fixDesc)}</p>` : ""}
         <p>If the issue persists, please open a new report from your dashboard under <em>Settings → Integrations</em>.</p>
         <p>Thank you for your patience.</p>
       `;

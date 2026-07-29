@@ -19,8 +19,14 @@ export const integrationSupportReportsTable = pgTable("integration_support_repor
   description: text("description").notNull(),
   /** open | in_progress | resolved */
   status: text("status").notNull().default("open"),
-  /** Admin's resolution note shown to the vendor when resolved. */
+  /** Admin's note to the vendor (shown when resolved). */
   adminNote: text("admin_note"),
+  /**
+   * Required when marking a report as "fix_deployed" or "resolved".
+   * Must describe exactly what was changed in the code — prevents admins
+   * from closing reports without a real fix in place.
+   */
+  fixDescription: text("fix_description"),
   /** Clerk user id of the admin who last updated the report. */
   resolvedByAdminId: text("resolved_by_admin_id"),
   resolvedByAdminName: text("resolved_by_admin_name"),
