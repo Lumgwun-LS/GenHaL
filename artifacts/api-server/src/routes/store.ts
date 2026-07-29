@@ -69,7 +69,7 @@ const router = Router();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PUBLISHING_FEE_KOBO = 2_500_000; // NGN 25,000
+const PUBLISHING_FEE_KOBO = 5_000_000; // NGN 50,000
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? "";
 const IS_MERCHANT_CODE = process.env.INTERSWITCH_MERCHANT_CODE ?? "";
 const IS_PAY_ITEM_ID = process.env.INTERSWITCH_PAY_ITEM_ID ?? "";

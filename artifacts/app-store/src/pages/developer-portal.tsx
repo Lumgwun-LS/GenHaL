@@ -364,7 +364,7 @@ function PublishOverlay({
                 style={{ color: "#8892a4", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
                 {feeExempt
                   ? "Your app is in the review queue — you'll get a notification once it's live."
-                  : "Complete the NGN 25,000 publishing fee to enter the review queue and go live."}
+                  : "Complete the NGN 50,000 publishing fee to enter the review queue and go live."}
               </motion.p>
 
               {/* App card */}
@@ -416,7 +416,7 @@ function PublishOverlay({
                 {!feeExempt && (
                   <button className="btn-green" onClick={onPayFee}
                     style={{ width: "100%", padding: "13px 0", fontSize: 15, fontWeight: 700, borderRadius: 12 }}>
-                    💳 Pay NGN 25,000 Publishing Fee →
+                    💳 Pay NGN 50,000 Publishing Fee →
                   </button>
                 )}
                 <button onClick={onViewApps}
@@ -821,7 +821,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         </div>
         {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
         <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-          💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
+          💳 After submission you'll pay the <strong style={{ color: "#ffb300" }}>NGN 50,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer (offline).
         </div>
         <motion.button
           className="btn-green"
@@ -859,7 +859,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
 // ── OfflinePaymentModal ───────────────────────────────────────────────────────
 
 function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
-  const [form, setForm] = useState({ proofUrl: "", proofNote: "", amountPaid: "NGN 25,000", bankReference: "" });
+  const [form, setForm] = useState({ proofUrl: "", proofNote: "", amountPaid: "NGN 50,000", bankReference: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -880,7 +880,7 @@ function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }
     { label: "Bank", value: "Zenith Bank" },
     { label: "Account Name", value: "Awajimaa Ltd" },
     { label: "Account Number", value: "1234567890" },
-    { label: "Amount", value: "NGN 25,000" },
+    { label: "Amount", value: "NGN 50,000" },
   ];
 
   return (
@@ -900,7 +900,7 @@ function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }
         ) : (
           <>
             <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>Pay via Bank Transfer</h3>
-            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>Transfer <strong style={{ color: "#00c853" }}>NGN 25,000</strong> to the account below, then upload your proof of payment.</p>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>Transfer <strong style={{ color: "#00c853" }}>NGN 50,000</strong> to the account below, then upload your proof of payment.</p>
 
             {/* Account details */}
             <div style={{ background: "rgba(0,200,83,0.06)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
@@ -926,7 +926,7 @@ function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }
               </div>
               <div>
                 <label className="form-label">Amount Paid</label>
-                <input className="input" value={form.amountPaid} onChange={e => set("amountPaid", e.target.value)} placeholder="NGN 25,000" />
+                <input className="input" value={form.amountPaid} onChange={e => set("amountPaid", e.target.value)} placeholder="NGN 50,000" />
               </div>
               <div>
                 <label className="form-label">Additional Note (optional)</label>
@@ -981,7 +981,7 @@ function PaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
       <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%" }}>
         <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Pay Publishing Fee</h3>
-        <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 24 }}>Publishing <strong style={{ color: "#e8eaf0" }}>"{app.name}"</strong> — one-time fee of <strong style={{ color: "#00c853" }}>NGN 25,000</strong>.</p>
+        <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 24 }}>Publishing <strong style={{ color: "#e8eaf0" }}>"{app.name}"</strong> — one-time fee of <strong style={{ color: "#00c853" }}>NGN 50,000</strong>.</p>
         <div style={{ fontWeight: 700, fontSize: 13, color: "#8892a4", marginBottom: 10, textTransform: "uppercase" }}>Choose Payment Method</div>
         {GATEWAYS.map(g => (
           <button key={g.id} onClick={() => setGateway(g.id)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", background: gateway===g.id?"rgba(0,200,83,0.08)":"rgba(255,255,255,0.03)", border: `1.5px solid ${gateway===g.id?"#00c853":"rgba(255,255,255,0.08)"}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", marginBottom: 10, textAlign: "left" }}>
@@ -997,7 +997,7 @@ function PaymentModal({ app, onClose }: { app: App; onClose: () => void }) {
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={onClose} className="btn-outline" style={{ flex: 1 }}>Cancel</button>
           <button onClick={handlePay} disabled={loading} className="btn-green" style={{ flex: 2, fontSize: 14 }}>
-            {loading ? "Redirecting..." : gateway === "offline" ? "Continue to Bank Transfer →" : `Pay NGN 25,000 via ${gateway === "paystack" ? "Paystack" : "Interswitch"}`}
+            {loading ? "Redirecting..." : gateway === "offline" ? "Continue to Bank Transfer →" : `Pay NGN 50,000 via ${gateway === "paystack" ? "Paystack" : "Interswitch"}`}
           </button>
         </div>
       </div>
@@ -1317,7 +1317,7 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt }: { apps: App[]; onPayA
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ background: s.bg, color: s.color, padding: "4px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay NGN 25K</button>}
+                  {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay NGN 50K</button>}
                   {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
                 </div>
               </div>
@@ -1444,7 +1444,7 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
           {apps.filter(a => a.status === "pending_payment").map(app => (
             <div key={app.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               <span style={{ fontSize: 14 }}>{app.name}</span>
-              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => onPayApp(app)}>Pay NGN 25,000</button>
+              <button className="btn-green" style={{ fontSize: 13, padding: "6px 16px" }} onClick={() => onPayApp(app)}>Pay NGN 50,000</button>
             </div>
           ))}
         </div>
@@ -1453,7 +1453,7 @@ function DeveloperDashboard({ apps, onPayApp, onSubmit, feeExempt }: {
       {apps.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
-          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for NGN 25,000.</div>
+          <div style={{ color: "#8892a4", fontSize: 14, marginBottom: 20 }}>Submit your first app for NGN 50,000.</div>
           <button className="btn-green" onClick={onSubmit}>Submit Your First App</button>
         </div>
       ) : (
@@ -2111,7 +2111,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
 
           {!dev.feeExempt && (
             <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-              💳 After launch you'll pay the <strong style={{ color: "#ffb300" }}>NGN 25,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer.
+              💳 After launch you'll pay the <strong style={{ color: "#ffb300" }}>NGN 50,000 publishing fee</strong> via Paystack, Interswitch, or bank transfer.
             </div>
           )}
 
@@ -2138,7 +2138,7 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
       <p style={{ color: "#8892a4", fontSize: 14, maxWidth: 420, margin: "0 auto 28px", lineHeight: 1.7 }}>
         {dev.feeExempt
           ? "Your app is now in the review queue. An admin will approve it shortly."
-          : "Your app has been submitted. Complete the NGN 25,000 publishing fee from My Apps to go live."}
+          : "Your app has been submitted. Complete the NGN 50,000 publishing fee from My Apps to go live."}
       </p>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         <button className="btn-outline" onClick={() => { setStep("upload"); setSession(null); setForm({}); setError(""); }}>
@@ -2204,7 +2204,7 @@ export default function DeveloperPortal() {
     <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 20px", textAlign: "center" }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
       <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Become a Developer</h2>
-      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store — free registration, then NGN 25,000 per app published.</p>
+      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store — free registration, then NGN 50,000 per app published.</p>
       <Link href="/developer/signup" className="btn-green" style={{ display: "inline-flex", fontSize: 15, padding: "12px 32px" }}>Create Developer Account →</Link>
     </div>
   );

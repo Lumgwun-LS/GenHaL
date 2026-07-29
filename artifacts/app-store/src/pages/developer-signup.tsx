@@ -63,7 +63,7 @@ export default function DeveloperSignup() {
         <div style={{ fontSize: 52, marginBottom: 12 }}>🌍</div>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>Create Developer Account</h1>
         <p style={{ color: "#8892a4", fontSize: 14, lineHeight: 1.6 }}>
-          Registration is <strong style={{ color: "#00c853" }}>free</strong>. A dedicated NGN bank account will be created for you automatically. Publishing each app costs <strong style={{ color: "#00c853" }}>NGN 25,000</strong>.
+          Registration is <strong style={{ color: "#00c853" }}>free</strong>. A dedicated NGN bank account will be created for you automatically. Publishing each app costs <strong style={{ color: "#00c853" }}>NGN 50,000</strong>.
         </p>
       </div>
 
@@ -128,7 +128,7 @@ export default function DeveloperSignup() {
         </button>
 
         <p style={{ fontSize: 12, color: "#8892a4", textAlign: "center" }}>
-          By registering you agree to the Africa App Store developer terms. NGN 25,000 publishing fee applies per app.
+          By registering you agree to the Africa App Store developer terms. NGN 50,000 publishing fee applies per app.
         </p>
       </form>
     </div>
