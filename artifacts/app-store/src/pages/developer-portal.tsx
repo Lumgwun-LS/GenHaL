@@ -26,6 +26,7 @@ const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }>
   approved:        { bg: "rgba(0,200,83,0.1)",   color: "#00c853", label: "✅ Live" },
   rejected:        { bg: "rgba(255,82,82,0.1)",  color: "#ff5252", label: "❌ Rejected" },
   draft:           { bg: "rgba(255,255,255,0.05)", color: "#8892a4", label: "📝 Draft" },
+  suspended:       { bg: "rgba(255,82,82,0.1)",  color: "#ff5252", label: "🔒 Suspended" },
 };
 
 interface PlatformDef {
@@ -74,9 +75,15 @@ async function uploadFilePresigned(
   file: File,
   onProgress: (pct: number) => void,
 ): Promise<string> {
-  const token = await getClerkToken();
+  // Step 1: get a presigned upload URL + the permanent public fileUrl from the API server.
+  const { uploadUrl, fileUrl } = await apiFetch<{ uploadUrl: string; fileUrl: string }>(
+    "/apps/upload-url",
+    { method: "POST" },
+  );
 
-  return new Promise<string>((resolve, reject) => {
+  // Step 2: PUT the file directly to object storage via the presigned URL.
+  // Use XHR so we can report upload progress.
+  await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
     xhr.upload.onprogress = (e) => {
@@ -85,30 +92,23 @@ async function uploadFilePresigned(
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const { fileUrl } = JSON.parse(xhr.responseText);
-          resolve(fileUrl);
-        } catch {
-          reject(new Error("Invalid response from upload endpoint"));
-        }
+        resolve();
       } else {
         const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 300)}` : "";
         reject(new Error(`Upload failed (HTTP ${xhr.status})${detail}`));
       }
     };
 
-    xhr.onerror  = () => reject(new Error("Network error during upload"));
+    xhr.onerror   = () => reject(new Error("Network error during upload"));
     xhr.ontimeout = () => reject(new Error("Upload timed out"));
 
-    xhr.open("POST", "/api/store/apps/stream-upload");
+    xhr.open("PUT", uploadUrl);
     xhr.timeout = 10 * 60 * 1000; // 10 min for large APKs
-    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    // Use FormData (multipart/form-data) — raw binary bodies are silently
-    // dropped by some reverse proxies; multipart is universally supported.
-    const formData = new FormData();
-    formData.append("file", file, file.name);
-    xhr.send(formData);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.send(file);
   });
+
+  return fileUrl;
 }
 
 function formatBytes(bytes: number): string {
@@ -1582,7 +1582,22 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: A
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ background: s.bg, color: s.color, padding: "4px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600 }}>{s.label}</span>
+                  {/* Trial upload notice — payment window still open */}
+                  {(app as any).trialUpload && !(app as any).trialSuspendedAt && app.status !== "suspended" && (
+                    <span style={{ background: "rgba(255,179,0,0.12)", color: "#ffb300", border: "1px solid rgba(255,179,0,0.3)", padding: "3px 9px", borderRadius: 16, fontSize: 11, fontWeight: 600 }}>
+                      ⚠️ Trial — payment required
+                    </span>
+                  )}
+                  {/* Suspended trial app — payment window expired */}
+                  {app.status === "suspended" && (app as any).trialSuspendedAt && (
+                    <span style={{ background: "rgba(255,82,82,0.12)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.3)", padding: "3px 9px", borderRadius: 16, fontSize: 11, fontWeight: 600 }}>
+                      💳 Payment required to restore
+                    </span>
+                  )}
                   {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay {feeLabel}</button>}
+                  {app.status === "suspended" && (app as any).trialSuspendedAt && !feeExempt && (
+                    <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay to restore</button>
+                  )}
                   {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
                   <button className="btn-outline" style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setEditSsApp(app)}>📸 Screenshots</button>
                 </div>

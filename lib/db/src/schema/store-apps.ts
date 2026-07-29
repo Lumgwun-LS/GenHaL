@@ -50,6 +50,10 @@ export const storeAppsTable = pgTable("store_apps", {
   // Canonical public ID — encoded as {base36_timestamp}{owner_fingerprint}{random}
   // Maps to https://awajimaaappstore.com/app/{publicId}
   publicId: text("public_id").unique(),
+  // Trial upload: set when a developer submits under an admin-granted upload trial.
+  // trialSuspendedAt is set by the expiry scheduler when the trial lapses before payment.
+  trialUpload:      boolean("trial_upload").notNull().default(false),
+  trialSuspendedAt: timestamp("trial_suspended_at", { withTimezone: true }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

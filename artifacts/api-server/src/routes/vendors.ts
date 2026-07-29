@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc, or } from "drizzle-orm";
-import { db, vendorsTable, bannedIdentifiersTable } from "@workspace/db";
+import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable } from "@workspace/db";
 import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
@@ -250,6 +250,28 @@ router.post("/vendors/login-ping", async (req, res): Promise<void> => {
   if (!email) { res.status(204).end(); return; }
 
   sendLoginNotification({ platform: "vendor-hub", name, email });
+
+  // Fire-and-forget: register this Clerk user in the platform_users registry.
+  // This captures pre-onboarding users (no vendor row yet) as well as vendors.
+  if (email) {
+    const vendorRow = vendor ? await db.query.vendorsTable.findFirst({
+      where: eq(vendorsTable.email, email),
+      columns: { id: true },
+    }) : null;
+    const nowTs = new Date();
+    db.insert(platformUsersTable).values({
+      clerkUserId: userId,
+      email,
+      name,
+      onboardingCompleted: vendorRow != null,
+      vendorId: vendorRow?.id ?? null,
+      lastSeenAt: nowTs,
+    }).onConflictDoUpdate({
+      target: platformUsersTable.clerkUserId,
+      set: { email, name, lastSeenAt: nowTs, onboardingCompleted: vendorRow != null, vendorId: vendorRow?.id ?? null },
+    }).catch(() => {});
+  }
+
   res.status(204).end();
 });
 
@@ -271,6 +293,22 @@ router.get("/vendors/me", async (req, res): Promise<void> => {
     .limit(1);
 
   if (!vendor) { res.status(404).json({ error: "No vendor profile found" }); return; }
+
+  // Keep platform_users in sync — marks onboarding complete and links vendorId.
+  const nowTs = new Date();
+  db.insert(platformUsersTable).values({
+    clerkUserId: userId,
+    email: vendor.email,
+    name: vendor.name,
+    phone: vendor.phone ?? null,
+    onboardingCompleted: true,
+    vendorId: vendor.id,
+    lastSeenAt: nowTs,
+  }).onConflictDoUpdate({
+    target: platformUsersTable.clerkUserId,
+    set: { email: vendor.email, name: vendor.name, phone: vendor.phone ?? null, onboardingCompleted: true, vendorId: vendor.id, lastSeenAt: nowTs },
+  }).catch(() => {});
+
   res.json(serializeVendor(vendor));
 });
 

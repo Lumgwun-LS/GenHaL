@@ -13,8 +13,9 @@ import {
   storeAppEventsTable,
   storeUserSignupsTable,
   storeOfflinePaymentsTable,
+  storeUploadTrialsTable,
 } from "@workspace/db";
-import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray } from "drizzle-orm";
+import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, isNotNull } from "drizzle-orm";
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -226,6 +227,8 @@ function serializeApp(app: any, developer?: any) {
     rejectionReason: app.rejectionReason ?? null,
     publicId: app.publicId ?? null,
     publicUrl: publicAppUrl(app.publicId),
+    trialUpload: (app as any).trialUpload ?? false,
+    trialSuspendedAt: (app as any).trialSuspendedAt ? new Date((app as any).trialSuspendedAt).toISOString() : null,
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
   };
@@ -1082,6 +1085,21 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
 
     const isFeeExempt = (dev as any).feeExempt === true;
     const clerkUserId = (req as any).auth?.userId;
+
+    // Check for an active upload trial (grants the developer a free-to-submit window)
+    let isTrialUpload = false;
+    if (!isFeeExempt) {
+      const now = new Date();
+      const activeTrial = await db.query.storeUploadTrialsTable.findFirst({
+        where: and(
+          eq(storeUploadTrialsTable.developerId, dev.id),
+          isNull(storeUploadTrialsTable.revokedAt),
+          gte(storeUploadTrialsTable.expiresAt, now),
+        ),
+      });
+      isTrialUpload = activeTrial != null;
+    }
+
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
       name, slug, tagline, description, category, categories, platform, iconUrl,
@@ -1091,9 +1109,11 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       currentVersion: currentVersion ?? null,
       packageName: packageName ?? null,
       publicId: generatePublicId(clerkUserId),
-      // Fee-exempt developers (e.g. super admin) skip the payment step entirely
-      status: isFeeExempt ? "pending_review" : "pending_payment",
+      // Fee-exempt developers skip the payment step entirely.
+      // Trial-upload developers also go straight to review but are flagged for later payment.
+      status: (isFeeExempt || isTrialUpload) ? "pending_review" : "pending_payment",
       publishingFeePaid: isFeeExempt,
+      trialUpload: isTrialUpload,
       publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
     } as any).returning();
     res.status(201).json(serializeApp(app, dev));
@@ -1344,7 +1364,7 @@ router.post("/payments/squad/verify", requireAuth(), async (req, res) => {
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, transactionRef) } as any);
     if (app && !app.publishingFeePaid) {
       await db.update(storeAppsTable)
-        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
         .where(eq(storeAppsTable.id, app.id));
     }
     res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
@@ -1366,7 +1386,7 @@ router.get("/payments/squad/callback", async (req, res) => {
         const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, transaction_ref) } as any);
         if (app && !app.publishingFeePaid) {
           await db.update(storeAppsTable)
-            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
             .where(eq(storeAppsTable.id, app.id));
         }
         return void res.redirect(`${baseUrl}/app-store/developer?payment=squad&status=success&appId=${app?.id ?? ""}`);
@@ -1392,7 +1412,7 @@ router.post("/payments/stripe/verify-usd", requireAuth(), async (req, res) => {
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, sessionId) } as any);
     if (app && !app.publishingFeePaid) {
       await db.update(storeAppsTable)
-        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
         .where(eq(storeAppsTable.id, app.id));
     }
     res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
@@ -1418,7 +1438,7 @@ router.post("/webhooks/squad", async (req, res) => {
         const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, ref) } as any);
         if (app && !app.publishingFeePaid) {
           await db.update(storeAppsTable)
-            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
             .where(eq(storeAppsTable.id, app.id));
         }
       }
@@ -1440,7 +1460,7 @@ router.post("/payments/paystack/verify", requireAuth(), async (req, res) => {
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, reference) } as any);
     if (app && !app.publishingFeePaid) {
       await db.update(storeAppsTable)
-        .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+        .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
         .where(eq(storeAppsTable.id, app.id));
     }
     res.json({ status: "success", appId: app?.id ?? null, appName: app?.name ?? null });
@@ -1461,7 +1481,7 @@ router.get("/payments/interswitch/callback", async (req, res) => {
         const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, txnRef) } as any);
         if (app && !app.publishingFeePaid) {
           await db.update(storeAppsTable)
-            .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+            .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
             .where(eq(storeAppsTable.id, app.id));
           return void res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&status=success&appId=${app.id}`);
         }
@@ -1487,7 +1507,7 @@ router.post("/webhooks/paystack", async (req, res) => {
       const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.publishingFeeRef, data.reference) } as any);
       if (app && !app.publishingFeePaid) {
         await db.update(storeAppsTable)
-          .set({ publishingFeePaid: true, status: "pending_review", updatedAt: new Date() } as any)
+          .set({ publishingFeePaid: true, status: "pending_review", trialUpload: false, trialSuspendedAt: null, updatedAt: new Date() } as any)
           .where(eq(storeAppsTable.id, app.id));
         logger.info({ appId: app.id, reference: data.reference }, "[store] App publishing fee confirmed via Paystack webhook");
       }
@@ -2691,13 +2711,16 @@ router.post("/admin/offline-payments/:id/super-approve", requireAuth(), async (r
       updatedAt: new Date(),
     } as any).where(eq(storeOfflinePaymentsTable.id, op.id));
 
-    // Mark the app's publishing fee as paid and move to review
+    // Mark the app's publishing fee as paid and move to review.
+    // Also clear trial flags so a previously-suspended trial app is fully restored.
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, op.appId) });
     if (app && !app.publishingFeePaid) {
       await db.update(storeAppsTable).set({
         publishingFeePaid: true,
         publishingFeeGateway: "offline",
         status: "pending_review",
+        trialUpload: false,
+        trialSuspendedAt: null,
         updatedAt: new Date(),
       } as any).where(eq(storeAppsTable.id, op.appId));
     }
@@ -2980,6 +3003,177 @@ router.patch("/admin/platform-apps/:id", requireAuth(), async (req: any, res: an
     res.json({ ...updated, canonicalDownloadUrl: canonicalDownloadUrl(updated) });
   } catch (err) {
     logger.error({ err }, "platform-apps: update error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── UPLOAD TRIAL ADMIN ROUTES ────────────────────────────────────────────────
+
+// GET /store/admin/upload-trials — all grants (active + expired + revoked) with developer info + trial-app counts
+router.get("/admin/upload-trials", requireAuth(), async (req, res) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+
+    const trials = await db.query.storeUploadTrialsTable.findMany({
+      orderBy: desc(storeUploadTrialsTable.createdAt),
+      with: { developer: true } as any,
+    });
+
+    const now = new Date();
+    const result = await Promise.all(trials.map(async (t: any) => {
+      const dev = t.developer as any;
+      // Count trial apps for this developer
+      const trialApps = await db
+        .select({ id: storeAppsTable.id, name: storeAppsTable.name, status: storeAppsTable.status, publishingFeePaid: storeAppsTable.publishingFeePaid })
+        .from(storeAppsTable)
+        .where(and(
+          eq(storeAppsTable.developerId, t.developerId),
+          eq(storeAppsTable.trialUpload as any, true),
+        ));
+      return {
+        id: t.id,
+        developerId: t.developerId,
+        developerName: dev?.displayName ?? "Unknown",
+        developerEmail: dev?.email ?? "",
+        expiresAt: t.expiresAt.toISOString(),
+        grantedByAdminId: t.grantedByAdminId ?? null,
+        revokedAt: t.revokedAt ? t.revokedAt.toISOString() : null,
+        note: t.note ?? null,
+        createdAt: t.createdAt.toISOString(),
+        active: !t.revokedAt && t.expiresAt > now,
+        expired: !t.revokedAt && t.expiresAt <= now,
+        trialApps: trialApps.map(a => ({ id: a.id, name: a.name, status: a.status, publishingFeePaid: a.publishingFeePaid })),
+      };
+    }));
+
+    res.json(result);
+  } catch (err) {
+    logger.error({ err }, "getUploadTrials error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/admin/upload-trials — grant a developer a trial upload window
+router.post("/admin/upload-trials", requireAuth(), async (req, res) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const { userId } = getAuth(req);
+    const { developerId, days, note } = req.body as { developerId?: number; days?: number; note?: string };
+
+    if (!developerId || typeof developerId !== "number") {
+      return void res.status(400).json({ error: "developerId (number) required" });
+    }
+    const daysNum = typeof days === "number" && days > 0 && days <= 365 ? days : 7;
+
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, developerId) });
+    if (!dev) return void res.status(404).json({ error: "Developer not found" });
+
+    // Revoke any existing active trial first
+    const existingActive = await db.query.storeUploadTrialsTable.findFirst({
+      where: and(
+        eq(storeUploadTrialsTable.developerId, developerId),
+        isNull(storeUploadTrialsTable.revokedAt),
+        gte(storeUploadTrialsTable.expiresAt, new Date()),
+      ),
+    });
+    if (existingActive) {
+      await db.update(storeUploadTrialsTable).set({ revokedAt: new Date() }).where(eq(storeUploadTrialsTable.id, existingActive.id));
+    }
+
+    const expiresAt = new Date(Date.now() + daysNum * 24 * 60 * 60 * 1000);
+    const [trial] = await db.insert(storeUploadTrialsTable).values({
+      developerId,
+      expiresAt,
+      grantedByAdminId: userId ?? null,
+      note: typeof note === "string" && note.trim() ? note.trim() : null,
+    }).returning();
+
+    // Notify developer by email — best-effort
+    if (dev.email) {
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">🎉 Trial upload access granted</h1>
+          <p style="font-size:14px;line-height:1.6;color:#444;">Hi ${escapeHtml(dev.displayName ?? "there")},</p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            You've been granted a <strong>${daysNum}-day</strong> trial upload window on the Awajimaa App Store.
+            You can submit your app now and pay the publishing fee later — before
+            <strong>${expiresAt.toLocaleDateString()}</strong>.
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            If payment isn't received by the deadline, your app will be suspended until payment is completed.
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Head to your <a href="https://awajimaaappstore.com/app-store/developer" style="color:#00c853;">Developer Portal</a> to submit your app.
+          </p>
+        `,
+      });
+      sendEmail({ to: dev.email, subject: `You've been granted trial upload access to the Awajimaa App Store`, html }).catch(() => {});
+    }
+
+    res.status(201).json({ ok: true, trialId: trial.id, expiresAt: trial.expiresAt.toISOString() });
+  } catch (err) {
+    logger.error({ err }, "grantUploadTrial error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /store/admin/upload-trials/:id — revoke trial + immediately suspend unpaid trial apps
+router.delete("/admin/upload-trials/:id", requireAuth(), async (req, res) => {
+  try {
+    if (!(await checkIsAdmin(req))) return void res.status(403).json({ error: "Admin only" });
+    const trialId = parseInt(String(req.params.id), 10);
+    if (isNaN(trialId)) return void res.status(400).json({ error: "Invalid id" });
+
+    const trial = await db.query.storeUploadTrialsTable.findFirst({ where: eq(storeUploadTrialsTable.id, trialId) });
+    if (!trial) return void res.status(404).json({ error: "Trial not found" });
+    if (trial.revokedAt) return void res.status(409).json({ error: "Trial already revoked" });
+
+    const now = new Date();
+    await db.update(storeUploadTrialsTable).set({ revokedAt: now }).where(eq(storeUploadTrialsTable.id, trialId));
+
+    // Suspend unpaid trial apps for this developer
+    const unpaidApps = await db
+      .select({ id: storeAppsTable.id, name: storeAppsTable.name })
+      .from(storeAppsTable)
+      .where(and(
+        eq(storeAppsTable.developerId, trial.developerId),
+        eq(storeAppsTable.trialUpload as any, true),
+        eq(storeAppsTable.publishingFeePaid, false),
+      ));
+
+    for (const app of unpaidApps) {
+      await db.update(storeAppsTable)
+        .set({ status: "suspended", trialSuspendedAt: now, updatedAt: now } as any)
+        .where(eq(storeAppsTable.id, app.id));
+    }
+
+    // Notify developer — best-effort
+    if (unpaidApps.length > 0) {
+      const dev = await db.query.storeDeveloperAccountsTable.findFirst({ where: eq(storeDeveloperAccountsTable.id, trial.developerId) });
+      if (dev?.email) {
+        const appList = unpaidApps.map(a => `<li>${escapeHtml(a.name)}</li>`).join("");
+        const html = wrapVendorEmail({
+          bodyHtml: `
+            <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">⚠️ Trial access revoked</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">Hi ${escapeHtml(dev.displayName ?? "there")},</p>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              Your trial upload access on the Awajimaa App Store has been revoked by an administrator.
+              The following app${unpaidApps.length > 1 ? "s have" : " has"} been suspended:
+            </p>
+            <ul style="font-size:14px;color:#444;padding-left:20px;margin:12px 0;">${appList}</ul>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              To restore ${unpaidApps.length > 1 ? "them" : "it"}, complete the publishing fee payment from your
+              <a href="https://awajimaaappstore.com/app-store/developer" style="color:#00c853;">Developer Portal</a>.
+            </p>
+          `,
+        });
+        sendEmail({ to: dev.email, subject: `Trial upload access revoked — publishing fee required`, html }).catch(() => {});
+      }
+    }
+
+    res.json({ ok: true, suspended: unpaidApps.length });
+  } catch (err) {
+    logger.error({ err }, "revokeUploadTrial error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

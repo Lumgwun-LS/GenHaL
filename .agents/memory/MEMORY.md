@@ -107,3 +107,4 @@
 - [VendorHub ratings & complaints](vendorhub-ratings-complaints.md) — post-order star ratings + complaint submission; partial/full refund; gallery carousel; video/image hero bg; admin Ratings & Complaints tab.
 - [CRM People Tracking](crm-people-tracking.md) — inbound CRM rebuilt from scraping→visitor tracking; pixel/form/UTM/order capture; person_activities timeline; api-zod needs dom lib; channel mirrors source for compat.
 - [Vendor Feature Trial System](vendor-feature-trial.md) — 5 cols on vendors table; getEffectiveTier() respects featureTrialTier; admin grant/revoke/list routes; dashboard banner; prod grant needs Publish first.
+- [Platform Users Registry](platform-users.md) — platform_users table captures all Clerk users (inc. pre-onboarding) via JIT upsert in login-ping + GET /vendors/me; admin list + detail routes; UI in admin/platform-users.tsx.

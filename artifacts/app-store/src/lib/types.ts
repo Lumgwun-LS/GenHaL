@@ -63,6 +63,8 @@ export interface App extends AppSummary {
   developerId: number;
   publicId: string | null;
   publicUrl: string | null;
+  trialUpload: boolean;
+  trialSuspendedAt: string | null;
   updatedAt: string;
 }
 

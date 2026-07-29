@@ -7,8 +7,8 @@
 import { Router } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, gt, asc, inArray, sql, type SQL } from "drizzle-orm";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable, platformUsersTable, ordersTable, pageViewsTable } from "@workspace/db/schema";
+import { eq, desc, and, gte, lte, gt, asc, inArray, sql, isNull, or, ilike, type SQL } from "drizzle-orm";
 import { subscriptionRefundBlacklistTable } from "@workspace/db/schema";
 import { isTwilioConfigured } from "../lib/voice-caller";
 import { canAddPaymentKeys } from "../lib/vendor-keys";
@@ -2016,6 +2016,164 @@ router.delete("/admin/feature-trials/:vendorId", async (req, res): Promise<void>
   }).catch(() => { /* non-fatal */ });
 
   res.json({ vendorId, revoked: true });
+});
+
+// ─── PLATFORM USERS ───────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/platform-users
+ * All signed-up Clerk users (including those who haven't completed onboarding),
+ * with order counts and page-view counts aggregated per user.
+ * Query params: ?q=<search>&status=all|completed|pending&limit=100&offset=0
+ */
+router.get("/admin/platform-users", async (req, res) => {
+  const { userId } = getAuth(req);
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  if (!userId || !adminIds.includes(userId)) return void res.status(403).json({ error: "Admin only" });
+
+  const q      = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const status = typeof req.query.status === "string" ? req.query.status : "all";
+  const limit  = Math.min(parseInt(String(req.query.limit  ?? "100")), 200);
+  const offset = parseInt(String(req.query.offset ?? "0")) || 0;
+
+  const conditions: SQL[] = [];
+  if (q) {
+    conditions.push(or(
+      ilike(platformUsersTable.name,  `%${q}%`),
+      ilike(platformUsersTable.email, `%${q}%`),
+      ilike(platformUsersTable.phone, `%${q}%`),
+    ) as SQL);
+  }
+  if (status === "completed") conditions.push(eq(platformUsersTable.onboardingCompleted, true));
+  if (status === "pending")   conditions.push(eq(platformUsersTable.onboardingCompleted, false));
+
+  const where = conditions.length ? and(...conditions) : undefined;
+
+  const [users, [{ total }]] = await Promise.all([
+    db.select({
+        id:                  platformUsersTable.id,
+        clerkUserId:         platformUsersTable.clerkUserId,
+        email:               platformUsersTable.email,
+        name:                platformUsersTable.name,
+        phone:               platformUsersTable.phone,
+        imageUrl:            platformUsersTable.imageUrl,
+        onboardingCompleted: platformUsersTable.onboardingCompleted,
+        vendorId:            platformUsersTable.vendorId,
+        firstSeenAt:         platformUsersTable.firstSeenAt,
+        lastSeenAt:          platformUsersTable.lastSeenAt,
+        vendorTier:          vendorsTable.subscriptionTier,
+        vendorStatus:        vendorsTable.status,
+        orderCount: sql<number>`(
+          SELECT COUNT(*) FROM orders
+          WHERE customer_email = ${platformUsersTable.email}
+        )`,
+        pageViewCount: sql<number>`COALESCE((
+          SELECT COUNT(*) FROM page_views
+          WHERE vendor_id = ${platformUsersTable.vendorId}
+        ), 0)`,
+      })
+      .from(platformUsersTable)
+      .leftJoin(vendorsTable, eq(platformUsersTable.vendorId, vendorsTable.id))
+      .where(where)
+      .orderBy(desc(platformUsersTable.lastSeenAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ total: sql<number>`count(*)` })
+      .from(platformUsersTable)
+      .where(where),
+  ]);
+
+  res.json({
+    total: Number(total),
+    users: users.map(u => ({
+      ...u,
+      orderCount:   Number(u.orderCount),
+      pageViewCount: Number(u.pageViewCount),
+      firstSeenAt:  u.firstSeenAt.toISOString(),
+      lastSeenAt:   u.lastSeenAt.toISOString(),
+    })),
+  });
+});
+
+/**
+ * GET /admin/platform-users/:clerkUserId
+ * Full detail for one user: profile + last 30 orders + recent page views.
+ */
+router.get("/admin/platform-users/:clerkUserId", async (req, res) => {
+  const { userId } = getAuth(req);
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  if (!userId || !adminIds.includes(userId)) return void res.status(403).json({ error: "Admin only" });
+
+  const { clerkUserId } = req.params;
+  const user = await db.query.platformUsersTable.findFirst({
+    where: eq(platformUsersTable.clerkUserId, clerkUserId),
+  });
+  if (!user) return void res.status(404).json({ error: "User not found" });
+
+  // Orders (by email — the only stable cross-table link for pre-onboarding users)
+  const orders = user.email
+    ? await db.select({
+        id:          ordersTable.id,
+        status:      ordersTable.status,
+        totalAmount: ordersTable.totalAmount,
+        currency:    ordersTable.currency,
+        customerName: ordersTable.customerName,
+        notes:       ordersTable.notes,
+        createdAt:   ordersTable.createdAt,
+      })
+      .from(ordersTable)
+      .where(eq(ordersTable.customerEmail, user.email))
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(30)
+    : [];
+
+  // Page views (only available for users with a vendor row)
+  const pageViews = user.vendorId
+    ? await db.select({
+        id:          pageViewsTable.id,
+        platform:    pageViewsTable.platform,
+        path:        pageViewsTable.path,
+        device:      pageViewsTable.device,
+        country:     pageViewsTable.country,
+        trafficSource: pageViewsTable.trafficSource,
+        createdAt:   pageViewsTable.createdAt,
+      })
+      .from(pageViewsTable)
+      .where(eq(pageViewsTable.vendorId, user.vendorId))
+      .orderBy(desc(pageViewsTable.createdAt))
+      .limit(30)
+    : [];
+
+  // Vendor row (if they completed onboarding)
+  const vendor = user.vendorId
+    ? await db.query.vendorsTable.findFirst({ where: eq(vendorsTable.id, user.vendorId) })
+    : null;
+
+  res.json({
+    user: {
+      ...user,
+      firstSeenAt: user.firstSeenAt.toISOString(),
+      lastSeenAt:  user.lastSeenAt.toISOString(),
+    },
+    vendor: vendor ? {
+      id:                vendor.id,
+      name:              vendor.name,
+      subscriptionTier:  vendor.subscriptionTier,
+      verificationLevel: vendor.verificationLevel,
+      status:            vendor.status,
+      country:           vendor.country,
+      industry:          vendor.industry,
+      createdAt:         vendor.createdAt.toISOString(),
+    } : null,
+    orders: orders.map(o => ({
+      ...o,
+      createdAt: o.createdAt.toISOString(),
+    })),
+    pageViews: pageViews.map(p => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+    })),
+  });
 });
 
 export default router;

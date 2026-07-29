@@ -25,7 +25,7 @@ const PLATFORM_ICON: Record<string, string> = {
   heroku: "🚂", netlify: "🌐", vercel: "▲", render: "🎨",
 };
 
-type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "traffic" | "offline" | "our-apps";
+type Tab = "overview" | "pending" | "all" | "developers" | "updates" | "analytics" | "traffic" | "offline" | "our-apps" | "upload-trials";
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 
@@ -1625,6 +1625,244 @@ function OurAppsTab() {
   );
 }
 
+// ── UploadTrialsTab ───────────────────────────────────────────────────────────
+
+interface UploadTrial {
+  id: number;
+  developerId: number;
+  developerName: string;
+  developerEmail: string;
+  expiresAt: string;
+  grantedByAdminId: string | null;
+  revokedAt: string | null;
+  note: string | null;
+  createdAt: string;
+  active: boolean;
+  expired: boolean;
+  trialApps: { id: number; name: string; status: string; publishingFeePaid: boolean }[];
+}
+
+function UploadTrialsTab() {
+  const [trials, setTrials] = useState<UploadTrial[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [developers, setDevelopers] = useState<Developer[]>([]);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [revoking, setRevoking] = useState<number | null>(null);
+  // Grant form
+  const [grantDevId, setGrantDevId] = useState<number | "">("");
+  const [grantDays, setGrantDays] = useState("7");
+  const [grantNote, setGrantNote] = useState("");
+  const [granting, setGranting] = useState(false);
+  const [devSearch, setDevSearch] = useState("");
+
+  function load() {
+    setLoading(true);
+    apiFetch<UploadTrial[]>("/admin/upload-trials").then(setTrials).catch(() => {}).finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
+    apiFetch<Developer[]>("/admin/developers").then(setDevelopers).catch(() => {});
+  }, []);
+
+  const filteredDevs = developers.filter(d =>
+    !devSearch.trim() ||
+    d.displayName.toLowerCase().includes(devSearch.toLowerCase()) ||
+    d.email.toLowerCase().includes(devSearch.toLowerCase())
+  ).slice(0, 40);
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault();
+    if (!grantDevId) { alert("Select a developer first"); return; }
+    const daysNum = parseInt(grantDays);
+    if (isNaN(daysNum) || daysNum < 1 || daysNum > 365) { alert("Days must be 1–365"); return; }
+    setGranting(true);
+    try {
+      await apiFetch("/admin/upload-trials", {
+        method: "POST",
+        body: JSON.stringify({ developerId: grantDevId, days: daysNum, note: grantNote.trim() || undefined }),
+      });
+      setGrantDevId(""); setGrantDays("7"); setGrantNote(""); setDevSearch("");
+      load();
+    } catch (err: any) { alert(err.message ?? "Failed to grant trial"); }
+    finally { setGranting(false); }
+  }
+
+  async function handleRevoke(trial: UploadTrial) {
+    if (!confirm(`Revoke trial for ${trial.developerName}? Unpaid trial apps will be suspended immediately.`)) return;
+    setRevoking(trial.id);
+    try {
+      const result = await apiFetch<{ ok: boolean; suspended: number }>(`/admin/upload-trials/${trial.id}`, { method: "DELETE" });
+      alert(`Trial revoked. ${result.suspended} app${result.suspended !== 1 ? "s" : ""} suspended.`);
+      load();
+    } catch (err: any) { alert(err.message ?? "Failed to revoke trial"); }
+    finally { setRevoking(null); }
+  }
+
+  const active  = trials.filter(t => t.active);
+  const expired = trials.filter(t => t.expired);
+  const revoked = trials.filter(t => !!t.revokedAt);
+
+  function TrialBadge({ trial }: { trial: UploadTrial }) {
+    if (trial.revokedAt) return <span style={{ fontSize: 11, background: "rgba(255,82,82,0.1)", color: "#ff5252", padding: "2px 8px", borderRadius: 10 }}>Revoked</span>;
+    if (trial.expired)  return <span style={{ fontSize: 11, background: "rgba(255,179,0,0.1)", color: "#ffb300", padding: "2px 8px", borderRadius: 10 }}>Expired</span>;
+    const daysLeft = Math.ceil((new Date(trial.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return <span style={{ fontSize: 11, background: "rgba(0,200,83,0.1)", color: "#00c853", padding: "2px 8px", borderRadius: 10 }}>Active · {daysLeft}d left</span>;
+  }
+
+  function TrialRow({ trial }: { trial: UploadTrial }) {
+    const isExpanded = expanded === trial.id;
+    return (
+      <>
+        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }} onClick={() => setExpanded(isExpanded ? null : trial.id)}>
+          <td style={{ padding: "10px 12px" }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{trial.developerName}</div>
+            <div style={{ fontSize: 11, color: "#8892a4" }}>{trial.developerEmail}</div>
+          </td>
+          <td style={{ padding: "10px 12px", color: "#8892a4", fontSize: 12 }}>{new Date(trial.expiresAt).toLocaleDateString()}</td>
+          <td style={{ padding: "10px 12px" }}><TrialBadge trial={trial} /></td>
+          <td style={{ padding: "10px 12px", color: "#8892a4", fontSize: 12 }}>
+            {trial.trialApps.length} app{trial.trialApps.length !== 1 ? "s" : ""}
+            {" "}({trial.trialApps.filter(a => a.publishingFeePaid).length} paid)
+          </td>
+          <td style={{ padding: "10px 12px", color: "#8892a4", fontSize: 11, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{trial.note ?? "—"}</td>
+          <td style={{ padding: "10px 12px" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              {trial.active && (
+                <button
+                  onClick={e => { e.stopPropagation(); handleRevoke(trial); }}
+                  disabled={revoking === trial.id}
+                  style={{ fontSize: 11, background: "rgba(255,82,82,0.1)", color: "#ff5252", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+                >
+                  {revoking === trial.id ? "..." : "Revoke"}
+                </button>
+              )}
+              <span style={{ fontSize: 11, color: "#8892a4" }}>{isExpanded ? "▲" : "▼"}</span>
+            </div>
+          </td>
+        </tr>
+        {isExpanded && (
+          <tr>
+            <td colSpan={6} style={{ padding: "0 12px 12px", background: "rgba(255,255,255,0.02)" }}>
+              {trial.trialApps.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#8892a4", padding: "8px 0" }}>No apps submitted under this trial yet.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      {["App", "Status", "Fee Paid"].map(h => (
+                        <th key={h} style={{ padding: "4px 8px", textAlign: "left", fontSize: 11, color: "#8892a4", fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trial.trialApps.map(app => (
+                      <tr key={app.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                        <td style={{ padding: "5px 8px", fontSize: 12, fontWeight: 600 }}>{app.name}</td>
+                        <td style={{ padding: "5px 8px" }}>
+                          <span style={{ fontSize: 11, color: app.status === "approved" ? "#00c853" : app.status === "suspended" ? "#ff5252" : "#a78bfa" }}>
+                            {app.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td style={{ padding: "5px 8px", fontSize: 12 }}>{app.publishingFeePaid ? "✅" : "❌"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </td>
+          </tr>
+        )}
+      </>
+    );
+  }
+
+  function TrialTable({ rows, title }: { rows: UploadTrial[]; title: string }) {
+    if (rows.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#8892a4", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                {["Developer", "Expires", "Status", "Apps", "Note", "Actions"].map(h => (
+                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, color: "#8892a4", fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(t => <TrialRow key={t.id} trial={t} />)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Grant form */}
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🧪 Grant Upload Trial</div>
+        <div style={{ fontSize: 13, color: "#8892a4", marginBottom: 16 }}>
+          Give a developer a temporary window to submit apps without paying upfront. Payment is required before the trial expires.
+        </div>
+        <form onSubmit={handleGrant} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 12, alignItems: "end" }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label className="form-label" style={{ fontSize: 12 }}>Developer</label>
+            <select
+              className="input"
+              value={grantDevId}
+              onChange={e => setGrantDevId(e.target.value ? parseInt(e.target.value) : "")}
+              style={{ fontSize: 13 }}
+              required
+            >
+              <option value="">— select a developer —</option>
+              {developers.map(d => (
+                <option key={d.id} value={d.id}>{d.displayName} ({d.email})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 12 }}>Duration (days)</label>
+            <input className="input" type="number" min={1} max={365} value={grantDays} onChange={e => setGrantDays(e.target.value)} style={{ fontSize: 13 }} required />
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 12 }}>Note (optional)</label>
+            <input className="input" placeholder="e.g. partner onboarding" value={grantNote} onChange={e => setGrantNote(e.target.value)} style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 12 }}>&nbsp;</label>
+            <button type="submit" className="btn-green" disabled={granting} style={{ fontSize: 13, height: 40, padding: "0 20px" }}>
+              {granting ? "Granting…" : "Grant Trial"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" style={{ margin: "0 auto" }} /></div>
+      ) : trials.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#8892a4" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🧪</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>No upload trials yet</div>
+          <div style={{ fontSize: 13 }}>Use the form above to grant a developer a trial window.</div>
+        </div>
+      ) : (
+        <>
+          <TrialTable rows={active}  title={`Active (${active.length})`} />
+          <TrialTable rows={expired} title={`Expired (${expired.length})`} />
+          <TrialTable rows={revoked} title={`Revoked (${revoked.length})`} />
+          <div style={{ textAlign: "right" }}>
+            <button onClick={load} className="btn-outline" style={{ fontSize: 12 }}>↻ Refresh</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Admin ────────────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -1744,15 +1982,16 @@ export default function Admin() {
   }
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: "our-apps",   label: "🚀 Our Apps" },
-    { id: "overview",   label: "📊 Overview" },
-    { id: "analytics",  label: "📈 Analytics" },
-    { id: "traffic",    label: "🌍 Traffic" },
-    { id: "pending",    label: `🔍 Pending (${pending.length})` },
-    { id: "all",        label: "📱 All Apps" },
-    { id: "developers", label: "👥 Developers" },
-    { id: "updates",    label: "🔄 Updates" },
-    { id: "offline",    label: "🏦 Offline Payments" },
+    { id: "our-apps",       label: "🚀 Our Apps" },
+    { id: "overview",       label: "📊 Overview" },
+    { id: "analytics",      label: "📈 Analytics" },
+    { id: "traffic",        label: "🌍 Traffic" },
+    { id: "pending",        label: `🔍 Pending (${pending.length})` },
+    { id: "all",            label: "📱 All Apps" },
+    { id: "developers",     label: "👥 Developers" },
+    { id: "updates",        label: "🔄 Updates" },
+    { id: "offline",        label: "🏦 Offline Payments" },
+    { id: "upload-trials",  label: "🧪 Upload Trials" },
   ];
 
   return (
@@ -1923,6 +2162,9 @@ export default function Admin() {
 
       {/* Offline payments */}
       {tab === "offline" && <OfflinePaymentsTab />}
+
+      {/* Upload Trials */}
+      {tab === "upload-trials" && <UploadTrialsTab />}
 
       {/* Reject modal */}
       {rejectModal && (
