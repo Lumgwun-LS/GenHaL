@@ -88,6 +88,14 @@ export const vendorsTable = pgTable("vendors", {
   // After each successful threshold charge the scheduler advances this to the next rung.
   // Admins can reset it back to NULL via the billing-enforcement admin panel.
   currentDeductionThreshold: numeric("current_deduction_threshold"),
+  // Admin-granted feature trial — bumps the vendor's effective tier for a fixed
+  // window without a Stripe subscription. Respected by getEffectiveTier() and
+  // the subscription-sync reconciler so it isn't stomped on scheduled sync.
+  featureTrialTier: text("feature_trial_tier"),          // starter|pro|enterprise
+  featureTrialExpiresAt: timestamp("feature_trial_expires_at", { withTimezone: true }),
+  featureTrialGrantedBy: text("feature_trial_granted_by"), // admin email for audit
+  featureTrialGrantedAt: timestamp("feature_trial_granted_at", { withTimezone: true }),
+  featureTrialNote: text("feature_trial_note"),
   // Set when a vendor account is permanently deleted — used to prevent the same
   // email/phone from registering a new account on this platform.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

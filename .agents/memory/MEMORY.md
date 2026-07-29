@@ -106,3 +106,4 @@
 - [VendorHub Media Library](vendorhub-media-library.md) — unified image/video browsing (AI + uploads), image/video editors, POST /media/upload-url for auth-based upload (no vendorId needed), MediaPickerDialog for website builder + social create.
 - [VendorHub ratings & complaints](vendorhub-ratings-complaints.md) — post-order star ratings + complaint submission; partial/full refund; gallery carousel; video/image hero bg; admin Ratings & Complaints tab.
 - [CRM People Tracking](crm-people-tracking.md) — inbound CRM rebuilt from scraping→visitor tracking; pixel/form/UTM/order capture; person_activities timeline; api-zod needs dom lib; channel mirrors source for compat.
+- [Vendor Feature Trial System](vendor-feature-trial.md) — 5 cols on vendors table; getEffectiveTier() respects featureTrialTier; admin grant/revoke/list routes; dashboard banner; prod grant needs Publish first.

@@ -1863,4 +1863,159 @@ router.get("/admin/vendors/search", async (req, res): Promise<void> => {
   })));
 });
 
+// ─── Feature Trial Routes ─────────────────────────────────────────────────────
+//  POST /admin/feature-trials/:vendorId  — grant a feature-tier trial
+//  DELETE /admin/feature-trials/:vendorId — revoke a feature-tier trial
+//  GET  /admin/feature-trials             — list all vendors with active trials
+
+const VALID_TRIAL_TIERS = ["starter", "pro", "enterprise"] as const;
+
+router.get("/admin/feature-trials", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdmin(userId)) { res.status(403).json({ error: "Admin only" }); return; }
+
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: vendorsTable.id,
+      name: vendorsTable.name,
+      email: vendorsTable.email,
+      subscriptionTier: vendorsTable.subscriptionTier,
+      featureTrialTier: vendorsTable.featureTrialTier,
+      featureTrialExpiresAt: vendorsTable.featureTrialExpiresAt,
+      featureTrialGrantedBy: vendorsTable.featureTrialGrantedBy,
+      featureTrialGrantedAt: vendorsTable.featureTrialGrantedAt,
+      featureTrialNote: vendorsTable.featureTrialNote,
+    })
+    .from(vendorsTable)
+    .where(and(
+      sql`${vendorsTable.featureTrialTier} IS NOT NULL`,
+      gte(vendorsTable.featureTrialExpiresAt, now),
+    ))
+    .orderBy(asc(vendorsTable.featureTrialExpiresAt));
+
+  res.json(rows.map(r => ({
+    ...r,
+    featureTrialExpiresAt: r.featureTrialExpiresAt?.toISOString() ?? null,
+    featureTrialGrantedAt: r.featureTrialGrantedAt?.toISOString() ?? null,
+    active: r.featureTrialExpiresAt ? r.featureTrialExpiresAt > now : false,
+  })));
+});
+
+router.post("/admin/feature-trials/:vendorId", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdmin(userId)) { res.status(403).json({ error: "Admin only" }); return; }
+
+  const vendorId = parseInt(req.params.vendorId, 10);
+  if (isNaN(vendorId)) { res.status(400).json({ error: "Invalid vendor ID" }); return; }
+
+  const { tier, days, note } = req.body as { tier?: string; days?: number; note?: string };
+  if (!tier || !VALID_TRIAL_TIERS.includes(tier as any)) {
+    res.status(400).json({ error: `tier must be one of: ${VALID_TRIAL_TIERS.join(", ")}` });
+    return;
+  }
+  const daysNum = Number(days ?? 7);
+  if (!Number.isInteger(daysNum) || daysNum < 1 || daysNum > 365) {
+    res.status(400).json({ error: "days must be an integer between 1 and 365" });
+    return;
+  }
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId)).limit(1);
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + daysNum * 24 * 60 * 60 * 1000);
+
+  // Look up the admin's email for the audit trail
+  let grantedBy = userId;
+  try {
+    const clerkUser = await clerkClient.users.getUser(userId);
+    grantedBy = clerkUser.primaryEmailAddress?.emailAddress ?? userId;
+  } catch { /* fall back to userId */ }
+
+  await db
+    .update(vendorsTable)
+    .set({
+      featureTrialTier: tier,
+      featureTrialExpiresAt: expiresAt,
+      featureTrialGrantedBy: grantedBy,
+      featureTrialGrantedAt: now,
+      featureTrialNote: note ?? null,
+      updatedAt: now,
+    })
+    .where(eq(vendorsTable.id, vendorId));
+
+  // Send an in-app notification to the vendor
+  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+  await db.insert(vendorNotificationsTable).values({
+    vendorId,
+    type: "feature_trial_granted",
+    message: `🎉 You've been granted a ${daysNum}-day free trial of the ${tierLabel} plan features. Enjoy full access to AI Content Studio, Website Builder, and more!`,
+  }).catch(() => { /* non-fatal */ });
+
+  // Send email notification
+  if (vendor.email) {
+    const expiryStr = expiresAt.toLocaleDateString("en-US", { dateStyle: "long" });
+    const bodyHtml = `
+      <h2 style="margin:0 0 12px">Your free feature trial is now active! 🎉</h2>
+      <p>Hi ${escapeHtml(vendor.name)},</p>
+      <p>You've been granted a <strong>${daysNum}-day free trial</strong> of the <strong>${tierLabel} plan</strong> features on your Awa Biz Suite dashboard.</p>
+      <p>Your trial gives you access to:</p>
+      <ul>
+        <li>AI Content Studio (images, videos, captions)</li>
+        <li>Website Builder</li>
+        <li>Media Library &amp; Editor</li>
+        <li>All ${tierLabel} plan features and quotas</li>
+      </ul>
+      <p>Your trial expires on <strong>${expiryStr}</strong>. Upgrade your plan before then to keep your access.</p>
+    `;
+    await sendEmail({
+      to: vendor.email,
+      subject: `Your ${daysNum}-day ${tierLabel} trial is now active on Awa Biz Suite`,
+      html: wrapVendorEmail({ bodyHtml }),
+    }).catch(() => { /* non-fatal */ });
+  }
+
+  res.json({
+    vendorId,
+    tier,
+    expiresAt: expiresAt.toISOString(),
+    grantedBy,
+    note: note ?? null,
+  });
+});
+
+router.delete("/admin/feature-trials/:vendorId", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId || !isAdmin(userId)) { res.status(403).json({ error: "Admin only" }); return; }
+
+  const vendorId = parseInt(req.params.vendorId, 10);
+  if (isNaN(vendorId)) { res.status(400).json({ error: "Invalid vendor ID" }); return; }
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId)).limit(1);
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const now = new Date();
+  await db
+    .update(vendorsTable)
+    .set({
+      featureTrialTier: null,
+      featureTrialExpiresAt: null,
+      featureTrialGrantedBy: null,
+      featureTrialGrantedAt: null,
+      featureTrialNote: null,
+      updatedAt: now,
+    })
+    .where(eq(vendorsTable.id, vendorId));
+
+  // Notify vendor that their trial was revoked
+  await db.insert(vendorNotificationsTable).values({
+    vendorId,
+    type: "feature_trial_revoked",
+    message: "Your admin-granted feature trial has ended. Upgrade your plan to continue using premium features.",
+  }).catch(() => { /* non-fatal */ });
+
+  res.json({ vendorId, revoked: true });
+});
+
 export default router;

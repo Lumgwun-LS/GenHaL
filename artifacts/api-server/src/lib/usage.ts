@@ -115,12 +115,30 @@ export function getBillingPeriodEnd(periodStart: Date): Date {
 }
 
 /**
- * Returns the effective subscription tier for a vendor, accounting for
- * admin-assigned free trials. A free-tier vendor with an active trial
- * (trialEndsAt > now) is treated as "starter" so they actually receive
- * premium quotas and overage eligibility during the trial period.
+ * Returns the effective subscription tier for a vendor, accounting for:
+ *  1. Admin-assigned feature trials (featureTrialTier + featureTrialExpiresAt) —
+ *     these take precedence and may elevate to any tier (starter/pro/enterprise).
+ *  2. Legacy Stripe-trial flag (trialEndsAt) — free vendor with an active Stripe
+ *     trial is treated as "starter".
+ * The higher of the vendor's paid tier and any active trial tier is returned.
  */
-export function getEffectiveTier(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): string {
+export function getEffectiveTier(
+  vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt" | "featureTrialTier" | "featureTrialExpiresAt">,
+): string {
+  const TIER_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, enterprise: 3 };
+
+  // Admin-granted feature trial — takes precedence over billing tier.
+  if (
+    vendor.featureTrialTier &&
+    vendor.featureTrialExpiresAt instanceof Date &&
+    vendor.featureTrialExpiresAt > new Date()
+  ) {
+    const trialRank = TIER_RANK[vendor.featureTrialTier] ?? 0;
+    const subRank   = TIER_RANK[vendor.subscriptionTier] ?? 0;
+    return trialRank > subRank ? vendor.featureTrialTier : vendor.subscriptionTier;
+  }
+
+  // Legacy Stripe-trial: free vendor on a paid trial is treated as starter.
   if (
     vendor.subscriptionTier === "free" &&
     vendor.trialEndsAt instanceof Date &&
@@ -128,16 +146,21 @@ export function getEffectiveTier(vendor: Pick<Vendor, "subscriptionTier" | "tria
   ) {
     return "starter";
   }
+
   return vendor.subscriptionTier;
 }
 
 /** Returns true when the vendor is on a paid plan (overage billing is possible). */
-function isPaidTier(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): boolean {
+function isPaidTier(
+  vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt" | "featureTrialTier" | "featureTrialExpiresAt">,
+): boolean {
   return getEffectiveTier(vendor) !== "free";
 }
 
 /** Resolves the quota bundle for whatever tier the vendor is currently on. */
-export async function getVendorQuotas(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">): Promise<SubscriptionPlanQuotas> {
+export async function getVendorQuotas(
+  vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt" | "featureTrialTier" | "featureTrialExpiresAt">,
+): Promise<SubscriptionPlanQuotas> {
   const effective = getEffectiveTier(vendor);
   if (effective === "free") return FREE_TIER_QUOTAS;
   const plan = await getSubscriptionPlan(effective);
@@ -306,7 +329,7 @@ export async function checkQuota(vendor: Vendor, resource: ResourceKey, amount: 
 }
 
 /** Human-readable message for a hard block (free-tier vendors who hit quota). */
-export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt">, result: QuotaCheckResult): string {
+export function quotaExceededMessage(vendor: Pick<Vendor, "subscriptionTier" | "trialEndsAt" | "featureTrialTier" | "featureTrialExpiresAt">, result: QuotaCheckResult): string {
   const effective = getEffectiveTier(vendor);
   const tierLabel = effective === "free" ? "Free" : effective;
   return `You've used ${result.used} of ${result.quota} ${RESOURCE_LABEL[result.resource]} included in your ${tierLabel} plan this period. Upgrade your plan or purchase add-on capacity to continue.`;

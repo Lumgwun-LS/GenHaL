@@ -6,12 +6,13 @@ import {
   useGetSalesAnalytics,
   useGetSocialAnalytics,
 } from "@workspace/api-client-react";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   DollarSign, Users, ShoppingCart, Target, Share2, Package,
-  TrendingUp, TrendingDown, Minus, Zap, ArrowRight, Activity,
+  TrendingUp, TrendingDown, Minus, Zap, ArrowRight, Activity, Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -308,6 +309,16 @@ export default function Dashboard() {
     return first === 0 ? null : second > first ? "up" : second < first ? "down" : "flat";
   }, [revenueByDay]) as "up" | "down" | "flat" | null;
 
+  const { vendor } = useCurrentVendor();
+
+  // Feature trial banner data
+  const featureTrialTier = (vendor as any)?.featureTrialTier as string | null | undefined;
+  const featureTrialExpiresAt = (vendor as any)?.featureTrialExpiresAt as string | null | undefined;
+  const trialActive = featureTrialTier && featureTrialExpiresAt && new Date(featureTrialExpiresAt) > new Date();
+  const trialDaysLeft = trialActive
+    ? Math.ceil((new Date(featureTrialExpiresAt!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   if (isLoading) return <DashboardSkeleton />;
 
   const totalRevenue   = (analytics?.totalRevenue ?? 0) as number;
@@ -377,6 +388,33 @@ export default function Dashboard() {
         initial="hidden"
         animate="show"
       >
+
+        {/* ── Feature Trial Banner ─────────────────────────────────────── */}
+        {trialActive && (
+          <motion.div variants={fadeUp}>
+            <div className="relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 p-4 flex items-center gap-4">
+              <div className="shrink-0 w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-violet-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-violet-300">
+                  {featureTrialTier!.charAt(0).toUpperCase() + featureTrialTier!.slice(1)} Plan — Free Trial Active
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  You have full access to design features (AI Content Studio, Website Builder, Media Editor) for{" "}
+                  <span className="font-medium text-violet-400">{trialDaysLeft} more {trialDaysLeft === 1 ? "day" : "days"}</span>.
+                  Upgrade your plan to keep access after your trial ends.
+                </p>
+              </div>
+              <a
+                href="/pricing"
+                className="shrink-0 text-xs font-semibold text-violet-300 hover:text-violet-200 border border-violet-500/40 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+              >
+                Upgrade →
+              </a>
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <motion.div
