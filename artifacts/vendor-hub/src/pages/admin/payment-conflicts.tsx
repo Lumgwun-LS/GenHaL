@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ async function fetchConflicts(resolved: boolean): Promise<PaymentConflict[]> {
 }
 
 async function resolveConflict(id: number, resolution: Resolution): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/payment-conflicts/${id}/resolve`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/payment-conflicts/${id}/resolve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

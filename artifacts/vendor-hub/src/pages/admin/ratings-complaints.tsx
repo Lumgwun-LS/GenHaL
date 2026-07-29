@@ -1,9 +1,14 @@
 /**
+
  * Admin Ratings & Complaints Panel
+
  * Super-admin view: see all customer ratings and complaints across all vendors.
+
  */
-import { useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,7 +56,7 @@ export default function RatingsComplaintsPanel() {
   // ── Ratings query ───────────────────────────────────────────────────────────
   const { data: ratingsData, isLoading: rLoad } = useQuery({
     queryKey: ["admin-ratings"],
-    queryFn: () => fetch(`${BASE}/api/admin/ratings`).then(r => r.json()),
+    queryFn: () => authFetch(`${BASE}/api/admin/ratings`).then(r => r.json()),
   });
 
   // ── Complaints query ────────────────────────────────────────────────────────
@@ -67,7 +72,7 @@ export default function RatingsComplaintsPanel() {
   // ── Mutations ───────────────────────────────────────────────────────────────
   const patchRating = useMutation({
     mutationFn: ({ id, ...body }: { id: number; isFlagged?: boolean; isPublic?: boolean }) =>
-      fetch(`${BASE}/api/admin/ratings/${id}`, {
+      authFetch(`${BASE}/api/admin/ratings/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       }).then(r => r.json()),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-ratings"] }); },
@@ -75,7 +80,7 @@ export default function RatingsComplaintsPanel() {
 
   const patchComplaint = useMutation({
     mutationFn: ({ id, ...body }: { id: number; status?: string; adminNote?: string }) =>
-      fetch(`${BASE}/api/admin/complaints/${id}`, {
+      authFetch(`${BASE}/api/admin/complaints/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       }).then(r => r.json()),
     onSuccess: () => {

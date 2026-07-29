@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,7 +123,7 @@ export default function RevenueIntelligencePanel() {
   const { data, isLoading, error } = useQuery<RevenueData>({
     queryKey: ["admin-revenue-intelligence", period],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/analytics/revenue-intelligence?period=${period}`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/analytics/revenue-intelligence?period=${period}`, { credentials: "include" });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },
@@ -146,7 +147,7 @@ export default function RevenueIntelligencePanel() {
   async function saveCosts() {
     setSavingCosts(true);
     try {
-      const r = await fetch(`${BASE_URL}/api/admin/site-content/admin.platformCosts`, {
+      const r = await authFetch(`${BASE_URL}/api/admin/site-content/admin.platformCosts`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

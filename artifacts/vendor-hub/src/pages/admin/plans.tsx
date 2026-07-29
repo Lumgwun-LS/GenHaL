@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,7 @@ const DEFAULT_OVERAGE_RATES: OverageRates = {
 const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: true, defaultDurationDays: 7, availableDurations: [7, 14, 21, 30] };
 
 async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways; overageRates: OverageRates; trialSettings: TrialSettings }> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plans");
   const content = (await res.json()) as {
     "billing.subscriptionPlans": { plans: Plan[] };
@@ -118,7 +119,7 @@ async function fetchPlans(): Promise<{ plans: Plan[]; gateways: PaymentGateways;
 }
 
 async function saveTrialSettings(settings: TrialSettings): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.trialSettings`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/billing.trialSettings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -131,7 +132,7 @@ async function saveTrialSettings(settings: TrialSettings): Promise<void> {
 }
 
 async function saveOverageRates(rates: OverageRates): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.overageRates`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/billing.overageRates`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -144,7 +145,7 @@ async function saveOverageRates(rates: OverageRates): Promise<void> {
 }
 
 async function savePlans(plans: Plan[]): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.subscriptionPlans`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/billing.subscriptionPlans`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -157,7 +158,7 @@ async function savePlans(plans: Plan[]): Promise<void> {
 }
 
 async function saveGateways(gateways: PaymentGateways): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/billing.paymentGateways`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/billing.paymentGateways`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -182,7 +183,7 @@ type SiteContentHistoryEntry = {
 };
 
 async function fetchSiteContentHistory(key: string): Promise<SiteContentHistoryEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/${encodeURIComponent(key)}/history`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/${encodeURIComponent(key)}/history`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to load change history");
@@ -421,13 +422,13 @@ interface VendorSearchResult {
 
 async function searchVendors(q: string): Promise<VendorSearchResult[]> {
   if (q.length < 2) return [];
-  const res = await fetch(`${BASE_URL}/api/admin/vendors/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/vendors/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
   if (!res.ok) return [];
   return res.json() as Promise<VendorSearchResult[]>;
 }
 
 async function assignTrial(vendorId: number, durationDays: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/vendors/${vendorId}/trial`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendorId}/trial`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

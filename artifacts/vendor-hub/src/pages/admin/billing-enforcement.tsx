@@ -1,17 +1,30 @@
 /**
+
  * Billing Enforcement Panel
+
  *
+
  * Shows four things admins need for billing discipline:
+
  *  1. Deduction Ladder Editor — admin-configurable escalation thresholds
+
  *  2. Vendors with unsettled overage — current threshold + reset control
+
  *  3. Vendors whose resource access is currently suspended (billing_blocked = true)
+
  *     — with a one-click Unblock button
+
  *  4. Permanently banned email / phone identifiers from deleted accounts
+
  *     — with a Remove button to lift the ban
+
  *  5. Recent auto-charges that were settled
+
  */
-import { useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -137,7 +150,7 @@ function DeductionLadderEditor() {
   const { data: siteContent, isLoading: loadingLadder } = useQuery<Record<string, unknown>>({
     queryKey: ["admin-site-content-all"],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load site content");
       return r.json();
     },
@@ -190,7 +203,7 @@ function DeductionLadderEditor() {
 
   const saveMutation = useMutation({
     mutationFn: async (ladder: number[]) => {
-      const r = await fetch(`${BASE_URL}/api/admin/site-content/billing.deductionLadder`, {
+      const r = await authFetch(`${BASE_URL}/api/admin/site-content/billing.deductionLadder`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -317,7 +330,7 @@ export default function BillingEnforcementPanel() {
   const { data: siteContent } = useQuery<Record<string, unknown>>({
     queryKey: ["admin-site-content-all"],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load site content");
       return r.json();
     },
@@ -330,7 +343,7 @@ export default function BillingEnforcementPanel() {
   const { data, isLoading, isError, refetch, isFetching } = useQuery<Overview>({
     queryKey: ["admin-billing-enforcement"],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/billing-enforcement/overview`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/billing-enforcement/overview`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load enforcement data");
       return r.json();
     },

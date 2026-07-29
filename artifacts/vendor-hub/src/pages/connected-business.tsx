@@ -1,12 +1,20 @@
 /**
+
  * Connected Business dashboard — vendor-facing page where platform/website owners
+
  * manage their Connected Business profile: connect VCS, set base URL, trigger
+
  * AI doc generation, and view/share their docs.
+
  *
+
  * Accessed at /connected-business (auth-gated).
+
  */
-import { useState, useEffect } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -66,7 +74,7 @@ function SetupForm({ onCreated }: { onCreated: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/connected-business/setup`, {
+      const res = await authFetch(`${BASE}/api/connected-business/setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -140,7 +148,7 @@ function VCSPanel({ profile, onRefresh }: { profile: Profile; onRefresh: () => v
 
   const vcsMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/connected-business/vcs`, {
+      const res = await authFetch(`${BASE}/api/connected-business/vcs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -154,7 +162,7 @@ function VCSPanel({ profile, onRefresh }: { profile: Profile; onRefresh: () => v
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/connected-business/vcs`, { method: "DELETE" });
+      const res = await authFetch(`${BASE}/api/connected-business/vcs`, { method: "DELETE" });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? "Disconnect failed"); }
       return res.json();
     },
@@ -242,7 +250,7 @@ function DocsPanel({ profile, onRefresh }: { profile: Profile; onRefresh: () => 
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/connected-business/generate-docs`, { method: "POST" });
+      const res = await authFetch(`${BASE}/api/connected-business/generate-docs`, { method: "POST" });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? "Generation failed"); }
       return res.json();
     },
@@ -349,7 +357,7 @@ function ProfilePanel({ profile, onRefresh }: { profile: Profile; onRefresh: () 
 
   const patchMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/connected-business/profile`, {
+      const res = await authFetch(`${BASE}/api/connected-business/profile`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -430,7 +438,7 @@ function IntegrationPanel({ profile }: { profile: Profile }) {
   const apiBase = `${host}/api`;
 
   useEffect(() => {
-    fetch(`${apiBase}/connected-business/embed-key`, { credentials: "include" })
+    authFetch(`${apiBase}/connected-business/embed-key`, { credentials: "include" })
       .then(r => r.json())
       .then((data: EmbedKeyResponse) => { setKeyData(data); if (data.rawKey) setRawKey(data.rawKey); })
       .finally(() => setLoading(false));
@@ -448,7 +456,7 @@ function IntegrationPanel({ profile }: { profile: Profile }) {
     if (!window.confirm("Rotate your embed API key? Your current key will stop working immediately.")) return;
     setRotating(true);
     try {
-      const r    = await fetch(`${apiBase}/connected-business/embed-key/rotate`, { method: "POST", credentials: "include" });
+      const r    = await authFetch(`${apiBase}/connected-business/embed-key/rotate`, { method: "POST", credentials: "include" });
       const data: EmbedKeyResponse = await r.json();
       setKeyData(data);
       if (data.rawKey) { setRawKey(data.rawKey); setRevealed(true); }
@@ -462,7 +470,7 @@ function IntegrationPanel({ profile }: { profile: Profile }) {
     }
     setPushing(true); setPushResult(null);
     try {
-      const r    = await fetch(`${apiBase}/connected-business/push-integration`, {
+      const r    = await authFetch(`${apiBase}/connected-business/push-integration`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ embedKey: rawKey ?? displayKey }),
@@ -781,7 +789,7 @@ export default function ConnectedBusinessPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<{ profile: Profile | null }>({
     queryKey: ["connected-business-profile"],
-    queryFn: () => fetch(`${BASE}/api/connected-business/profile`).then(r => r.json()),
+    queryFn: () => authFetch(`${BASE}/api/connected-business/profile`).then(r => r.json()),
   });
 
   const profile = data?.profile ?? null;

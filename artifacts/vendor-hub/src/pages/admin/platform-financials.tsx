@@ -1,11 +1,18 @@
 /**
+
  * Platform Financials Dashboard
+
  *
+
  * Unified view of Replit/infrastructure charges vs platform revenue,
+
  * with filters: period preset, custom date range, country, resource type, year.
+
  */
-import { useState, useMemo } from "react";
+
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,7 +188,7 @@ export default function PlatformFinancialsPanel() {
   const { data, isLoading, error, refetch } = useQuery<FinancialsData>({
     queryKey,
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/analytics/platform-financials?${params}`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/analytics/platform-financials?${params}`, { credentials: "include" });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },

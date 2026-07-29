@@ -351,10 +351,25 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
+  // Always send Accept: application/json so auth middleware returns 401, not a 302 redirect.
+  if (!headers.has("accept")) {
+    headers.set("accept", DEFAULT_JSON_ACCEPT);
+  }
+
+  // Attach bearer token when no Authorization header has been provided.
+  // Priority:
+  //   1. An explicit _authTokenGetter (e.g. Expo / React Native)
+  //   2. window.Clerk.session (web — Clerk session cookies may not propagate
+  //      through reverse-proxies in production, so we always prefer the token)
+  if (!headers.has("authorization")) {
+    let token: string | null = null;
+    if (_authTokenGetter) {
+      token = await _authTokenGetter();
+    } else if (typeof window !== "undefined") {
+      try {
+        token = (await (window as any).Clerk?.session?.getToken?.()) ?? null;
+      } catch { /* Clerk not loaded yet or no active session — fall back to cookie */ }
+    }
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }

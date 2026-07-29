@@ -6,6 +6,7 @@ import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
 import { syncVendorToAwajimaa } from "../lib/awajimaa-sync";
 import { notifyAdminSignup } from "../lib/signup-notify";
+import { sendLoginNotification } from "../lib/login-notify";
 import { addVendorToCache } from "../lib/trusted-vendors-cache";
 import {
   ListVendorsQueryParams,
@@ -210,6 +211,46 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
     }
     throw err;
   }
+});
+
+/**
+ * POST /vendors/login-ping
+ * Called once per Clerk session by the vendor-hub frontend to send a "Log In"
+ * notification email to the signed-in user. Works for both vendor accounts and
+ * admin accounts that have no vendor row. Fire-and-forget on the client side.
+ */
+router.post("/vendors/login-ping", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  // Try vendor row first; fall back to Clerk for admin accounts without a row.
+  const [vendor] = await db
+    .select({ name: vendorsTable.name, email: vendorsTable.email })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, userId))
+    .limit(1);
+
+  let name: string;
+  let email: string;
+  if (vendor) {
+    name = vendor.name;
+    email = vendor.email;
+  } else {
+    // Admin with no vendor row — look up email from Clerk.
+    try {
+      const clerkUser = await clerkClient.users.getUser(userId);
+      email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? "";
+      name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || clerkUser.username || "Admin";
+    } catch {
+      res.status(204).end();
+      return;
+    }
+  }
+
+  if (!email) { res.status(204).end(); return; }
+
+  sendLoginNotification({ platform: "vendor-hub", name, email });
+  res.status(204).end();
 });
 
 /**

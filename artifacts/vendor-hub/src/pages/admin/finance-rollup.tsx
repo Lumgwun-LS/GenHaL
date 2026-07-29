@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useGetAdminFinanceRollupAnalytics } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -101,7 +102,7 @@ function VendorOrdersView({ vendorId, period, from, to }: { vendorId: number; pe
   const { data, isLoading, isError } = useQuery<OrderRow[]>({
     queryKey: ["admin-vendor-orders", vendorId, isoFrom, isoTo],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/orders?${qs.toString()}`, { credentials: "include" });
+      const res = await authFetch(`${BASE_URL}/api/orders?${qs.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json() as Promise<OrderRow[]>;
     },
@@ -180,7 +181,7 @@ function VendorPaymentsView({ vendorId, period, from, to }: { vendorId: number; 
   const { data, isLoading, isError } = useQuery<{ payments: PaymentRow[]; summary: { total: number; paid: number; totalRevenue: number } }>({
     queryKey: ["admin-vendor-payments", vendorId, isoFrom, isoTo],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/payments?${qs.toString()}`, { credentials: "include" });
+      const res = await authFetch(`${BASE_URL}/api/payments?${qs.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch payments");
       return res.json() as Promise<{ payments: PaymentRow[]; summary: { total: number; paid: number; totalRevenue: number } }>;
     },

@@ -106,7 +106,18 @@ export function notifyAdminSignup(info: SignupInfo): void {
 </body>
 </html>`;
 
-      const recipients = getSuperAdminEmails();
+      // Never CC the signing-up person on the admin notification — they'll get
+      // their own welcome/login email separately. Filter their email out of the
+      // super-admin list so an admin who is also a super-admin email recipient
+      // doesn't receive a "new sign-up" about themselves.
+      const signingUpEmail = (info.email ?? "").toLowerCase().trim();
+      const recipients = getSuperAdminEmails().filter(
+        (addr) => addr.toLowerCase().trim() !== signingUpEmail,
+      );
+      if (recipients.length === 0) {
+        logger.info({ platform: info.platform }, "[signup-notify] No admin recipients after filtering out signing-up user — skipping");
+        return;
+      }
       await sendEmail({
         to: recipients.join(", "),
         subject: `New sign-up: ${info.name} — ${label}`,

@@ -62,6 +62,7 @@ function logAppEvent(appId: number, eventType: string, req: import("express").Re
 import { requireAuth, getAuth, clerkClient } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { notifyAdminSignup } from "../lib/signup-notify";
+import { sendLoginNotification } from "../lib/login-notify";
 import crypto from "crypto";
 
 const router = Router();
@@ -525,13 +526,27 @@ router.post("/users/track", requireAuth(), async (req, res) => {
   try {
     const { userId } = getAuth(req);
     const { email, displayName, country } = req.body ?? {};
-    // INSERT … ON CONFLICT DO NOTHING — idempotent
-    const result = await db.insert(storeUserSignupsTable)
-      .values({ clerkUserId: userId!, email: email ?? null, displayName: displayName ?? null, country: country ?? extractCountry(req) })
-      .onConflictDoNothing()
-      .returning();
-    if (result.length > 0) {
-      // Genuinely new user — fire admin email
+
+    // SELECT first — more robust than relying on ON CONFLICT alone (handles
+    // the case where the unique constraint might be absent in production DB).
+    const existing = await db
+      .select({ id: storeUserSignupsTable.id })
+      .from(storeUserSignupsTable)
+      .where(eq(storeUserSignupsTable.clerkUserId, userId!))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Returning user — send a "Log In" email only to themselves, not admins.
+      sendLoginNotification({
+        platform: "app-store-user",
+        name: displayName ?? "there",
+        email: email ?? "",
+      });
+    } else {
+      // Genuinely new user — insert row + notify admins + (they get a welcome from the UI).
+      await db.insert(storeUserSignupsTable)
+        .values({ clerkUserId: userId!, email: email ?? null, displayName: displayName ?? null, country: country ?? extractCountry(req) })
+        .onConflictDoNothing(); // race-safe guard
       notifyAdminSignup({ platform: "app-store-user", name: displayName ?? "App Store User", email: email ?? undefined, country: country ?? undefined });
     }
     res.status(204).end();

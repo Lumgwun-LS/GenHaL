@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
+import { useCallback, useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useUser } from "@clerk/react";
 import { useListVendors } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -193,7 +194,7 @@ export default function InvoicesPage() {
     if (!effectiveVendor) return;
     setLoading(true);
     try {
-      const r = await fetch(`${BASE_URL}/api/invoices`);
+      const r = await authFetch(`${BASE_URL}/api/invoices`);
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json() as { invoices: Invoice[]; summary: InvoiceSummary };
       setInvoices(data.invoices);
@@ -215,7 +216,7 @@ export default function InvoicesPage() {
     if (!aiDescText.trim()) return;
     setAiParsing(true);
     try {
-      const r = await fetch(`${BASE_URL}/api/invoices/parse-description`, {
+      const r = await authFetch(`${BASE_URL}/api/invoices/parse-description`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: aiDescText }),
       });
@@ -246,14 +247,14 @@ export default function InvoicesPage() {
     if (items.some((it) => !it.description.trim())) { toast({ title: "All items need a description", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
-      const r = await fetch(`${BASE_URL}/api/invoices`, {
+      const r = await authFetch(`${BASE_URL}/api/invoices`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, items }),
       });
       if (!r.ok) throw new Error(await r.text());
       const invoice = await r.json() as Invoice;
       if (sendToCustomer && form.customerEmail) {
-        await fetch(`${BASE_URL}/api/invoices/${invoice.id}/send`, { method: "POST" });
+        await authFetch(`${BASE_URL}/api/invoices/${invoice.id}/send`, { method: "POST" });
       }
       toast({ title: "Invoice created 🎉", description: sendToCustomer ? "Sent to customer." : "Saved as draft." });
       setShowCreate(false);
@@ -286,13 +287,13 @@ export default function InvoicesPage() {
   };
 
   const sendInvoice = async (inv: Invoice) => {
-    await fetch(`${BASE_URL}/api/invoices/${inv.id}/send`, { method: "POST" });
+    await authFetch(`${BASE_URL}/api/invoices/${inv.id}/send`, { method: "POST" });
     toast({ title: "Invoice sent ✓" }); fetchInvoices();
   };
 
   const deleteInvoice = async (inv: Invoice) => {
     if (!confirm(`Delete invoice #${inv.id}?`)) return;
-    await fetch(`${BASE_URL}/api/invoices/${inv.id}`, { method: "DELETE" });
+    await authFetch(`${BASE_URL}/api/invoices/${inv.id}`, { method: "DELETE" });
     toast({ title: "Invoice removed" }); fetchInvoices();
   };
 

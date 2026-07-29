@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, useSearch, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, SignInButton } from "@clerk/react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, getClerkToken } from "../lib/api";
 import type {
   Developer, App, PaymentInitResult, OfflinePayment,
   LinkedAccount, PlatformRepo, AppRepoLink, UpdateRequest, PlatformId,
@@ -1475,10 +1475,13 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
       if (iconFile) fd.append("icon", iconFile);
       screenshotFiles.forEach(f => fd.append("screenshots", f));
 
+      const token = await getClerkToken();
       const res = await fetch("/api/store/ai-launch/upload", {
         method: "POST",
         body: fd,
-        // Note: no Content-Type header — browser sets it with boundary for multipart
+        credentials: "include",
+        // No Content-Type — browser sets it with multipart boundary automatically
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
         const msg = await res.text().catch(() => "");

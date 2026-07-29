@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import { useCallback, useRef, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -308,7 +309,7 @@ export default function DataAnalysisPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const resp = await fetch(`${BASE_URL}/api/data-analysis/upload`, {
+      const resp = await authFetch(`${BASE_URL}/api/data-analysis/upload`, {
         method: "POST",
         body: form,
         credentials: "include",
@@ -357,7 +358,7 @@ export default function DataAnalysisPage() {
     setMessages(prev => [...prev, assistantMsg]);
 
     try {
-      const resp = await fetch(`${BASE_URL}/api/data-analysis/analyze`, {
+      const resp = await authFetch(`${BASE_URL}/api/data-analysis/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -413,7 +414,7 @@ export default function DataAnalysisPage() {
     }
     setImporting(true);
     try {
-      const resp = await fetch(`${BASE_URL}/api/data-analysis/import`, {
+      const resp = await authFetch(`${BASE_URL}/api/data-analysis/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

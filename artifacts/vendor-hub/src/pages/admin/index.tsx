@@ -1,5 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
 import { applyAddToSelection, applyRemoveFromSelection } from "@/lib/vendor-selection";
+import { useEffect, useMemo, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { computeOptedOutVendors, formatOptOutBannerText, formatOptOutPopoverDescription } from "@/lib/bulk-message-opt-out";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -66,7 +67,7 @@ type AdminVendor = {
 };
 
 async function fetchAdminVendors(): Promise<AdminVendor[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/vendors`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/vendors`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load vendors");
   return res.json() as Promise<AdminVendor[]>;
 }
@@ -75,7 +76,7 @@ async function patchTier(
   vendorId: number,
   update: { subscriptionTier?: string; verificationLevel?: string },
 ): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}/tier`, {
+  const res = await authFetch(`${BASE_URL}/api/vendors/${vendorId}/tier`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -224,7 +225,7 @@ async function fetchAuditLog(page: number, adminSearch?: string, vendorId?: numb
   if (vendorId !== undefined) {
     qs.set("vendorId", String(vendorId));
   }
-  const res = await fetch(`${BASE_URL}/api/admin/audit-log?${qs}`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/audit-log?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load audit log");
   return res.json() as Promise<AuditLogPage>;
 }
@@ -239,7 +240,7 @@ type BirthdayLog = {
 };
 
 async function fetchBirthdayLogs(): Promise<BirthdayLog[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/birthday-logs`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/birthday-logs`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load birthday logs");
   return res.json() as Promise<BirthdayLog[]>;
 }
@@ -258,7 +259,7 @@ type VoiceCallLog = {
 };
 
 async function fetchVoiceCallLogs(): Promise<VoiceCallLog[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-call-logs`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-call-logs`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load voice call logs");
   return res.json() as Promise<VoiceCallLog[]>;
 }
@@ -273,13 +274,13 @@ type ScheduledCampaign = {
 };
 
 async function fetchScheduledCampaigns(): Promise<ScheduledCampaign[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/scheduled`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-campaigns/scheduled`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load scheduled campaigns");
   return res.json() as Promise<ScheduledCampaign[]>;
 }
 
 async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-status`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-status`, { credentials: "include" });
   if (!res.ok) return { configured: false };
   return res.json();
 }
@@ -293,7 +294,7 @@ type ExportLog = {
 };
 
 async function fetchExportLogs(): Promise<ExportLog[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/export-logs`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/export-logs`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load export history");
   return res.json() as Promise<ExportLog[]>;
 }
@@ -312,7 +313,7 @@ type ExportAlerts = {
 };
 
 async function fetchExportAlerts(): Promise<ExportAlerts> {
-  const res = await fetch(`${BASE_URL}/api/admin/export-alerts`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/export-alerts`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load export alerts");
   return res.json() as Promise<ExportAlerts>;
 }
@@ -326,7 +327,7 @@ type ExportAcknowledgmentHistoryEntry = {
 };
 
 async function fetchExportAcknowledgmentHistory(adminUserId: string): Promise<ExportAcknowledgmentHistoryEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/history`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/history`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to load review history");
@@ -334,7 +335,7 @@ async function fetchExportAcknowledgmentHistory(adminUserId: string): Promise<Ex
 }
 
 async function acknowledgeExportBurst(adminUserId: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/acknowledge`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/export-alerts/${encodeURIComponent(adminUserId)}/acknowledge`, {
     method: "POST",
     credentials: "include",
   });
@@ -355,7 +356,7 @@ type ExportAlertSettingsHistoryEntry = {
 };
 
 async function fetchExportAlertSettingsHistory(): Promise<ExportAlertSettingsHistoryEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings/history`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings/history`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to load threshold change history");
@@ -372,7 +373,7 @@ function formatAlertSettingsValue(raw: string): string {
 }
 
 async function saveExportAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/admin.exportAlertSettings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -654,13 +655,13 @@ type VoiceSignatureFailureAcknowledgmentHistoryEntry = {
 async function fetchVoiceSignatureFailureAcknowledgmentHistory(): Promise<
   VoiceSignatureFailureAcknowledgmentHistoryEntry[]
 > {
-  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/history`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice/signature-failures/history`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load review history");
   return res.json() as Promise<VoiceSignatureFailureAcknowledgmentHistoryEntry[]>;
 }
 
 async function acknowledgeVoiceSignatureFailureBurst(): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/acknowledge`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/voice/signature-failures/acknowledge`, {
     method: "POST",
     credentials: "include",
   });
@@ -748,7 +749,7 @@ function VoiceSignatureFailureHistoryButton() {
 type PaymentConflictSummary = { id: number }[];
 
 async function fetchPaymentConflicts(): Promise<PaymentConflictSummary> {
-  const res = await fetch(`${BASE_URL}/api/admin/payment-conflicts`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/payment-conflicts`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load payment conflicts");
   return res.json() as Promise<PaymentConflictSummary>;
 }
@@ -756,25 +757,25 @@ async function fetchPaymentConflicts(): Promise<PaymentConflictSummary> {
 type VoidErrorSummary = { id: number }[];
 
 async function fetchVoidErrors(): Promise<VoidErrorSummary> {
-  const res = await fetch(`${BASE_URL}/api/admin/void-errors`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/void-errors`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load void errors");
   return res.json() as Promise<VoidErrorSummary>;
 }
 
 async function fetchLateArrivalRefundSummary(): Promise<{ unresolvedFailures: number }> {
-  const res = await fetch(`${BASE_URL}/api/admin/late-arrival-refunds/summary`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/late-arrival-refunds/summary`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load late-arrival refund summary");
   return res.json() as Promise<{ unresolvedFailures: number }>;
 }
 
 async function fetchVoiceSignatureFailureAlert(): Promise<VoiceSignatureFailureAlert> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice/signature-failures/alert`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice/signature-failures/alert`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load signature-failure alert status");
   return res.json() as Promise<VoiceSignatureFailureAlert>;
 }
 
 async function fetchVoiceSignatureFailureAlertSettingsHistory(): Promise<ExportAlertSettingsHistoryEntry[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings/history`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings/history`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to load threshold change history");
@@ -791,7 +792,7 @@ function formatVoiceSignatureFailureAlertSettingsValue(raw: string): string {
 }
 
 async function saveVoiceSignatureFailureAlertSettings(value: { threshold: number; windowMinutes: number }): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/admin.voiceSignatureFailureAlertSettings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -824,13 +825,13 @@ type VoiceBackfillStatus = {
 };
 
 async function fetchVoiceBackfillStatus(): Promise<VoiceBackfillStatus> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-backfill`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-backfill`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load backfill status");
   return res.json() as Promise<VoiceBackfillStatus>;
 }
 
 async function runVoiceBackfillNow(): Promise<VoiceBackfillStatus> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-backfill/run`, { method: "POST", credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-backfill/run`, { method: "POST", credentials: "include" });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
     throw new Error(err.error ?? "Failed to run backfill");
@@ -1353,7 +1354,7 @@ async function retryBulkAnnouncementEmails(
 ): Promise<{ retried: number; succeeded: number; failures: BulkEmailFailure[] }> {
   // Pass the full failures array so the server can enforce that only
   // send_failed vendors are retried — it extracts send_failed IDs itself.
-  const res = await fetch(`${BASE_URL}/api/vendors/notifications/bulk/retry-emails`, {
+  const res = await authFetch(`${BASE_URL}/api/vendors/notifications/bulk/retry-emails`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1755,7 +1756,7 @@ function MessageVendorDialog({
 }
 
 async function resendBirthdayEmail(logId: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/birthday-logs/${logId}/resend`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/birthday-logs/${logId}/resend`, {
     method: "POST",
     credentials: "include",
   });
@@ -1796,7 +1797,7 @@ function ResendBirthdayEmailButton({ logId, onDone }: { logId: number; onDone: (
 }
 
 async function retryVoiceCall(logId: number): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-call-logs/${logId}/retry`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-call-logs/${logId}/retry`, {
     method: "POST",
     credentials: "include",
   });
@@ -1813,7 +1814,7 @@ type RetryJobState =
   | { status: "idle" };
 
 async function startRetryAllFailedCampaignCalls(campaignId: number): Promise<RetryJobState> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-failed`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-failed`, {
     method: "POST",
     credentials: "include",
   });
@@ -1825,7 +1826,7 @@ async function startRetryAllFailedCampaignCalls(campaignId: number): Promise<Ret
 }
 
 async function pollRetryStatus(campaignId: number): Promise<RetryJobState> {
-  const res = await fetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-status`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/voice-campaigns/${campaignId}/retry-status`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to fetch retry status");
@@ -1971,7 +1972,7 @@ const PLAN_CHANGE_PAGE_SIZE = 50;
 async function fetchTierChangeHistory(params: { page: number; vendorId?: number }): Promise<PlanChangeHistoryPage> {
   const qs = new URLSearchParams({ page: String(params.page), pageSize: String(PLAN_CHANGE_PAGE_SIZE) });
   if (params.vendorId !== undefined) qs.set("vendorId", String(params.vendorId));
-  const res = await fetch(`${BASE_URL}/api/admin/tier-change-history?${qs}`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/tier-change-history?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load plan change history");
   return res.json() as Promise<PlanChangeHistoryPage>;
 }

@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useGetAdminDemographicsAnalytics } from "@workspace/api-client-react";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,7 @@ function useVisitorIntelligence(period: string, from: string, to: string) {
       const params = new URLSearchParams({ period });
       if (period === "custom" && from) params.set("from", new Date(from).toISOString());
       if (period === "custom" && to)   params.set("to",   new Date(to).toISOString());
-      const res = await fetch(`${BASE_URL}/api/admin/analytics/visitor-intelligence?${params}`, { credentials: "include" });
+      const res = await authFetch(`${BASE_URL}/api/admin/analytics/visitor-intelligence?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json() as Promise<any>;
     },

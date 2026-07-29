@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/react";
-import { apiFetch, StoreApiError } from "../lib/api";
+import { apiFetch, StoreApiError, getClerkToken } from "../lib/api";
 import type { App, AdminStats, Developer, UpdateRequest, OfflinePayment } from "../lib/types";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -728,9 +728,12 @@ function CategoryPicker({ selected, onChange, all, max = 5 }: {
 async function uploadFile(file: File): Promise<string> {
   const form = new FormData();
   form.append("file", file);
+  const token = await getClerkToken();
   const res = await fetch("/api/store/admin/platform-apps/upload-file", {
     method: "POST",
     body: form,
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
@@ -786,7 +789,12 @@ function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void
       fd.append("releaseNotes", releaseNotes);
       fd.append("minOsVersion", minOs);
       fd.append("autoActivate", "true");
-      const res = await fetch(`/api/store/admin/apps/${app.id}/versions`, { method: "POST", body: fd });
+      const token = await getClerkToken();
+      const res = await fetch(`/api/store/admin/apps/${app.id}/versions`, {
+        method: "POST", body: fd,
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) { const t = await res.text(); throw new Error(t); }
       setFile(null); setVersionStr(""); setReleaseNotes(""); setMinOs("");
       load();

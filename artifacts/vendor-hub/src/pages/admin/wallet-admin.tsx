@@ -1,12 +1,20 @@
 /**
+
  * Admin Wallet Panel
+
  *
+
  * Two sections:
+
  *   1. Wallet Settings — USD→NGN rate and platform fee rate
+
  *   2. Payout Queue — pending/processing payouts, approve/reject
+
  */
-import { useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +59,7 @@ function WalletSettingsCard() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<WalletSettings>({
     queryKey: ["admin-wallet-settings"],
-    queryFn: () => fetch(`${BASE}/api/admin/wallet-settings`).then(r => r.json()),
+    queryFn: () => authFetch(`${BASE}/api/admin/wallet-settings`).then(r => r.json()),
   });
 
   const [usdToNgn, setUsdToNgn] = useState<string>("");
@@ -68,7 +76,7 @@ function WalletSettingsCard() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`${BASE}/api/admin/wallet-settings`, {
+      const res = await authFetch(`${BASE}/api/admin/wallet-settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -135,7 +143,7 @@ function PayoutQueueCard() {
   const { data, isLoading, refetch } = useQuery<{ payouts: PayoutRow[] }>({
     queryKey: ["admin-payouts", filter],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/admin/payouts?status=${filter}`);
+      const res = await authFetch(`${BASE}/api/admin/payouts?status=${filter}`);
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       return res.json();
     },
@@ -146,7 +154,7 @@ function PayoutQueueCard() {
 
   const approve = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${BASE}/api/admin/payouts/${id}/approve`, { method: "POST" });
+      const res = await authFetch(`${BASE}/api/admin/payouts/${id}/approve`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       return data;
@@ -160,7 +168,7 @@ function PayoutQueueCard() {
 
   const reject = useMutation({
     mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      const res = await fetch(`${BASE}/api/admin/payouts/${id}/reject`, {
+      const res = await authFetch(`${BASE}/api/admin/payouts/${id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),

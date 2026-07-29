@@ -269,6 +269,33 @@ function PageViewTracker() {
   return null;
 }
 
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+/**
+ * Fires once per Clerk session to send a "Log In" notification email to the
+ * signed-in user. Uses a ref so it fires at most once per page load even if
+ * React re-renders the component. Attaches a Clerk Bearer token so the request
+ * reaches the API server through the production proxy (same as authFetch.ts).
+ */
+function LoginTracker() {
+  const { isSignedIn, user } = useUser();
+  const { session } = useClerk();
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!isSignedIn || !session || fired.current) return;
+    fired.current = true;
+    session.getToken().then((token) => {
+      if (!token) return;
+      fetch(`${BASE_URL}/api/vendors/login-ping`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      }).catch(() => {/* best-effort */});
+    }).catch(() => {/* best-effort */});
+  }, [isSignedIn, session]);
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const qc = useQueryClient();
@@ -321,6 +348,7 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
         <PageViewTracker />
+        <LoginTracker />
         <Switch>
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />

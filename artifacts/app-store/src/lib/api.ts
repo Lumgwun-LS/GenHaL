@@ -10,9 +10,8 @@ export class StoreApiError extends Error {
   }
 }
 
-/** Try to get a fresh Clerk session token for the Authorization header.
- *  Falls back silently — routes that don't need auth still work. */
-async function getClerkToken(): Promise<string | null> {
+/** Get a fresh Clerk session token — exported for raw fetch() callers. */
+export async function getClerkToken(): Promise<string | null> {
   try {
     // Clerk attaches itself to window.Clerk when loaded via ClerkProvider.
     const clerk = (window as any).Clerk;

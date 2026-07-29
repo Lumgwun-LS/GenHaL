@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { authFetch } from "@/lib/authFetch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
@@ -18,7 +19,7 @@ type JobRunStatus = {
 };
 
 async function fetchAllStatuses(): Promise<JobRunStatus[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/job-run-status`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/job-run-status`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load background job status");
   return (await res.json()) as JobRunStatus[];
 }

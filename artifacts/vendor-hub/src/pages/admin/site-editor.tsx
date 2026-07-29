@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,13 +30,13 @@ type SiteContent = {
 };
 
 async function fetchAdminSiteContent(): Promise<SiteContent> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load site content");
   return res.json() as Promise<SiteContent>;
 }
 
 async function saveBlock(key: string, value: unknown): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/${key}`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/${key}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -40,19 +41,19 @@ type SocialHealthSettings = {
 };
 
 async function fetchNeedsReconnect(): Promise<NeedsReconnectAccount[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/social-account-health/needs-reconnect`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/social-account-health/needs-reconnect`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load social account health list");
   return (await res.json()) as NeedsReconnectAccount[];
 }
 
 async function fetchFrequentBreakers(): Promise<FrequentBreakerAccount[]> {
-  const res = await fetch(`${BASE_URL}/api/admin/social-account-health/frequent-breakers`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/social-account-health/frequent-breakers`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load frequent breakers list");
   return (await res.json()) as FrequentBreakerAccount[];
 }
 
 async function fetchSocialHealthSettings(): Promise<SocialHealthSettings> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load settings");
   const all = (await res.json()) as Record<string, unknown>;
   const s = all["admin.socialHealthSettings"] as SocialHealthSettings | undefined;
@@ -60,7 +61,7 @@ async function fetchSocialHealthSettings(): Promise<SocialHealthSettings> {
 }
 
 async function saveSocialHealthSettings(value: SocialHealthSettings): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/admin/site-content/admin.socialHealthSettings`, {
+  const res = await authFetch(`${BASE_URL}/api/admin/site-content/admin.socialHealthSettings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

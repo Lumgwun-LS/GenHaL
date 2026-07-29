@@ -1,14 +1,24 @@
 /**
+
  * Billing Intelligence Panel
+
  *
+
  * Three clearly-separated sections:
+
  *  1. Your Platform Costs — what we actually pay per provider
+
  *     (Replit infrastructure, Twilio, ElevenLabs, OpenAI) with live usage-derived estimates
+
  *  2. Your Customer Pricing — 500% markup table, side-by-side with provider cost
+
  *  3. Per-Vendor Usage & Bills — metered consumption + calculated charges per vendor
+
  */
-import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -340,7 +350,7 @@ export default function InfrastructureBillingPanel() {
   const { data: overview, isLoading: loadingOverview, isError: errorOverview } = useQuery<Overview>({
     queryKey: ["admin-infra-billing-overview", selectedMonth],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/overview?month=${selectedMonth}`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/infrastructure-billing/overview?month=${selectedMonth}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load overview");
       return r.json();
     },
@@ -349,7 +359,7 @@ export default function InfrastructureBillingPanel() {
   const { data: vendorData, isLoading: loadingVendors } = useQuery<VendorBillsResponse>({
     queryKey: ["admin-infra-billing-vendors", selectedMonth],
     queryFn: async () => {
-      const r = await fetch(`${BASE_URL}/api/admin/infrastructure-billing/vendor-bills?month=${selectedMonth}`, { credentials: "include" });
+      const r = await authFetch(`${BASE_URL}/api/admin/infrastructure-billing/vendor-bills?month=${selectedMonth}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load vendor bills");
       return r.json();
     },
