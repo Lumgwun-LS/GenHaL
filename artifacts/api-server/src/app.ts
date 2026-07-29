@@ -11,7 +11,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
-import { objectStorageClient } from "./lib/objectStorage";
+import { objectStorageClient, ObjectStorageService } from "./lib/objectStorage";
 
 // ─── Credential encryption startup guard ─────────────────────────────────────
 if (!process.env.PAYMENT_CREDS_ENCRYPTION_KEY || process.env.PAYMENT_CREDS_ENCRYPTION_KEY.length !== 64) {
@@ -175,6 +175,13 @@ app.post(
 
       const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
       if (!domain) { res.status(500).json({ error: "No public domain configured" }); return; }
+
+      // Tag with the same ACL policy the presigned-URL path would have set,
+      // so the object is treated identically by the rest of the system.
+      const objectEntityPath = `/objects/uploads/${objectId}`;
+      new ObjectStorageService()
+        .trySetObjectEntityAclPolicy(objectEntityPath, { owner: "system:store-app", visibility: "public" })
+        .catch(() => { /* best-effort — does not affect serving */ });
 
       res.json({ fileUrl: `https://${domain}/api/media/${objectId}` });
     } catch (err: unknown) {
