@@ -12,6 +12,7 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { objectStorageClient, ObjectStorageService } from "./lib/objectStorage";
+import multer from "multer";
 
 // ─── Credential encryption startup guard ─────────────────────────────────────
 if (!process.env.PAYMENT_CREDS_ENCRYPTION_KEY || process.env.PAYMENT_CREDS_ENCRYPTION_KEY.length !== 64) {
@@ -134,17 +135,39 @@ app.use(
 );
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Streaming file upload ────────────────────────────────────────────────────
-// MUST stay before express.json() so the file body is never buffered by Express
-// or rejected by Replit's proxy body-size cap.  The raw req stream is piped
-// directly into the GCS write stream, so uploads of any size work.
+// ─── Multipart file upload ────────────────────────────────────────────────────
+// Uses multer (multipart/form-data) instead of raw binary POST.
+// Raw binary bodies are silently dropped by Replit's reverse proxy before
+// they reach Express; multipart is the standard upload encoding that every
+// proxy handles correctly.  Must stay before express.json() so multer parses
+// the multipart body before the JSON middleware runs.
+const _uploadMiddleware = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 300 * 1024 * 1024 }, // 300 MB max (covers large APKs/IPAs)
+});
+
 app.post(
   "/api/store/apps/stream-upload",
   requireAuth(),
+  (req: any, res: any, next: any) => {
+    _uploadMiddleware.single("file")(req, res, (err: any) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(413).json({ error: `File too large: ${err.message}` });
+      }
+      if (err) {
+        logger.error({ err }, "multer error during upload");
+        return res.status(500).json({ error: "Upload processing failed" });
+      }
+      next();
+    });
+  },
   async (req: any, res: any) => {
     try {
       const { userId } = getAuth(req);
       if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) { res.status(400).json({ error: "No file provided" }); return; }
 
       const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
       if (!privateObjectDir) {
@@ -154,34 +177,28 @@ app.post(
 
       const objectId = randomUUID();
       const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-      // parseObjectPath: /bucket/path → { bucketName: "bucket", objectName: "path" }
       const parts = (fullPath.startsWith("/") ? fullPath : `/${fullPath}`).split("/");
       const bucketName = parts[1]!;
       const objectName = parts.slice(2).join("/");
 
-      const contentType = (req.headers["x-file-type"] as string) || "application/octet-stream";
-
+      const contentType = file.mimetype || "application/octet-stream";
       const writeStream = objectStorageClient
         .bucket(bucketName)
         .file(objectName)
         .createWriteStream({ contentType, resumable: false });
 
       await new Promise<void>((resolve, reject) => {
-        req.pipe(writeStream);
         writeStream.on("finish", resolve);
         writeStream.on("error", (err: Error) => reject(err));
-        req.on("error", (err: Error) => reject(err));
+        writeStream.end(file.buffer);
       });
 
       const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
       if (!domain) { res.status(500).json({ error: "No public domain configured" }); return; }
 
-      // Tag with the same ACL policy the presigned-URL path would have set,
-      // so the object is treated identically by the rest of the system.
-      const objectEntityPath = `/objects/uploads/${objectId}`;
       new ObjectStorageService()
-        .trySetObjectEntityAclPolicy(objectEntityPath, { owner: "system:store-app", visibility: "public" })
-        .catch(() => { /* best-effort — does not affect serving */ });
+        .trySetObjectEntityAclPolicy(`/objects/uploads/${objectId}`, { owner: "system:store-app", visibility: "public" })
+        .catch(() => { /* best-effort */ });
 
       res.json({ fileUrl: `https://${domain}/api/media/${objectId}` });
     } catch (err: unknown) {

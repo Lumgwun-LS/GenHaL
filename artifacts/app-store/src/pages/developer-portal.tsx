@@ -103,10 +103,11 @@ async function uploadFilePresigned(
     xhr.open("POST", "/api/store/apps/stream-upload");
     xhr.timeout = 10 * 60 * 1000; // 10 min for large APKs
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    // Pass MIME type in a custom header; setting Content-Type here would
-    // override the raw-stream interpretation on the server side.
-    xhr.setRequestHeader("X-File-Type", file.type || "application/octet-stream");
-    xhr.send(file);
+    // Use FormData (multipart/form-data) — raw binary bodies are silently
+    // dropped by some reverse proxies; multipart is universally supported.
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    xhr.send(formData);
   });
 }
 
