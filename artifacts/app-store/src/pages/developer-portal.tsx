@@ -56,32 +56,58 @@ function card(extra?: React.CSSProperties): React.CSSProperties {
 }
 
 /**
- * Upload a File directly to object storage via a presigned PUT URL.
- * The file bypasses the API server + proxy entirely, so there is no size limit.
- * Returns the permanent public URL the file is reachable at.
+ * Upload a File via the same-origin streaming proxy endpoint.
+ * The server pipes the raw bytes directly to GCS without buffering, so there
+ * is no Replit proxy body-size cap and no CORS issue.
+ * XHR is used so onprogress fires for real-time progress tracking.
  */
 async function uploadFilePresigned(
   file: File,
   onProgress: (pct: number) => void,
 ): Promise<string> {
-  const { uploadUrl, fileUrl } = await apiFetch<{ uploadUrl: string; fileUrl: string }>(
-    "/store/apps/upload-url",
-    { method: "POST", body: JSON.stringify({}) },
-  );
-  await new Promise<void>((resolve, reject) => {
+  // Get a fresh Clerk session token for the Authorization header
+  const token = await (async () => {
+    try {
+      const clerk = (window as any).Clerk;
+      if (!clerk?.session) return null;
+      return await clerk.session.getToken();
+    } catch { return null; }
+  })();
+
+  const { fileUrl } = await new Promise<{ fileUrl: string }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`Storage upload failed (HTTP ${xhr.status})`));
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error("Invalid response from upload endpoint"));
+        }
+      } else {
+        // Surface the actual error body so debugging is easier
+        const detail = xhr.responseText ? `: ${xhr.responseText.slice(0, 200)}` : "";
+        reject(new Error(`Upload failed (HTTP ${xhr.status})${detail}`));
+      }
+    };
+
     xhr.onerror = () => reject(new Error("Network error during file upload"));
-    xhr.open("PUT", uploadUrl);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.ontimeout = () => reject(new Error("Upload timed out"));
+
+    // POST to same-origin streaming proxy — bypasses Replit proxy body cap
+    xhr.open("POST", "/api/store/apps/stream-upload");
+    xhr.timeout = 10 * 60 * 1000; // 10 min for large APKs
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // Tell the server the file's MIME type without setting Content-Type
+    // (setting Content-Type to multipart would break the raw stream)
+    xhr.setRequestHeader("X-File-Type", file.type || "application/octet-stream");
     xhr.send(file);
   });
+
   return fileUrl;
 }
 

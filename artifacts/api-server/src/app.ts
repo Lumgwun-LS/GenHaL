@@ -1,7 +1,8 @@
+import { randomUUID } from "crypto";
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
+import { clerkMiddleware, getAuth, requireAuth } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -10,6 +11,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { objectStorageClient } from "./lib/objectStorage";
 
 // ─── Credential encryption startup guard ─────────────────────────────────────
 if (!process.env.PAYMENT_CREDS_ENCRYPTION_KEY || process.env.PAYMENT_CREDS_ENCRYPTION_KEY.length !== 64) {
@@ -104,6 +106,17 @@ app.use(
   }),
 );
 
+// ─── Clerk middleware — mounted early so requireAuth() works on all routes ────
+// (does not need req.body, only reads Authorization header)
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
+
 // ─── Webhook routes need raw body for signature verification ─────────────────
 // These must be mounted BEFORE express.json() so the raw Buffer is preserved.
 app.use(
@@ -121,21 +134,63 @@ app.use(
 );
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Streaming file upload ────────────────────────────────────────────────────
+// MUST stay before express.json() so the file body is never buffered by Express
+// or rejected by Replit's proxy body-size cap.  The raw req stream is piped
+// directly into the GCS write stream, so uploads of any size work.
+app.post(
+  "/api/store/apps/stream-upload",
+  requireAuth(),
+  async (req: any, res: any) => {
+    try {
+      const { userId } = getAuth(req);
+      if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
+      if (!privateObjectDir) {
+        res.status(500).json({ error: "Object storage not configured (PRIVATE_OBJECT_DIR missing)" });
+        return;
+      }
+
+      const objectId = randomUUID();
+      const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+      // parseObjectPath: /bucket/path → { bucketName: "bucket", objectName: "path" }
+      const parts = (fullPath.startsWith("/") ? fullPath : `/${fullPath}`).split("/");
+      const bucketName = parts[1]!;
+      const objectName = parts.slice(2).join("/");
+
+      const contentType = (req.headers["x-file-type"] as string) || "application/octet-stream";
+
+      const writeStream = objectStorageClient
+        .bucket(bucketName)
+        .file(objectName)
+        .createWriteStream({ contentType, resumable: false });
+
+      await new Promise<void>((resolve, reject) => {
+        req.pipe(writeStream);
+        writeStream.on("finish", resolve);
+        writeStream.on("error", (err: Error) => reject(err));
+        req.on("error", (err: Error) => reject(err));
+      });
+
+      const domain = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+      if (!domain) { res.status(500).json({ error: "No public domain configured" }); return; }
+
+      res.json({ fileUrl: `https://${domain}/api/media/${objectId}` });
+    } catch (err: unknown) {
+      logger.error({ err }, "stream-upload error");
+      res.status(500).json({ error: "Upload failed" });
+    }
+  }
+);
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Raised from Express's 100kb default: AI-generated images/videos are stored
 // as base64 data: URIs in request bodies (e.g. post creation with a
 // generated image/video attached, /ai/render-video responses), which are
 // comfortably multiple megabytes before base64 overhead.
 app.use(express.json({ limit: "250mb" }));
 app.use(express.urlencoded({ extended: true, limit: "250mb" }));
-
-app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
-);
 
 app.use("/api", router);
 
