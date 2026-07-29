@@ -70,6 +70,7 @@ import walletRouter, { walletPublicRouter } from "./wallet";
 import analyticsVisitsRouter from "./analytics-visits";
 import ratingsRouter from "./ratings";
 import complaintsRouter from "./complaints";
+import integrationErrorsRouter from "./integration-errors";
 import personActivitiesRouter from "./person-activities";
 import leadFormsRouter from "./lead-forms";
 import utmLinksRouter from "./utm-links";
@@ -206,5 +207,6 @@ router.use(walletRouter);
 // Admin rating/complaint management (auth-gated inside the router)
 router.use(ratingsRouter);
 router.use(complaintsRouter);
+router.use(integrationErrorsRouter);
 
 export default router;

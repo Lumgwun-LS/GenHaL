@@ -88,3 +88,5 @@ export * from "./vendor-wallets";
 export * from "./embed-visits";
 export * from "./vendor-ratings";
 export * from "./customer-complaints";
+export * from "./integration-error-logs";
+export * from "./integration-support-reports";
