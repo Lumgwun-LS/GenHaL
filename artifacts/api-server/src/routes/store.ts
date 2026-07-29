@@ -323,8 +323,19 @@ async function requireDeveloper(req: any, res: any) {
   const dev = await db.query.storeDeveloperAccountsTable.findFirst({
     where: eq(storeDeveloperAccountsTable.clerkUserId, userId),
   });
-  if (!dev) { res.status(404).json({ error: "Developer account not found. Register first." }); return null; }
-  if (dev.status !== "active") { res.status(403).json({ error: "Developer account is suspended." }); return null; }
+  // Admins can use all developer routes even without a registered developer account.
+  // If they also have a developer account, use it; otherwise synthesise a minimal record.
+  if (!dev) {
+    if (await checkIsAdmin(req)) {
+      return { id: 0, clerkUserId: userId, status: "active", displayName: "Admin", email: "" } as any;
+    }
+    res.status(404).json({ error: "Developer account not found. Register first." });
+    return null;
+  }
+  if (dev.status !== "active" && !(await checkIsAdmin(req))) {
+    res.status(403).json({ error: "Developer account is suspended." });
+    return null;
+  }
   return dev;
 }
 
