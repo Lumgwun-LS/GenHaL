@@ -77,6 +77,7 @@ import utmLinksRouter from "./utm-links";
 import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
 import mobileAppsRouter from "./mobile-apps";
+import internalMobileAppRouter from "./internal-mobile-app";
 
 const router: IRouter = Router();
 
@@ -143,6 +144,9 @@ router.use(complaintsRouter);
 
 // Public: CRM tracking (website pixel, form submit, UTM redirect) — no auth
 router.use(crmTrackingRouter);
+
+// Internal callbacks from GitHub Actions (APK upload + build-fail report) — secret-verified, no Clerk
+router.use(internalMobileAppRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

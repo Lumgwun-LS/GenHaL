@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Copyright © 2015-2021 the original authors.
+# Gradle start-up script for POSIX-compatible shells.
+# (Standard Gradle wrapper script — do not modify.)
+
+set -e
+
+APP_HOME="$(dirname "$(realpath "$0")")"
+APP_NAME="Gradle"
+APP_BASE_NAME="$(basename "$0")"
+
+CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+
+# Determine JAVA_HOME if not set
+if [ -z "$JAVA_HOME" ]; then
+  JAVA_CANDIDATE=$(which java 2>/dev/null)
+  if [ -n "$JAVA_CANDIDATE" ]; then
+    JAVA_HOME="$(dirname "$(dirname "$(realpath "$JAVA_CANDIDATE")")")"
+  fi
+fi
+
+JAVA_EXE="$JAVA_HOME/bin/java"
+if [ ! -x "$JAVA_EXE" ]; then
+  echo "ERROR: JAVA_HOME is not set or java executable is missing at $JAVA_EXE" >&2
+  exit 1
+fi
+
+exec "$JAVA_EXE" \
+  -classpath "$CLASSPATH" \
+  org.gradle.wrapper.GradleWrapperMain \
+  "$@"

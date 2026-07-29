@@ -94,6 +94,7 @@ router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) 
     void (async () => {
       try {
         const result = await generateVendorApp({
+          recordId:   record.id,
           vendorId:   vendor.id,
           vendorName: vendor.name,
           websiteUrl: targetUrl,
@@ -101,13 +102,13 @@ router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) 
           appName:    finalName,
         });
         await db.update(vendorMobileAppsTable).set({
-          easBuildId:  result.easBuildId,
+          easBuildId:  result.runId,
           appSlug:     result.slug,
           packageName: result.packageName,
           status:      "building",
           updatedAt:   new Date(),
         }).where(eq(vendorMobileAppsTable.id, record.id));
-        logger.info({ recordId: record.id, easBuildId: result.easBuildId }, "[mobile-apps] build queued");
+        logger.info({ recordId: record.id, runId: result.runId }, "[mobile-apps] build queued");
       } catch (err: any) {
         logger.error({ err, recordId: record.id }, "[mobile-apps] build trigger failed");
         await db.update(vendorMobileAppsTable).set({

@@ -1,0 +1,131 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_id:
+        description: "vendor_mobile_apps record ID"
+        required: true
+        type: string
+      app_name:
+        description: "App display name (max 30 chars)"
+        required: true
+        type: string
+      package_name:
+        description: "Android package name e.g. com.awajimaa.mystore_42"
+        required: true
+        type: string
+      website_url:
+        description: "Website URL the WebView will open"
+        required: true
+        type: string
+      icon_url:
+        description: "Vendor icon URL (optional)"
+        required: false
+        default: ""
+        type: string
+      callback_url:
+        description: "Base URL of the Awajimaa API for the result callback"
+        required: true
+        type: string
+      callback_secret:
+        description: "Shared secret sent as X-Callback-Secret"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Customise package name
+        run: |
+          PKG="${{ github.event.inputs.package_name }}"
+          # app/build.gradle.kts
+          sed -i "s/com\.awajimaa\.template/${PKG}/g" app/build.gradle.kts
+          # AndroidManifest
+          sed -i "s/com\.awajimaa\.template/${PKG}/g" app/src/main/AndroidManifest.xml
+          # Move the Kotlin source file to the correct package directory
+          PKG_DIR="app/src/main/kotlin/$(echo "$PKG" | tr '.' '/')"
+          mkdir -p "$PKG_DIR"
+          # Update package declaration in the source file
+          sed "s/^package com\.awajimaa\.template$/package ${PKG}/" \
+            app/src/main/kotlin/com/awajimaa/template/MainActivity.kt \
+            > "$PKG_DIR/MainActivity.kt"
+
+      - name: Customise app name
+        run: |
+          APP="${{ github.event.inputs.app_name }}"
+          sed -i "s|<string name=\"app_name\">Awajimaa App</string>|<string name=\"app_name\">${APP}</string>|" \
+            app/src/main/res/values/strings.xml
+
+      - name: Inject website URL
+        run: |
+          URL="${{ github.event.inputs.website_url }}"
+          sed -i "s|WEBSITE_URL_PLACEHOLDER|${URL}|g" \
+            app/src/main/kotlin/com/awajimaa/template/MainActivity.kt
+          # Also update the moved file in the real package path
+          PKG="${{ github.event.inputs.package_name }}"
+          PKG_DIR="app/src/main/kotlin/$(echo "$PKG" | tr '.' '/')"
+          sed -i "s|WEBSITE_URL_PLACEHOLDER|${URL}|g" "$PKG_DIR/MainActivity.kt"
+
+      - name: Download vendor icon
+        if: ${{ github.event.inputs.icon_url != '' }}
+        run: |
+          for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            DIR="app/src/main/res/mipmap-${size}"
+            mkdir -p "$DIR"
+            curl -s -L -f -o "${DIR}/ic_launcher.png" "${{ github.event.inputs.icon_url }}" && \
+            cp "${DIR}/ic_launcher.png" "${DIR}/ic_launcher_round.png" || true
+          done
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK to Awajimaa
+        id: upload
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "APK path: $APK"
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ github.event.inputs.callback_url }}/internal/mobile-app/${{ github.event.inputs.record_id }}/apk" \
+            -H "X-Callback-Secret: ${{ github.event.inputs.callback_secret }}" \
+            -H "X-App-Name: ${{ github.event.inputs.app_name }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$APK")
+          echo "Callback HTTP: $HTTP"
+          if [ "$HTTP" != "200" ]; then
+            echo "Upload callback failed with HTTP $HTTP"
+            exit 1
+          fi
+
+      - name: Report failure to API
+        if: failure()
+        run: |
+          curl -s -X POST \
+            "${{ github.event.inputs.callback_url }}/internal/mobile-app/${{ github.event.inputs.record_id }}/fail" \
+            -H "X-Callback-Secret: ${{ github.event.inputs.callback_secret }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"errorMessage\":\"Build failed — see GitHub Actions run ${{ github.run_id }}\"}" || true

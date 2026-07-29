@@ -1,124 +1,80 @@
 /**
- * Background scheduler — polls EAS for finishing builds, then:
- *  1. Uploads the APK URL to the App Store listing
- *  2. Creates a store_apps row if one doesn't exist
- *  3. Updates vendor_mobile_apps with apkUrl, storeAppId, status: "published"
+ * Mobile App Build Scheduler
  *
- * Runs every 5 minutes.
+ * Polls GitHub Actions every 5 minutes for in-progress builds.
+ * The primary completion path is the GitHub Actions callback
+ * (POST /internal/mobile-app/:id/apk). This scheduler is a safety net —
+ * it detects runs that failed without calling the callback (e.g. network
+ * error during the curl step) and marks them failed so the vendor can retry.
+ *
+ * It does NOT update records that are already published/failed — the
+ * callback route is the authoritative writer for successful builds.
  */
 
-import { eq, inArray } from "drizzle-orm";
-import { db, vendorMobileAppsTable, storeAppsTable, storeDeveloperAccountsTable } from "@workspace/db";
-import { checkEasBuildStatus } from "./app-generator";
+import { eq } from "drizzle-orm";
+import { db, vendorMobileAppsTable } from "@workspace/db";
+import { checkGitHubRunStatus } from "./app-generator";
 import { logger } from "./logger";
 
-const INTERVAL_MS = 5 * 60 * 1000;
+const POLL_INTERVAL_MS = 5 * 60 * 1_000; // 5 minutes
+// If a build has been in "building" for longer than this, mark it as timed out
+const MAX_BUILD_AGE_MS = 45 * 60 * 1_000; // 45 minutes
 
-async function tick() {
-  // Find all builds that are currently building and have an EAS build ID
-  const inProgress = await db
-    .select()
-    .from(vendorMobileAppsTable)
-    .where(eq(vendorMobileAppsTable.status, "building"));
+async function tick(): Promise<void> {
+  try {
+    const inProgress = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(eq(vendorMobileAppsTable.status, "building"));
 
-  const withBuildId = inProgress.filter((r) => !!r.easBuildId);
-  if (withBuildId.length === 0) return;
+    if (inProgress.length === 0) return;
 
-  logger.info({ count: withBuildId.length }, "[mobile-app-scheduler] Polling EAS for builds");
+    logger.info({ count: inProgress.length }, "[mobile-app-scheduler] Checking in-progress builds");
 
-  for (const record of withBuildId) {
-    try {
-      const result = await checkEasBuildStatus(record.easBuildId!);
+    for (const record of inProgress) {
+      try {
+        const runId = record.easBuildId ?? "";
 
-      if (result.status === "in_progress") continue;
+        // Check for stale builds (no GitHub run ID yet or too old)
+        const ageMs = Date.now() - new Date(record.createdAt).getTime();
+        if (ageMs > MAX_BUILD_AGE_MS) {
+          logger.warn({ recordId: record.id, ageMs }, "[mobile-app-scheduler] Build timed out");
+          await db.update(vendorMobileAppsTable).set({
+            status:       "failed",
+            errorMessage: "Build timed out after 45 minutes — please try again.",
+            updatedAt:    new Date(),
+          }).where(eq(vendorMobileAppsTable.id, record.id));
+          continue;
+        }
 
-      if (result.status === "failed") {
-        await db
-          .update(vendorMobileAppsTable)
-          .set({ status: "failed", errorMessage: result.errorMessage, lastCheckedAt: new Date(), updatedAt: new Date() })
-          .where(eq(vendorMobileAppsTable.id, record.id));
-        logger.warn({ recordId: record.id }, "[mobile-app-scheduler] Build failed");
-        continue;
+        // No run ID yet — it's still being dispatched
+        if (!runId || runId === "pending") continue;
+
+        const result = await checkGitHubRunStatus(runId);
+
+        if (result.status === "failed") {
+          logger.info({ recordId: record.id, runId }, "[mobile-app-scheduler] Build failed (detected via polling)");
+          await db.update(vendorMobileAppsTable).set({
+            status:       "failed",
+            errorMessage: result.errorMessage ?? "Build failed",
+            updatedAt:    new Date(),
+          }).where(eq(vendorMobileAppsTable.id, record.id));
+        }
+        // "in_progress" → do nothing (callback handles "finished")
+      } catch (err) {
+        logger.error({ err, recordId: record.id }, "[mobile-app-scheduler] Error checking build");
       }
-
-      // Build FINISHED — create or update the App Store listing
-      const apkUrl = result.apkUrl!;
-
-      // Find developer account for this vendor
-      const vendorRow = await db.query.vendorsTable.findFirst({
-        where: (v, { eq: eqFn }) => eqFn(v.id, record.vendorId),
-      });
-      if (!vendorRow) continue;
-
-      const devAccount = await db.query.storeDeveloperAccountsTable.findFirst({
-        where: (d, { eq: eqFn }) => eqFn(d.clerkUserId, vendorRow.clerkUserId ?? ""),
-      });
-
-      let storeAppId = record.storeAppId;
-
-      if (!storeAppId) {
-        // Auto-create App Store listing for this vendor's generated app
-        const devId = devAccount?.id ?? 1; // fallback to platform developer
-        const now = new Date();
-
-        const [storeApp] = await db
-          .insert(storeAppsTable)
-          .values({
-            developerId:       devId,
-            name:              record.appName,
-            slug:              record.appSlug,
-            tagline:           `${record.appName} — mobile app`,
-            description:       `The official ${record.appName} mobile app, generated by the Awajimaa App Builder. Access ${record.websiteUrl ?? record.repoUrl ?? "your platform"} directly from your phone.`,
-            category:          "Business",
-            categories:        ["Business"],
-            platform:          "android",
-            iconUrl:           record.iconUrl ?? "",
-            screenshots:       [],
-            downloadUrl:       apkUrl,
-            currentVersion:    "1.0.0",
-            status:            "approved",
-            isFeatured:        false,
-            publishingFeePaid: true,
-            isPlatformApp:     false,
-            packageName:       record.packageName,
-            createdAt:         now,
-            updatedAt:         now,
-          })
-          .onConflictDoUpdate({
-            target: storeAppsTable.slug,
-            set: { downloadUrl: apkUrl, status: "approved", updatedAt: now },
-          })
-          .returning({ id: storeAppsTable.id });
-
-        storeAppId = storeApp.id;
-      } else {
-        // Update existing listing's download URL
-        await db
-          .update(storeAppsTable)
-          .set({ downloadUrl: apkUrl, status: "approved", updatedAt: new Date() })
-          .where(eq(storeAppsTable.id, storeAppId));
-      }
-
-      await db
-        .update(vendorMobileAppsTable)
-        .set({
-          apkUrl,
-          storeAppId,
-          status:        "published",
-          lastCheckedAt: new Date(),
-          updatedAt:     new Date(),
-        })
-        .where(eq(vendorMobileAppsTable.id, record.id));
-
-      logger.info({ recordId: record.id, apkUrl, storeAppId }, "[mobile-app-scheduler] Build published");
-    } catch (err) {
-      logger.error({ err, recordId: record.id }, "[mobile-app-scheduler] Error processing build");
     }
+  } catch (err) {
+    logger.error({ err }, "[mobile-app-scheduler] Tick error");
   }
 }
 
-export function startMobileAppBuildScheduler() {
+export function startMobileAppBuildScheduler(): void {
   logger.info("[mobile-app-scheduler] Started — polls every 5 minutes");
-  setInterval(() => void tick(), INTERVAL_MS);
-  void tick(); // run once immediately
+  // First tick after a short delay (let the server fully start)
+  setTimeout(() => {
+    void tick();
+    setInterval(() => void tick(), POLL_INTERVAL_MS);
+  }, 30_000);
 }
