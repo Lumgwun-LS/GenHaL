@@ -466,9 +466,10 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   const [iconFileObj, setIconFileObj] = useState<File | null>(null);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconProgress, setIconProgress] = useState(0);
-  const [ssFiles, setSsFiles] = useState<File[]>([]);
+  const [ssUrls, setSsUrls] = useState<string[]>([]);
   const [ssUploading, setSsUploading] = useState(false);
   const [ssProgress, setSsProgress] = useState(0);
+  const [ssUploadingCount, setSsUploadingCount] = useState(0);
   const apkInputRef = useRef<HTMLInputElement>(null);
   const iconUploadRef = useRef<HTMLInputElement>(null);
   const ssUploadRef = useRef<HTMLInputElement>(null);
@@ -498,23 +499,32 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   }
 
   async function uploadScreenshots(files: File[]) {
-    setSsFiles(files); setSsUploading(true); setSsProgress(0);
+    // Cap total at 8 across existing + new
+    const remaining = 8 - ssUrls.length;
+    if (remaining <= 0) { setError("Maximum 8 screenshots allowed. Remove some first."); return; }
+    const toUpload = files.slice(0, remaining);
+    setSsUploading(true); setSsProgress(0); setSsUploadingCount(toUpload.length);
     try {
-      const totalBytes = files.reduce((s, f) => s + f.size, 0) || 1;
+      const totalBytes = toUpload.reduce((s, f) => s + f.size, 0) || 1;
       let doneBytes = 0;
-      const urls: string[] = [];
-      for (const f of files) {
+      const newUrls: string[] = [];
+      for (const f of toUpload) {
         const url = await uploadFilePresigned(f, (pct) =>
           setSsProgress(Math.round(((doneBytes + (f.size * pct) / 100) / totalBytes) * 100)));
         doneBytes += f.size;
-        urls.push(url);
+        newUrls.push(url);
       }
-      set("screenshots", urls.join("\n"));
+      setSsUrls(prev => [...prev, ...newUrls]);
     } catch (err: any) {
       setError(`Screenshot upload failed: ${err.message ?? "Unknown error"}`);
     } finally {
       setSsUploading(false);
+      setSsUploadingCount(0);
     }
+  }
+
+  function removeSsUrl(index: number) {
+    setSsUrls(prev => prev.filter((_, i) => i !== index));
   }
 
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
@@ -581,7 +591,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         body: JSON.stringify({
           ...form,
           categories,
-          screenshots: form.screenshots ? form.screenshots.split("\n").map(s => s.trim()).filter(Boolean) : [],
+          screenshots: ssUrls,
           packageName: form.packageName || undefined,
         }),
       });
@@ -684,24 +694,81 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
 
         <div><label className="form-label">Web App URL (optional)</label><input className="input" type="url" value={form.webUrl} onChange={e => set("webUrl", e.target.value)} placeholder="https://..." /></div>
 
-        {/* Screenshots field with optional direct upload */}
+        {/* Screenshots — thumbnail grid with remove buttons */}
         <div>
-          <label className="form-label">Screenshots (optional)</label>
-          <textarea className="input" value={form.screenshots} onChange={e => set("screenshots", e.target.value)} placeholder="One URL per line, or use the upload button →" style={{ minHeight: 72 }} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-            <button type="button" onClick={() => ssUploadRef.current?.click()}
-              style={{ padding: "7px 14px", background: "rgba(0,188,212,0.1)", border: "1px solid rgba(0,188,212,0.3)", borderRadius: 8, color: "#00bcd4", fontSize: 12, cursor: "pointer" }}>
-              {ssUploading ? `Uploading… ${ssProgress}%` : ssFiles.length ? `✅ ${ssFiles.length} screenshot${ssFiles.length > 1 ? "s" : ""} uploaded` : "⬆ Upload Screenshots"}
-            </button>
-            <span style={{ fontSize: 11, color: "#8892a4" }}>Up to 8 images (PNG/JPG)</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <label className="form-label" style={{ margin: 0 }}>
+              Screenshots <span style={{ color: "#8892a4", fontWeight: 400 }}>({ssUrls.length}/8)</span>
+            </label>
+            {ssUrls.length < 8 && (
+              <button type="button" onClick={() => ssUploadRef.current?.click()} disabled={ssUploading}
+                style={{ padding: "6px 14px", background: "rgba(0,188,212,0.1)", border: "1px solid rgba(0,188,212,0.3)", borderRadius: 8, color: ssUploading ? "#8892a4" : "#00bcd4", fontSize: 12, cursor: ssUploading ? "not-allowed" : "pointer" }}>
+                {ssUploading ? `Uploading ${ssUploadingCount} image${ssUploadingCount > 1 ? "s" : ""}… ${ssProgress}%` : "⬆ Add Screenshots"}
+              </button>
+            )}
           </div>
-          <input ref={ssUploadRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-            onChange={e => { const files = Array.from(e.target.files ?? []).slice(0, 8); if (files.length) uploadScreenshots(files); }} />
+
+          {/* Upload progress bar */}
           {ssUploading && (
-            <div style={{ marginTop: 6 }}>
-              <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 4, overflow: "hidden" }}>
                 <div style={{ width: `${ssProgress}%`, height: "100%", background: "linear-gradient(90deg,#00bcd4,#80deea)", transition: "width 0.3s" }} />
               </div>
+            </div>
+          )}
+
+          {/* Thumbnail grid */}
+          {ssUrls.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 10 }}>
+              {ssUrls.map((url, i) => (
+                <div key={url + i} style={{ position: "relative", borderRadius: 10, overflow: "hidden", aspectRatio: "9/16", background: "#0a0d13", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <img
+                    src={url}
+                    alt={`Screenshot ${i + 1}`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  {/* Remove button */}
+                  <button
+                    type="button"
+                    onClick={() => removeSsUrl(i)}
+                    title="Remove screenshot"
+                    style={{
+                      position: "absolute", top: 5, right: 5,
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.2)",
+                      color: "#fff", fontSize: 13, lineHeight: 1,
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                  {/* Index badge */}
+                  <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(0,0,0,0.6)", borderRadius: 4, fontSize: 10, color: "#ccc", padding: "2px 5px" }}>
+                    {i + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            !ssUploading && (
+              <div
+                onClick={() => ssUploadRef.current?.click()}
+                style={{ border: "2px dashed rgba(0,188,212,0.2)", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", color: "#8892a4", fontSize: 13 }}
+              >
+                <div style={{ fontSize: 28, marginBottom: 8 }}>📸</div>
+                Click to upload screenshots (up to 8 images)
+              </div>
+            )
+          )}
+
+          <input ref={ssUploadRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) { uploadScreenshots(files); (e.target as HTMLInputElement).value = ""; } }} />
+
+          {ssUrls.length > 0 && (
+            <div style={{ fontSize: 11, color: "#8892a4", marginTop: 8 }}>
+              Click × on any image to remove it. Drag to reorder is not yet supported — remove and re-upload to change order.
             </div>
           )}
         </div>
