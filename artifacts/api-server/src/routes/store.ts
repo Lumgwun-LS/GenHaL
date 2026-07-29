@@ -1097,6 +1097,55 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
     } as any).returning();
     res.status(201).json(serializeApp(app, dev));
+
+    // ── Submission confirmation email — best-effort, never blocks the response ──
+    if (dev.email) {
+      const STORE = "https://awajimaaappstore.com";
+      const html = wrapVendorEmail({
+        bodyHtml: `
+          <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">
+            App received! 📱
+          </h1>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Hi ${escapeHtml(dev.displayName ?? "there")},
+          </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            We've received your submission for <strong>${escapeHtml(name)}</strong>.
+            Our team will review it and get back to you shortly.
+          </p>
+          <table style="width:100%;font-size:13px;color:#444;border-collapse:collapse;margin:16px 0;">
+            <tr>
+              <td style="padding:6px 0;color:#888;width:120px;">Platform</td>
+              <td style="padding:6px 0;font-weight:600;text-transform:capitalize;">${escapeHtml(platform)}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0;color:#888;">Category</td>
+              <td style="padding:6px 0;font-weight:600;">${escapeHtml(category)}</td>
+            </tr>
+            ${currentVersion ? `<tr>
+              <td style="padding:6px 0;color:#888;">Version</td>
+              <td style="padding:6px 0;font-weight:600;">${escapeHtml(String(currentVersion))}</td>
+            </tr>` : ""}
+            <tr>
+              <td style="padding:6px 0;color:#888;vertical-align:top;">Download link</td>
+              <td style="padding:6px 0;word-break:break-all;">
+                <a href="${escapeHtml(downloadUrl)}" style="color:#00c853;">${escapeHtml(downloadUrl)}</a>
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:14px;line-height:1.6;color:#444;">
+            Track your submission and respond to any reviewer feedback in your
+            <a href="${STORE}/app-store/developer" style="color:#00c853;">Developer Portal</a>.
+            We'll email you as soon as a decision is made.
+          </p>
+        `,
+      });
+      sendEmail({
+        to: dev.email,
+        subject: `Your app "${name}" has been submitted to the Awajimaa App Store`,
+        html,
+      }).catch(() => {/* best-effort */});
+    }
   } catch (err) {
     logger.error({ err }, "submitApp error");
     res.status(500).json({ error: "Internal server error" });

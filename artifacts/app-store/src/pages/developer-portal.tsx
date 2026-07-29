@@ -524,9 +524,9 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   }
 
   async function uploadScreenshots(files: File[]) {
-    // Cap total at 8 across existing + new
-    const remaining = 8 - ssUrls.length;
-    if (remaining <= 0) { setError("Maximum 8 screenshots allowed. Remove some first."); return; }
+    // Cap total at 5 across existing + new
+    const remaining = 5 - ssUrls.length;
+    if (remaining <= 0) { setError("Maximum 5 screenshots allowed. Remove some first."); return; }
     const toUpload = files.slice(0, remaining);
     setSsUploading(true); setSsProgress(0); setSsUploadingCount(toUpload.length);
     try {
@@ -851,7 +851,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
                 style={{ border: "2px dashed rgba(0,188,212,0.2)", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", color: "#8892a4", fontSize: 13 }}
               >
                 <div style={{ fontSize: 28, marginBottom: 8 }}>📸</div>
-                Click to upload screenshots (up to 8 images)
+                Click to upload screenshots (up to 5 images)
               </div>
             )
           )}
@@ -1405,6 +1405,137 @@ function PlatformsTab({ dev }: { dev: Developer }) {
   );
 }
 
+// ── EditScreenshotsModal ──────────────────────────────────────────────────────
+
+const MAX_SCREENSHOTS = 5;
+
+function EditScreenshotsModal({ app, onClose, onSaved }: {
+  app: App;
+  onClose: () => void;
+  onSaved: (updated: App) => void;
+}) {
+  const [screenshots, setScreenshots] = useState<string[]>(app.screenshots ?? []);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+
+  async function handleUpload(files: File[]) {
+    const remaining = MAX_SCREENSHOTS - screenshots.length;
+    if (remaining <= 0) { setError("Maximum 5 screenshots reached. Remove one first."); return; }
+    const toUpload = files.slice(0, remaining);
+    setUploading(true); setUploadProgress(0); setError(null);
+    try {
+      const totalBytes = toUpload.reduce((s, f) => s + f.size, 0) || 1;
+      let doneBytes = 0;
+      const newUrls: string[] = [];
+      for (const f of toUpload) {
+        const url = await uploadFilePresigned(f, (pct) =>
+          setUploadProgress(Math.round(((doneBytes + (f.size * pct) / 100) / totalBytes) * 100)));
+        doneBytes += f.size;
+        newUrls.push(url);
+      }
+      setUploadProgress(100);
+      setScreenshots(prev => [...prev, ...newUrls]);
+      setTimeout(() => setUploadProgress(0), 1500);
+    } catch (err: any) {
+      setError(`Upload failed: ${err.message ?? "Unknown error"}`);
+      setUploadProgress(0);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true); setError(null);
+    try {
+      const updated = await apiFetch<App>(`/store/developers/me/apps/${app.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ screenshots }),
+      });
+      onSaved(updated);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to save screenshots");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 540, maxHeight: "90vh", overflowY: "auto" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>📸 Edit Screenshots</div>
+            <div style={{ fontSize: 12, color: "#8892a4", marginTop: 2 }}>{app.name} · {screenshots.length}/{MAX_SCREENSHOTS} uploaded</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8892a4", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>×</button>
+        </div>
+
+        {/* Screenshot grid */}
+        {screenshots.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 10, marginBottom: 16 }}>
+            {screenshots.map((url, i) => (
+              <div key={i} style={{ position: "relative", borderRadius: 8 }}>
+                <img src={url} alt={`Screenshot ${i + 1}`}
+                  style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", display: "block" }} />
+                <button
+                  onClick={() => setScreenshots(prev => prev.filter((_, j) => j !== i))}
+                  style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: "#ff5252", border: "2px solid #0d1117", color: "#fff", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", lineHeight: 1, padding: 0 }}
+                  title="Remove">×</button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "20px 0", color: "#8892a4", fontSize: 13, marginBottom: 12 }}>No screenshots yet</div>
+        )}
+
+        {/* Upload zone */}
+        {screenshots.length < MAX_SCREENSHOTS && (
+          <>
+            <div
+              onClick={() => !uploading && uploadRef.current?.click()}
+              style={{ border: "2px dashed rgba(0,188,212,0.2)", borderRadius: 10, padding: "18px 16px", textAlign: "center", cursor: uploading ? "default" : "pointer", color: "#8892a4", fontSize: 13, marginBottom: 10 }}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>📸</div>
+              {uploading
+                ? `Uploading…`
+                : `Add screenshots · ${MAX_SCREENSHOTS - screenshots.length} slot${MAX_SCREENSHOTS - screenshots.length !== 1 ? "s" : ""} remaining`}
+            </div>
+            <input ref={uploadRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+              onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) { handleUpload(f); (e.target as HTMLInputElement).value = ""; } }} />
+          </>
+        )}
+
+        {/* Upload progress */}
+        {(uploading || uploadProgress > 0) && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${uploadProgress}%`, background: uploadProgress === 100 ? "#00c853" : "#00bcd4", borderRadius: 2, transition: "width 0.2s" }} />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 13, marginBottom: 12 }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+          <button onClick={onClose} className="btn-outline" style={{ fontSize: 13, padding: "8px 18px" }}>Cancel</button>
+          <button onClick={handleSave} className="btn-green" style={{ fontSize: 13, padding: "8px 18px" }}
+            disabled={saving || uploading}>
+            {saving ? "Saving…" : "Save Screenshots"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── AppsTab (with repo link + request update) ─────────────────────────────────
 
 function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: App[]; onPayApp: (a: App) => void; onRefresh: () => void; feeExempt?: boolean; devCountry?: string }) {
@@ -1413,6 +1544,7 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: A
   const [repoLinks, setRepoLinks] = useState<Record<number, AppRepoLink | null>>({});
   const [linkingApp, setLinkingApp] = useState<App | null>(null);
   const [updatingApp, setUpdatingApp] = useState<{ app: App; link: AppRepoLink } | null>(null);
+  const [editSsApp, setEditSsApp] = useState<App | null>(null);
 
   useEffect(() => {
     apiFetch<LinkedAccount[]>("/linked-accounts").then(r => setAccounts(r ?? [])).catch(() => {});
@@ -1451,6 +1583,7 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: A
                   <span style={{ background: s.bg, color: s.color, padding: "4px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600 }}>{s.label}</span>
                   {app.status === "pending_payment" && !feeExempt && <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay {feeLabel}</button>}
                   {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
+                  <button className="btn-outline" style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setEditSsApp(app)}>📸 Screenshots</button>
                 </div>
               </div>
 
@@ -1500,6 +1633,13 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: A
           link={updatingApp.link}
           onClose={() => setUpdatingApp(null)}
           onRequested={() => { setUpdatingApp(null); alert("Update request submitted! An admin will review it."); }}
+        />
+      )}
+      {editSsApp && (
+        <EditScreenshotsModal
+          app={editSsApp}
+          onClose={() => setEditSsApp(null)}
+          onSaved={() => { setEditSsApp(null); onRefresh(); }}
         />
       )}
     </>
