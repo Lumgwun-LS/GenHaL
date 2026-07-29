@@ -1,0 +1,11 @@
+# Exclude large generated/cache directories from the EAS build tarball
+node_modules/
+.expo/
+android/
+ios/
+dist/
+.turbo/
+*.log
+*.map
+__tests__/
+e2e/
