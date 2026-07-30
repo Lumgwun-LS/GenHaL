@@ -146,7 +146,7 @@ export default function MobileAppPage() {
         {[
           { icon: <Globe className="w-4 h-4" />,       step: "1", label: "Paste your URL",    desc: "Website or Git repo" },
           { icon: <Zap className="w-4 h-4" />,         step: "2", label: "We build the APK",  desc: "~20 min" },
-          { icon: <Download className="w-4 h-4" />,    step: "3", label: "Auto-published",    desc: "Listed on App Store + download link" },
+          { icon: <Download className="w-4 h-4" />,    step: "3", label: "Auto-published",    desc: "Listed on Awajimaa App Store + download link" },
         ].map((s) => (
           <div key={s.step} className="flex items-start gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
             <div className="w-7 h-7 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 flex-shrink-0">
