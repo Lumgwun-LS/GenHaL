@@ -12,7 +12,7 @@
 
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, vendorMobileAppsTable, storeDeveloperAccountsTable, storeAppsTable } from "@workspace/db";
+import { db, vendorMobileAppsTable, vendorsTable, storeDeveloperAccountsTable, storeAppsTable } from "@workspace/db";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { logger } from "../lib/logger";
 
@@ -74,12 +74,23 @@ router.post(
       // ── Auto-create or update App Store listing ──────────────────────────
       let storeAppId: number | null = record.storeAppId;
       try {
-        // Find or create a developer account for this vendor
-        const [devAccount] = await db
-          .select({ id: storeDeveloperAccountsTable.id })
-          .from(storeDeveloperAccountsTable)
-          .where(eq(storeDeveloperAccountsTable.vendorId, record.vendorId))
+        // storeDeveloperAccountsTable is keyed by clerkUserId, not vendorId —
+        // resolve the vendor's Clerk identity first, then find their dev account.
+        const [vendor] = await db
+          .select({ clerkUserId: vendorsTable.clerkUserId })
+          .from(vendorsTable)
+          .where(eq(vendorsTable.id, record.vendorId))
           .limit(1);
+
+        const clerkUserId = vendor?.clerkUserId ?? null;
+
+        const [devAccount] = clerkUserId
+          ? await db
+              .select({ id: storeDeveloperAccountsTable.id })
+              .from(storeDeveloperAccountsTable)
+              .where(eq(storeDeveloperAccountsTable.clerkUserId, clerkUserId))
+              .limit(1)
+          : [];
 
         if (devAccount) {
           // Check if a store listing already exists
