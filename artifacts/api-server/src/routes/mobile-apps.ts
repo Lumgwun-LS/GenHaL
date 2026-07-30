@@ -15,13 +15,50 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-/** Resolve the vendor row for the authenticated Clerk user. Returns null and sends 401/404 if missing. */
+/** Resolve the vendor row for the authenticated Clerk user.
+ *  Admins (ADMIN_USER_IDS) get an auto-created enterprise vendor record so they
+ *  can test all features without going through onboarding. */
 async function getVendor(req: any, res: any) {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
+
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
-  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return null; }
-  return vendor;
+  if (vendor) return vendor;
+
+  // Auto-create a vendor record for admins so they can test features freely
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId)) {
+    res.status(404).json({ error: "Vendor not found" });
+    return null;
+  }
+
+  logger.info({ userId }, "[mobile-apps] Admin has no vendor row — auto-creating one");
+  const trialExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+  const [created] = await db
+    .insert(vendorsTable)
+    .values({
+      clerkUserId:          userId,
+      name:                 "Admin Account",
+      email:                `${userId}@admin.awajimaa.internal`,
+      subscriptionTier:     "enterprise",
+      billingBlocked:       false,
+      featureTrialTier:     "enterprise",
+      featureTrialExpiresAt: trialExpiresAt,
+      featureTrialGrantedBy: "system",
+      featureTrialGrantedAt: new Date(),
+      featureTrialNote:     "Auto-granted to admin account",
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (created) return created;
+
+  // Race condition — another request inserted first; just fetch it
+  const [refetch] = await db.select().from(vendorsTable).where(eq(vendorsTable.clerkUserId, userId));
+  if (refetch) return refetch;
+
+  res.status(500).json({ error: "Could not create admin vendor record" });
+  return null;
 }
 
 // ── GET /vendors/me/mobile-app ───────────────────────────────────────────────
