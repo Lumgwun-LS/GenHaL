@@ -83,6 +83,13 @@
   "dependencies": {
     "@clerk/react": "^6.11.3",
     "@clerk/themes": "^2.4.57",
+    "@tiptap/extension-character-count": "^3.29.2",
+    "@tiptap/extension-image": "^3.29.2",
+    "@tiptap/extension-link": "^3.29.2",
+    "@tiptap/extension-placeholder": "^3.29.2",
+    "@tiptap/pm": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
     "@workspace/api-zod": "workspace:*"
   }
 }

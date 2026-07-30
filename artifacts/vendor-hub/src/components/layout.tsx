@@ -43,6 +43,7 @@ import {
   Landmark,
   MapPin,
   Smartphone,
+  BookOpen,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState, useCallback } from "react";
@@ -190,13 +191,20 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Content",
+    defaultOpen: true,
+    items: [
+      { href: "/blog",        label: "Blog",        icon: BookOpen },
+      { href: "/website",     label: "My Website",  icon: Globe },
+      { href: "/mobile-app",  label: "Mobile App",  icon: Smartphone },
+    ],
+  },
+  {
     label: "Operations",
     defaultOpen: true,
     items: [
       { href: "/branches",    label: "Branches",    icon: Building2 },
       { href: "/workers",     label: "Workers",     icon: Users },
-      { href: "/website",     label: "My Website",  icon: Globe },
-      { href: "/mobile-app",  label: "Mobile App",  icon: Smartphone },
     ],
   },
   {

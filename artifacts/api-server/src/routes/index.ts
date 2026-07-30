@@ -78,6 +78,7 @@ import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
 import mobileAppsRouter from "./mobile-apps";
 import internalMobileAppRouter from "./internal-mobile-app";
+import blogRouter from "./blog";
 
 const router: IRouter = Router();
 
@@ -214,5 +215,6 @@ router.use(ratingsRouter);
 router.use(complaintsRouter);
 router.use(integrationErrorsRouter);
 router.use(mobileAppsRouter);
+  router.use(blogRouter);
 
 export default router;

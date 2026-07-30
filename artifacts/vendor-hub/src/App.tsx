@@ -73,6 +73,8 @@ import MessagesPage from "@/pages/messages/index";
 import WalletPage from "@/pages/wallet/index";
 import InterswitchPage from "@/pages/interswitch/index";
 import MobileAppPage from "@/pages/mobile-app";
+import BlogManagement from "@/pages/blog/index";
+import BlogEditor from "@/pages/blog/editor";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -403,6 +405,9 @@ function ClerkProviderWithRoutes() {
           <Route path="/architect" component={() => <AuthenticatedRoute component={ArchitectPage} />} />
           <Route path="/website" component={() => <AuthenticatedRoute component={WebsitePage} />} />
           <Route path="/mobile-app" component={() => <AuthenticatedRoute component={MobileAppPage} />} />
+          <Route path="/blog" component={() => <AuthenticatedRoute component={BlogManagement} />} />
+          <Route path="/blog/new" component={() => <AuthenticatedRoute component={BlogEditor} />} />
+          <Route path="/blog/:id/edit" component={() => <AuthenticatedRoute component={BlogEditor} />} />
           <Route path="/account" component={() => <AuthenticatedRoute component={Account} />} />
           <Route path="/marketplace" component={() => <AuthenticatedRoute component={MarketplacePage} />} />
           <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />
