@@ -13,8 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ArrowLeft, Calendar, Eye, Heart, MessageSquare,
   BookOpen, Loader2, Send, CheckCircle2, AlertCircle,
-  User, Mail, Phone,
+  User, Mail, Phone, Bell,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -57,6 +58,7 @@ export default function PublicBlogPost() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [body, setBody] = useState("");
+  const [newsLetterOptIn, setNewsLetterOptIn] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -112,7 +114,7 @@ export default function PublicBlogPost() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, phone, body }),
+          body: JSON.stringify({ name, email, phone, body, newsLetterOptIn }),
         }
       );
       const data = await res.json();
@@ -122,7 +124,7 @@ export default function PublicBlogPost() {
       }
       setComments((prev) => [data.comment, ...prev]);
       setSubmitSuccess(true);
-      setName(""); setEmail(""); setPhone(""); setBody("");
+      setName(""); setEmail(""); setPhone(""); setBody(""); setNewsLetterOptIn(true);
       if (post) setPost({ ...post, commentCount: post.commentCount + 1 });
     } catch (err: any) {
       setSubmitError(err.message ?? "Something went wrong");
@@ -356,6 +358,24 @@ export default function PublicBlogPost() {
                       required
                     />
                   </div>
+                  {/* Newsletter opt-in */}
+                  <div className="flex items-start gap-3 rounded-lg border bg-primary/5 border-primary/20 px-3 py-3">
+                    <Checkbox
+                      id="newsletter-opt-in"
+                      checked={newsLetterOptIn}
+                      onCheckedChange={(v) => setNewsLetterOptIn(!!v)}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <label htmlFor="newsletter-opt-in" className="text-sm text-foreground cursor-pointer leading-tight">
+                      <span className="font-medium flex items-center gap-1.5 mb-0.5">
+                        <Bell className="w-3.5 h-3.5 text-primary" /> Receive newsletters
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Get updates and new posts from {vendor.name} by email. You can unsubscribe anytime.
+                      </span>
+                    </label>
+                  </div>
+
                   {submitError && (
                     <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
                       <AlertCircle className="w-4 h-4 shrink-0" />

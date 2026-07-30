@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import { clerkMiddleware, getAuth, requireAuth } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
+import publicCustomerActivityRouter from "./routes/public-customer-activity";
 import { logger } from "./lib/logger";
 import {
   CLERK_PROXY_PATH,
@@ -219,6 +220,7 @@ app.use(express.urlencoded({ extended: true, limit: "250mb" }));
 app.use(cookieParser());
 
 app.use("/api", router);
+app.use("/api", publicCustomerActivityRouter);
 
 // ─── Global error handler ────────────────────────────────────────────────────
 // Clerk's middleware can throw synchronously (e.g. a malformed/garbage

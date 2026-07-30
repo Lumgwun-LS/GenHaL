@@ -20,10 +20,17 @@ import {
   blogCommenterBansTable,
   leadsTable,
   personActivitiesTable,
+  vendorWebsitesTable,
 } from "@workspace/db";
-import { vendorWebsitesTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { randomBytes } from "node:crypto";
+import { sendEmail } from "../lib/mailer";
+import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
+
+function getAppBaseUrl(): string {
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  return domain ? `https://${domain}` : "https://app.awabiz.com";
+}
 
 const router = Router();
 
@@ -230,7 +237,7 @@ router.post("/public/blog/:siteSlug/:postSlug/comments", async (req: any, res: a
     if (!vendor) return void res.status(404).json({ error: "Blog not found" });
 
     const [post] = await db
-      .select({ id: blogPostsTable.id, commentCount: blogPostsTable.commentCount })
+      .select({ id: blogPostsTable.id, title: blogPostsTable.title, slug: blogPostsTable.slug, commentCount: blogPostsTable.commentCount })
       .from(blogPostsTable)
       .where(
         and(
@@ -291,12 +298,15 @@ router.post("/public/blog/:siteSlug/:postSlug/comments", async (req: any, res: a
         .from(leadsTable)
         .where(and(eq(leadsTable.vendorId, vendor.id), eq(leadsTable.email, normalizedEmail)));
 
+      const newsLetterOptIn = typeof req.body.newsLetterOptIn === "boolean" ? req.body.newsLetterOptIn : true;
+
       if (existingLead) {
-        // Update with any new info
+        // Update with any new info; always respect a fresh opt-in preference
         await db
           .update(leadsTable)
           .set({
             lastSeenAt: now,
+            newsLetterOptIn,
             ...(name.trim() && { name: name.trim() }),
             ...(phone?.trim() && { phone: phone.trim() }),
           })
@@ -306,16 +316,17 @@ router.post("/public/blog/:siteSlug/:postSlug/comments", async (req: any, res: a
         const [inserted] = await db
           .insert(leadsTable)
           .values({
-            vendorId:   vendor.id,
-            name:       name.trim(),
-            email:      normalizedEmail,
-            phone:      phone?.trim() || undefined,
-            channel:    "blog",
-            source:     "blog",
-            pageViews:  1,
-            firstSeenAt: now,
-            lastSeenAt:  now,
-            status:     "new",
+            vendorId:        vendor.id,
+            name:            name.trim(),
+            email:           normalizedEmail,
+            phone:           phone?.trim() || undefined,
+            channel:         "blog",
+            source:          "blog",
+            pageViews:       1,
+            firstSeenAt:     now,
+            lastSeenAt:      now,
+            status:          "new",
+            newsLetterOptIn,
           })
           .returning({ id: leadsTable.id });
         leadId = inserted?.id;
@@ -354,9 +365,87 @@ router.post("/public/blog/:siteSlug/:postSlug/comments", async (req: any, res: a
       .set({ commentCount: sql`${blogPostsTable.commentCount} + 1` })
       .where(eq(blogPostsTable.id, post.id));
 
+    // Send confirmation email to commenter — best-effort, never blocks the response
+    void (async () => {
+      try {
+        const postUrl = `${getAppBaseUrl()}/vendor-hub/public-blog/${encodeURIComponent(req.params.siteSlug)}/${encodeURIComponent(req.params.postSlug)}`;
+        const activityUrl = `${getAppBaseUrl()}/vendor-hub/my-activity?email=${encodeURIComponent(normalizedEmail)}`;
+        const html = wrapVendorEmail({
+          bodyHtml: `
+            <h2 style="font-size:20px;font-weight:700;margin:0 0 8px;">
+              Thanks for your comment, ${escapeHtml(name.trim().split(" ")[0])}!
+            </h2>
+            <p style="color:#555;margin:0 0 16px;">
+              Your comment on <strong>${escapeHtml(post.title)}</strong> by
+              <strong>${escapeHtml(vendor.name)}</strong> was received.
+            </p>
+            <blockquote style="border-left:3px solid #7F50FF;padding:10px 16px;margin:0 0 20px;background:#f9f6ff;border-radius:4px;color:#333;font-style:italic;">
+              ${escapeHtml(body.trim().slice(0, 300))}${body.trim().length > 300 ? "…" : ""}
+            </blockquote>
+            <p style="color:#888;font-size:13px;margin:0 0 4px;">
+              You can view your activity and pending orders anytime at the link below.
+            </p>`,
+          action: { label: "View the Post", url: postUrl },
+        });
+        await sendEmail({
+          to:      normalizedEmail,
+          subject: `Your comment on "${post.title}"`,
+          html,
+        });
+      } catch (emailErr) {
+        logger.warn({ emailErr }, "[blog-comment] Confirmation email failed");
+      }
+    })();
+
     res.status(201).json({ comment: serializeComment(comment) });
   } catch (err) {
     logger.error({ err }, "POST /public/blog/:siteSlug/:postSlug/comments error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /public/vendor-blog ───────────────────────────────────────────────────
+// Platform-wide blog: 50 most-recent published posts from all vendors
+// who have opted in (blogFeaturedOnPlatform=true) and aren't suspended.
+router.get("/public/vendor-blog", async (req: any, res: any) => {
+  try {
+    const posts = await db
+      .select({
+        id:             blogPostsTable.id,
+        title:          blogPostsTable.title,
+        slug:           blogPostsTable.slug,
+        siteSlug:       vendorWebsitesTable.slug,
+        coverImageUrl:  blogPostsTable.coverImageUrl,
+        excerpt:        blogPostsTable.excerpt,
+        keywords:       blogPostsTable.keywords,
+        viewCount:      blogPostsTable.viewCount,
+        likeCount:      blogPostsTable.likeCount,
+        commentCount:   blogPostsTable.commentCount,
+        publishedAt:    blogPostsTable.publishedAt,
+        vendorName:     vendorsTable.name,
+        vendorLogoUrl:  vendorsTable.logoUrl,
+      })
+      .from(blogPostsTable)
+      .innerJoin(vendorsTable, eq(vendorsTable.id, blogPostsTable.vendorId))
+      .innerJoin(vendorWebsitesTable, eq(vendorWebsitesTable.vendorId, blogPostsTable.vendorId))
+      .where(and(
+        eq(blogPostsTable.status, "published"),
+        eq(blogPostsTable.suspendedFromGlobal, false),
+        eq(vendorsTable.blogSuspended, false),
+        eq(vendorsTable.blogFeaturedOnPlatform, true),
+        eq(vendorsTable.status, "active"),
+      ))
+      .orderBy(desc(blogPostsTable.publishedAt))
+      .limit(50);
+
+    res.json({
+      posts: posts.map((p) => ({
+        ...p,
+        publishedAt: p.publishedAt?.toISOString() ?? null,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "GET /public/vendor-blog error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

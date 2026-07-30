@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
@@ -50,6 +50,9 @@ export const leadsTable = pgTable("leads", {
   referrerUrl: text("referrer_url"),
   landingPage: text("landing_page"),
   visitorToken: text("visitor_token"), // anonymous token from tracking script
+
+  // Email marketing
+  newsLetterOptIn: boolean("newsletter_opt_in").notNull().default(true),
 
   // Engagement counters
   pageViews: integer("page_views").notNull().default(0),

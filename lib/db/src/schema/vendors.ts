@@ -98,6 +98,8 @@ export const vendorsTable = pgTable("vendors", {
   featureTrialNote: text("feature_trial_note"),
   // Admin-only: suspend all of this vendor's blog posts from the global blog page
   blogSuspended: boolean("blog_suspended").notNull().default(false),
+  // Vendor opt-out: hide their posts from the platform-wide Awajimaa Vendor Blog page
+  blogFeaturedOnPlatform: boolean("blog_featured_on_platform").notNull().default(true),
   // Set when a vendor account is permanently deleted — used to prevent the same
   // email/phone from registering a new account on this platform.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

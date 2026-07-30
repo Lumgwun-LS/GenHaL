@@ -11,11 +11,17 @@
  */
 
 import { Router } from "express";
-import { eq, and, desc } from "drizzle-orm";
-import { db, vendorsTable, blogPostsTable, blogCommentsTable, blogCommenterBansTable } from "@workspace/db";
+import { eq, and, desc, count, isNotNull, ne } from "drizzle-orm";
+import { db, vendorsTable, blogPostsTable, blogCommentsTable, blogCommenterBansTable, leadsTable, emailCampaignsTable, vendorWebsitesTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { randomBytes } from "node:crypto";
+import { sendEmail } from "../lib/mailer";
+
+function getAppBaseUrl(): string {
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  return domain ? `https://${domain}` : "https://app.awabiz.com";
+}
 
 const router = Router();
 
@@ -383,6 +389,198 @@ router.get("/blog/admin/vendors", async (req: any, res: any) => {
     res.json(vendors);
   } catch (err) {
     logger.error({ err }, "GET /blog/admin/vendors error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /blog/posts/:id/newsletter-stats ─────────────────────────────────────
+// Returns the count of opted-in leads that would receive a newsletter for this post.
+router.get("/blog/posts/:id/newsletter-stats", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+
+    const postId = Number(req.params.id);
+    if (!postId) return void res.status(400).json({ error: "Invalid post id" });
+
+    const [post] = await db.select({ id: blogPostsTable.id, vendorId: blogPostsTable.vendorId, status: blogPostsTable.status })
+      .from(blogPostsTable)
+      .where(eq(blogPostsTable.id, postId));
+    if (!post) return void res.status(404).json({ error: "Post not found" });
+    if (!vendor.isAdmin && post.vendorId !== vendor.id) return void res.status(403).json({ error: "Forbidden" });
+    if (post.status !== "published") return void res.status(400).json({ error: "Post is not published" });
+
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(leadsTable)
+      .where(and(
+        eq(leadsTable.vendorId, post.vendorId),
+        isNotNull(leadsTable.email),
+        ne(leadsTable.email, ""),
+        eq(leadsTable.newsLetterOptIn, true),
+      ));
+
+    res.json({ recipientCount: value });
+  } catch (err) {
+    logger.error({ err }, "GET /blog/posts/:id/newsletter-stats error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /blog/posts/:id/send-newsletter ─────────────────────────────────────
+// Creates an email campaign from a blog post and dispatches it via SMTP
+// to all opted-in leads for that vendor.
+//
+// Idempotency: a per-post `targetAudience = "newsletter:<postId>"` guard
+// prevents sending the same post twice. Returns 409 if already sent.
+router.post("/blog/posts/:id/send-newsletter", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+
+    const postId = Number(req.params.id);
+    if (!postId) return void res.status(400).json({ error: "Invalid post id" });
+
+    const [post] = await db.select().from(blogPostsTable).where(eq(blogPostsTable.id, postId));
+    if (!post) return void res.status(404).json({ error: "Post not found" });
+    if (!vendor.isAdmin && post.vendorId !== vendor.id) return void res.status(403).json({ error: "Forbidden" });
+    if (post.status !== "published") return void res.status(400).json({ error: "Post is not published" });
+
+    // Idempotency guard: one newsletter per post
+    const newsletterAudience = `newsletter:${postId}`;
+    const [existing] = await db
+      .select({ id: emailCampaignsTable.id, sentCount: emailCampaignsTable.sentCount })
+      .from(emailCampaignsTable)
+      .where(and(
+        eq(emailCampaignsTable.vendorId, post.vendorId),
+        eq(emailCampaignsTable.targetAudience, newsletterAudience),
+      ));
+    if (existing) {
+      return void res.status(409).json({
+        error: "A newsletter has already been sent for this post",
+        campaignId: existing.id,
+        sentCount: existing.sentCount,
+      });
+    }
+
+    // Fetch opted-in leads with valid emails
+    const recipients = await db
+      .select({ id: leadsTable.id, email: leadsTable.email, name: leadsTable.name })
+      .from(leadsTable)
+      .where(and(
+        eq(leadsTable.vendorId, post.vendorId),
+        isNotNull(leadsTable.email),
+        ne(leadsTable.email, ""),
+        eq(leadsTable.newsLetterOptIn, true),
+      ));
+
+    if (recipients.length === 0) {
+      return void res.status(400).json({ error: "No opted-in subscribers to send to" });
+    }
+
+    // Build public post URL using the same pattern as customer-emails.ts
+    const [website] = await db
+      .select({ slug: vendorWebsitesTable.slug })
+      .from(vendorWebsitesTable)
+      .where(eq(vendorWebsitesTable.vendorId, post.vendorId));
+    const siteSlug = website?.slug ?? String(post.vendorId);
+    const postUrl = `${getAppBaseUrl()}/vendor-hub/public-blog/${encodeURIComponent(siteSlug)}/${encodeURIComponent(post.slug)}`;
+
+    // Build email HTML
+    const safeTitle   = post.title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeExcerpt = (post.excerpt ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const emailHtml = `
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+  <h1 style="font-size:24px;font-weight:700;margin-bottom:8px;">${safeTitle}</h1>
+  ${post.coverImageUrl ? `<img src="${post.coverImageUrl}" alt="" style="width:100%;max-height:320px;object-fit:cover;border-radius:8px;margin-bottom:16px;" />` : ""}
+  <p style="font-size:16px;line-height:1.6;color:#444;">${safeExcerpt}</p>
+  <a href="${postUrl}" style="display:inline-block;margin-top:20px;padding:12px 28px;background:#7C3AED;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">Read Full Post →</a>
+  <hr style="margin-top:32px;border:none;border-top:1px solid #eee;" />
+  <p style="font-size:12px;color:#999;margin-top:12px;">
+    You are receiving this because you opted in to newsletters from this business.
+  </p>
+</div>`.trim();
+
+    // Atomically create campaign in "sending" state to claim the send slot
+    const [campaign] = await db.insert(emailCampaignsTable).values({
+      vendorId:       post.vendorId,
+      name:           `Newsletter: ${post.title}`,
+      subject:        post.title,
+      body:           emailHtml,
+      status:         "sending",
+      recipientCount: recipients.length,
+      targetAudience: newsletterAudience,
+    }).returning();
+
+    // Dispatch emails and track real sent/failed counts
+    let sentCount = 0;
+    let failedCount = 0;
+    for (const lead of recipients) {
+      if (!lead.email) continue;
+      const result = await sendEmail({ to: lead.email, subject: post.title, html: emailHtml });
+      if (result.status === "sent" || result.status === "skipped") {
+        sentCount++;
+      } else {
+        failedCount++;
+      }
+    }
+
+    // Finalise campaign with accurate counts
+    await db.update(emailCampaignsTable).set({
+      status:    "sent",
+      sentCount,
+      sentAt:    new Date(),
+    }).where(eq(emailCampaignsTable.id, campaign.id));
+
+    logger.info({ campaignId: campaign.id, postId, sentCount, failedCount }, "[newsletter] Campaign dispatched");
+    res.json({
+      campaignId:    campaign.id,
+      sentCount,
+      failedCount,
+      recipientCount: recipients.length,
+      message: `Newsletter sent to ${sentCount} of ${recipients.length} subscriber${recipients.length !== 1 ? "s" : ""}`,
+    });
+  } catch (err) {
+    logger.error({ err }, "POST /blog/posts/:id/send-newsletter error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /blog/settings — vendor blog opt-out flag ───────────────────────────
+router.patch("/blog/settings", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+
+    const { blogFeaturedOnPlatform } = req.body as { blogFeaturedOnPlatform?: boolean };
+    if (typeof blogFeaturedOnPlatform !== "boolean") {
+      return void res.status(400).json({ error: "blogFeaturedOnPlatform must be boolean" });
+    }
+
+    await db.update(vendorsTable)
+      .set({ blogFeaturedOnPlatform })
+      .where(eq(vendorsTable.id, vendor.id));
+
+    res.json({ blogFeaturedOnPlatform });
+  } catch (err) {
+    logger.error({ err }, "PATCH /blog/settings error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /blog/settings — fetch vendor's blog settings ────────────────────────
+router.get("/blog/settings", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+
+    const [row] = await db.select({ blogFeaturedOnPlatform: vendorsTable.blogFeaturedOnPlatform })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, vendor.id));
+
+    res.json({ blogFeaturedOnPlatform: row?.blogFeaturedOnPlatform ?? true });
+  } catch (err) {
+    logger.error({ err }, "GET /blog/settings error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

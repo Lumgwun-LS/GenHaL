@@ -34,6 +34,8 @@ export const ordersTable = pgTable("orders", {
   source: text("source"),
   /** True once stock has been decremented for this order — prevents double-decrement on webhook retries */
   stockApplied: boolean("stock_applied").notNull().default(false),
+  /** Set once a cart-abandonment reminder email has been sent — prevents duplicate sends */
+  cartReminderSentAt: timestamp("cart_reminder_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

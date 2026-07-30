@@ -322,6 +322,13 @@ export default function LandingPage() {
               <Globe2 className="w-3.5 h-3.5" />
               Connected Business
             </Link>
+            <Link href="/my-activity" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
+              Track Orders
+            </Link>
+            <Link href="/vendor-blog" className="px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" />
+              Vendor Blog
+            </Link>
 
             <div className="ml-4 flex items-center gap-3">
               {isSignedIn ? (
@@ -398,6 +405,16 @@ export default function LandingPage() {
                   className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
                   <BookOpen className="w-4 h-4 text-muted-foreground" />
                   Documentation
+                </Link>
+                <Link href="/my-activity" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+                  Track Your Orders
+                </Link>
+                <Link href="/vendor-blog" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  Vendor Blog
                 </Link>
                 {isSignedIn ? (
                   <div className="pt-2">

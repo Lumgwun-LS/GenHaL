@@ -14,7 +14,12 @@ import {
 import {
   LayoutGrid, List, Plus, Search, Eye, Heart, MessageSquare,
   Edit2, Trash2, Globe, FileText, Loader2, BookOpen, ShieldBan,
+  Send, Users, Settings2,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -53,6 +58,66 @@ export default function BlogManagement() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+  // Newsletter dialog
+  const [newsletterPost, setNewsletterPost] = useState<BlogPost | null>(null);
+  const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+  const [sendingNewsletter, setSendingNewsletter] = useState(false);
+
+  // Blog settings (featured on platform)
+  const [blogFeaturedOnPlatform, setBlogFeaturedOnPlatform] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Load blog settings once
+  useEffect(() => {
+    apiFetch("/blog/settings")
+      .then((d) => setBlogFeaturedOnPlatform(d.blogFeaturedOnPlatform ?? true))
+      .catch(() => {/* non-critical */});
+  }, []);
+
+  const handleSaveSettings = async (val: boolean) => {
+    setSavingSettings(true);
+    try {
+      await apiFetch("/blog/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blogFeaturedOnPlatform: val }),
+      });
+      setBlogFeaturedOnPlatform(val);
+      toast.success(val ? "Your posts will appear on the Awajimaa Blog" : "Your posts are hidden from the Awajimaa Blog");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save settings");
+    }
+    setSavingSettings(false);
+  };
+
+  const handleOpenNewsletter = async (post: BlogPost) => {
+    setNewsletterPost(post);
+    setRecipientCount(null);
+    setLoadingRecipients(true);
+    try {
+      const d = await apiFetch(`/blog/posts/${post.id}/newsletter-stats`);
+      setRecipientCount(d.recipientCount ?? 0);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to load recipient count");
+      setNewsletterPost(null);
+    }
+    setLoadingRecipients(false);
+  };
+
+  const handleSendNewsletter = async () => {
+    if (!newsletterPost) return;
+    setSendingNewsletter(true);
+    try {
+      const d = await apiFetch(`/blog/posts/${newsletterPost.id}/send-newsletter`, { method: "POST" });
+      toast.success(d.message ?? "Newsletter sent!");
+      setNewsletterPost(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to send newsletter");
+    }
+    setSendingNewsletter(false);
+  };
 
   useEffect(() => {
     localStorage.setItem("blog:gridCols", String(gridCols));
@@ -127,6 +192,26 @@ export default function BlogManagement() {
         <Button onClick={() => setLocation("/blog/new")}>
           <Plus className="w-4 h-4 mr-2" /> New Post
         </Button>
+      </div>
+
+      {/* Blog settings: featured on platform */}
+      <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Show my posts on the Awajimaa Vendor Blog</p>
+            <p className="text-xs text-muted-foreground">Your published posts will appear on the platform-wide blog page, giving you free exposure across the Awajimaa ecosystem.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {savingSettings && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+          <Checkbox
+            id="blog-featured-platform"
+            checked={blogFeaturedOnPlatform}
+            onCheckedChange={(v) => handleSaveSettings(!!v)}
+            disabled={savingSettings}
+          />
+        </div>
       </div>
 
       {/* Stats */}
@@ -291,6 +376,15 @@ export default function BlogManagement() {
                           : <Globe className={cn("w-3.5 h-3.5", post.status === "published" ? "text-green-500" : "text-muted-foreground")} />
                         }
                       </Button>
+                      {post.status === "published" && (
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary"
+                          title="Send as Newsletter"
+                          onClick={() => handleOpenNewsletter(post)}
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Link href={`/blog/${post.id}/edit`}>
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit">
                           <Edit2 className="w-3.5 h-3.5" />
@@ -343,7 +437,7 @@ export default function BlogManagement() {
                   <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{post.likeCount}</span>
                   <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />{post.commentCount}</span>
                 </div>
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button
                     variant="ghost" size="sm" className="h-7 px-2 text-xs"
                     disabled={actionLoading === post.id}
@@ -352,6 +446,14 @@ export default function BlogManagement() {
                     {actionLoading === post.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                     {post.status === "draft" ? "Publish" : "Unpublish"}
                   </Button>
+                  {post.status === "published" && (
+                    <Button
+                      variant="ghost" size="sm" className="h-7 px-2 text-xs text-primary hover:text-primary"
+                      onClick={() => handleOpenNewsletter(post)}
+                    >
+                      <Send className="w-3 h-3 mr-1" /> Newsletter
+                    </Button>
+                  )}
                   <Link href={`/blog/${post.id}/edit`}>
                     <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
                       <Edit2 className="w-3 h-3 mr-1" /> Edit
@@ -385,6 +487,61 @@ export default function BlogManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Newsletter send confirm dialog */}
+      <Dialog open={newsletterPost !== null} onOpenChange={(o) => !o && setNewsletterPost(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-primary" /> Send as Newsletter
+            </DialogTitle>
+            <DialogDescription>
+              This will send an email campaign to all opted-in subscribers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+              <p className="text-sm font-medium truncate">{newsletterPost?.title}</p>
+              {newsletterPost?.excerpt && (
+                <p className="text-xs text-muted-foreground line-clamp-2">{newsletterPost.excerpt}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border bg-primary/5 border-primary/20 p-3">
+              <Users className="w-8 h-8 text-primary/60 shrink-0" />
+              <div>
+                {loadingRecipients ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Counting opted-in subscribers…</span>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xl font-bold">{recipientCount ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">opted-in subscriber{recipientCount !== 1 ? "s" : ""} will receive this email</p>
+                  </>
+                )}
+              </div>
+            </div>
+            {recipientCount === 0 && !loadingRecipients && (
+              <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                No opted-in subscribers found. Subscribers opt in via the comment form on your public blog.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewsletterPost(null)}>Cancel</Button>
+            <Button
+              disabled={sendingNewsletter || loadingRecipients || recipientCount === 0}
+              onClick={handleSendNewsletter}
+            >
+              {sendingNewsletter
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Sending…</>
+                : <><Send className="w-4 h-4 mr-2" /> Send to {recipientCount ?? 0} subscriber{recipientCount !== 1 ? "s" : ""}</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
