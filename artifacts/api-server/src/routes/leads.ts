@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, ilike, or } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
-import { db, leadsTable, vendorsTable } from "@workspace/db";
+import { db, leadsTable, vendorsTable, ordersTable, blogCommentsTable, blogPostsTable } from "@workspace/db";
 import {
   ListLeadsQueryParams,
   CreateLeadBody,
@@ -212,6 +212,74 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
   const [lead] = await db.delete(leadsTable).where(eq(leadsTable.id, params.data.id)).returning();
   if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
   res.sendStatus(204);
+});
+
+// GET /leads/:id/transactions — orders placed by this lead (matched by email + vendorId)
+router.get("/leads/:id/transactions", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [person] = await db.select({ email: leadsTable.email, vendorId: leadsTable.vendorId })
+    .from(leadsTable).where(eq(leadsTable.id, id));
+  if (!person) { res.status(404).json({ error: "Lead not found" }); return; }
+  if (!authed.isAdmin && person.vendorId !== authed.vendorId) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (!person.email) { res.json([]); return; }
+
+  const rows = await db.select({
+    id: ordersTable.id,
+    customerName: ordersTable.customerName,
+    customerEmail: ordersTable.customerEmail,
+    status: ordersTable.status,
+    paymentStatus: ordersTable.paymentStatus,
+    currency: ordersTable.currency,
+    totalAmount: ordersTable.totalAmount,
+    createdAt: ordersTable.createdAt,
+  })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.vendorId, person.vendorId), eq(ordersTable.customerEmail, person.email)))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(50);
+
+  res.json(rows.map((r) => ({ ...r, totalAmount: String(r.totalAmount), createdAt: r.createdAt.toISOString() })));
+});
+
+// GET /leads/:id/blog-comments — blog comments from this lead (matched by email + vendorId)
+router.get("/leads/:id/blog-comments", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [person] = await db.select({ email: leadsTable.email, vendorId: leadsTable.vendorId })
+    .from(leadsTable).where(eq(leadsTable.id, id));
+  if (!person) { res.status(404).json({ error: "Lead not found" }); return; }
+  if (!authed.isAdmin && person.vendorId !== authed.vendorId) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (!person.email) { res.json([]); return; }
+
+  const rows = await db.select({
+    id: blogCommentsTable.id,
+    postId: blogCommentsTable.postId,
+    commenterName: blogCommentsTable.commenterName,
+    commenterEmail: blogCommentsTable.commenterEmail,
+    commenterPhone: blogCommentsTable.commenterPhone,
+    body: blogCommentsTable.body,
+    createdAt: blogCommentsTable.createdAt,
+    postTitle: blogPostsTable.title,
+    postSlug: blogPostsTable.slug,
+  })
+    .from(blogCommentsTable)
+    .innerJoin(blogPostsTable, eq(blogPostsTable.id, blogCommentsTable.postId))
+    .where(and(eq(blogCommentsTable.vendorId, person.vendorId), eq(blogCommentsTable.commenterEmail, person.email)))
+    .orderBy(desc(blogCommentsTable.createdAt))
+    .limit(100);
+
+  res.json(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
 });
 
 function generateSampleLeads(vendorId: number, industry: string, location: string, businessType: string, count: number) {

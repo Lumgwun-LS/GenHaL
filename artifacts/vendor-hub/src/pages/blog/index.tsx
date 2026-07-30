@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   LayoutGrid, List, Plus, Search, Eye, Heart, MessageSquare,
-  Edit2, Trash2, Globe, FileText, Loader2, BookOpen,
+  Edit2, Trash2, Globe, FileText, Loader2, BookOpen, ShieldBan,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ type BlogPost = {
   coverImageUrl: string | null; excerpt: string | null;
   status: "draft" | "published"; viewCount: number; likeCount: number;
   commentCount: number; publishedAt: string | null;
+  suspendedFromGlobal: boolean;
   createdAt: string; updatedAt: string;
 };
 
@@ -260,9 +261,16 @@ export default function BlogManagement() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={post.status === "published" ? "default" : "secondary"} className="capitalize">
-                      {post.status}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={post.status === "published" ? "default" : "secondary"} className="capitalize w-fit">
+                        {post.status}
+                      </Badge>
+                      {post.suspendedFromGlobal && (
+                        <Badge variant="outline" className="w-fit text-[10px] gap-0.5 bg-destructive/10 text-destructive border-destructive/20">
+                          <ShieldBan className="w-2.5 h-2.5" /> Suspended
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center text-sm">{post.viewCount}</TableCell>
                   <TableCell className="text-center text-sm">{post.likeCount}</TableCell>
@@ -316,9 +324,16 @@ export default function BlogManagement() {
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-sm leading-snug line-clamp-2">{post.title}</h3>
-                  <Badge variant={post.status === "published" ? "default" : "secondary"} className="capitalize shrink-0 text-[10px]">
-                    {post.status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge variant={post.status === "published" ? "default" : "secondary"} className="capitalize text-[10px]">
+                      {post.status}
+                    </Badge>
+                    {post.suspendedFromGlobal && (
+                      <Badge variant="outline" className="text-[10px] gap-0.5 bg-destructive/10 text-destructive border-destructive/20">
+                        <ShieldBan className="w-2.5 h-2.5" /> Suspended
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 {post.excerpt && (
                   <p className="text-xs text-muted-foreground line-clamp-2">{post.excerpt}</p>

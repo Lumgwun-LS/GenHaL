@@ -10,7 +10,8 @@ import {
   Sparkles, Wallet, Network, Package, PhoneCall, Megaphone, Layers, Users, Check,
   Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2,
   Library, Target, HelpCircle, Plus, Building2, Palette, Scissors, BarChart3,
-  Menu, X, ChevronDown, BookOpen
+  Menu, X, ChevronDown, BookOpen, Smartphone, Code2, ShoppingBag, PenSquare,
+  Webhook, FileText, Plug, ShoppingCart, UserCheck, BookMarked,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
@@ -64,42 +65,52 @@ const getFeatureIcon = (title: string) => {
   if (t.includes("ai quick") || t.includes("quick create")) return Mic;
   if (t.includes("spreadsheet") || t.includes("intelligence")) return FileSpreadsheet;
   if (t.includes("data analytics") || t.includes("analytics")) return BarChart3;
-  if (t.includes("website builder")) return Globe2;
+  if (t.includes("website builder") || t.includes("e-commerce")) return Globe2;
   if (t.includes("media library") || t.includes("media")) return Library;
   if (t.includes("ads") || t.includes("paid social")) return Target;
   if (t.includes("architecture") || t.includes("building design")) return Building2;
   if (t.includes("interior design")) return Palette;
   if (t.includes("fashion") || t.includes("tailoring")) return Scissors;
   if (t.includes("ai ") || t.includes("studio")) return Sparkles;
-  if (t.includes("sales") || t.includes("crm")) return Users;
+  if (t.includes("crm") || t.includes("lead")) return UserCheck;
+  if (t.includes("sales")) return Users;
   if (t.includes("finance")) return Wallet;
   if (t.includes("branch") || t.includes("worker")) return Network;
   if (t.includes("order") || t.includes("inventory")) return Package;
+  if (t.includes("products") || t.includes("catalogue")) return ShoppingBag;
   if (t.includes("voice")) return PhoneCall;
   if (t.includes("omnichannel")) return Megaphone;
   if (t.includes("vendor")) return Layers;
+  if (t.includes("mobile app") || t.includes("android")) return Smartphone;
+  if (t.includes("connect api") || t.includes("api") || t.includes("webhook")) return Webhook;
+  if (t.includes("blog") || t.includes("content publishing")) return PenSquare;
+  if (t.includes("documentation") || t.includes("developer docs")) return BookMarked;
+  if (t.includes("payment")) return ShoppingCart;
   return Zap;
 };
 
 const DEFAULT_FEATURES = [
-  { title: "Quick E-Commerce Website", description: "Launch a beautiful, animated storefront with a built-in cart, live checkout, and multi-gateway payments — Paystack, Stripe, Interswitch, Flutterwave, and more — in minutes. Rated by customers. Fully mobile-ready." },
-  { title: "Interswitch Payment Suite", description: "Accept payments, send bank transfers, pay utility bills (airtime, DSTV, electricity, data), verify accounts and BVNs, create dedicated virtual accounts, and process partial or full refunds — all from one dashboard." },
-  { title: "Unified Social", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer." },
-  { title: "AI Content & Video Studio", description: "Generate product imagery, captions, and fully animated multi-scene marketing videos with AI voiceover and music." },
-  { title: "Sales & Leads CRM", description: "Track every lead from first touch to closed order. Visualize pipelines and revenue." },
-  { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range, exportable anytime." },
-  { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale." },
-  { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, full order fulfillment, and transaction histories." },
-  { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI." },
-  { title: "Interior Design Studio", description: "Visualize room layouts, furniture arrangements, color palettes, and full interior renders for any space." },
-  { title: "Fashion & Tailoring AI", description: "Create fashion illustrations, outfit concepts, fabric pattern ideas, and tailoring spec sheets with AI." },
+  { title: "E-Commerce & Payments", description: "Launch a full animated storefront with a built-in cart, live checkout, and multi-gateway payments — Paystack, Stripe, Interswitch, Flutterwave, PayPal, Squad, and more. Customer ratings, refunds, and real-time order tracking included." },
+  { title: "Products & Catalogue", description: "Manage your full product catalogue with variants, pricing, stock levels, and categories. AI Quick Create lets you add items by voice or chat — just describe what you sell." },
+  { title: "CRM & Lead Tracking", description: "Capture leads from your website, blog comments, social clicks, UTM links, and order forms automatically. Track every lead from first touch to closed deal with pipeline views and activity timelines." },
+  { title: "Blog & Content Publishing", description: "Write and publish rich-text blog posts with a TipTap editor, cover images, keywords, and SEO excerpts. Visitors can like posts and leave comments — automatically captured as CRM leads." },
+  { title: "Connect API & Webhooks", description: "Expose your store data via a secure REST API with API key authentication and OAuth 2.0. Connect third-party tools, trigger webhooks on order and payment events, and build custom integrations from a dedicated developer portal." },
+  { title: "Developer Documentation", description: "A full developer docs portal with getting-started guides, API reference, code samples, and a connected business onboarding flow — everything external developers need to build on top of your platform." },
+  { title: "Mobile App Builder", description: "Turn your business into a native Android app — no coding needed. Configure your brand colors, logo, and website URL, and the platform generates and signs an APK automatically, ready to share or publish on the Play Store." },
+  { title: "Unified Social Media", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer. AI captions, platform-specific formatting, and scheduled auto-posting included." },
+  { title: "AI Content & Video Studio", description: "Generate product imagery, social captions, and fully animated multi-scene marketing videos with AI voiceover and music — all without leaving your dashboard." },
+  { title: "Interswitch Payment Suite", description: "Accept payments, send bank transfers, pay utility bills (airtime, DSTV, electricity, data), verify accounts and BVNs, create dedicated virtual accounts, and process partial or full refunds — all in one place." },
+  { title: "Finance Suite", description: "Sales, expenses, and investments in one ledger — filterable by branch, worker, and date range. Exportable anytime. Reconciles automatically with incoming payment webhooks." },
+  { title: "Orders & Inventory", description: "Real-time stock tracking with low-stock alerts, reorder management, full order fulfillment lifecycle, and complete transaction histories across all payment gateways." },
+  { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale, expense, or investment." },
+  { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement using ElevenLabs TTS. Schedule campaigns, track call status, and get completion reports — no call center required." },
+  { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers. Segment by channel, status, or location and track open rates and conversions." },
+  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard. Link your ad accounts, track spend, and measure ROI in one place." },
+  { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI — ideal for real estate, construction, and property businesses." },
   { title: "Data Analytics", description: "Upload any CSV or Excel file, connect your sales data, and interrogate it with AI — get interactive charts, trend summaries, and actionable insights instantly." },
-  { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement — no call center required." },
-  { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers." },
-  { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login." },
   { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
   { title: "Media Library", description: "Browse, edit, and reuse every AI-generated and vendor-uploaded image or video in one searchable library." },
-  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard." },
+  { title: "Multi-Vendor Management", description: "Run an agency? Manage dozens of separate brands and vendors from a single login, with isolated data and per-vendor billing." },
 ];
 
 const ADDON_PLANS = [
@@ -169,30 +180,39 @@ const ADDON_PLANS = [
 
 const NAV_FEATURE_GROUPS = [
   {
-    label: "Marketing",
+    label: "Commerce",
     items: [
+      { icon: Globe2,       title: "E-Commerce & Payments", desc: "Storefront, cart & multi-gateway checkout" },
+      { icon: ShoppingBag,  title: "Products & Catalogue", desc: "Variants, pricing & stock management" },
+      { icon: Package,      title: "Orders & Inventory", desc: "Fulfillment & real-time stock tracking" },
+      { icon: ShoppingCart, title: "Interswitch Suite", desc: "Transfers, bills, virtual accounts" },
+    ],
+  },
+  {
+    label: "Growth",
+    items: [
+      { icon: UserCheck,         title: "CRM & Lead Tracking", desc: "Pipeline, activity & auto-capture" },
+      { icon: PenSquare,         title: "Blog & Content", desc: "Rich-text posts with comment lead capture" },
       { icon: MessageSquareText, title: "Social Media", desc: "Schedule & publish to all platforms" },
-      { icon: Sparkles,          title: "AI Content & Video", desc: "Captions, images, multi-scene video" },
-      { icon: Target,            title: "Ads Suite", desc: "Meta & X paid campaigns" },
       { icon: Megaphone,         title: "Omnichannel Campaigns", desc: "Email, SMS & voice broadcast" },
     ],
   },
   {
-    label: "Design Studio",
+    label: "Developer",
     items: [
-      { icon: Building2, title: "Architecture & Building", desc: "AI floor plans, elevations & renders" },
-      { icon: Palette,   title: "Interior Design", desc: "Room layouts & interior renders" },
-      { icon: Scissors,  title: "Fashion & Tailoring", desc: "Outfit concepts & pattern specs" },
-      { icon: Library,   title: "Media Library", desc: "All your AI & uploaded assets" },
+      { icon: Webhook,    title: "Connect API", desc: "REST API, OAuth 2.0 & webhooks" },
+      { icon: BookMarked, title: "Documentation", desc: "Guides, API reference & code samples" },
+      { icon: Smartphone, title: "Mobile App Builder", desc: "Native Android APK, no code needed" },
+      { icon: Sparkles,   title: "AI Studio", desc: "Images, captions & multi-scene video" },
     ],
   },
   {
-    label: "Business Ops",
+    label: "Operations",
     items: [
-      { icon: Users,        title: "Sales & Leads CRM", desc: "Pipeline, deals & customer history" },
-      { icon: Package,      title: "Orders & Inventory", desc: "Stock tracking & fulfillment" },
-      { icon: Wallet,       title: "Finance Suite", desc: "Sales, expenses & investments" },
-      { icon: BarChart3,    title: "Data Analytics", desc: "AI-powered charts from any CSV" },
+      { icon: Wallet,    title: "Finance Suite", desc: "Sales, expenses & investments" },
+      { icon: Network,   title: "Branches & Workers", desc: "Locations, staff & attribution" },
+      { icon: BarChart3, title: "Data Analytics", desc: "AI-powered charts from any CSV" },
+      { icon: Target,    title: "Ads Suite", desc: "Meta & X paid campaigns" },
     ],
   },
 ];
@@ -253,10 +273,10 @@ export default function LandingPage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.97 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[720px] rounded-2xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl shadow-black/40 p-5"
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[920px] rounded-2xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl shadow-black/40 p-5"
                     onClick={() => setFeaturesOpen(false)}
                   >
-                    <div className="grid grid-cols-3 gap-5">
+                    <div className="grid grid-cols-4 gap-5">
                       {NAV_FEATURE_GROUPS.map((group) => (
                         <div key={group.label}>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-3 px-2">{group.label}</p>

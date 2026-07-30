@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -48,6 +48,7 @@ import RatingsComplaintsPanel from "./ratings-complaints";
 import IntegrationErrorsPanel from "./integration-errors";
 import FeatureTrialsPanel from "./feature-trials";
 import PlatformUsersPanel from "./platform-users";
+import BlogModerationPanel from "./blog-moderation";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -2373,6 +2374,9 @@ export default function AdminPanel() {
           <TabsTrigger value="platform-users" className="flex items-center gap-2">
             <Users className="w-4 h-4" /> Platform Users
           </TabsTrigger>
+          <TabsTrigger value="blog-moderation" className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4" /> Blog Moderation
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -3728,6 +3732,11 @@ export default function AdminPanel() {
         {/* ── Platform Users tab ──────────────────────────────────────────── */}
         <TabsContent value="platform-users">
           <PlatformUsersPanel />
+        </TabsContent>
+
+        {/* ── Blog Moderation tab ──────────────────────────────────────────── */}
+        <TabsContent value="blog-moderation">
+          <BlogModerationPanel />
         </TabsContent>
       </Tabs>
     </div>

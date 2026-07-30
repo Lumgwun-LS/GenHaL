@@ -79,6 +79,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import mobileAppsRouter from "./mobile-apps";
 import internalMobileAppRouter from "./internal-mobile-app";
 import blogRouter from "./blog";
+import publicBlogRouter from "./public-blog";
 
 const router: IRouter = Router();
 
@@ -148,6 +149,9 @@ router.use(crmTrackingRouter);
 
 // Internal callbacks from GitHub Actions (APK upload + build-fail report) — secret-verified, no Clerk
 router.use(internalMobileAppRouter);
+
+// Public blog — no auth required (visitor-facing pages)
+router.use(publicBlogRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

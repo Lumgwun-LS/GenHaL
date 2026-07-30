@@ -96,6 +96,8 @@ export const vendorsTable = pgTable("vendors", {
   featureTrialGrantedBy: text("feature_trial_granted_by"), // admin email for audit
   featureTrialGrantedAt: timestamp("feature_trial_granted_at", { withTimezone: true }),
   featureTrialNote: text("feature_trial_note"),
+  // Admin-only: suspend all of this vendor's blog posts from the global blog page
+  blogSuspended: boolean("blog_suspended").notNull().default(false),
   // Set when a vendor account is permanently deleted — used to prevent the same
   // email/phone from registering a new account on this platform.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

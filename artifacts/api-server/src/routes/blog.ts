@@ -12,7 +12,7 @@
 
 import { Router } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, vendorsTable, blogPostsTable } from "@workspace/db";
+import { db, vendorsTable, blogPostsTable, blogCommentsTable, blogCommenterBansTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { randomBytes } from "node:crypto";
@@ -236,6 +236,153 @@ router.post("/blog/posts/:id/unpublish", async (req: any, res: any) => {
     res.json({ post: serializePost(post) });
   } catch (err) {
     logger.error({ err }, "POST /blog/posts/:id/unpublish error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /blog/commenter-bans — list banned commenters for this vendor ─────────
+router.get("/blog/commenter-bans", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor) return void res.status(401).json({ error: "Unauthorized" });
+    const bans = await db.select()
+      .from(blogCommenterBansTable)
+      .where(eq(blogCommenterBansTable.vendorId, vendor.id === 0 ? -1 : vendor.id))
+      .orderBy(desc(blogCommenterBansTable.bannedAt));
+    res.json(bans.map((b) => ({ ...b, bannedAt: b.bannedAt.toISOString() })));
+  } catch (err) {
+    logger.error({ err }, "GET /blog/commenter-bans error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /blog/commenter-bans — ban a commenter from this vendor's blog ───────
+router.post("/blog/commenter-bans", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+    const { email, reason } = req.body as { email?: string; reason?: string };
+    if (!email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return void res.status(400).json({ error: "Valid email is required" });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    await db.insert(blogCommenterBansTable)
+      .values({ vendorId: vendor.id, commenterEmail: normalizedEmail, reason: reason?.trim() || null })
+      .onConflictDoUpdate({
+        target: [blogCommenterBansTable.vendorId, blogCommenterBansTable.commenterEmail],
+        set: { reason: reason?.trim() || null, bannedAt: new Date() },
+      });
+    res.status(201).json({ banned: true, email: normalizedEmail });
+  } catch (err) {
+    logger.error({ err }, "POST /blog/commenter-bans error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── DELETE /blog/commenter-bans/:email — unban a commenter ───────────────────
+router.delete("/blog/commenter-bans/:email", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor || vendor.id === 0) return void res.status(401).json({ error: "Unauthorized" });
+    const email = decodeURIComponent(req.params.email).toLowerCase();
+    await db.delete(blogCommenterBansTable)
+      .where(and(eq(blogCommenterBansTable.vendorId, vendor.id), eq(blogCommenterBansTable.commenterEmail, email)));
+    res.sendStatus(204);
+  } catch (err) {
+    logger.error({ err }, "DELETE /blog/commenter-bans/:email error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /blog/posts/:id/toggle-global-suspension — admin only ────────────────
+router.post("/blog/posts/:id/toggle-global-suspension", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor?.isAdmin) return void res.status(403).json({ error: "Admin only" });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+    const [existing] = await db.select({ suspendedFromGlobal: blogPostsTable.suspendedFromGlobal })
+      .from(blogPostsTable).where(eq(blogPostsTable.id, id));
+    if (!existing) return void res.status(404).json({ error: "Post not found" });
+    const [post] = await db.update(blogPostsTable)
+      .set({ suspendedFromGlobal: !existing.suspendedFromGlobal, updatedAt: new Date() })
+      .where(eq(blogPostsTable.id, id))
+      .returning({ id: blogPostsTable.id, suspendedFromGlobal: blogPostsTable.suspendedFromGlobal });
+    res.json(post);
+  } catch (err) {
+    logger.error({ err }, "POST /blog/posts/:id/toggle-global-suspension error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /blog/vendors/:id/toggle-blog-suspension — admin only ───────────────
+router.post("/blog/vendors/:id/toggle-blog-suspension", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor?.isAdmin) return void res.status(403).json({ error: "Admin only" });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid vendor id" });
+    const [existing] = await db.select({ blogSuspended: vendorsTable.blogSuspended })
+      .from(vendorsTable).where(eq(vendorsTable.id, id));
+    if (!existing) return void res.status(404).json({ error: "Vendor not found" });
+    const [updated] = await db.update(vendorsTable)
+      .set({ blogSuspended: !existing.blogSuspended, updatedAt: new Date() })
+      .where(eq(vendorsTable.id, id))
+      .returning({ id: vendorsTable.id, blogSuspended: vendorsTable.blogSuspended });
+    res.json(updated);
+  } catch (err) {
+    logger.error({ err }, "POST /blog/vendors/:id/toggle-blog-suspension error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /blog/admin/posts — admin view of all posts with suspension state ─────
+router.get("/blog/admin/posts", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor?.isAdmin) return void res.status(403).json({ error: "Admin only" });
+    const posts = await db.select({
+      id: blogPostsTable.id,
+      vendorId: blogPostsTable.vendorId,
+      title: blogPostsTable.title,
+      slug: blogPostsTable.slug,
+      status: blogPostsTable.status,
+      suspendedFromGlobal: blogPostsTable.suspendedFromGlobal,
+      viewCount: blogPostsTable.viewCount,
+      commentCount: blogPostsTable.commentCount,
+      publishedAt: blogPostsTable.publishedAt,
+      vendorName: vendorsTable.name,
+      vendorBlogSuspended: vendorsTable.blogSuspended,
+    })
+      .from(blogPostsTable)
+      .innerJoin(vendorsTable, eq(vendorsTable.id, blogPostsTable.vendorId))
+      .where(eq(blogPostsTable.status, "published"))
+      .orderBy(desc(blogPostsTable.publishedAt))
+      .limit(200);
+    res.json(posts.map((p) => ({ ...p, publishedAt: p.publishedAt?.toISOString() ?? null })));
+  } catch (err) {
+    logger.error({ err }, "GET /blog/admin/posts error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /blog/admin/vendors — admin list vendors with blog suspension state ───
+router.get("/blog/admin/vendors", async (req: any, res: any) => {
+  try {
+    const vendor = await resolveVendor(req);
+    if (!vendor?.isAdmin) return void res.status(403).json({ error: "Admin only" });
+    const vendors = await db.select({
+      id: vendorsTable.id,
+      name: vendorsTable.name,
+      email: vendorsTable.email,
+      blogSuspended: vendorsTable.blogSuspended,
+      status: vendorsTable.status,
+    })
+      .from(vendorsTable)
+      .orderBy(vendorsTable.name);
+    res.json(vendors);
+  } catch (err) {
+    logger.error({ err }, "GET /blog/admin/vendors error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

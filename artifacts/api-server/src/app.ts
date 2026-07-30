@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { clerkMiddleware, getAuth, requireAuth } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
@@ -215,6 +216,7 @@ app.post(
 // comfortably multiple megabytes before base64 overhead.
 app.use(express.json({ limit: "250mb" }));
 app.use(express.urlencoded({ extended: true, limit: "250mb" }));
+app.use(cookieParser());
 
 app.use("/api", router);
 

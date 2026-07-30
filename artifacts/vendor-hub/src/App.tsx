@@ -75,6 +75,8 @@ import InterswitchPage from "@/pages/interswitch/index";
 import MobileAppPage from "@/pages/mobile-app";
 import BlogManagement from "@/pages/blog/index";
 import BlogEditor from "@/pages/blog/editor";
+import PublicBlogIndex from "@/pages/public-blog/index";
+import PublicBlogPost from "@/pages/public-blog/post";
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -364,6 +366,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/pricing" component={PricingPage} />
           <Route path="/site/:slug" component={PublicSitePage} />
           <Route path="/awajimaaai/:slug" component={PublicSitePage} />
+          <Route path="/public-blog/:siteSlug" component={PublicBlogIndex} />
+          <Route path="/public-blog/:siteSlug/:postSlug" component={PublicBlogPost} />
           <Route path="/store/:id" component={VendorStorefront} />
           <Route path="/p/:token" component={ShopLinkPage} />
           <Route path="/invoice/:token" component={InvoicePublicPage} />

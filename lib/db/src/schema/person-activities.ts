@@ -10,7 +10,8 @@ export type PersonActivityType =
   | "order_placed"
   | "manual_note"
   | "ad_click"
-  | "status_change";
+  | "status_change"
+  | "blog_comment";
 
 export const personActivitiesTable = pgTable("person_activities", {
   id: serial("id").primaryKey(),
