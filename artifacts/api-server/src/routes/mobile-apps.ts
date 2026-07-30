@@ -40,6 +40,7 @@ async function getVendor(req: any, res: any) {
       clerkUserId:          userId,
       name:                 "Admin Account",
       email:                `${userId}@admin.awajimaa.internal`,
+      industry:             "Technology",
       subscriptionTier:     "enterprise",
       billingBlocked:       false,
       featureTrialTier:     "enterprise",
