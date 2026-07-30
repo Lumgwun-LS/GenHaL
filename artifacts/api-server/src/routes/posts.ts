@@ -9,6 +9,7 @@ import { publishTweet, publishTweetWithImage, publishTweetWithVideo, isTwitterAu
 import { ensureFreshAccessToken } from "../lib/token-refresh";
 import { notifyScheduledPostFailed } from "../lib/post-notifications";
 import { releaseOrphanedPostMedia } from "../lib/media-cleanup";
+import { buildSocialLinkFooter } from "../lib/social-link-appender";
 import { logger } from "../lib/logger";
 import {
   ListPostsQueryParams,
@@ -639,6 +640,11 @@ export async function executeClaimedPublish(
   const auto = opts.auto ?? false;
   const vendorAccounts = await db.select().from(socialAccountsTable).where(and(eq(socialAccountsTable.vendorId, claimed.vendorId), eq(socialAccountsTable.status, "active")));
 
+  // Resolve once per publish run — all platforms for the same post get the same
+  // footer so the caption stored on the post is never mutated.
+  const linkFooter = await buildSocialLinkFooter(claimed.vendorId);
+  const captionWithLinks = linkFooter ? `${claimed.caption}${linkFooter}` : claimed.caption;
+
   const outcomes: PublishOutcome[] = [];
   for (let i = 0; i < claimed.platforms.length; i++) {
     const platformLabel = claimed.platforms[i];
@@ -649,7 +655,7 @@ export async function executeClaimedPublish(
       continue;
     }
     const key = normalizePlatformKey(platformLabel);
-    outcomes.push(await publishToPlatform(key, platformLabel, account, claimed.caption, claimed.mediaUrls));
+    outcomes.push(await publishToPlatform(key, platformLabel, account, captionWithLinks, claimed.mediaUrls));
   }
 
   const insertedPublications = outcomes.length > 0

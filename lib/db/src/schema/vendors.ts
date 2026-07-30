@@ -100,6 +100,12 @@ export const vendorsTable = pgTable("vendors", {
   blogSuspended: boolean("blog_suspended").notNull().default(false),
   // Vendor opt-out: hide their posts from the platform-wide Awajimaa Vendor Blog page
   blogFeaturedOnPlatform: boolean("blog_featured_on_platform").notNull().default(true),
+  // Social post link sharing — vendor-controlled, default off so existing posts
+  // are unaffected. When enabled, the corresponding URL is appended as a compact
+  // footer at publish time (not stored on the post), e.g. "🌐 site.com | 📱 ...".
+  socialAppendWebsite: boolean("social_append_website").notNull().default(false),
+  socialAppendAppLink: boolean("social_append_app_link").notNull().default(false),
+  socialAppendBlogLink: boolean("social_append_blog_link").notNull().default(false),
   // Set when a vendor account is permanently deleted — used to prevent the same
   // email/phone from registering a new account on this platform.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

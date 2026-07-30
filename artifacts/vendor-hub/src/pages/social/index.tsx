@@ -44,7 +44,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2, Bookmark, BookmarkCheck, ChevronDown, Sparkles } from "lucide-react";
+import { Plus, Twitter, Facebook, Linkedin, Instagram, Youtube, Share2, Clock, CheckCircle2, XCircle, Send, Link2, Trash2, ExternalLink, AlertCircle, CalendarClock, CalendarX, Search, Filter, X as XIcon, Loader2, Bookmark, BookmarkCheck, ChevronDown, Sparkles, Settings, Globe } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -406,6 +408,149 @@ export function PostProcessingPublications({ postId }: { postId: number }) {
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // Only platforms without a live OAuth connection fall back to manual "just note the handle" entry.
 const MANUAL_ONLY_PLATFORMS = ["TikTok"];
+
+// ── Social Link Sharing Settings ────────────────────────────────────────────
+
+type LinkSharingState = {
+  socialAppendWebsite: boolean;
+  socialAppendAppLink: boolean;
+  socialAppendBlogLink: boolean;
+};
+
+function SocialLinkSharingSettings() {
+  const { user } = useUser();
+  const { data: vendors, refetch } = useListVendors();
+  const vendor = vendors?.find((v) => v.clerkUserId === user?.id) ?? vendors?.[0];
+  const vendorId = vendor?.id;
+
+  const [saving, setSaving] = useState(false);
+  const [state, setState] = useState<LinkSharingState>({
+    socialAppendWebsite: false,
+    socialAppendAppLink: false,
+    socialAppendBlogLink: false,
+  });
+
+  // Sync toggles from vendor data whenever it loads / changes
+  useEffect(() => {
+    if (!vendor) return;
+    setState({
+      socialAppendWebsite: (vendor as any).socialAppendWebsite ?? false,
+      socialAppendAppLink: (vendor as any).socialAppendAppLink ?? false,
+      socialAppendBlogLink: (vendor as any).socialAppendBlogLink ?? false,
+    });
+  }, [vendor?.id, (vendor as any)?.socialAppendWebsite, (vendor as any)?.socialAppendAppLink, (vendor as any)?.socialAppendBlogLink]);
+
+  const handleToggle = async (field: keyof LinkSharingState, value: boolean) => {
+    if (!vendorId) return;
+    const next = { ...state, [field]: value };
+    setState(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/vendors/${vendorId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Link sharing preference saved");
+      refetch();
+    } catch {
+      // Roll back the optimistic update
+      setState(state);
+      toast.error("Failed to save preference");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Build a live preview of what will be appended
+  const previewParts: string[] = [];
+  if (state.socialAppendWebsite) {
+    const site = (vendor as any)?.website;
+    previewParts.push(`🌐 ${site ? site.replace(/^https?:\/\//, "").replace(/\/$/, "") : "your-website.com"}`);
+  }
+  if (state.socialAppendAppLink) previewParts.push("📱 Download app: https://…");
+  if (state.socialAppendBlogLink) previewParts.push("📝 Latest: https://…");
+  const preview = previewParts.length > 0
+    ? `Your post caption…\n\n${previewParts.join(" | ")}`
+    : "Your post caption…\n\n(no links appended)";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="w-4 h-4" />
+          Link Sharing
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Automatically append your owned-channel links to every post at publish time. Links are added at the end of
+          the caption — they don't appear in drafts.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Website toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="append-website" className="font-medium">Include website link</Label>
+            <p className="text-sm text-muted-foreground">
+              Appends your store website URL (e.g. <span className="font-mono">🌐 your-site.com</span>).
+              {!(vendor as any)?.website && (
+                <span className="text-amber-600"> Add your website in profile settings first.</span>
+              )}
+            </p>
+          </div>
+          <Switch
+            id="append-website"
+            checked={state.socialAppendWebsite}
+            disabled={saving || !(vendor as any)?.website}
+            onCheckedChange={(v) => handleToggle("socialAppendWebsite", v)}
+          />
+        </div>
+
+        {/* App download toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="append-app" className="font-medium">Include app download link</Label>
+            <p className="text-sm text-muted-foreground">
+              Appends your APK download URL (<span className="font-mono">📱 Download app: …</span>).
+              Only works if you've built and published a mobile app from the App Builder.
+            </p>
+          </div>
+          <Switch
+            id="append-app"
+            checked={state.socialAppendAppLink}
+            disabled={saving}
+            onCheckedChange={(v) => handleToggle("socialAppendAppLink", v)}
+          />
+        </div>
+
+        {/* Latest blog post toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="append-blog" className="font-medium">Include latest blog post link</Label>
+            <p className="text-sm text-muted-foreground">
+              Appends a link to your most recently published blog post (<span className="font-mono">📝 Latest: …</span>).
+              Updated automatically at publish time.
+            </p>
+          </div>
+          <Switch
+            id="append-blog"
+            checked={state.socialAppendBlogLink}
+            disabled={saving}
+            onCheckedChange={(v) => handleToggle("socialAppendBlogLink", v)}
+          />
+        </div>
+
+        {/* Live preview */}
+        <div className="rounded-lg border bg-muted/40 p-4 space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview</p>
+          <pre className="text-sm whitespace-pre-wrap break-all font-sans">{preview}</pre>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 type GatewayAvailability = { provider: string; available: boolean; reason: string | null };
 
@@ -1214,6 +1359,10 @@ export default function Social() {
             <Sparkles className="w-3.5 h-3.5 mr-1.5" />
             AI Content Studio
           </TabsTrigger>
+          <TabsTrigger value="settings">
+            <Settings className="w-3.5 h-3.5 mr-1.5" />
+            Settings
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="posts" className="mt-6 space-y-8">
@@ -1379,6 +1528,10 @@ export default function Social() {
 
         <TabsContent value="studio" className="mt-6">
           <ContentStudio />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-6 space-y-6">
+          <SocialLinkSharingSettings />
         </TabsContent>
       </Tabs>
     </div>

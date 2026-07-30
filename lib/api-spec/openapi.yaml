@@ -4786,6 +4786,12 @@ components:
           type: ["string", "null"]
         voiceCallOptOut:
           type: boolean
+        socialAppendWebsite:
+          type: boolean
+        socialAppendAppLink:
+          type: boolean
+        socialAppendBlogLink:
+          type: boolean
 
     VendorOnboardingInput:
       type: object
@@ -4869,6 +4875,12 @@ components:
         postReminderLeadMinutes:
           type: integer
           description: "Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440."
+        socialAppendWebsite:
+          type: boolean
+        socialAppendAppLink:
+          type: boolean
+        socialAppendBlogLink:
+          type: boolean
 
     DeletionEligibility:
       type: object

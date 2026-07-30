@@ -282,7 +282,10 @@ export const UpdateVendorBody = zod.object({
   "pushAiMediaExpiryEnabled": zod.boolean().optional(),
   "pushFacebookVideoAlertsEnabled": zod.boolean().optional(),
   "announcementEmailOptOut": zod.boolean().optional(),
-  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.')
+  "postReminderLeadMinutes": zod.number().optional().describe('Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440.'),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 export const UpdateVendorResponse = zod.object({
@@ -326,7 +329,10 @@ export const UpdateVendorResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 
