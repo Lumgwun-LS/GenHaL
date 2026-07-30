@@ -145,7 +145,7 @@ export default function MobileAppPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { icon: <Globe className="w-4 h-4" />,       step: "1", label: "Paste your URL",    desc: "Website or Git repo" },
-          { icon: <Zap className="w-4 h-4" />,         step: "2", label: "We build the APK",  desc: "~20 min on Expo cloud" },
+          { icon: <Zap className="w-4 h-4" />,         step: "2", label: "We build the APK",  desc: "~20 min" },
           { icon: <Download className="w-4 h-4" />,    step: "3", label: "Auto-published",    desc: "Listed on App Store + download link" },
         ].map((s) => (
           <div key={s.step} className="flex items-start gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
@@ -274,7 +274,7 @@ export default function MobileAppPage() {
                     </div>
                     {app.status === "building" && (
                       <div className="mt-2 text-xs text-blue-400">
-                        Building on Expo cloud — typically 15–20 min. This page auto-refreshes.
+                        Building your app — typically 15–20 min. This page auto-refreshes.
                       </div>
                     )}
                     {app.status === "published" && app.apkUrl && (
