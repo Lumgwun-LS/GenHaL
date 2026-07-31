@@ -656,9 +656,13 @@ export default function LandingPage() {
                   <div className="text-2xl font-black tracking-tight">
                     {addon.price ? (
                       <>
-                        <span>${addon.price.usd}</span>
-                        <span className="text-sm font-medium text-muted-foreground">/mo</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xs font-semibold text-muted-foreground/70 tracking-wide">from</span>
+                          <span>${addon.price.usd}</span>
+                          <span className="text-sm font-medium text-muted-foreground">/mo</span>
+                        </div>
                         <div className="text-sm font-semibold text-muted-foreground">₦{addon.price.ngn.toLocaleString()}/mo</div>
+                        <div className="text-[11px] font-normal text-muted-foreground/60 mt-0.5">pay only for what you use</div>
                       </>
                     ) : (
                       <span className="text-emerald-400">Free</span>

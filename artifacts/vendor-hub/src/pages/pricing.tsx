@@ -301,18 +301,26 @@ export default function PricingPage() {
                       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
                         {plan.name}
                       </p>
-                      <div className="flex items-end gap-1 mb-1">
-                        <span className="text-3xl font-black">
-                          {plan.pricing.usd === 0
-                            ? "Free"
-                            : currency === "usd"
-                              ? fmtUsd(plan.pricing.usd)
-                              : fmtNgn(plan.pricing.ngn)}
-                        </span>
-                        {plan.pricing.usd > 0 && (
-                          <span className="text-muted-foreground text-sm mb-1">/ month</span>
-                        )}
-                      </div>
+                      {plan.pricing.usd === 0 ? (
+                        <div className="flex items-end gap-1 mb-1">
+                          <span className="text-3xl font-black">Free</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-baseline gap-1 mb-0.5">
+                            <span className="text-xs font-semibold text-muted-foreground/70 tracking-wide">from</span>
+                            <span className="text-3xl font-black">
+                              {currency === "usd"
+                                ? fmtUsd(plan.pricing.usd)
+                                : fmtNgn(plan.pricing.ngn)}
+                            </span>
+                            <span className="text-muted-foreground text-sm">/ mo</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground/60 mb-1">
+                            extra usage billed as you go
+                          </p>
+                        </>
+                      )}
                       <p className="text-xs text-muted-foreground leading-relaxed">{plan.description}</p>
                     </div>
 

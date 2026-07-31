@@ -564,11 +564,15 @@ export default function UpgradePlanCard({ vendorId, currentTier, subscriptionPro
                   </div>
 
                   <div>
-                    <div className="text-xl font-bold">
+                    <div className="flex items-baseline gap-1 text-xl font-bold">
+                      <span className="text-xs font-normal text-muted-foreground/70">from</span>
                       {priceLabel(plan)}
-                      <span className="text-sm font-normal text-muted-foreground"> /mo</span>
+                      <span className="text-sm font-normal text-muted-foreground">/mo</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                      extra usage billed as you go
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
                   </div>
 
                   <ul className="space-y-1.5 flex-1">
