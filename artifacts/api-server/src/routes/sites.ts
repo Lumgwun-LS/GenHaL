@@ -15,7 +15,8 @@ import {
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { TEMPLATES } from "../lib/website-templates";
-import { resolvePaystackKey } from "../lib/vendor-keys";
+import { resolvePaystackKey, resolveSquadKey } from "../lib/vendor-keys";
+import { squadInitiatePayment } from "../lib/squad";
 
 const router: IRouter = Router();
 
@@ -47,6 +48,7 @@ async function resolveSite(slug: string) {
       verificationLevel: vendorsTable.verificationLevel,
       paystackEnabled: vendorsTable.paystackEnabled,
       stripeEnabled: vendorsTable.stripeEnabled,
+      squadEnabled: vendorsTable.squadEnabled,
     })
     .from(vendorWebsitesTable)
     .innerJoin(vendorsTable, eq(vendorWebsitesTable.vendorId, vendorsTable.id))
@@ -68,6 +70,7 @@ router.get("/sites/:slug", async (req, res): Promise<void> => {
   const enabledGateways: string[] = [];
   if (site.paystackEnabled) enabledGateways.push("paystack");
   if (site.stripeEnabled)   enabledGateways.push("stripe");
+  if (site.squadEnabled)    enabledGateways.push("squad");
 
   res.json({
     slug: site.slug,
@@ -213,14 +216,17 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
   }
   const dedupedItems = Array.from(qtyByProductId.entries()).map(([productId, qty]) => ({ productId, qty }));
 
-  // Gateway check (only paystack + stripe supported in site checkout)
+  // Gateway check
   if (gateway === "paystack" && !site.paystackEnabled) {
     res.status(403).json({ error: "Paystack is not enabled for this store" }); return;
   }
   if (gateway === "stripe" && !site.stripeEnabled) {
     res.status(403).json({ error: "Stripe is not enabled for this store" }); return;
   }
-  if (!["paystack", "stripe"].includes(gateway)) {
+  if (gateway === "squad" && !site.squadEnabled) {
+    res.status(403).json({ error: "Squad is not enabled for this store" }); return;
+  }
+  if (!["paystack", "stripe", "squad"].includes(gateway)) {
     res.status(400).json({ error: `Unsupported gateway: ${gateway}` }); return;
   }
 
@@ -373,6 +379,46 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
     });
 
     res.json({ orderId: order.id, reference: session.id, paymentUrl: session.url, gateway: "stripe" });
+    return;
+  }
+
+  // ── Squad ────────────────────────────────────────────────────────────────────
+  // Supports both NGN and USD. Currency follows the site's defaultCurrency.
+  if (gateway === "squad") {
+    let secretKey: string;
+    try {
+      secretKey = await resolveSquadKey();
+    } catch (err) {
+      res.status(503).json({ error: err instanceof Error ? err.message : "Squad key unavailable" }); return;
+    }
+
+    const transactionRef = `SQ-SITE-${site.vendorId}-${order.id}-${Date.now()}`;
+    const squadCurrency = (currency.toUpperCase() === "USD" ? "USD" : "NGN") as "NGN" | "USD";
+    // Squad amounts are in the smallest unit (kobo for NGN, cents for USD)
+    const amountSmallest = Math.round(totalAmount * 100);
+
+    const squadRes = await squadInitiatePayment(secretKey, {
+      email: customer.email,
+      amount: amountSmallest,
+      currency: squadCurrency,
+      transactionRef,
+      callbackUrl: `${baseHost}/api/embed/checkout-return`,
+      customerName: customer.name,
+      metadata: { orderId: String(order.id), vendorId: String(site.vendorId), source: "site" },
+    });
+
+    await db.insert(paymentsTable).values({
+      orderId: order.id,
+      vendorId: site.vendorId,
+      provider: "squad",
+      providerReference: squadRes.data.transaction_ref ?? transactionRef,
+      amount: totalAmount.toFixed(2),
+      currency: squadCurrency,
+      status: "pending",
+      metadata: { transactionRef, checkoutUrl: squadRes.data.checkout_url, source: "site" },
+    });
+
+    res.json({ orderId: order.id, reference: squadRes.data.transaction_ref ?? transactionRef, paymentUrl: squadRes.data.checkout_url, gateway: "squad" });
     return;
   }
 

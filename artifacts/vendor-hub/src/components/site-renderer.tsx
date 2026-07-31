@@ -907,7 +907,7 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         {(enabledGateways ?? []).map(gw => (
                           <button key={gw} type="button" onClick={() => setGateway(gw)} style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${gateway === gw ? themeColor : "#e5e7eb"}`, background: gateway === gw ? themeColor + "12" : "none", color: gateway === gw ? themeColor : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            {gw === "paystack" ? "💳 Paystack" : gw === "stripe" ? "💳 Stripe" : `💳 ${gw}`}
+                            {gw === "paystack" ? "🏦 Paystack · NGN" : gw === "stripe" ? "💳 Card · USD" : gw === "squad" ? "💳 Squad · NGN/USD" : `💳 ${gw}`}
                           </button>
                         ))}
                       </div>
