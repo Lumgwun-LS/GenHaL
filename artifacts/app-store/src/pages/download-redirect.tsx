@@ -1,5 +1,5 @@
-import { onMount } from "solid-js";
-import { useParams } from "@solidjs/router";
+import { useEffect } from "react";
+import { useParams } from "wouter";
 
 /**
  * Handles https://awajimaaappstore.com/dl/:identifier
@@ -11,13 +11,13 @@ import { useParams } from "@solidjs/router";
 export default function DownloadRedirect() {
   const params = useParams<{ identifier: string }>();
 
-  onMount(() => {
+  useEffect(() => {
     const id = encodeURIComponent(params.identifier ?? "");
     window.location.replace(`/api/store/dl/${id}`);
-  });
+  }, [params.identifier]);
 
   return (
-    <div style={{ display: "flex", "align-items": "center", "justify-content": "center", height: "100vh", "font-family": "sans-serif", color: "#555" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "sans-serif", color: "#555" }}>
       <p>Preparing download…</p>
     </div>
   );
