@@ -19,6 +19,7 @@ import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, is
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { isGcsConfigured, mirrorUrlToGcs } from "../lib/gcs";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
@@ -1962,6 +1963,17 @@ router.post("/admin/apps/:id/versions", requireAuth(), _versionUpload.single("fi
       fileSize = result.fileSize;
     }
 
+    // Mirror to GCS for permanent, non-expiring hosting
+    if (fileUrl && isGcsConfigured()) {
+      try {
+        const gcsUrl = await mirrorUrlToGcs(fileUrl);
+        fileUrl = gcsUrl;
+        logger.info({ gcsUrl }, "APK mirrored to GCS");
+      } catch (gcsErr) {
+        logger.warn({ err: gcsErr }, "GCS mirror failed — keeping original URL");
+      }
+    }
+
     // Auto-assign the next integer version code
     const [{ maxCode }] = await db.select({ maxCode: sql<number>`COALESCE(MAX(version_code), 0)` })
       .from(storeAppVersionsTable).where(eq(storeAppVersionsTable.appId, appId));
@@ -2933,13 +2945,25 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
     const clash = await db.select({ id: storeAppsTable.id }).from(storeAppsTable).where(eq(storeAppsTable.slug, slug));
     if (clash.length) slug = `${slug}-${Date.now()}`;
     const { userId: adminClerkId } = getAuth(req);
+
+    // Mirror the APK to GCS for permanent hosting before persisting the URL
+    let finalDownloadUrl = downloadUrl;
+    if (isGcsConfigured()) {
+      try {
+        finalDownloadUrl = await mirrorUrlToGcs(downloadUrl);
+        logger.info({ gcsUrl: finalDownloadUrl }, "platform-app APK mirrored to GCS");
+      } catch (gcsErr) {
+        logger.warn({ err: gcsErr }, "GCS mirror failed for platform-app — keeping original URL");
+      }
+    }
+
     const [app] = await db.insert(storeAppsTable).values({
       developerId: dev.id,
       name, slug, tagline, description, category, categories,
       platform: platform ?? "android",
       iconUrl,
       screenshots: screenshots ?? [],
-      downloadUrl,
+      downloadUrl: finalDownloadUrl,
       webUrl: webUrl ?? null,
       currentVersion: currentVersion ?? null,
       packageName: packageName ?? null,
@@ -2951,12 +2975,12 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
     } as any).returning();
 
     // Auto-create the initial version record and mark it live
-    if (downloadUrl) {
+    if (finalDownloadUrl) {
       await db.insert(storeAppVersionsTable).values({
         appId: app.id,
         version: currentVersion ?? "1.0.0",
         versionCode: 1,
-        fileUrl: downloadUrl,
+        fileUrl: finalDownloadUrl,
         uploadedByClerkId: adminClerkId,
         status: "live",
         activatedAt: new Date(),
