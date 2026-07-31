@@ -1430,15 +1430,15 @@ function EditScreenshotsModal({ app, onClose, onSaved }: {
     try {
       const totalBytes = toUpload.reduce((s, f) => s + f.size, 0) || 1;
       let doneBytes = 0;
-      const newUrls: string[] = [];
       for (const f of toUpload) {
         const url = await uploadFilePresigned(f, (pct) =>
           setUploadProgress(Math.round(((doneBytes + (f.size * pct) / 100) / totalBytes) * 100)));
         doneBytes += f.size;
-        newUrls.push(url);
+        // Add each thumbnail the moment its upload finishes so the grid updates live
+        setScreenshots(prev => [...prev, url]);
       }
       setUploadProgress(100);
-      setScreenshots(prev => [...prev, ...newUrls]);
+      // Keep the green "done" bar for 1.5 s then hide
       setTimeout(() => setUploadProgress(0), 1500);
     } catch (err: any) {
       setError(`Upload failed: ${err.message ?? "Unknown error"}`);
@@ -1499,10 +1499,10 @@ function EditScreenshotsModal({ app, onClose, onSaved }: {
           <>
             <div
               onClick={() => !uploading && uploadRef.current?.click()}
-              style={{ border: "2px dashed rgba(0,188,212,0.2)", borderRadius: 10, padding: "18px 16px", textAlign: "center", cursor: uploading ? "default" : "pointer", color: "#8892a4", fontSize: 13, marginBottom: 10 }}>
+              style={{ border: `2px dashed ${uploading ? "rgba(0,188,212,0.5)" : "rgba(0,188,212,0.2)"}`, borderRadius: 10, padding: "18px 16px", textAlign: "center", cursor: uploading ? "default" : "pointer", color: "#8892a4", fontSize: 13, marginBottom: 10, transition: "border-color 0.2s" }}>
               <div style={{ fontSize: 22, marginBottom: 4 }}>📸</div>
               {uploading
-                ? `Uploading…`
+                ? <span style={{ color: "#00bcd4", fontWeight: 600 }}>Uploading… {uploadProgress}%</span>
                 : `Add screenshots · ${MAX_SCREENSHOTS - screenshots.length} slot${MAX_SCREENSHOTS - screenshots.length !== 1 ? "s" : ""} remaining`}
             </div>
             <input ref={uploadRef} type="file" accept="image/*" multiple style={{ display: "none" }}
@@ -1510,11 +1510,15 @@ function EditScreenshotsModal({ app, onClose, onSaved }: {
           </>
         )}
 
-        {/* Upload progress */}
+        {/* Upload progress bar */}
         {(uploading || uploadProgress > 0) && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${uploadProgress}%`, background: uploadProgress === 100 ? "#00c853" : "#00bcd4", borderRadius: 2, transition: "width 0.2s" }} />
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8892a4", marginBottom: 4 }}>
+              <span>{uploading ? "Uploading to storage…" : "✅ Done"}</span>
+              <span style={{ fontWeight: 700, color: uploadProgress === 100 ? "#00c853" : "#00bcd4" }}>{uploadProgress}%</span>
+            </div>
+            <div style={{ height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${uploadProgress}%`, background: uploadProgress === 100 ? "#00c853" : "linear-gradient(90deg,#00bcd4,#80deea)", borderRadius: 3, transition: "width 0.2s ease-out" }} />
             </div>
           </div>
         )}
