@@ -1703,6 +1703,8 @@ router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
     // Notify the developer — best-effort, never blocks the admin response.
     const developer = (app as any).developer as { email: string; displayName: string } | null;
     if (developer?.email) {
+      const _storePageUrl = publicAppUrl((app as any).publicId) ?? "https://awajimaaappstore.com";
+      const _dlUrl = canonicalDownloadUrl(app);
       const html = wrapVendorEmail({
         bodyHtml: `
           <h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">
@@ -1716,6 +1718,21 @@ router.post("/admin/apps/:id/approve", requireAuth(), async (req, res) => {
             has been reviewed and is now <strong>approved</strong> on the Awajimaa App Store.
             It is now publicly visible and available for download.
           </p>
+          <p style="font-size:14px;line-height:1.6;color:#444;margin-bottom:4px;"><strong>Your app links:</strong></p>
+          <table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
+            <tr>
+              <td style="font-size:12px;color:#888;padding:6px 0 2px;width:120px;">Store Page</td>
+              <td style="padding:6px 0 2px;">
+                <a href="${_storePageUrl}" style="color:#00c853;font-size:13px;word-break:break-all;">${_storePageUrl}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-size:12px;color:#888;padding:6px 0 2px;">Download Link</td>
+              <td style="padding:6px 0 2px;">
+                <a href="${_dlUrl}" style="color:#00c853;font-size:13px;word-break:break-all;">${_dlUrl}</a>
+              </td>
+            </tr>
+          </table>
           <p style="font-size:14px;line-height:1.6;color:#444;">
             Thank you for contributing to the Awajimaa ecosystem.
           </p>
@@ -1879,10 +1896,23 @@ router.post("/admin/apps/:id/direct-approve", requireAuth(), async (req, res) =>
 
     const developer = (app as any).developer as { email: string; displayName: string } | null;
     if (developer?.email) {
+      const _storePageUrl = publicAppUrl((app as any).publicId) ?? "https://awajimaaappstore.com";
+      const _dlUrl = canonicalDownloadUrl(app);
       const html = wrapVendorEmail({
         bodyHtml: `<h1 style="text-align:center;font-size:20px;color:#1a1a1a;margin:0 0 16px;">Your app has been approved 🎉</h1>
           <p style="font-size:14px;line-height:1.6;color:#444;">Hi ${escapeHtml(developer.displayName)},</p>
-          <p style="font-size:14px;line-height:1.6;color:#444;"><strong>${escapeHtml(app.name)}</strong> has been approved and is now live on the Awajimaa App Store. The publishing fee has been waived by an administrator.</p>`,
+          <p style="font-size:14px;line-height:1.6;color:#444;"><strong>${escapeHtml(app.name)}</strong> has been approved and is now live on the Awajimaa App Store. The publishing fee has been waived by an administrator.</p>
+          <p style="font-size:14px;line-height:1.6;color:#444;margin-bottom:4px;"><strong>Your app links:</strong></p>
+          <table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
+            <tr>
+              <td style="font-size:12px;color:#888;padding:6px 0 2px;width:120px;">Store Page</td>
+              <td style="padding:6px 0 2px;"><a href="${_storePageUrl}" style="color:#00c853;font-size:13px;word-break:break-all;">${_storePageUrl}</a></td>
+            </tr>
+            <tr>
+              <td style="font-size:12px;color:#888;padding:6px 0 2px;">Download Link</td>
+              <td style="padding:6px 0 2px;"><a href="${_dlUrl}" style="color:#00c853;font-size:13px;word-break:break-all;">${_dlUrl}</a></td>
+            </tr>
+          </table>`,
       });
       sendEmail({ to: developer.email, subject: `Your app "${app.name}" is now live`, html }).catch(() => {});
     }

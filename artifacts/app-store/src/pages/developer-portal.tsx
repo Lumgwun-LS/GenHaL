@@ -1602,10 +1602,51 @@ function AppsTab({ apps, onPayApp, onRefresh, feeExempt, devCountry }: { apps: A
                   {app.status === "suspended" && (app as any).trialSuspendedAt && !feeExempt && (
                     <button className="btn-green" style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => onPayApp(app)}>Pay to restore</button>
                   )}
-                  {app.status === "approved" && <Link href={`/apps/${app.slug}`} style={{ color: "#00c853", fontSize: 12 }}>View →</Link>}
+                  {app.status === "approved" && app.publicUrl && (
+                    <a href={app.publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#00c853", fontSize: 12, textDecoration: "none" }}>View ↗</a>
+                  )}
                   <button className="btn-outline" style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setEditSsApp(app)}>📸 Screenshots</button>
                 </div>
               </div>
+
+              {/* Share links — shown for approved apps */}
+              {app.status === "approved" && app.publicUrl && (
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12, marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: "#8892a4", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>
+                    🔗 Share your app
+                  </div>
+                  {([
+                    { label: "Store Page",     url: app.publicUrl },
+                    { label: "Download Link",  url: app.canonicalDownloadUrl },
+                  ] as { label: string; url: string }[]).map(({ label, url }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, color: "#8892a4", width: 108, flexShrink: 0 }}>{label}</span>
+                      <span style={{
+                        fontSize: 11, color: "#e8eaf0", fontFamily: "monospace", flex: 1, minWidth: 0,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        background: "rgba(255,255,255,0.03)", padding: "4px 8px",
+                        borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                        {url}
+                      </span>
+                      <button
+                        style={{
+                          fontSize: 11, padding: "4px 12px", borderRadius: 6,
+                          border: "1px solid rgba(0,200,83,0.35)", background: "rgba(0,200,83,0.08)",
+                          color: "#00c853", cursor: "pointer", flexShrink: 0,
+                        }}
+                        onClick={() => navigator.clipboard.writeText(url).catch(() => {})}
+                      >
+                        Copy
+                      </button>
+                      <a href={url} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 13, color: "#8892a4", textDecoration: "none", flexShrink: 0 }}
+                        title="Open in new tab"
+                      >↗</a>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Repo link section */}
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
