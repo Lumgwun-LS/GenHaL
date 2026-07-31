@@ -1044,22 +1044,32 @@ function CategoryPicker({ selected, onChange, all, max = 5 }: {
   );
 }
 
-async function uploadFile(file: File): Promise<string> {
-  const form = new FormData();
-  form.append("file", file);
-  const token = await getClerkToken();
-  const res = await fetch("/api/store/admin/platform-apps/upload-file", {
-    method: "POST",
-    body: form,
-    credentials: "include",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+/**
+ * Upload a file to object storage via a presigned PUT URL.
+ * The file goes directly from the browser to storage — it never passes through
+ * the API proxy — so there is no 413 body-size limit.
+ */
+async function uploadFile(file: File, onProgress?: (pct: number) => void): Promise<string> {
+  // Step 1: get a presigned upload URL + permanent public fileUrl
+  const { uploadUrl, fileUrl } = await apiFetch<{ uploadUrl: string; fileUrl: string }>(
+    "/apps/upload-url",
+    { method: "POST" },
+  );
+  // Step 2: PUT directly to object storage (bypasses API proxy, no 413 limit)
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+    xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Storage upload failed: ${xhr.status}`)));
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.send(file);
   });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(t || `Upload failed (${res.status})`);
-  }
-  const { url } = await res.json();
-  return url;
+  return fileUrl;
 }
 
 function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void }) {
@@ -1067,6 +1077,7 @@ function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [versionStr, setVersionStr] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
@@ -1101,21 +1112,22 @@ function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void
     if (!versionStr.trim()) { setUploadErr("Version string is required (e.g. 1.2.0)"); return; }
     if (!file) { setUploadErr("Please choose an APK / file to upload"); return; }
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("version", versionStr.trim());
-      fd.append("releaseNotes", releaseNotes);
-      fd.append("minOsVersion", minOs);
-      fd.append("autoActivate", "true");
-      const token = await getClerkToken();
-      const res = await fetch(`/api/store/admin/apps/${app.id}/versions`, {
-        method: "POST", body: fd,
-        credentials: "include",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      // Step 1: upload file directly to storage (bypasses proxy — no 413)
+      const fileUrl = await uploadFile(file, setUploadProgress);
+      // Step 2: register the version via JSON (no multipart body through proxy)
+      await apiFetch(`/admin/apps/${app.id}/versions`, {
+        method: "POST",
+        body: JSON.stringify({
+          fileUrl,
+          version: versionStr.trim(),
+          releaseNotes,
+          minOsVersion: minOs,
+          autoActivate: true,
+        }),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(t); }
-      setFile(null); setVersionStr(""); setReleaseNotes(""); setMinOs("");
+      setFile(null); setVersionStr(""); setReleaseNotes(""); setMinOs(""); setUploadProgress(0);
       load();
     } catch (e: any) { setUploadErr(e.message || "Upload failed"); }
     finally { setUploading(false); }
@@ -1173,9 +1185,21 @@ function VersionsModal({ app, onClose }: { app: PlatformApp; onClose: () => void
             </label>
           </div>
           {uploadErr && <div style={{ color: "#ff5252", fontSize: 12, marginBottom: 10 }}>⚠️ {uploadErr}</div>}
+          {uploading && uploadProgress > 0 && uploadProgress < 100 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "#8892a4", marginBottom: 4 }}>Uploading… {uploadProgress}%</div>
+              <div style={{ height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: `${uploadProgress}%`, height: "100%", background: "linear-gradient(90deg,#00c853,#69f0ae)", transition: "width 0.2s" }} />
+              </div>
+            </div>
+          )}
           <button onClick={upload} disabled={uploading}
             style={{ background: "#00c853", color: "#000", border: "none", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 800, cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.7 : 1 }}>
-            {uploading ? "Uploading & Activating…" : "⬆️ Upload & Make Live"}
+            {uploading
+              ? uploadProgress > 0 && uploadProgress < 100
+                ? `Uploading… ${uploadProgress}%`
+                : "Saving version…"
+              : "⬆️ Upload & Make Live"}
           </button>
         </div>
 
