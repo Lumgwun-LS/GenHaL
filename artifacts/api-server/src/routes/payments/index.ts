@@ -12,6 +12,8 @@ import nombaRouter, { NOMBA_BASE, getNombaCreds, issueNombaToken } from "./nomba
 import remitaRouter from "./remita";
 import squadRouter from "./squad";
 import interswitchRouter from "./interswitch";
+import nowpaymentsRouter from "./nowpayments";
+import stripeConnectRouter from "./stripe-connect";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField, callWithPlatformStripe, getPlatformCredentials } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
@@ -38,6 +40,8 @@ router.use(nombaRouter);
 router.use(remitaRouter);
 router.use(squadRouter);
 router.use(interswitchRouter);
+router.use(nowpaymentsRouter);
+router.use(stripeConnectRouter);
 
 /**
  * POST /payments/:id/refund

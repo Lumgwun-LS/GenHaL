@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import { TEMPLATES } from "../lib/website-templates";
 import { resolvePaystackKey, resolveSquadKey } from "../lib/vendor-keys";
 import { squadInitiatePayment } from "../lib/squad";
+import { createNowInvoice } from "../lib/nowpayments";
 
 const router: IRouter = Router();
 
@@ -49,6 +50,9 @@ async function resolveSite(slug: string) {
       paystackEnabled: vendorsTable.paystackEnabled,
       stripeEnabled: vendorsTable.stripeEnabled,
       squadEnabled: vendorsTable.squadEnabled,
+      nowpaymentsEnabled: vendorsTable.nowpaymentsEnabled,
+      stripeConnectAccountId: vendorsTable.stripeConnectAccountId,
+      stripeConnectOnboarded: vendorsTable.stripeConnectOnboarded,
     })
     .from(vendorWebsitesTable)
     .innerJoin(vendorsTable, eq(vendorWebsitesTable.vendorId, vendorsTable.id))
@@ -68,9 +72,10 @@ router.get("/sites/:slug", async (req, res): Promise<void> => {
 
   // Only expose gateways that have a working site checkout implementation
   const enabledGateways: string[] = [];
-  if (site.paystackEnabled) enabledGateways.push("paystack");
-  if (site.stripeEnabled)   enabledGateways.push("stripe");
-  if (site.squadEnabled)    enabledGateways.push("squad");
+  if (site.paystackEnabled)    enabledGateways.push("paystack");
+  if (site.stripeEnabled)      enabledGateways.push("stripe");
+  if (site.squadEnabled)       enabledGateways.push("squad");
+  if (site.nowpaymentsEnabled) enabledGateways.push("nowpayments");
 
   res.json({
     slug: site.slug,
@@ -226,7 +231,10 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
   if (gateway === "squad" && !site.squadEnabled) {
     res.status(403).json({ error: "Squad is not enabled for this store" }); return;
   }
-  if (!["paystack", "stripe", "squad"].includes(gateway)) {
+  if (gateway === "nowpayments" && !site.nowpaymentsEnabled) {
+    res.status(403).json({ error: "USDT payments are not enabled for this store" }); return;
+  }
+  if (!["paystack", "stripe", "squad", "nowpayments"].includes(gateway)) {
     res.status(400).json({ error: `Unsupported gateway: ${gateway}` }); return;
   }
 
@@ -340,6 +348,9 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
   }
 
   // ── Stripe ──────────────────────────────────────────────────────────────────
+  // When the vendor has a Stripe Connect sub-account, route funds directly to
+  // them via transfer_data.destination so they receive the money in their own
+  // Stripe dashboard — no key sharing required.
   if (gateway === "stripe") {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) { res.status(503).json({ error: "Stripe payments not configured" }); return; }
@@ -347,7 +358,15 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
     const Stripe = (await import("stripe")).default;
     const stripe = new Stripe(stripeKey);
 
-    const session = await stripe.checkout.sessions.create({
+    const useConnect = !!(site.stripeConnectOnboarded && site.stripeConnectAccountId);
+
+    // Build platform fee: env-configured percentage (default 0 = no platform fee)
+    const platformFeePercent = parseFloat(process.env.STRIPE_CONNECT_PLATFORM_FEE_PERCENT ?? "0");
+    const platformFeeAmount = useConnect && platformFeePercent > 0
+      ? Math.round(totalAmount * 100 * (platformFeePercent / 100))
+      : undefined;
+
+    const sessionParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
       payment_method_types: ["card"],
       line_items: dedupedItems.map(item => {
         const p = productMap.get(item.productId)!;
@@ -365,7 +384,15 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
       success_url: `${baseHost}/api/embed/checkout-return?status=success&orderId=${order.id}`,
       cancel_url:  `${baseHost}/api/embed/checkout-return?status=cancelled&orderId=${order.id}`,
       metadata: { orderId: String(order.id), vendorId: String(site.vendorId), source: "site" },
-    });
+      ...(useConnect && {
+        payment_intent_data: {
+          transfer_data: { destination: site.stripeConnectAccountId! },
+          ...(platformFeeAmount ? { application_fee_amount: platformFeeAmount } : {}),
+        },
+      }),
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     await db.insert(paymentsTable).values({
       orderId: order.id,
@@ -375,7 +402,7 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
       amount: totalAmount.toFixed(2),
       currency: currency.toUpperCase(),
       status: "pending",
-      metadata: { sessionId: session.id, source: "site" },
+      metadata: { sessionId: session.id, source: "site", stripeConnect: useConnect },
     });
 
     res.json({ orderId: order.id, reference: session.id, paymentUrl: session.url, gateway: "stripe" });
@@ -419,6 +446,42 @@ router.post("/sites/:slug/checkout", async (req, res): Promise<void> => {
     });
 
     res.json({ orderId: order.id, reference: squadRes.data.transaction_ref ?? transactionRef, paymentUrl: squadRes.data.checkout_url, gateway: "squad" });
+    return;
+  }
+
+  // ── NOWPayments (USDT crypto) ─────────────────────────────────────────────────
+  if (gateway === "nowpayments") {
+    const nowRef = `NP-SITE-${site.vendorId}-${order.id}-${Date.now()}`;
+
+    let invoice: { id: string; invoice_url: string };
+    try {
+      invoice = await createNowInvoice({
+        priceAmount:    totalAmount,
+        priceCurrency:  currency.toLowerCase(),
+        payCurrency:    "usdttrc20",   // TRC20 — lowest fees; customer can switch on NOWPayments page
+        orderId:        nowRef,
+        orderDescription: `Order #${order.id} — ${site.vendorName}`,
+        ipnCallbackUrl: `${baseHost}/api/payments/nowpayments/webhook`,
+        successUrl:     `${baseHost}/api/embed/checkout-return?status=success&orderId=${order.id}`,
+        cancelUrl:      `${baseHost}/api/embed/checkout-return?status=cancelled&orderId=${order.id}`,
+        customerEmail:  customer.email,
+      });
+    } catch (err) {
+      res.status(503).json({ error: err instanceof Error ? err.message : "USDT payment unavailable" }); return;
+    }
+
+    await db.insert(paymentsTable).values({
+      orderId: order.id,
+      vendorId: site.vendorId,
+      provider: "nowpayments",
+      providerReference: nowRef,
+      amount: totalAmount.toFixed(2),
+      currency: currency.toUpperCase(),
+      status: "pending",
+      metadata: { invoiceId: invoice.id, invoiceUrl: invoice.invoice_url, source: "site" },
+    });
+
+    res.json({ orderId: order.id, reference: nowRef, paymentUrl: invoice.invoice_url, gateway: "nowpayments" });
     return;
   }
 

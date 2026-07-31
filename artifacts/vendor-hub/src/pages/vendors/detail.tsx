@@ -87,7 +87,9 @@ export default function VendorDetail() {
   const [paypalEnabled, setPaypalEnabled] = useState(false);
   const [squadEnabled, setSquadEnabled] = useState(false);
   const [interswitchEnabled, setInterswitchEnabled] = useState(false);
+  const [nowpaymentsEnabled, setNowpaymentsEnabled] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const [connectOnboarding, setConnectOnboarding] = useState(false);
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [voiceCallOptOut, setVoiceCallOptOut] = useState(false);
   const [announcementEmailOptOut, setAnnouncementEmailOptOut] = useState(false);
@@ -139,6 +141,7 @@ export default function VendorDetail() {
       setPaypalEnabled(vendor.paypalEnabled ?? false);
       setSquadEnabled((vendor as any).squadEnabled ?? false);
       setInterswitchEnabled((vendor as any).interswitchEnabled ?? false);
+      setNowpaymentsEnabled((vendor as any).nowpaymentsEnabled ?? false);
       setDefaultCurrency(vendor.defaultCurrency ?? "USD");
       setDateOfBirth(vendor.dateOfBirth ?? "");
       setVoiceCallOptOut(vendor.voiceCallOptOut ?? false);
@@ -207,6 +210,7 @@ export default function VendorDetail() {
           paypalEnabled,
           squadEnabled,
           interswitchEnabled,
+          nowpaymentsEnabled,
           defaultCurrency,
         }),
       });
@@ -547,6 +551,20 @@ export default function VendorDetail() {
                 )}
               </div>
 
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="nowpayments-toggle" className="text-sm font-medium">₮ USDT Crypto (NOWPayments)</Label>
+                    <p className="text-xs text-muted-foreground">Accept USDT on TRC20, ERC20, and BEP20 via NOWPayments</p>
+                  </div>
+                  <Switch
+                    id="nowpayments-toggle"
+                    checked={nowpaymentsEnabled}
+                    onCheckedChange={setNowpaymentsEnabled}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Default Currency</Label>
                 <Select value={defaultCurrency} onValueChange={setDefaultCurrency}>
@@ -568,6 +586,106 @@ export default function VendorDetail() {
               >
                 {saving ? "Saving…" : "Save Payment Settings"}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Stripe Connect — vendor dedicated card-payment sub-account */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Stripe Connect — Dedicated Card Account
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Connect a Stripe Express account so card payments go directly into your own Stripe balance — no key sharing needed.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(vendor as any)?.stripeConnectOnboarded ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
+                    <span>✓</span> Stripe Connect active — card payments route to your Stripe account
+                  </div>
+                  <p className="text-xs text-muted-foreground">Account ID: <span className="font-mono">{(vendor as any)?.stripeConnectAccountId}</span></p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={connectOnboarding}
+                      onClick={async () => {
+                        setConnectOnboarding(true);
+                        try {
+                          const r = await fetch(`${BASE_URL}/api/payments/stripe-connect/status`, { credentials: "include" });
+                          const d = await r.json() as { requirementsCount?: number };
+                          if ((d.requirementsCount ?? 0) > 0) {
+                            const res = await fetch(`${BASE_URL}/api/payments/stripe-connect/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({}) });
+                            const data = await res.json() as { onboardingUrl?: string };
+                            if (data.onboardingUrl) window.open(data.onboardingUrl, "_blank");
+                          } else {
+                            toast.info("Your Stripe Connect account is fully set up.");
+                          }
+                        } catch { toast.error("Could not reach Stripe"); }
+                        finally { setConnectOnboarding(false); }
+                      }}
+                    >
+                      {connectOnboarding ? "Loading…" : "Manage on Stripe"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={async () => {
+                        if (!confirm("Disconnect your Stripe Connect account? Card payments will still work but funds will no longer route to your Stripe account.")) return;
+                        await fetch(`${BASE_URL}/api/payments/stripe-connect/disconnect`, { method: "DELETE", credentials: "include" });
+                        void queryClient.invalidateQueries({ queryKey: getGetVendorQueryKey(id) });
+                        toast.success("Stripe Connect disconnected");
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              ) : (vendor as any)?.stripeConnectAccountId ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-amber-600 font-medium">⚠ Onboarding started but not complete. Click below to finish.</p>
+                  <Button
+                    size="sm"
+                    disabled={connectOnboarding}
+                    onClick={async () => {
+                      setConnectOnboarding(true);
+                      try {
+                        const res = await fetch(`${BASE_URL}/api/payments/stripe-connect/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({}) });
+                        const data = await res.json() as { onboardingUrl?: string };
+                        if (data.onboardingUrl) window.open(data.onboardingUrl, "_blank");
+                        else toast.error("Could not get onboarding link");
+                      } catch { toast.error("Network error"); }
+                      finally { setConnectOnboarding(false); }
+                    }}
+                  >
+                    {connectOnboarding ? "Loading…" : "Continue Stripe Onboarding"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Not connected. Complete the quick Stripe onboarding to get your dedicated account.</p>
+                  <Button
+                    size="sm"
+                    disabled={connectOnboarding}
+                    onClick={async () => {
+                      setConnectOnboarding(true);
+                      try {
+                        const res = await fetch(`${BASE_URL}/api/payments/stripe-connect/onboard`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({}) });
+                        const data = await res.json() as { onboardingUrl?: string; error?: string };
+                        if (data.error) { toast.error(data.error); return; }
+                        if (data.onboardingUrl) window.open(data.onboardingUrl, "_blank");
+                      } catch { toast.error("Network error"); }
+                      finally { setConnectOnboarding(false); }
+                    }}
+                  >
+                    {connectOnboarding ? "Loading…" : "Connect Stripe Account"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

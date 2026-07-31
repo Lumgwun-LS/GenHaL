@@ -29,6 +29,10 @@ export const vendorsTable = pgTable("vendors", {
   paypalEnabled: boolean("paypal_enabled").notNull().default(false),
   squadEnabled: boolean("squad_enabled").notNull().default(false),
   interswitchEnabled: boolean("interswitch_enabled").notNull().default(false),
+  nowpaymentsEnabled: boolean("nowpayments_enabled").notNull().default(false),
+  // Stripe Connect — vendor's own Express sub-account for direct card payment routing
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  stripeConnectOnboarded: boolean("stripe_connect_onboarded").notNull().default(false),
   defaultCurrency: text("default_currency").notNull().default("USD"),
   // Subscription & verification — controls which premium features are unlocked
   subscriptionTier: text("subscription_tier").notNull().default("free"),    // free|starter|pro|enterprise

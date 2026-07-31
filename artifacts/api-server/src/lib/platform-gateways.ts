@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "./encryption";
 import { sendSlackAlert } from "./slack";
 
-export const GATEWAY_PROVIDERS = ["stripe", "paystack", "paypal", "remita", "flutterwave", "nomba", "squad", "interswitch"] as const;
+export const GATEWAY_PROVIDERS = ["stripe", "paystack", "paypal", "remita", "flutterwave", "nomba", "squad", "interswitch", "nowpayments"] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 export interface GatewayFieldDef {
@@ -203,6 +203,24 @@ export const GATEWAY_DEFS: Record<GatewayProvider, GatewayDef> = {
       }
     },
   },
+  nowpayments: {
+    label: "NOWPayments (USDT / Crypto)",
+    fields: [
+      { key: "apiKey",    label: "API Key",    secret: true },
+      { key: "ipnSecret", label: "IPN Secret (webhook signing secret)", secret: true },
+    ],
+    liveVerification: true,
+    test: async (creds) => {
+      const res = await fetch("https://api.nowpayments.io/v1/status", {
+        headers: { "x-api-key": creds.apiKey },
+      });
+      if (!res.ok) throw new Error(`NOWPayments rejected the API key (HTTP ${res.status})`);
+      const data = (await res.json()) as { message?: string };
+      if (data.message?.toLowerCase() !== "ok") {
+        throw new Error(`NOWPayments status check failed: ${data.message ?? "unknown"}`);
+      }
+    },
+  },
 };
 
 /** Env-var fallbacks per provider/field, for backward compatibility in dev. */
@@ -215,6 +233,7 @@ const ENV_FALLBACK: Partial<Record<GatewayProvider, Record<string, string | unde
   paystack: { secretKey: process.env.PAYSTACK_SECRET_KEY, webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET },
   paypal:   { clientId: process.env.PAYPAL_CLIENT_ID, clientSecret: process.env.PAYPAL_CLIENT_SECRET },
   squad:    { secretKey: process.env.SQUAD_SECRET_KEY, webhookSecret: process.env.SQUAD_WEBHOOK_SECRET },
+  nowpayments: { apiKey: process.env.NOWPAYMENTS_API_KEY, ipnSecret: process.env.NOWPAYMENTS_IPN_SECRET },
   interswitch: {
     clientId:     process.env.INTERSWITCH_CLIENT_ID,
     secretKey:    process.env.INTERSWITCH_SECRET_KEY,
