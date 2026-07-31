@@ -6,7 +6,7 @@ import {
   Plus, MoreHorizontal, Calendar, User, Building2, Tag, Loader2,
   CheckCircle2, Circle, Clock, AlertCircle, Flame, ChevronDown,
   Paperclip, Trash2, Edit2, X, Filter, ArrowUpDown, Zap, Phone,
-  MessageSquare, Receipt, ShoppingBag, ListTodo,
+  MessageSquare, Receipt, ShoppingBag, ListTodo, Globe, Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 // ─── Types ───────────────────────────────────────────────────────────────────
 type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
-type TaskType = "general" | "call_customer" | "send_message" | "send_invoice" | "send_product";
+type TaskType = "general" | "call_customer" | "send_message" | "send_invoice" | "send_product" | "post_social_media" | "create_strategy";
 
 interface VendorTask {
   id: number;
@@ -113,11 +113,13 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; icon
 };
 
 const TASK_TYPE_CONFIG: Record<TaskType, { label: string; icon: React.ReactNode }> = {
-  general:       { label: "General",        icon: <ListTodo className="w-4 h-4" /> },
-  call_customer: { label: "Call Customer",  icon: <Phone className="w-4 h-4 text-green-600" /> },
-  send_message:  { label: "Send Message",   icon: <MessageSquare className="w-4 h-4 text-blue-600" /> },
-  send_invoice:  { label: "Send Invoice",   icon: <Receipt className="w-4 h-4 text-purple-600" /> },
-  send_product:  { label: "Send Product",   icon: <ShoppingBag className="w-4 h-4 text-orange-600" /> },
+  general:           { label: "General",            icon: <ListTodo className="w-4 h-4" /> },
+  call_customer:     { label: "Call Customer",      icon: <Phone className="w-4 h-4 text-green-600" /> },
+  send_message:      { label: "Send Message",       icon: <MessageSquare className="w-4 h-4 text-blue-600" /> },
+  send_invoice:      { label: "Send Invoice",       icon: <Receipt className="w-4 h-4 text-purple-600" /> },
+  send_product:      { label: "Send Product",       icon: <ShoppingBag className="w-4 h-4 text-orange-600" /> },
+  post_social_media: { label: "Post to Social",     icon: <Globe className="w-4 h-4 text-violet-600" /> },
+  create_strategy:   { label: "Create AI Strategy", icon: <Lightbulb className="w-4 h-4 text-amber-600" /> },
 };
 
 // ─── Due date label ───────────────────────────────────────────────────────────
@@ -243,7 +245,33 @@ const EMPTY_FORM = {
   title: "", description: "", status: "todo" as TaskStatus, priority: "medium" as TaskPriority,
   dueDate: "", imageUrl: "", videoUrl: "", branchId: "", workerId: "",
   taskType: "general" as TaskType, automatedAction: false, notes: "",
+  // taskData fields — shown dynamically based on taskType
+  tdMessage: "", tdSubject: "", tdScript: "", tdTopic: "", tdPlatforms: "instagram, facebook", tdProblem: "",
 };
+
+function parseTaskData(raw: string | null | undefined): Record<string, any> {
+  try { return JSON.parse(raw ?? "{}"); } catch { return {}; }
+}
+
+function buildTaskDataFromForm(form: typeof EMPTY_FORM): Record<string, any> | undefined {
+  switch (form.taskType) {
+    case "send_message":
+      if (!form.tdMessage && !form.tdSubject) return undefined;
+      return { message: form.tdMessage || undefined, subject: form.tdSubject || undefined };
+    case "call_customer":
+      if (!form.tdScript) return undefined;
+      return { script: form.tdScript };
+    case "post_social_media": {
+      const platforms = form.tdPlatforms.split(",").map(s => s.trim()).filter(Boolean);
+      return { topic: form.tdTopic || undefined, platforms: platforms.length ? platforms : ["instagram", "facebook"] };
+    }
+    case "create_strategy":
+      if (!form.tdProblem) return undefined;
+      return { problem: form.tdProblem };
+    default:
+      return undefined;
+  }
+}
 
 function TaskFormDialog({
   open, onClose, editing, assignees, onSave,
@@ -257,50 +285,42 @@ function TaskFormDialog({
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
 
+  function syncFromEditing(e: VendorTask) {
+    const td = parseTaskData(e.taskData);
+    setForm({
+      title:           e.title,
+      description:     e.description ?? "",
+      status:          e.status,
+      priority:        e.priority,
+      dueDate:         e.dueDate ? e.dueDate.slice(0, 16) : "",
+      imageUrl:        e.imageUrl ?? "",
+      videoUrl:        e.videoUrl ?? "",
+      branchId:        e.branchId?.toString() ?? "",
+      workerId:        e.workerId?.toString() ?? "",
+      taskType:        e.taskType,
+      automatedAction: e.automatedAction,
+      notes:           e.notes ?? "",
+      tdMessage:       td.message ?? "",
+      tdSubject:       td.subject ?? "",
+      tdScript:        td.script  ?? "",
+      tdTopic:         td.topic   ?? "",
+      tdPlatforms:     Array.isArray(td.platforms) ? td.platforms.join(", ") : (td.platforms ?? "instagram, facebook"),
+      tdProblem:       td.problem ?? "",
+    });
+  }
+
   // Sync form when editing task changes
   useState(() => {
-    if (editing) {
-      setForm({
-        title: editing.title,
-        description: editing.description ?? "",
-        status: editing.status,
-        priority: editing.priority,
-        dueDate: editing.dueDate ? editing.dueDate.slice(0, 16) : "",
-        imageUrl: editing.imageUrl ?? "",
-        videoUrl: editing.videoUrl ?? "",
-        branchId: editing.branchId?.toString() ?? "",
-        workerId: editing.workerId?.toString() ?? "",
-        taskType: editing.taskType,
-        automatedAction: editing.automatedAction,
-        notes: editing.notes ?? "",
-      });
-    } else {
-      setForm({ ...EMPTY_FORM });
-    }
+    if (editing) syncFromEditing(editing);
+    else setForm({ ...EMPTY_FORM });
   });
 
   // Re-sync when editing changes (not just on mount)
   const prevEditingRef = { current: editing };
   if (prevEditingRef.current !== editing) {
     prevEditingRef.current = editing;
-    if (editing) {
-      setForm({
-        title: editing.title,
-        description: editing.description ?? "",
-        status: editing.status,
-        priority: editing.priority,
-        dueDate: editing.dueDate ? editing.dueDate.slice(0, 16) : "",
-        imageUrl: editing.imageUrl ?? "",
-        videoUrl: editing.videoUrl ?? "",
-        branchId: editing.branchId?.toString() ?? "",
-        workerId: editing.workerId?.toString() ?? "",
-        taskType: editing.taskType,
-        automatedAction: editing.automatedAction,
-        notes: editing.notes ?? "",
-      });
-    } else {
-      setForm({ ...EMPTY_FORM });
-    }
+    if (editing) syncFromEditing(editing);
+    else setForm({ ...EMPTY_FORM });
   }
 
   function set(k: keyof typeof EMPTY_FORM, v: string | boolean) {
@@ -312,19 +332,21 @@ function TaskFormDialog({
     if (!form.title.trim()) { toast.error("Title is required"); return; }
     setSaving(true);
     try {
+      const taskData = buildTaskDataFromForm(form);
       await onSave({
-        title: form.title.trim(),
-        description: form.description || undefined,
-        status: form.status,
-        priority: form.priority,
-        dueDate: form.dueDate || undefined,
-        imageUrl: form.imageUrl || undefined,
-        videoUrl: form.videoUrl || undefined,
-        branchId: form.branchId ? parseInt(form.branchId) : undefined,
-        workerId: form.workerId ? parseInt(form.workerId) : undefined,
-        taskType: form.taskType,
+        title:           form.title.trim(),
+        description:     form.description || undefined,
+        status:          form.status,
+        priority:        form.priority,
+        dueDate:         form.dueDate || undefined,
+        imageUrl:        form.imageUrl || undefined,
+        videoUrl:        form.videoUrl || undefined,
+        branchId:        form.branchId ? parseInt(form.branchId) : undefined,
+        workerId:        form.workerId ? parseInt(form.workerId) : undefined,
+        taskType:        form.taskType,
         automatedAction: form.automatedAction,
-        notes: form.notes || undefined,
+        taskData:        taskData ? taskData : undefined,
+        notes:           form.notes || undefined,
       });
       onClose();
     } catch (err: unknown) {
@@ -404,6 +426,60 @@ function TaskFormDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Dynamic taskData fields */}
+          {form.taskType === "send_message" && (
+            <div className="space-y-3 rounded-lg bg-blue-50 p-4 border border-blue-100">
+              <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" />Email Configuration
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Subject</Label>
+                <input className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm" value={form.tdSubject} onChange={e => set("tdSubject", e.target.value)} placeholder="Email subject line" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Message Body</Label>
+                <Textarea value={form.tdMessage} onChange={e => set("tdMessage", e.target.value)} placeholder="Write the message to send to the customer…" rows={3} className="bg-white" />
+              </div>
+            </div>
+          )}
+          {form.taskType === "call_customer" && (
+            <div className="space-y-3 rounded-lg bg-green-50 p-4 border border-green-100">
+              <p className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" />Call Script — read aloud by AI voice (ElevenLabs)
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Script</Label>
+                <Textarea value={form.tdScript} onChange={e => set("tdScript", e.target.value)} placeholder="Hi, this is a message from [Business Name]. We'd like to remind you…" rows={4} className="bg-white" />
+              </div>
+            </div>
+          )}
+          {form.taskType === "post_social_media" && (
+            <div className="space-y-3 rounded-lg bg-violet-50 p-4 border border-violet-100">
+              <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5" />Social Post — AI generates the caption from your topic
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Topic / Trending Issue</Label>
+                <Textarea value={form.tdTopic} onChange={e => set("tdTopic", e.target.value)} placeholder="e.g. New product launch, seasonal offer, industry news…" rows={3} className="bg-white" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Platforms (comma-separated)</Label>
+                <input className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm" value={form.tdPlatforms} onChange={e => set("tdPlatforms", e.target.value)} placeholder="instagram, facebook, twitter" />
+              </div>
+            </div>
+          )}
+          {form.taskType === "create_strategy" && (
+            <div className="space-y-3 rounded-lg bg-amber-50 p-4 border border-amber-100">
+              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5" />AI Strategy — a full structured plan emailed to you
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Business Problem or Goal</Label>
+                <Textarea value={form.tdProblem} onChange={e => set("tdProblem", e.target.value)} placeholder="Describe the challenge or goal you want a strategy for…" rows={4} className="bg-white" />
+              </div>
+            </div>
+          )}
 
           {/* Branch + Worker */}
           <div className="grid grid-cols-2 gap-4">

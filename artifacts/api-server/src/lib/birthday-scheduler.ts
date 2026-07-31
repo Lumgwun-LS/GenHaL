@@ -30,6 +30,7 @@ import {
   leadsTable,
   customersTable,
   ordersTable,
+  vendorTasksTable,
 } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
@@ -576,6 +577,26 @@ async function runLeadBirthdayNotifJob(utcDateStr: string): Promise<{ checked: n
         }).onConflictDoNothing();
       }
 
+      // ── Kanban task so vendor can track birthday outreach ─────────────────
+      try {
+        const todayNoon = new Date(`${utcDateStr}T12:00:00.000Z`);
+        await db.insert(vendorTasksTable).values({
+          vendorId:        lead.vendorId,
+          title:           `🎂 Birthday: ${lead.leadName}`,
+          description:     `Today is ${lead.leadName}'s birthday. Consider sending a personal offer or follow-up.`,
+          status:          "todo" as const,
+          priority:        "medium" as const,
+          taskType:        "send_message",
+          automatedAction: false,
+          dueDate:         todayNoon,
+          leadId:          lead.leadId,
+          taskData:        JSON.stringify({
+            subject: `Happy Birthday, ${lead.leadName}! 🎂`,
+            message: `Hi ${lead.leadName}, wishing you a wonderful birthday from all of us at ${lead.vendorName}! 🎉`,
+          }),
+        } as any);
+      } catch { /* non-fatal — duplicate guard or schema gap */ }
+
       notified++;
     } catch (err) {
       logger.error({ err, leadId: lead.leadId }, "[birthday-leads] Error");
@@ -764,6 +785,26 @@ async function runCustomerBirthdayNotifJob(utcDateStr: string): Promise<{ checke
           recipientName: customer.name,
           recipientEmail: customer.email,
         }).onConflictDoNothing();
+
+        // ── Kanban task so vendor can track birthday outreach ────────────────
+        try {
+          const todayNoon = new Date(`${utcDateStr}T12:00:00.000Z`);
+          await db.insert(vendorTasksTable).values({
+            vendorId,
+            title:           `🎂 Birthday: ${customer.name}`,
+            description:     `Today is ${customer.name}'s birthday. Send a personal offer or thank-you message.`,
+            status:          "todo" as const,
+            priority:        "medium" as const,
+            taskType:        "send_message",
+            automatedAction: false,
+            dueDate:         todayNoon,
+            customerId:      customer.id,
+            taskData:        JSON.stringify({
+              subject: `Happy Birthday, ${customer.name}! 🎂`,
+              message: `Hi ${customer.name}, wishing you a wonderful birthday from all of us at ${vendorName}! 🎉`,
+            }),
+          } as any);
+        } catch { /* non-fatal */ }
       }
 
       notified++;

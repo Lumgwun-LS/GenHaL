@@ -46,7 +46,7 @@ const CreateTaskBody = z.object({
   workerId:        z.number().int().positive().optional(),
   customerId:      z.number().int().positive().optional(),
   leadId:          z.number().int().positive().optional(),
-  taskType:        z.enum(["general","call_customer","send_message","send_invoice","send_product"]).optional(),
+  taskType:        z.enum(["general","call_customer","send_message","send_invoice","send_product","post_social_media","create_strategy"]).optional(),
   taskData:        z.record(z.string(), z.unknown()).optional(),
   automatedAction: z.boolean().optional(),
   notes:           z.string().max(5000).optional(),
