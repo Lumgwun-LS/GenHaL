@@ -35,6 +35,7 @@ SMTP_PORT = "587"
 SMTP_USER = "b2d3a7001@smtp-brevo.com"
 TWILIO_PHONE_NUMBER = "+16813753205"
 PUBLIC_APP_DOMAIN = "awajimaaappstore.com"
+GCS_BUCKET_NAME = "awajimaa-ai"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
