@@ -87,6 +87,10 @@ const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS
 const FIRST_PARTY_ORIGINS = [
   "https://awajimaaai.com",
   "https://awajimaaappstore.com",
+  "https://awajimaaapp.io",
+  "https://www.awajimaaapp.io",
+  "https://app.awajimaaapp.io",
+  "https://store.awajimaaapp.io",
   "https://awajimaa-omni-business-suite.replit.app",
 ];
 
