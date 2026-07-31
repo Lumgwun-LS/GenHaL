@@ -1,5 +1,6 @@
 import { pgTable, text, serial, timestamp, integer, numeric, jsonb, date, index } from "drizzle-orm/pg-core";
 import { vendorsTable } from "./vendors";
+import { productsTable } from "./products";
 
 // ── Ad Contacts ───────────────────────────────────────────────────────────────
 
@@ -45,6 +46,14 @@ export const adCampaignsTable = pgTable("ad_campaigns", {
   platformAdId: text("platform_ad_id"),
   /** Human-readable error from the last publish attempt */
   lastPublishError: text("last_publish_error"),
+  /** Optional: link ad to a specific product in the vendor's catalog */
+  productId: integer("product_id").references(() => productsTable.id, { onDelete: "set null" }),
+  /** Landing page URL for this ad (with or without UTM params) */
+  destinationUrl: text("destination_url"),
+  /** UTM parameters auto-appended to the destination URL */
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium").default("paid"),
+  utmCampaign: text("utm_campaign"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

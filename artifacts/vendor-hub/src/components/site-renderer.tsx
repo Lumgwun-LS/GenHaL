@@ -67,6 +67,20 @@ const SITE_CSS = `
   @keyframes siteSlideLeft  { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:none} }
   @keyframes siteSlideRight { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:none} }
   @keyframes siteStarPop    { 0%{transform:scale(0.5);opacity:0} 70%{transform:scale(1.25)} 100%{transform:scale(1);opacity:1} }
+  @keyframes svCartBounce   { 0%{transform:scale(1)} 30%{transform:scale(.84)} 60%{transform:scale(1.16)} 100%{transform:scale(1)} }
+  @keyframes svStockPulse   { 0%,100%{opacity:1} 50%{opacity:.52} }
+  @keyframes svSlideUp      { from{opacity:0;transform:translateY(32px)} to{opacity:1;transform:none} }
+
+  .sv-shop-slider{display:flex;gap:1.5rem;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:8px}
+  .sv-shop-slider::-webkit-scrollbar{display:none}
+  .sv-snap{scroll-snap-align:start;flex-shrink:0}
+  .sv-list-card{transition:transform .22s,box-shadow .22s}
+  .sv-list-card:hover{transform:translateX(5px)!important;box-shadow:0 8px 32px rgba(0,0,0,.13)!important}
+  .sv-shop-btn{transition:background .25s,transform .18s,box-shadow .18s}
+  .sv-shop-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.22)}
+  .sv-shop-btn:active{transform:scale(.95)}
+  .sv-slider-btn{transition:opacity .2s,transform .18s,box-shadow .18s}
+  .sv-slider-btn:hover{box-shadow:0 4px 20px rgba(0,0,0,.18)!important;transform:translateY(-50%) scale(1.08)!important}
 
   .sv-obs{opacity:0;transform:translateY(36px);transition:opacity .75s cubic-bezier(.4,0,.2,1),transform .75s cubic-bezier(.4,0,.2,1)}
   .sv-obs.sv-vis{opacity:1;transform:none}
@@ -675,12 +689,17 @@ function RatingsSection({ content, palette, themeColor, vendorId }: {
 
 const BASE_URL_SHOP = (typeof import.meta !== "undefined" ? (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL?.replace(/\/$/, "") : "") ?? "";
 
+type ProductVariation = { name: string; options: string[] };
 type ShopProduct = {
   id: number; name: string; description?: string; price: number;
   category?: string; imageUrl?: string | null; inStock: boolean;
   stockQuantity?: number | null; unit?: string | null; currency: string;
+  variations?: ProductVariation[] | null;
 };
-type CartItem = { id: number; name: string; price: number; currency: string; imageUrl?: string | null; qty: number };
+type CartItem = {
+  id: number; name: string; price: number; currency: string;
+  imageUrl?: string | null; qty: number; selectedOptions?: string;
+};
 
 function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, currency: siteCurrency }: {
   content: Record<string, unknown>;
@@ -694,26 +713,46 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
   const [loading, setLoading]   = useState(true);
   const [cart, setCart]         = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
-  // checkout flow state
-  const [checkoutView, setCheckoutView] = useState<"items" | "checkout" | "paying" | "success" | "failed">("items");
+  const [checkoutView, setCheckoutView] = useState<"items"|"checkout"|"paying"|"success"|"failed">("items");
   const [cName, setCName]   = useState("");
   const [cEmail, setCEmail] = useState("");
   const [cPhone, setCPhone] = useState("");
   const [cAddr, setCAddr]   = useState("");
   const [gateway, setGateway] = useState((enabledGateways ?? [])[0] ?? "");
-  const [orderId, setOrderId] = useState<number | null>(null);
+  const [orderId, setOrderId] = useState<number|null>(null);
   const [paying, setPaying]  = useState(false);
   const [errMsg, setErrMsg]  = useState("");
   const [favs, setFavs]      = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("awa_site_fav") ?? "[]"); } catch { return []; }
   });
+  // New: variation picker + add-to-cart animation + quick-view + slider
+  const [pickerProduct, setPickerProduct] = useState<ShopProduct|null>(null);
+  const [pickerSel, setPickerSel]         = useState<Record<string,string>>({});
+  const [addedId, setAddedId]             = useState<number|null>(null);
+  const [quickView, setQuickView]         = useState<ShopProduct|null>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
 
-  const slug = siteSlug;
+  // ── CRM capture state ─────────────────────────────────────────────────────
+  const [visitorToken] = useState<string>(() => {
+    try {
+      let t = localStorage.getItem("awa_vis");
+      if (!t) { t = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem("awa_vis", t); }
+      return t;
+    } catch { return Math.random().toString(36).slice(2); }
+  });
+  const [viewedIds, setViewedIds] = useState<Set<number>>(new Set());
+  const [cartSaveOpen, setCartSaveOpen] = useState(false);
+  const [cartSaveEmail, setCartSaveEmail] = useState("");
+  const [cartSaved, setCartSaved] = useState(false);
+  const cartSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const slug     = siteSlug;
   const currency = siteCurrency ?? "USD";
-  const title = str(content.title) || "Shop Our Products";
+  const title    = str(content.title) || "Shop Our Products";
   const subtitle = str(content.subtitle);
-  const cta = str(content.cta) || "Add to Cart";
-  const columns = parseInt(str(content.columns) || "3") || 3;
+  const cta      = str(content.cta) || "Add to Cart";
+  // layout: "slider" | "2" | "3" | "4" | "list"  (default "3")
+  const layout   = str(content.layout) || "3";
 
   useEffect(() => {
     if (!slug) { setLoading(false); return; }
@@ -724,6 +763,39 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
       .finally(() => setLoading(false));
   }, [slug]);
 
+  // ── Visit beacon: fires once on mount, captures UTM params ───────────────
+  useEffect(() => {
+    if (!slug) return;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      void fetch(`${BASE_URL_SHOP}/api/public/crm/product-interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteSlug: slug, visitorToken, type: "page_visit",
+          productId: null, productName: null,
+          utmSource: p.get("utm_source"), utmMedium: p.get("utm_medium"),
+          utmCampaign: p.get("utm_campaign"), utmContent: p.get("utm_content"),
+          referrer: document.referrer || null,
+          landingPage: window.location.pathname,
+        }),
+      });
+    } catch { /* best-effort */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  // ── Cart-save popup: appears 30 s after first item is added (once) ────────
+  useEffect(() => {
+    if (cart.length > 0 && !cartSaved && !cartSaveOpen && !cartSaveTimerRef.current) {
+      cartSaveTimerRef.current = setTimeout(() => setCartSaveOpen(true), 30_000);
+    }
+    if (cart.length === 0 && cartSaveTimerRef.current) {
+      clearTimeout(cartSaveTimerRef.current);
+      cartSaveTimerRef.current = null;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length]);
+
   function toggleFav(id: number) {
     setFavs(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
@@ -732,22 +804,80 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
     });
   }
 
-  function addToCart(p: ShopProduct) {
+  /** Open variation picker if the product has options; otherwise add straight to cart. */
+  function handleAddToCart(p: ShopProduct) {
+    if (!p.inStock) return;
+    if ((p.variations?.length ?? 0) > 0) {
+      setPickerProduct(p);
+      setPickerSel({});
+    } else {
+      commitAdd(p);
+    }
+  }
+
+  /** Actually push the product (with optional variation string) into the cart and animate. */
+  function commitAdd(p: ShopProduct, opts?: string) {
+    setAddedId(p.id);
+    setTimeout(() => setAddedId(null), 900);
     setCart(prev => {
-      const ex = prev.find(i => i.id === p.id);
-      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: p.id, name: p.name, price: p.price, currency: p.currency, imageUrl: p.imageUrl, qty: 1 }];
+      const ex = prev.find(i => i.id === p.id && i.selectedOptions === opts);
+      if (ex) return prev.map(i => (i.id === p.id && i.selectedOptions === opts) ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: p.id, name: p.name + (opts ? ` (${opts})` : ""), price: p.price, currency: p.currency, imageUrl: p.imageUrl, qty: 1, selectedOptions: opts }];
     });
+    // CRM: fire add_to_cart beacon (best-effort)
+    if (slug) {
+      void fetch(`${BASE_URL_SHOP}/api/public/crm/product-interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteSlug: slug, visitorToken, type: "add_to_cart", productId: p.id, productName: p.name, productPrice: p.price }),
+      }).catch(() => {});
+    }
   }
-  function updateQty(id: number, d: number) {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + d) } : i).filter(i => i.qty > 0));
+
+  /** Open quick-view and fire a product_view CRM beacon (once per product per session). */
+  function openQuickView(p: ShopProduct) {
+    setQuickView(p);
+    if (slug && !viewedIds.has(p.id)) {
+      setViewedIds(prev => new Set([...prev, p.id]));
+      void fetch(`${BASE_URL_SHOP}/api/public/crm/product-interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteSlug: slug, visitorToken, type: "product_view", productId: p.id, productName: p.name, productPrice: p.price }),
+      }).catch(() => {});
+    }
   }
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+  /** Submit the cart-save email and record it in CRM. */
+  async function submitCartSave() {
+    if (!cartSaveEmail.trim() || !slug) return;
+    try {
+      await fetch(`${BASE_URL_SHOP}/api/public/crm/product-interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteSlug: slug, visitorToken, type: "cart_save_email",
+          productId: cart[0]?.id ?? null,
+          productName: cart.map(i => i.name).join(", "),
+          email: cartSaveEmail.trim(),
+          name: cName || null,
+        }),
+      });
+    } catch { /* best-effort */ }
+    setCartSaved(true);
+    setCartSaveOpen(false);
+  }
+
+  function updateQty(id: number, d: number, opts?: string) {
+    setCart(prev => prev.map(i => (i.id === id && i.selectedOptions === opts) ? { ...i, qty: Math.max(0, i.qty + d) } : i).filter(i => i.qty > 0));
+  }
+
+  const cartCount    = cart.reduce((s, i) => s + i.qty, 0);
+  const cartTotal    = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const cartCurrency = cart[0]?.currency ?? currency;
 
   function fmtPrice(amount: number, cur: string) {
-    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(amount); } catch { return `${cur} ${amount.toFixed(2)}`; }
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(amount); }
+    catch { return `${cur} ${amount.toFixed(2)}`; }
   }
 
   async function handleCheckout(e: React.FormEvent) {
@@ -799,17 +929,181 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
       try {
         const r = await fetch(`${BASE_URL_SHOP}/api/sites/${encodeURIComponent(slug)}/order-status?orderId=${oid}`);
         const d = await r.json();
-        if (d.paymentStatus === "paid")   { clearInterval(t); setCheckoutView("success"); setCart([]); }
+        if (d.paymentStatus === "paid")    { clearInterval(t); setCheckoutView("success"); setCart([]); }
         else if (d.paymentStatus === "failed") { clearInterval(t); setCheckoutView("failed"); }
       } catch {}
       if (tries >= 40) clearInterval(t);
     }, 3000);
   }
 
-  const border = `${themeColor}18`;
-  const cardBg = palette.accent;
+  // ── shared micro-helpers ──────────────────────────────────────────────────
+  const stockBadge = (inStock: boolean): React.CSSProperties => ({
+    fontSize: 9, fontWeight: 800, padding: "3px 9px", borderRadius: 20,
+    backdropFilter: "blur(8px)",
+    background: inStock ? "rgba(16,185,129,.18)" : "rgba(239,68,68,.18)",
+    color: inStock ? "#10b981" : "#ef4444",
+    border: `1px solid ${inStock ? "rgba(16,185,129,.3)" : "rgba(239,68,68,.3)"}`,
+  });
 
-  // Editor preview placeholder (no slug = inside editor, products not loaded)
+  const addBtnStyle = (isAdded: boolean, compact = false): React.CSSProperties => ({
+    display: "block", width: "100%", padding: compact ? 9 : 11, borderRadius: 12,
+    border: "none", cursor: "pointer", fontWeight: 800, fontSize: compact ? 11 : 13,
+    textAlign: "center", color: "#fff",
+    background: isAdded
+      ? "linear-gradient(135deg,#10b981,#059669)"
+      : `linear-gradient(135deg,${themeColor},${themeColor}cc)`,
+    animation: isAdded ? "svCartBounce .6s ease" : "none",
+    transition: "background .3s",
+  });
+
+  // ── per-layout grid config ────────────────────────────────────────────────
+  const gridCols = layout === "2" ? "repeat(auto-fill,minmax(320px,1fr))"
+                 : layout === "4" ? "repeat(auto-fill,minmax(200px,1fr))"
+                 :                  "repeat(auto-fill,minmax(260px,1fr))";
+  const gridGap  = layout === "4" ? "1.25rem" : "1.75rem";
+  const cardBg   = palette.accent;
+
+  // ── renderCard (grid + slider) ────────────────────────────────────────────
+  function renderCard(p: ShopProduct, i: number) {
+    const isFav   = favs.includes(p.id);
+    const isAdded = addedId === p.id;
+    const lowStock = p.inStock && (p.stockQuantity ?? 99) > 0 && (p.stockQuantity ?? 99) <= 5;
+    const hasVars  = (p.variations?.length ?? 0) > 0;
+    const compact  = layout === "4";
+
+    return (
+      <div key={p.id} className="sv-obs sv-card" style={{
+        borderRadius: 18, overflow: "hidden", background: "#fff",
+        border: `1px solid ${palette.text}0f`,
+        boxShadow: isAdded ? `0 4px 24px ${themeColor}44` : "0 2px 12px rgba(0,0,0,.07)",
+        transitionDelay: `${i * 50}ms`, display: "flex", flexDirection: "column",
+        transition: "box-shadow .3s",
+      }}>
+        {/* Image zone — click opens quick-view */}
+        <div style={{ position: "relative", aspectRatio: compact ? "4/3" : "1", overflow: "hidden", cursor: "pointer" }}
+             onClick={() => openQuickView(p)}>
+          {p.imageUrl
+            ? <img src={p.imageUrl} alt={p.name} className="sv-img-zoom"
+                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" />
+            : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${themeColor}18,${themeColor}08)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? 36 : 48 }}>🛍️</div>
+          }
+          {/* In/Out badge */}
+          <span style={{ position: "absolute", top: 10, left: 10, ...stockBadge(p.inStock) }}>
+            {p.inStock ? "● In Stock" : "✕ Sold Out"}
+          </span>
+          {/* Favourite */}
+          <button onClick={e => { e.stopPropagation(); toggleFav(p.id); }}
+            style={{ position: "absolute", top: 8, right: 10, width: 30, height: 30, borderRadius: "50%", border: "none", background: isFav ? "rgba(239,68,68,.8)" : "rgba(0,0,0,.3)", backdropFilter: "blur(6px)", color: "#fff", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+            ♥
+          </button>
+          {/* Low-stock pulse */}
+          {lowStock && (
+            <span style={{ position: "absolute", bottom: 8, left: 8, fontSize: 9, fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: "rgba(245,158,11,.9)", color: "#fff", animation: "svStockPulse 1.8s ease infinite" }}>
+              🔥 Only {p.stockQuantity} left!
+            </span>
+          )}
+          {/* Variation label */}
+          {hasVars && (
+            <span style={{ position: "absolute", bottom: lowStock ? 30 : 8, right: 8, fontSize: 9, fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: `${themeColor}cc`, color: "#fff" }}>
+              {p.variations!.map(v => v.name).join(" · ")}
+            </span>
+          )}
+        </div>
+
+        {/* Card body */}
+        <div style={{ padding: compact ? "0.9rem" : "1.25rem", display: "flex", flexDirection: "column", flex: 1 }}>
+          {p.category && <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em", color: themeColor, margin: "0 0 4px" }}>{p.category}</p>}
+          <h3 style={{ fontSize: compact ? 13 : 15, fontWeight: 800, margin: "0 0 4px", color: palette.text, lineHeight: 1.3 }}>{p.name}</h3>
+          <p style={{ fontSize: compact ? 17 : 21, fontWeight: 900, color: themeColor, margin: "0 0 6px" }}>
+            {fmtPrice(p.price, p.currency)}
+            {p.unit && <span style={{ fontSize: 10, color: palette.text + "66", fontWeight: 500 }}> / {p.unit}</span>}
+          </p>
+          {!compact && p.description && (
+            <p style={{ fontSize: 12, color: palette.text + "88", margin: "0 0 10px", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
+              {p.description}
+            </p>
+          )}
+          <div style={{ marginTop: "auto" }}>
+            {p.inStock
+              ? <button className="sv-shop-btn" onClick={() => handleAddToCart(p)} style={addBtnStyle(isAdded, compact)}>
+                  {hasVars ? "⚙ Select Options" : isAdded ? "✓ Added!" : cta}
+                </button>
+              : <span style={{ display: "block", width: "100%", padding: compact ? 9 : 11, borderRadius: 12, background: palette.accent, color: palette.text + "44", fontWeight: 800, fontSize: 12, textAlign: "center" }}>
+                  Sold Out
+                </span>
+            }
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── renderListCard ────────────────────────────────────────────────────────
+  function renderListCard(p: ShopProduct, i: number) {
+    const isFav   = favs.includes(p.id);
+    const isAdded = addedId === p.id;
+    const lowStock = p.inStock && (p.stockQuantity ?? 99) > 0 && (p.stockQuantity ?? 99) <= 5;
+    const hasVars  = (p.variations?.length ?? 0) > 0;
+
+    return (
+      <div key={p.id} className="sv-obs sv-list-card" style={{
+        display: "flex", borderRadius: 16, overflow: "hidden", background: "#fff",
+        border: `1px solid ${palette.text}0f`, boxShadow: "0 2px 10px rgba(0,0,0,.06)",
+        transitionDelay: `${i * 40}ms`,
+      }}>
+        {/* Thumbnail */}
+        <div style={{ width: 140, minHeight: 120, flexShrink: 0, position: "relative", overflow: "hidden", cursor: "pointer" }}
+             onClick={() => openQuickView(p)}>
+          {p.imageUrl
+            ? <img src={p.imageUrl} alt={p.name} className="sv-img-zoom"
+                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", minHeight: 120 }} loading="lazy" />
+            : <div style={{ width: "100%", height: "100%", minHeight: 120, background: `linear-gradient(135deg,${themeColor}18,${themeColor}08)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🛍️</div>
+          }
+        </div>
+
+        {/* Details */}
+        <div style={{ flex: 1, padding: "1rem 1.25rem", display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {p.category && <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em", color: themeColor, margin: "0 0 3px" }}>{p.category}</p>}
+              <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 2px", color: palette.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</h3>
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 9px", borderRadius: 20, flexShrink: 0,
+              background: p.inStock ? "rgba(16,185,129,.12)" : "rgba(239,68,68,.12)",
+              color: p.inStock ? "#10b981" : "#ef4444" }}>
+              {p.inStock ? (lowStock ? `🔥 ${p.stockQuantity} left` : "In Stock") : "Sold Out"}
+            </span>
+          </div>
+          {p.description && (
+            <p style={{ fontSize: 12, color: palette.text + "88", margin: "4px 0 8px", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
+              {p.description}
+            </p>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", gap: 12 }}>
+            <p style={{ fontSize: 20, fontWeight: 900, color: themeColor, margin: 0 }}>
+              {fmtPrice(p.price, p.currency)}
+              {p.unit && <span style={{ fontSize: 10, color: palette.text + "66", fontWeight: 500 }}> / {p.unit}</span>}
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => toggleFav(p.id)}
+                style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${isFav ? "#ef4444" : "#e5e7eb"}`, background: isFav ? "#ef444412" : "none", color: isFav ? "#ef4444" : "#9ca3af", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>
+                ♥
+              </button>
+              {p.inStock
+                ? <button className="sv-shop-btn" onClick={() => handleAddToCart(p)}
+                    style={{ ...addBtnStyle(isAdded), width: "auto", display: "inline-block", padding: "8px 18px", fontSize: 12 }}>
+                    {hasVars ? "⚙ Options" : isAdded ? "✓ Added" : cta}
+                  </button>
+                : <span style={{ padding: "8px 18px", borderRadius: 10, background: palette.accent, color: palette.text + "44", fontWeight: 800, fontSize: 12 }}>Sold Out</span>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Loading / editor placeholder ──────────────────────────────────────────
   if (!slug || loading) {
     return (
       <section className="sv-section-pad" style={{ background: palette.bg, padding: "5.5rem 2rem" }}>
@@ -823,12 +1117,12 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
             <div style={{ textAlign: "center", padding: "3rem", background: cardBg, borderRadius: 20, border: `2px dashed ${themeColor}40` }}>
               <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🛍️</div>
               <p style={{ fontWeight: 700, color: palette.text, marginBottom: ".5rem" }}>Live shop preview</p>
-              <p style={{ fontSize: ".9rem", color: palette.text + "88" }}>Your published products from the catalog will appear here with full cart &amp; checkout. Publish your site to see them live.</p>
+              <p style={{ fontSize: ".9rem", color: palette.text + "88" }}>Your published products will appear here with full cart &amp; checkout. Publish your site to see them live.</p>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(columns, 3)}, 1fr)`, gap: "1.5rem" }}>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: cardBg, animation: "siteShimmer 1.5s infinite linear", backgroundImage: `linear-gradient(90deg,${palette.bg} 0%,${palette.accent} 50%,${palette.bg} 100%)`, backgroundSize: "200% 100%", height: 280 }} />
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: gridGap }}>
+              {Array.from({ length: layout === "4" ? 4 : 3 }).map((_, i) => (
+                <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: cardBg, animation: "siteShimmer 1.5s infinite linear", backgroundImage: `linear-gradient(90deg,${palette.bg} 0%,${palette.accent} 50%,${palette.bg} 100%)`, backgroundSize: "200% 100%", height: layout === "list" ? 100 : 280 }} />
               ))}
             </div>
           )}
@@ -837,23 +1131,27 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
     );
   }
 
+  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <section id="shop" className="sv-section-pad" style={{ background: palette.bg, padding: "5.5rem 2rem", position: "relative" }}>
-      {/* Cart FAB */}
+
+      {/* ── Cart FAB ────────────────────────────────────────────────────── */}
       {cartCount > 0 && (
         <button onClick={() => { setCartOpen(true); setCheckoutView("items"); }}
           style={{ position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, boxShadow: `0 4px 24px ${themeColor}55`, zIndex: 200 }}>
           🛒
-          <span style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>{cartCount > 9 ? "9+" : cartCount}</span>
+          <span style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
+            {cartCount > 9 ? "9+" : cartCount}
+          </span>
         </button>
       )}
 
-      {/* Cart drawer overlay */}
+      {/* ── Cart Drawer ─────────────────────────────────────────────────── */}
       {cartOpen && (
         <>
           <div onClick={() => setCartOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 300 }} />
-          <div style={{ position: "fixed", top: 0, right: 0, width: 400, maxWidth: "100vw", height: "100vh", background: "#fff", color: "#111827", fontFamily: "inherit", display: "flex", flexDirection: "column", boxShadow: "-4px 0 40px rgba(0,0,0,.2)", zIndex: 400, overflowY: "auto" }}>
-            {/* Drawer header */}
+          <div style={{ position: "fixed", top: 0, right: 0, width: 400, maxWidth: "100vw", height: "100vh", background: "#fff", color: "#111827", display: "flex", flexDirection: "column", boxShadow: "-4px 0 40px rgba(0,0,0,.2)", zIndex: 400 }}>
+            {/* Header */}
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "#fff", zIndex: 10 }}>
               <div>
                 <p style={{ fontSize: 16, fontWeight: 800, margin: 0, color: themeColor }}>
@@ -863,26 +1161,31 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
               </div>
               {checkoutView === "checkout"
                 ? <button onClick={() => setCheckoutView("items")} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>← Back</button>
-                : <button onClick={() => setCartOpen(false)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 22 }}>✕</button>}
+                : <button onClick={() => setCartOpen(false)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 22 }}>✕</button>
+              }
             </div>
 
-            {/* Drawer body */}
+            {/* Body */}
             <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
               {checkoutView === "items" && (
                 cart.length === 0
                   ? <div style={{ textAlign: "center", paddingTop: 60 }}><div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div><p style={{ fontWeight: 700, marginBottom: 6 }}>Your cart is empty</p><p style={{ fontSize: 13, color: "#9ca3af" }}>Add products to get started.</p></div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {cart.map(item => (
-                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, background: "#f9f9ff", border: "1px solid #f0f0f0" }}>
-                          {item.imageUrl ? <img src={item.imageUrl} style={{ width: 50, height: 50, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} /> : <div style={{ width: 50, height: 50, borderRadius: 8, background: themeColor + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🛍️</div>}
+                        <div key={`${item.id}-${item.selectedOptions ?? ""}`}
+                          style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, background: "#f9f9ff", border: "1px solid #f0f0f0" }}>
+                          {item.imageUrl
+                            ? <img src={item.imageUrl} style={{ width: 50, height: 50, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                            : <div style={{ width: 50, height: 50, borderRadius: 8, background: themeColor + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🛍️</div>
+                          }
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
                             <p style={{ fontSize: 14, fontWeight: 800, color: themeColor, margin: 0 }}>{fmtPrice(item.price * item.qty, item.currency)}</p>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <button onClick={() => updateQty(item.id, -1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>−</button>
+                            <button onClick={() => updateQty(item.id, -1, item.selectedOptions)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>−</button>
                             <span style={{ minWidth: 20, textAlign: "center", fontWeight: 700, fontSize: 14 }}>{item.qty}</span>
-                            <button onClick={() => updateQty(item.id, 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>+</button>
+                            <button onClick={() => updateQty(item.id, 1, item.selectedOptions)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e5e7eb", background: "none", fontSize: 16, cursor: "pointer" }}>+</button>
                           </div>
                         </div>
                       ))}
@@ -898,7 +1201,8 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
                   {([["Full Name *", cName, setCName, "text", true], ["Email *", cEmail, setCEmail, "email", true], ["Phone", cPhone, setCPhone, "tel", false], ["Delivery Address", cAddr, setCAddr, "text", false]] as const).map(([lbl, val, set, type, req]) => (
                     <div key={String(lbl)}>
                       <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#6b7280", display: "block", marginBottom: 5 }}>{lbl}</label>
-                      <input value={val} onChange={e => (set as (v: string) => void)(e.target.value)} type={type} required={req} style={{ width: "100%", padding: "11px 13px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#f9f9ff", color: "#111827", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+                      <input value={val} onChange={e => (set as (v: string) => void)(e.target.value)} type={type} required={req}
+                        style={{ width: "100%", padding: "11px 13px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#f9f9ff", color: "#111827", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
                     </div>
                   ))}
                   {(enabledGateways ?? []).length > 0 && (
@@ -906,19 +1210,21 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
                       <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#6b7280", display: "block", marginBottom: 8 }}>Payment Method</label>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         {(enabledGateways ?? []).map(gw => (
-                          <button key={gw} type="button" onClick={() => setGateway(gw)} style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${gateway === gw ? themeColor : "#e5e7eb"}`, background: gateway === gw ? themeColor + "12" : "none", color: gateway === gw ? themeColor : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          <button key={gw} type="button" onClick={() => setGateway(gw)}
+                            style={{ padding: "9px 16px", borderRadius: 10, border: `1.5px solid ${gateway === gw ? themeColor : "#e5e7eb"}`, background: gateway === gw ? themeColor + "12" : "none", color: gateway === gw ? themeColor : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                             {gw === "paystack" ? "🏦 Paystack · NGN" : gw === "stripe" ? "💳 Card · USD" : gw === "squad" ? "💳 Squad · NGN/USD" : gw === "nowpayments" ? "₮ USDT Crypto" : `💳 ${gw}`}
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
-                  {errMsg && <p style={{ color: "#ef4444", fontSize: 12 }}>{errMsg}</p>}
+                  {errMsg && <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{errMsg}</p>}
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: "1px solid #f0f0f0" }}>
                     <span style={{ color: "#6b7280", fontSize: 13 }}>Total</span>
                     <span style={{ fontSize: 20, fontWeight: 900, color: themeColor }}>{fmtPrice(cartTotal, cartCurrency)}</span>
                   </div>
-                  <button type="submit" disabled={paying} style={{ padding: 13, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: paying ? "wait" : "pointer", opacity: paying ? 0.7 : 1 }}>
+                  <button type="submit" disabled={paying}
+                    style={{ padding: 13, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: paying ? "wait" : "pointer", opacity: paying ? 0.7 : 1 }}>
                     {paying ? "Processing…" : `Pay ${fmtPrice(cartTotal, cartCurrency)} →`}
                   </button>
                 </form>
@@ -938,16 +1244,12 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
                   <p style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Payment Successful!</p>
                   <p style={{ fontSize: 13, color: "#9ca3af" }}>Your order has been placed. The seller will be in touch shortly.</p>
                   {orderId && <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 12, padding: "6px 14px", borderRadius: 8, background: "#f3f4f6", display: "inline-block" }}>Order #{orderId}</p>}
-                  {/* Track order CTA — links to the Awa Biz Suite customer portal */}
                   <div style={{ marginTop: 24, padding: "16px", borderRadius: 16, background: `${themeColor}0d`, border: `1px solid ${themeColor}25` }}>
                     <p style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>📦 Want to track this order?</p>
                     <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 12, lineHeight: 1.5 }}>Create a free Awa Biz Suite account to view your order history, get updates, and access AI tools.</p>
-                    <a href="/customer/profile" style={{ display: "inline-block", padding: "9px 20px", borderRadius: 10, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontSize: 12, fontWeight: 800, textDecoration: "none" }}>
-                      Create Free Account →
-                    </a>
+                    <a href="/customer/profile" style={{ display: "inline-block", padding: "9px 20px", borderRadius: 10, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontSize: 12, fontWeight: 800, textDecoration: "none" }}>Create Free Account →</a>
                     <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 8 }}>Already have an account?{" "}
-                      <a href="/customer/dashboard" style={{ color: themeColor, fontWeight: 700, textDecoration: "none" }}>Sign in</a>
-                    </p>
+                      <a href="/customer/dashboard" style={{ color: themeColor, fontWeight: 700, textDecoration: "none" }}>Sign in</a></p>
                   </div>
                   <button onClick={() => setCartOpen(false)} style={{ marginTop: 16, padding: "10px 24px", borderRadius: 50, border: "1px solid #e5e7eb", background: "none", color: "#374151", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Close</button>
                 </div>
@@ -963,7 +1265,7 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
               )}
             </div>
 
-            {/* Drawer footer */}
+            {/* Footer */}
             {checkoutView === "items" && cart.length > 0 && (
               <div style={{ padding: "12px 20px", borderTop: "1px solid #f0f0f0", position: "sticky", bottom: 0, background: "#fff" }}>
                 <button onClick={() => setCheckoutView("checkout")} style={{ width: "100%", padding: 13, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: "pointer" }}>Proceed to Checkout →</button>
@@ -973,50 +1275,192 @@ function ShopSection({ content, palette, themeColor, siteSlug, enabledGateways, 
         </>
       )}
 
-      {/* Product grid */}
+      {/* ── Variation Picker (bottom sheet) ─────────────────────────────── */}
+      {pickerProduct && (
+        <>
+          <div onClick={() => setPickerProduct(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500 }} />
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, maxHeight: "80vh", background: "#fff", borderRadius: "24px 24px 0 0", zIndex: 600, display: "flex", flexDirection: "column", boxShadow: "0 -8px 40px rgba(0,0,0,.22)", animation: "svSlideUp .28s ease" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontWeight: 800, fontSize: 16, margin: 0, color: "#111827" }}>{pickerProduct.name}</p>
+                <p style={{ fontWeight: 900, fontSize: 18, margin: "2px 0 0", color: themeColor }}>{fmtPrice(pickerProduct.price, pickerProduct.currency)}</p>
+              </div>
+              <button onClick={() => setPickerProduct(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+            </div>
+            <div style={{ padding: 20, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 }}>
+              {pickerProduct.variations!.map(v => (
+                <div key={v.name}>
+                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: "#374151" }}>{v.name}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {v.options.map(opt => (
+                      <button key={opt} onClick={() => setPickerSel(prev => ({ ...prev, [v.name]: opt }))}
+                        style={{ padding: "8px 18px", borderRadius: 10, border: `1.5px solid ${pickerSel[v.name] === opt ? themeColor : "#e5e7eb"}`, background: pickerSel[v.name] === opt ? themeColor + "12" : "#fff", color: pickerSel[v.name] === opt ? themeColor : "#374151", fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all .18s" }}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {(() => {
+                const allSelected = !pickerProduct.variations!.some(v => !pickerSel[v.name]);
+                return (
+                  <button
+                    disabled={!allSelected}
+                    onClick={() => {
+                      const opts = pickerProduct.variations!.map(v => `${v.name}: ${pickerSel[v.name]}`).join(", ");
+                      commitAdd(pickerProduct, opts);
+                      setPickerProduct(null);
+                    }}
+                    style={{ padding: 13, borderRadius: 12, border: "none", cursor: allSelected ? "pointer" : "default", fontWeight: 800, fontSize: 14, color: allSelected ? "#fff" : "#9ca3af", background: allSelected ? `linear-gradient(135deg,${themeColor},${themeColor}cc)` : "#e5e7eb", transition: "all .2s" }}>
+                    {allSelected ? "Add to Cart →" : "Select all options to continue"}
+                  </button>
+                );
+              })()}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Quick View Overlay ───────────────────────────────────────────── */}
+      {quickView && (
+        <>
+          <div onClick={() => setQuickView(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 500 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(560px,95vw)", background: "#fff", borderRadius: 24, zIndex: 600, display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,.25)", overflow: "hidden", maxHeight: "90vh", animation: "svSlideUp .25s ease" }}>
+            {quickView.imageUrl && (
+              <div style={{ aspectRatio: "16/9", overflow: "hidden", position: "relative", flexShrink: 0 }}>
+                <img src={quickView.imageUrl} alt={quickView.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <span style={{ position: "absolute", top: 14, left: 14, ...stockBadge(quickView.inStock) }}>
+                  {quickView.inStock ? "● In Stock" : "✕ Sold Out"}
+                </span>
+              </div>
+            )}
+            <div style={{ padding: "1.5rem", overflowY: "auto" }}>
+              {quickView.category && <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em", color: themeColor, margin: "0 0 8px" }}>{quickView.category}</p>}
+              <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: "#111827" }}>{quickView.name}</h2>
+              <p style={{ fontSize: 26, fontWeight: 900, color: themeColor, margin: "0 0 12px" }}>
+                {fmtPrice(quickView.price, quickView.currency)}
+                {quickView.unit && <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}> / {quickView.unit}</span>}
+              </p>
+              {quickView.description && <p style={{ fontSize: 14, color: "#374151", lineHeight: 1.7, margin: "0 0 20px" }}>{quickView.description}</p>}
+              {(quickView.variations?.length ?? 0) > 0 && (
+                <div style={{ background: themeColor + "08", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                  {quickView.variations!.map(v => (
+                    <p key={v.name} style={{ margin: "0 0 4px", fontSize: 13, color: "#374151" }}>
+                      <strong>{v.name}:</strong> {v.options.join(", ")}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10 }}>
+                {quickView.inStock
+                  ? <button className="sv-shop-btn"
+                      onClick={() => { handleAddToCart(quickView); setQuickView(null); }}
+                      style={{ ...addBtnStyle(false), flex: 1, display: "block" }}>
+                      {(quickView.variations?.length ?? 0) > 0 ? "⚙ Select Options" : cta}
+                    </button>
+                  : <span style={{ flex: 1, display: "block", padding: 11, borderRadius: 12, background: "#f3f4f6", color: "#9ca3af", fontWeight: 800, fontSize: 13, textAlign: "center" }}>Sold Out</span>
+                }
+                <button onClick={() => setQuickView(null)}
+                  style={{ padding: "11px 20px", borderRadius: 12, border: "1px solid #e5e7eb", background: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, color: "#374151" }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Product Display ──────────────────────────────────────────────── */}
       <div style={{ maxWidth: 1140, margin: "0 auto" }}>
+        {/* Section header */}
         <div className="sv-obs" style={{ textAlign: "center", marginBottom: "3.5rem" }}>
           <div style={{ display: "inline-block", background: themeColor + "18", color: themeColor, borderRadius: 999, padding: "0.3rem 0.9rem", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: ".9rem" }}>Live Shop</div>
           <h2 style={{ fontSize: "clamp(1.6rem,3.5vw,2.3rem)", fontWeight: 800, color: palette.text, marginBottom: ".6rem" }}>{title}</h2>
           {subtitle && <p style={{ color: palette.text + "88", fontSize: "1.05rem", maxWidth: 560, margin: "0 auto" }}>{subtitle}</p>}
         </div>
+
         {products.length === 0 ? (
           <p style={{ textAlign: "center", color: palette.text + "55", fontSize: "1rem" }}>No products available yet.</p>
-        ) : (
-          <div className="sv-grid-3" style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${columns <= 2 ? "320px" : "270px"}, 1fr))`, gap: "1.75rem" }}>
-            {products.map((p, i) => {
-              const isFav = favs.includes(p.id);
-              return (
-                <div key={p.id} className="sv-obs sv-card" style={{ borderRadius: 18, overflow: "hidden", background: "#fff", border: `1px solid ${palette.text}0f`, boxShadow: "0 2px 12px rgba(0,0,0,.07)", transitionDelay: `${i * 60}ms` }}>
-                  <div style={{ position: "relative", aspectRatio: "1", overflow: "hidden" }}>
-                    {p.imageUrl
-                      ? <img src={p.imageUrl} alt={p.name} className="sv-img-zoom" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" />
-                      : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${themeColor}18,${themeColor}08)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52 }}>🛍️</div>
-                    }
-                    <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 20, backdropFilter: "blur(8px)", background: p.inStock ? "rgba(16,185,129,.18)" : "rgba(239,68,68,.18)", color: p.inStock ? "#10b981" : "#ef4444", border: `1px solid ${p.inStock ? "rgba(16,185,129,.3)" : "rgba(239,68,68,.3)"}` }}>
-                      {p.inStock ? "● In Stock" : "✕ Sold Out"}
-                    </span>
-                    <button onClick={() => toggleFav(p.id)} style={{ position: "absolute", top: 8, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: isFav ? "rgba(239,68,68,.75)" : "rgba(0,0,0,.28)", backdropFilter: "blur(6px)", color: "#fff", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>♥</button>
-                  </div>
-                  <div style={{ padding: "1.25rem" }}>
-                    {p.category && <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: themeColor, margin: "0 0 6px" }}>{p.category}</p>}
-                    <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 6px", color: palette.text, lineHeight: 1.3 }}>{p.name}</h3>
-                    <p style={{ fontSize: 22, fontWeight: 900, color: themeColor, margin: "0 0 8px" }}>
-                      {fmtPrice(p.price, p.currency)}
-                      {p.unit && <span style={{ fontSize: 11, color: palette.text + "66", fontWeight: 500 }}> / {p.unit}</span>}
-                    </p>
-                    {p.description && <p style={{ fontSize: 12, color: palette.text + "88", margin: "0 0 14px", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>{p.description}</p>}
-                    {p.inStock
-                      ? <button onClick={() => { addToCart(p); }} style={{ display: "block", width: "100%", padding: 11, borderRadius: 12, background: `linear-gradient(135deg,${themeColor},${themeColor}cc)`, color: "#fff", fontWeight: 800, fontSize: 13, textAlign: "center", border: "none", cursor: "pointer" }}>{cta}</button>
-                      : <span style={{ display: "block", width: "100%", padding: 11, borderRadius: 12, background: palette.accent, color: palette.text + "55", fontWeight: 800, fontSize: 13, textAlign: "center" }}>Sold Out</span>
-                    }
-                  </div>
+        ) : layout === "slider" ? (
+          /* ── Horizontal slider ──────────────────────────────────────── */
+          <div style={{ position: "relative", padding: "0 32px" }}>
+            <button className="sv-slider-btn" onClick={() => sliderRef.current?.scrollBy({ left: -310, behavior: "smooth" })}
+              style={{ position: "absolute", left: -4, top: "40%", transform: "translateY(-50%)", width: 44, height: 44, borderRadius: "50%", background: "#fff", border: `1px solid ${palette.text}18`, boxShadow: "0 4px 16px rgba(0,0,0,.12)", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: themeColor, zIndex: 10 }}>
+              ‹
+            </button>
+            <div ref={sliderRef} className="sv-shop-slider">
+              {products.map((p, i) => (
+                <div key={p.id} className="sv-snap" style={{ width: 280 }}>
+                  {renderCard(p, i)}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            <button className="sv-slider-btn" onClick={() => sliderRef.current?.scrollBy({ left: 310, behavior: "smooth" })}
+              style={{ position: "absolute", right: -4, top: "40%", transform: "translateY(-50%)", width: 44, height: 44, borderRadius: "50%", background: "#fff", border: `1px solid ${palette.text}18`, boxShadow: "0 4px 16px rgba(0,0,0,.12)", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: themeColor, zIndex: 10 }}>
+              ›
+            </button>
+          </div>
+        ) : layout === "list" ? (
+          /* ── List layout ────────────────────────────────────────────── */
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {products.map((p, i) => renderListCard(p, i))}
+          </div>
+        ) : (
+          /* ── Grid (2 / 3 / 4 col) ──────────────────────────────────── */
+          <div className={layout === "3" ? "sv-grid-3" : ""} style={{ display: "grid", gridTemplateColumns: gridCols, gap: gridGap }}>
+            {products.map((p, i) => renderCard(p, i))}
           </div>
         )}
       </div>
+
+      {/* ── Cart-Save Popup ──────────────────────────────────────────────── */}
+      {cartSaveOpen && !cartSaved && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 24, zIndex: 500,
+          background: "#fff", borderRadius: 16, boxShadow: "0 8px 40px rgba(0,0,0,.18)",
+          border: "1px solid #f0f0f0", padding: "18px 20px", maxWidth: 320, width: "calc(100vw - 48px)",
+          animation: "svSlideUp .35s cubic-bezier(.22,.68,0,1.2)",
+        }}>
+          <button onClick={() => setCartSaveOpen(false)}
+            style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af", lineHeight: 1 }}>
+            ✕
+          </button>
+          <p style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: "#111827" }}>
+            💌 Save your cart
+          </p>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 14px", lineHeight: 1.5 }}>
+            Enter your email and we'll send you a reminder with everything in your basket.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="email"
+              value={cartSaveEmail}
+              onChange={e => setCartSaveEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") void submitCartSave(); }}
+              placeholder="you@example.com"
+              style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 13, outline: "none" }}
+            />
+            <button
+              onClick={() => void submitCartSave()}
+              disabled={!cartSaveEmail.trim()}
+              style={{ padding: "9px 16px", borderRadius: 10, background: themeColor, color: "#fff", border: "none", fontWeight: 800, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap", opacity: cartSaveEmail.trim() ? 1 : 0.5 }}>
+              Save →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {cartSaved && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 24, zIndex: 500,
+          background: "#10b981", borderRadius: 14, boxShadow: "0 4px 20px rgba(16,185,129,.35)",
+          padding: "12px 18px", color: "#fff", fontWeight: 700, fontSize: 14,
+          animation: "svSlideUp .3s ease",
+        }}>
+          ✓ Saved! We'll remind you.
+        </div>
+      )}
+
     </section>
   );
 }

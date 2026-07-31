@@ -45,6 +45,8 @@ export interface Lead {
   visitorToken?: string | null;
   pageViews: number;
   /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
   firstSeenAt?: string | null;
   /** @nullable */
   lastSeenAt?: string | null;

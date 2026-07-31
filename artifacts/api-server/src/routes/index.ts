@@ -78,6 +78,7 @@ import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
 import mobileAppsRouter from "./mobile-apps";
 import internalMobileAppRouter from "./internal-mobile-app";
+import tasksRouter from "./tasks";
 import blogRouter from "./blog";
 import publicBlogRouter from "./public-blog";
 
@@ -219,6 +220,7 @@ router.use(ratingsRouter);
 router.use(complaintsRouter);
 router.use(integrationErrorsRouter);
 router.use(mobileAppsRouter);
+router.use(tasksRouter);
   router.use(blogRouter);
 
 export default router;

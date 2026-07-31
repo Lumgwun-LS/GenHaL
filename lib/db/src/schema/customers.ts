@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, date } from "drizzle-orm/pg-core";
 
 /**
  * Awa Biz Suite customer accounts.
@@ -21,6 +21,10 @@ export const customersTable = pgTable("customers", {
   bio:              text("bio"),
   /** True once the customer has filled in phone + country + city → unlocks AI Dashboard */
   profileCompleted: boolean("profile_completed").notNull().default(false),
+  /** Birthday for automated birthday calls and wishes */
+  dateOfBirth: date("date_of_birth"),
+  /** Opt out of automated birthday voice calls */
+  voiceBirthdayOptOut: boolean("voice_birthday_opt_out").notNull().default(false),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

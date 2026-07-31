@@ -2827,7 +2827,8 @@ export const UpdateLeadBody = zod.object({
   "status": zod.string().optional(),
   "notes": zod.string().optional(),
   "score": zod.number().optional(),
-  "channel": zod.string().optional()
+  "channel": zod.string().optional(),
+  "dateOfBirth": zod.string().nullable().optional()
 })
 
 export const UpdateLeadResponse = zod.object({
@@ -2844,6 +2845,7 @@ export const UpdateLeadResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),

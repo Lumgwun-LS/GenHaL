@@ -12,6 +12,8 @@
  *  - Edit videos (trim, caption overlay)
  *  - Download any file
  *  - Use media directly for a social post
+ *  - Set an image as a product image
+ *  - Generate a product image with AI
  *  - Copy the URL to paste into the website builder
  */
 import { useState, useRef, useEffect } from "react";
@@ -19,11 +21,18 @@ import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sparkles, Image as ImageIcon, Video as VideoIcon, MessageSquare,
-  Download, Clock, Trash2, Upload, Pencil, Send, Copy, Check, Loader2, Plus,
+  Download, Clock, Upload, Pencil, Send, Copy, Check, Loader2, Plus,
+  Package, Wand2,
 } from "lucide-react";
-import { useListAiGenerations } from "@workspace/api-client-react";
+import { useListAiGenerations, useListProducts, useGenerateAiImage } from "@workspace/api-client-react";
+import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { ImageEditorDialog } from "@/components/image-editor-dialog";
 import { VideoEditorDialog } from "@/components/video-editor-dialog";
 import { toast } from "sonner";
@@ -40,10 +49,13 @@ interface MediaItem {
   createdAt: string;
 }
 
-type Tab = "all" | "images" | "videos" | "captions";
+type Tab = "all" | "images" | "videos" | "captions" | "generate";
 
 export default function AiStudio() {
   const [, setLocation] = useLocation();
+  const { vendor: myVendor } = useCurrentVendor();
+  const vendorId = myVendor?.id;
+
   const [tab, setTab] = useState<Tab>("all");
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(true);
@@ -54,8 +66,21 @@ export default function AiStudio() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  // "Set as product image" dialog state
+  const [productPickUrl, setProductPickUrl] = useState<string | null>(null);
+  const [productPickId, setProductPickId] = useState<string>("");
+  const [productPickSaving, setProductPickSaving] = useState(false);
+
+  // AI Generate tab state
+  const [genPrompt, setGenPrompt] = useState("");
+  const [genProductId, setGenProductId] = useState<string>("");
+  const [genAssign, setGenAssign] = useState(false);
+  const generateAiImage = useGenerateAiImage();
+
   const { data: allGenerations, isLoading: captionsLoading, refetch: refetchGenerations } =
     useListAiGenerations();
+
+  const { data: products } = useListProducts(vendorId ? { vendorId } : {});
 
   const captions = (allGenerations ?? []).filter(
     (g) => g.type === "caption" || (g.type !== "image" && g.type !== "video"),
@@ -110,6 +135,55 @@ export default function AiStudio() {
     setLocation(`${BASE_URL}/social/create?${param}=${encodeURIComponent(item.url)}`);
   };
 
+  // ── Set as product image ────────────────────────────────────────────────────
+  async function applyToProduct() {
+    if (!productPickUrl || !productPickId) return;
+    setProductPickSaving(true);
+    try {
+      const r = await fetch(`${BASE_URL}/api/products/${productPickId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageUrl: productPickUrl }),
+      });
+      if (!r.ok) { toast.error("Failed to update product"); return; }
+      toast.success("Product image updated! Visit Products to see it.");
+      setProductPickUrl(null);
+      setProductPickId("");
+    } catch { toast.error("Network error"); }
+    finally { setProductPickSaving(false); }
+  }
+
+  // ── Generate product image ──────────────────────────────────────────────────
+  async function handleGenerate() {
+    if (!vendorId || !genPrompt.trim()) return;
+    try {
+      const result = await generateAiImage.mutateAsync({
+        data: { vendorId, prompt: genPrompt.trim() },
+      });
+      if (result.status === "failed") { toast.error(result.result ?? "Generation failed"); return; }
+      const url = result.result ?? null;
+      if (!url) return;
+      // Optionally assign to a product
+      if (genAssign && genProductId) {
+        await fetch(`${BASE_URL}/api/products/${genProductId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ imageUrl: url }),
+        });
+        toast.success("Image generated and set as product image!");
+      } else {
+        toast.success("Image generated and saved to your library.");
+      }
+      fetchLibrary();
+      setTab("images");
+      setGenPrompt("");
+      setGenProductId("");
+      setGenAssign(false);
+    } catch { toast.error("Generation failed"); }
+  }
+
   // ── Download ────────────────────────────────────────────────────────────────
   const download = (url: string) => {
     const a = document.createElement("a");
@@ -128,21 +202,24 @@ export default function AiStudio() {
   });
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "all",     label: "All Media",  count: mediaItems.length },
-    { id: "images",  label: "Images",     count: mediaItems.filter((i) => i.type === "image").length },
-    { id: "videos",  label: "Videos",     count: mediaItems.filter((i) => i.type === "video").length },
-    { id: "captions",label: "AI Captions", count: captions.length },
+    { id: "all",      label: "All Media",    count: mediaItems.length },
+    { id: "images",   label: "Images",       count: mediaItems.filter((i) => i.type === "image").length },
+    { id: "videos",   label: "Videos",       count: mediaItems.filter((i) => i.type === "video").length },
+    { id: "captions", label: "AI Captions",  count: captions.length },
+    { id: "generate", label: "✦ Generate",              },
   ];
 
-  const isMediaTab = tab !== "captions";
+  const isMediaTab = tab !== "captions" && tab !== "generate";
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Media Library</h1>
-          <p className="text-muted-foreground">All your AI-generated and uploaded images and videos in one place.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Design Studio</h1>
+          <p className="text-muted-foreground">
+            Create, edit, and manage product images, videos, and captions — all powered by AI.
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -169,12 +246,12 @@ export default function AiStudio() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
               tab === t.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -190,6 +267,85 @@ export default function AiStudio() {
         ))}
       </div>
 
+      {/* ── Generate tab ─────────────────────────────────────────────── */}
+      {tab === "generate" && (
+        <div className="max-w-xl mx-auto space-y-6">
+          <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-purple-500/5 p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">AI Product Image Generator</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Describe your product image. Be specific — mention style, background, lighting, angle, and mood.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Image description</Label>
+              <Textarea
+                rows={4}
+                value={genPrompt}
+                onChange={e => setGenPrompt(e.target.value)}
+                placeholder="e.g. A bottle of organic honey on a rustic wooden table, warm golden light, shallow depth of field, professional product photo"
+                className="resize-none"
+              />
+            </div>
+
+            {/* Optional: assign directly to a product */}
+            <div className="rounded-xl border p-3 space-y-3 bg-background/60">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="assign-toggle"
+                  checked={genAssign}
+                  onChange={e => setGenAssign(e.target.checked)}
+                  className="rounded"
+                />
+                <Label htmlFor="assign-toggle" className="cursor-pointer text-sm font-normal">
+                  Set this image as a product image right away
+                </Label>
+              </div>
+              {genAssign && (
+                <Select value={genProductId} onValueChange={setGenProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a product…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(products ?? []).map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <Button
+              className="w-full gap-2"
+              size="lg"
+              onClick={handleGenerate}
+              disabled={generateAiImage.isPending || !genPrompt.trim() || (genAssign && !genProductId)}
+            >
+              {generateAiImage.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> Generate Image</>
+              )}
+            </Button>
+          </div>
+
+          <div className="rounded-xl border p-4 space-y-2 bg-muted/30">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Wand2 className="w-4 h-4 text-muted-foreground" />
+              Pro tips for great product images
+            </div>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Specify a clean background: "white background", "marble surface", "outdoor setting"</li>
+              <li>Mention lighting: "soft studio lighting", "natural sunlight", "moody shadows"</li>
+              <li>Add style: "flat lay", "close-up macro", "lifestyle photo", "minimalist"</li>
+              <li>After generating, use <strong>Refine in Editor</strong> to adjust brightness, contrast, and apply filters</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Media grid */}
       {isMediaTab && (
         <>
@@ -202,14 +358,14 @@ export default function AiStudio() {
               <Sparkles className="w-12 h-12 opacity-20" />
               <div className="text-center">
                 <h3 className="text-lg font-medium text-foreground mb-1">No media yet</h3>
-                <p className="text-sm">Upload images/videos above, or generate them from the social post creator.</p>
+                <p className="text-sm">Upload images/videos above, or generate them with AI.</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
                   <Plus className="w-3.5 h-3.5 mr-1.5" /> Upload Image
                 </Button>
-                <Button size="sm" onClick={() => setLocation(`${BASE_URL}/social/create`)}>
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Studio
+                <Button size="sm" onClick={() => setTab("generate")}>
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Generate with AI
                 </Button>
               </div>
             </div>
@@ -249,7 +405,7 @@ export default function AiStudio() {
                             onClick={() => item.type === "image" ? setEditImage(item.url) : setEditVideo(item.url)}
                           >
                             <Pencil className="w-3 h-3 mr-1" />
-                            Edit
+                            {item.type === "image" ? "Edit & Refine" : "Edit"}
                           </Button>
                           <Button
                             size="sm"
@@ -271,16 +427,30 @@ export default function AiStudio() {
                             <Send className="w-3 h-3 mr-1" />
                             Use for Post
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 text-xs"
-                            onClick={() => copyUrl(item.id, item.url)}
-                          >
-                            {isCopied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                            {isCopied ? "Copied!" : "Copy URL"}
-                          </Button>
+                          {item.type === "image" && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-8 text-xs"
+                              onClick={() => {
+                                setProductPickUrl(item.url);
+                                setProductPickId("");
+                              }}
+                            >
+                              <Package className="w-3 h-3 mr-1" />
+                              Set as Product
+                            </Button>
+                          )}
                         </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 text-xs w-full max-w-[160px]"
+                          onClick={() => copyUrl(item.id, item.url)}
+                        >
+                          {isCopied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+                          {isCopied ? "Copied!" : "Copy URL"}
+                        </Button>
                       </div>
                     </div>
 
@@ -359,6 +529,43 @@ export default function AiStudio() {
         </div>
       )}
 
+      {/* ── Set as Product Image dialog ──────────────────────────────── */}
+      <Dialog open={!!productPickUrl} onOpenChange={v => { if (!v) { setProductPickUrl(null); setProductPickId(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-4 h-4" /> Set as Product Image
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {productPickUrl && (
+              <img src={productPickUrl} alt="Selected" className="w-full aspect-video object-contain rounded-lg border bg-muted" />
+            )}
+            <div className="space-y-1.5">
+              <Label>Select product</Label>
+              <Select value={productPickId} onValueChange={setProductPickId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a product…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(products ?? []).map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setProductPickUrl(null); setProductPickId(""); }}>Cancel</Button>
+            <Button onClick={applyToProduct} disabled={!productPickId || productPickSaving}>
+              {productPickSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Apply to Product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Image editor dialog */}
       {editImage && (
         <ImageEditorDialog
@@ -369,7 +576,6 @@ export default function AiStudio() {
             toast.success("Edited image saved to library");
             setEditImage(null);
             fetchLibrary();
-            // pass the new URL so the user can use it immediately
             void newUrl;
           }}
         />

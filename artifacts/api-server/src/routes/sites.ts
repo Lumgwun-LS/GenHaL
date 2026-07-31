@@ -127,6 +127,7 @@ router.get("/sites/:slug/products", async (req, res): Promise<void> => {
       imageUrl: productsTable.imageUrl,
       stockQuantity: productsTable.stockQuantity,
       unit: productsTable.unit,
+      variationsJson: productsTable.variationsJson,
       currency: vendorsTable.defaultCurrency,
     })
     .from(productsTable)
@@ -170,6 +171,7 @@ router.get("/sites/:slug/products", async (req, res): Promise<void> => {
       stockQuantity: p.stockQuantity,
       unit: p.unit,
       currency: p.currency ?? "USD",
+      variations: (() => { try { return p.variationsJson ? JSON.parse(p.variationsJson) : null; } catch { return null; } })(),
     })),
     total,
     pages: Math.ceil(total / limit),

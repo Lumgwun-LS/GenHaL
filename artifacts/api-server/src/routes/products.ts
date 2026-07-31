@@ -147,6 +147,31 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
   res.json(UpdateProductResponse.parse(serializeProduct(product)));
 });
 
+/**
+ * PATCH /products/:id/variations
+ * Save variation groups (e.g. [{name:"Size",options:["S","M","L"]}]) for a product.
+ */
+router.patch("/products/:id/variations", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const id = parseInt(req.params.id ?? "", 10);
+  if (!id) { res.status(400).json({ error: "Invalid product id" }); return; }
+
+  const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+  if (!authed.isAdmin && existing.vendorId !== authed.vendorId) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // variations: Array<{name:string; options:string[]}> or null to clear
+  const { variations } = req.body as { variations: unknown };
+  if (variations !== null && !Array.isArray(variations)) {
+    res.status(400).json({ error: "variations must be an array or null" }); return;
+  }
+  const variationsJson = variations === null ? null : JSON.stringify(variations);
+  await db.update(productsTable).set({ variationsJson }).where(eq(productsTable.id, id));
+  res.json({ ok: true });
+});
+
 router.delete("/products/:id", async (req, res): Promise<void> => {
   const authed = await resolveAuthedVendor(req);
   if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }

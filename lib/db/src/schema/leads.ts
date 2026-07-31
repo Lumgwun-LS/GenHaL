@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
@@ -56,6 +56,14 @@ export const leadsTable = pgTable("leads", {
 
   // Engagement counters
   pageViews: integer("page_views").notNull().default(0),
+
+  // Birthday for automated birthday calls and wishes
+  dateOfBirth: date("date_of_birth"),
+
+  // Product interest (shop CRM capture)
+  interestedProductIds: text("interested_product_ids"),   // JSON array of product IDs
+  productReminderSentAt: timestamp("product_reminder_sent_at", { withTimezone: true }),
+  shopSlug: text("shop_slug"),
 
   // Timing
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),

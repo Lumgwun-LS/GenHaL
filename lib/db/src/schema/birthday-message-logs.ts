@@ -16,8 +16,16 @@ export const birthdayMessageLogsTable = pgTable("birthday_message_logs", {
   vendorId: integer("vendor_id").notNull(),
   vendorName: text("vendor_name").notNull(),
   vendorEmail: text("vendor_email"),
-  channel: text("channel").notNull(),  // "in-app" | "email" | "email-queued"
+  channel: text("channel").notNull(),
+  // Vendor channels:   "in-app" | "email" | "email-failed"
+  // Lead channels:     "lead-call" | "lead-in-app" | "lead-email" | "lead-email-failed"
+  // Customer channels: "customer-call" | "customer-in-app" | "customer-email" | "customer-email-failed"
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  // Customer / lead birthday columns (null for vendor birthday rows)
+  customerId: integer("customer_id"),
+  leadId: integer("lead_id"),
+  recipientName: text("recipient_name"),
+  recipientEmail: text("recipient_email"),
 });
 
 export type BirthdayMessageLog = typeof birthdayMessageLogsTable.$inferSelect;

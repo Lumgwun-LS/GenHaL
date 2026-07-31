@@ -14,6 +14,7 @@ import {
   leadFormsTable,
   utmLinksTable,
   vendorsTable,
+  vendorWebsitesTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -251,6 +252,100 @@ router.get("/public/r/:shortCode", async (req, res): Promise<void> => {
   if (link.utmTerm) dest.searchParams.set("utm_term", link.utmTerm);
 
   res.redirect(302, dest.toString());
+});
+
+/* ─────────────────────────────────────────────────────────────
+   POST /api/public/crm/product-interest
+   Records a visitor's product view or add-to-cart event, upserts
+   them into the vendor's CRM, and appends the productId to their
+   interestedProductIds list so the reminder scheduler can email them.
+   Also handles a bare page-visit beacon (type="page_visit").
+───────────────────────────────────────────────────────────── */
+router.post("/public/crm/product-interest", async (req, res): Promise<void> => {
+  const {
+    siteSlug, visitorToken, type,
+    productId, productName,
+    email, name,
+    utmSource, utmMedium, utmCampaign, utmContent,
+    referrer, landingPage,
+  } = req.body as Record<string, string | number | null | undefined>;
+
+  // Resolve vendorId from slug
+  const slug = String(siteSlug ?? "");
+  if (!slug) { res.status(400).json({ error: "siteSlug required" }); return; }
+
+  const [site] = await db
+    .select({ vendorId: vendorWebsitesTable.vendorId })
+    .from(vendorWebsitesTable)
+    .where(eq(vendorWebsitesTable.slug, slug));
+
+  if (!site) { res.status(404).json({ error: "Site not found" }); return; }
+  const vendorId = site.vendorId;
+
+  // Upsert CRM person
+  const personId = await upsertPerson({
+    vendorId,
+    email: email ? String(email) : null,
+    name: name ? String(name) : null,
+    visitorToken: visitorToken ? String(visitorToken) : null,
+    channel: (utmSource ? "utm_link" : "website"),
+    utmSource: utmSource ? String(utmSource) : null,
+    utmMedium: utmMedium ? String(utmMedium) : null,
+    utmCampaign: utmCampaign ? String(utmCampaign) : null,
+    utmContent: utmContent ? String(utmContent) : null,
+    referrerUrl: referrer ? String(referrer) : null,
+    landingPage: landingPage ? String(landingPage) : null,
+  });
+
+  // Record the activity
+  const activityType = type === "add_to_cart" ? "add_to_cart"
+    : type === "product_view" ? "product_view"
+    : "page_view";
+
+  await db.insert(personActivitiesTable).values({
+    vendorId,
+    personId,
+    type: activityType,
+    data: {
+      siteSlug: slug,
+      productId: productId ?? null,
+      productName: productName ?? null,
+      utmSource: utmSource ?? null,
+      utmMedium: utmMedium ?? null,
+      utmCampaign: utmCampaign ?? null,
+    },
+  });
+
+  // Append productId to interestedProductIds + save shopSlug
+  if (productId) {
+    const pid = Number(productId);
+    if (!isNaN(pid)) {
+      // Fetch current list and append (avoiding duplicates)
+      const [current] = await db
+        .select({ ids: leadsTable.interestedProductIds, shopSlug: leadsTable.shopSlug })
+        .from(leadsTable)
+        .where(eq(leadsTable.id, personId));
+
+      let ids: number[] = [];
+      try { ids = JSON.parse(current?.ids ?? "[]"); } catch {}
+      if (!ids.includes(pid)) ids.push(pid);
+
+      await db.update(leadsTable)
+        .set({
+          interestedProductIds: JSON.stringify(ids),
+          shopSlug: current?.shopSlug ?? slug,
+        })
+        .where(eq(leadsTable.id, personId));
+    }
+  } else if (!productId) {
+    // On bare visit, save shopSlug if not already set
+    const [current] = await db.select({ shopSlug: leadsTable.shopSlug }).from(leadsTable).where(eq(leadsTable.id, personId));
+    if (!current?.shopSlug) {
+      await db.update(leadsTable).set({ shopSlug: slug }).where(eq(leadsTable.id, personId));
+    }
+  }
+
+  res.json({ ok: true, personId });
 });
 
 export default router;

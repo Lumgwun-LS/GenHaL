@@ -44,6 +44,7 @@ import Investments from "@/pages/investments/index";
 import FinanceAnalytics from "@/pages/finance-analytics/index";
 import Branches from "@/pages/branches/index";
 import Workers from "@/pages/workers/index";
+import Tasks from "@/pages/tasks/index";
 import AdsPage from "@/pages/ads/index";
 import ContactPage from "@/pages/contact";
 import PricingPage from "@/pages/pricing";
@@ -406,6 +407,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/finance-analytics" component={() => <AuthenticatedRoute component={FinanceAnalytics} />} />
           <Route path="/branches" component={() => <AuthenticatedRoute component={Branches} />} />
           <Route path="/workers" component={() => <AuthenticatedRoute component={Workers} />} />
+          <Route path="/tasks" component={() => <AuthenticatedRoute component={Tasks} />} />
           <Route path="/invoices" component={() => <AuthenticatedRoute component={InvoicesPage} />} />
           <Route path="/analytics" component={() => <AuthenticatedRoute component={Analytics} />} />
           <Route path="/data-analysis" component={() => <AuthenticatedRoute component={DataAnalysisPage} />} />

@@ -159,9 +159,9 @@ router.put("/customer/me", async (req, res): Promise<void> => {
   const customer = await resolveCustomer(req);
   if (!customer) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const { name, phone, country, city, address, bio, avatarUrl } = req.body as {
+  const { name, phone, country, city, address, bio, avatarUrl, dateOfBirth } = req.body as {
     name?: string; phone?: string; country?: string; city?: string;
-    address?: string; bio?: string; avatarUrl?: string;
+    address?: string; bio?: string; avatarUrl?: string; dateOfBirth?: string | null;
   };
 
   const updates: Partial<typeof customersTable.$inferInsert> = {};
@@ -172,6 +172,7 @@ router.put("/customer/me", async (req, res): Promise<void> => {
   if (address !== undefined) updates.address = address?.trim() || null;
   if (bio !== undefined)     updates.bio     = bio?.trim() || null;
   if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl || null;
+  if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth?.trim() || null;
 
   // Recompute profileCompleted
   const merged = { ...customer, ...updates };

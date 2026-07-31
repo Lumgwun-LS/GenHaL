@@ -11,7 +11,7 @@ import {
   Command, Play, MapPin, Phone, ChevronLeft, Mic, FileSpreadsheet, Globe2,
   Library, Target, HelpCircle, Plus, Building2, Palette, Scissors, BarChart3,
   Menu, X, ChevronDown, BookOpen, Smartphone, Code2, ShoppingBag, PenSquare,
-  Webhook, FileText, Plug, ShoppingCart, UserCheck, BookMarked,
+  Webhook, FileText, Plug, ShoppingCart, UserCheck, BookMarked, CheckSquare,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { FaInstagram, FaFacebook, FaXTwitter, FaLinkedin, FaTiktok, FaTelegram } from "react-icons/fa6";
@@ -67,6 +67,7 @@ const getFeatureIcon = (title: string) => {
   if (t.includes("data analytics") || t.includes("analytics")) return BarChart3;
   if (t.includes("website builder") || t.includes("e-commerce")) return Globe2;
   if (t.includes("media library") || t.includes("media")) return Library;
+  if (t.includes("task manager") || t.includes("task")) return CheckSquare;
   if (t.includes("ads") || t.includes("paid social")) return Target;
   if (t.includes("architecture") || t.includes("building design")) return Building2;
   if (t.includes("interior design")) return Palette;
@@ -105,7 +106,8 @@ const DEFAULT_FEATURES = [
   { title: "Branches & Workers", description: "Model every physical location and staff member, and see exactly which branch or worker drove each sale, expense, or investment." },
   { title: "Voice Campaigns", description: "Automated AI voice calls for birthdays, promotions, and re-engagement using ElevenLabs TTS. Schedule campaigns, track call status, and get completion reports — no call center required." },
   { title: "Omnichannel Campaigns", description: "Broadcast targeted email and SMS campaigns to your leads and customers. Segment by channel, status, or location and track open rates and conversions." },
-  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard. Link your ad accounts, track spend, and measure ROI in one place." },
+  { title: "Ads Suite", description: "Create and manage Meta and X/Twitter paid social campaigns without leaving your dashboard. Link a product directly to your ad, auto-generate UTM-tagged destination URLs, and track every click-through visitor automatically in your CRM." },
+  { title: "Task Manager", description: "Manage your team's work with a Kanban board (To Do / In Progress / Done). Assign tasks to branches or workers, set due dates, attach media, and choose automated actions — the platform executes them at the right time and notifies your team." },
   { title: "Architecture & Building Design", description: "Generate architectural concept sketches, building elevations, floor plans, and 3D render previews with AI — ideal for real estate, construction, and property businesses." },
   { title: "Data Analytics", description: "Upload any CSV or Excel file, connect your sales data, and interrogate it with AI — get interactive charts, trend summaries, and actionable insights instantly." },
   { title: "AI Quick Create", description: "Create inventory items, orders, and invoices instantly — just speak or type what you want and AI fills in the details." },
@@ -211,8 +213,9 @@ const NAV_FEATURE_GROUPS = [
     items: [
       { icon: Wallet,    title: "Finance Suite", desc: "Sales, expenses & investments" },
       { icon: Network,   title: "Branches & Workers", desc: "Locations, staff & attribution" },
-      { icon: BarChart3, title: "Data Analytics", desc: "AI-powered charts from any CSV" },
-      { icon: Target,    title: "Ads Suite", desc: "Meta & X paid campaigns" },
+      { icon: BarChart3,    title: "Data Analytics", desc: "AI-powered charts from any CSV" },
+      { icon: Target,       title: "Ads Suite", desc: "Meta & X campaigns with product linking & UTM tracking" },
+      { icon: CheckSquare,  title: "Task Manager", desc: "Kanban board with automated team actions" },
     ],
   },
 ];

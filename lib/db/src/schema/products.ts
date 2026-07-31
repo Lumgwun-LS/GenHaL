@@ -21,6 +21,9 @@ export const productsTable = pgTable("products", {
   imageUrl: text("image_url"),
   status: text("status").notNull().default("active"),
   unit: text("unit"),
+  // Variations — JSON array of { name: string, options: string[] }
+  // e.g. [{"name":"Size","options":["S","M","L","XL"]},{"name":"Color","options":["Red","Blue"]}]
+  variationsJson: text("variations_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

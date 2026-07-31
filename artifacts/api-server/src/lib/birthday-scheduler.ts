@@ -27,6 +27,9 @@ import {
   vendorNotificationsTable,
   birthdayMessageLogsTable,
   voiceCallLogsTable,
+  leadsTable,
+  customersTable,
+  ordersTable,
 } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
@@ -393,10 +396,390 @@ export async function retryBirthdayCall(logId: number): Promise<{ ok: true } | {
   return { ok: true };
 }
 
+// ─── Customer & Lead birthday helpers ────────────────────────────────────────
+
+/** True if a birthday log row already exists for this lead + channel + date. */
+async function alreadyLoggedLeadToday(leadId: number, channel: string, utcDate: string): Promise<boolean> {
+  const rows = await db.select({ id: birthdayMessageLogsTable.id })
+    .from(birthdayMessageLogsTable)
+    .where(and(
+      eq(birthdayMessageLogsTable.leadId, leadId),
+      eq(birthdayMessageLogsTable.channel, channel),
+      sql`DATE(${birthdayMessageLogsTable.sentAt} AT TIME ZONE 'UTC') = ${utcDate}::date`,
+    )).limit(1);
+  return rows.length > 0;
+}
+
+/** True if a birthday log row already exists for this customer + channel + date. */
+async function alreadyLoggedCustomerToday(customerId: number, channel: string, utcDate: string): Promise<boolean> {
+  const rows = await db.select({ id: birthdayMessageLogsTable.id })
+    .from(birthdayMessageLogsTable)
+    .where(and(
+      eq(birthdayMessageLogsTable.customerId, customerId),
+      eq(birthdayMessageLogsTable.channel, channel),
+      sql`DATE(${birthdayMessageLogsTable.sentAt} AT TIME ZONE 'UTC') = ${utcDate}::date`,
+    )).limit(1);
+  return rows.length > 0;
+}
+
+// ─── Lead birthday jobs ───────────────────────────────────────────────────────
+
+/**
+ * 06:00 UTC — place birthday voice calls to CRM leads who have a birthday today,
+ * an E.164 phone number, and belong to a vendor.
+ */
+async function runLeadBirthdayCallJob(utcDateStr: string): Promise<{ checked: number; called: number }> {
+  const [, monthStr, dayStr] = utcDateStr.split("-");
+  const month = Number(monthStr);
+  const day   = Number(dayStr);
+
+  const todaysLeads = await db
+    .select({
+      leadId: leadsTable.id,
+      leadName: leadsTable.name,
+      leadPhone: leadsTable.phone,
+      vendorId: leadsTable.vendorId,
+      vendorName: vendorsTable.name,
+    })
+    .from(leadsTable)
+    .innerJoin(vendorsTable, eq(vendorsTable.id, leadsTable.vendorId))
+    .where(
+      sql`${leadsTable.dateOfBirth} IS NOT NULL
+        AND ${leadsTable.phone} IS NOT NULL
+        AND ${leadsTable.phone} LIKE '+%'
+        AND EXTRACT(MONTH FROM ${leadsTable.dateOfBirth}) = ${month}
+        AND EXTRACT(DAY   FROM ${leadsTable.dateOfBirth}) = ${day}`,
+    );
+
+  if (todaysLeads.length === 0) return { checked: 0, called: 0 };
+
+  logger.info({ count: todaysLeads.length }, "[voice-birthday-leads] Placing calls");
+
+  let called = 0;
+  for (const lead of todaysLeads) {
+    try {
+      if (await alreadyLoggedLeadToday(lead.leadId, "lead-call", utcDateStr)) {
+        logger.info({ leadId: lead.leadId }, "[voice-birthday-leads] Already called today — skipping");
+        continue;
+      }
+
+      const message =
+        `Hello ${lead.leadName}! ` +
+        `We're calling on behalf of ${lead.vendorName} to wish you ` +
+        `a very happy birthday! We hope today is filled with joy. ` +
+        `From all of us at ${lead.vendorName} — have a wonderful day!`;
+
+      const result = await placeCall({
+        to: lead.leadPhone!,
+        message,
+        purpose: "birthday",
+        vendorId: lead.vendorId,
+      });
+
+      await db.insert(birthdayMessageLogsTable).values({
+        vendorId: lead.vendorId,
+        vendorName: lead.vendorName,
+        channel: result.status === "placed" ? "lead-call" : "lead-call-failed",
+        leadId: lead.leadId,
+        recipientName: lead.leadName,
+      }).onConflictDoNothing();
+
+      if (result.status === "placed") called++;
+      logger.info({ leadId: lead.leadId, result: result.status }, "[voice-birthday-leads] Call result");
+      await new Promise(r => setTimeout(r, 300));
+    } catch (err) {
+      logger.error({ err, leadId: lead.leadId }, "[voice-birthday-leads] Error");
+    }
+  }
+  return { checked: todaysLeads.length, called };
+}
+
+/**
+ * 08:00 UTC — send birthday emails + vendor in-app notifications for leads
+ * whose birthday is today.
+ */
+async function runLeadBirthdayNotifJob(utcDateStr: string): Promise<{ checked: number; notified: number }> {
+  const [, monthStr, dayStr] = utcDateStr.split("-");
+  const month = Number(monthStr);
+  const day   = Number(dayStr);
+
+  const todaysLeads = await db
+    .select({
+      leadId: leadsTable.id,
+      leadName: leadsTable.name,
+      leadEmail: leadsTable.email,
+      vendorId: leadsTable.vendorId,
+      vendorName: vendorsTable.name,
+    })
+    .from(leadsTable)
+    .innerJoin(vendorsTable, eq(vendorsTable.id, leadsTable.vendorId))
+    .where(
+      sql`${leadsTable.dateOfBirth} IS NOT NULL
+        AND EXTRACT(MONTH FROM ${leadsTable.dateOfBirth}) = ${month}
+        AND EXTRACT(DAY   FROM ${leadsTable.dateOfBirth}) = ${day}`,
+    );
+
+  if (todaysLeads.length === 0) return { checked: 0, notified: 0 };
+
+  logger.info({ count: todaysLeads.length }, "[birthday-leads] Processing birthday leads");
+
+  let notified = 0;
+  for (const lead of todaysLeads) {
+    try {
+      // ── Vendor in-app notification ──────────────────────────────────────────
+      if (!(await alreadyLoggedLeadToday(lead.leadId, "lead-in-app", utcDateStr))) {
+        await db.insert(vendorNotificationsTable).values({
+          vendorId: lead.vendorId,
+          type: "birthday",
+          message: `🎂 It's ${lead.leadName}'s birthday today! Send them a special offer or personal message.`,
+        }).onConflictDoNothing();
+
+        await db.insert(birthdayMessageLogsTable).values({
+          vendorId: lead.vendorId,
+          vendorName: lead.vendorName,
+          channel: "lead-in-app",
+          leadId: lead.leadId,
+          recipientName: lead.leadName,
+        }).onConflictDoNothing();
+      }
+
+      // ── Birthday email to the lead ──────────────────────────────────────────
+      if (lead.leadEmail && !(await alreadyLoggedLeadToday(lead.leadId, "lead-email", utcDateStr))) {
+        const emailHtml = wrapVendorEmail({
+          bodyHtml: `
+            <div style="text-align:center;margin-bottom:24px;">
+              <span style="font-size:48px;">🎂</span>
+            </div>
+            <h1 style="text-align:center;font-size:22px;color:#1a1a1a;margin:0 0 16px;">
+              Happy Birthday, ${escapeHtml(lead.leadName)}!
+            </h1>
+            <p style="text-align:center;font-size:15px;line-height:1.7;color:#444;">
+              The whole team at <strong>${escapeHtml(lead.vendorName)}</strong> is wishing you
+              an amazing birthday today. We hope it's full of joy and everything you deserve! 🎉
+            </p>`,
+          action: undefined,
+        });
+
+        const result = await sendEmail({
+          to: lead.leadEmail,
+          subject: `🎂 Happy Birthday from ${lead.vendorName}!`,
+          html: emailHtml,
+        });
+
+        await db.insert(birthdayMessageLogsTable).values({
+          vendorId: lead.vendorId,
+          vendorName: lead.vendorName,
+          channel: result.status === "sent" ? "lead-email" : "lead-email-failed",
+          leadId: lead.leadId,
+          recipientName: lead.leadName,
+          recipientEmail: lead.leadEmail,
+        }).onConflictDoNothing();
+      }
+
+      notified++;
+    } catch (err) {
+      logger.error({ err, leadId: lead.leadId }, "[birthday-leads] Error");
+    }
+  }
+  return { checked: todaysLeads.length, notified };
+}
+
+// ─── Customer birthday jobs ───────────────────────────────────────────────────
+
+/**
+ * 06:00 UTC — place birthday voice calls to registered customers who have
+ * a birthday today and haven't opted out. Call is attributed to the vendor
+ * they ordered from most recently (for quota purposes).
+ */
+async function runCustomerBirthdayCallJob(utcDateStr: string): Promise<{ checked: number; called: number }> {
+  const [, monthStr, dayStr] = utcDateStr.split("-");
+  const month = Number(monthStr);
+  const day   = Number(dayStr);
+
+  // Find customers with birthday today who have a phone and haven't opted out
+  const todaysCustomers = await db
+    .select()
+    .from(customersTable)
+    .where(
+      sql`${customersTable.dateOfBirth} IS NOT NULL
+        AND ${customersTable.voiceBirthdayOptOut} = FALSE
+        AND ${customersTable.phone} IS NOT NULL
+        AND ${customersTable.phone} LIKE '+%'
+        AND EXTRACT(MONTH FROM ${customersTable.dateOfBirth}) = ${month}
+        AND EXTRACT(DAY   FROM ${customersTable.dateOfBirth}) = ${day}`,
+    );
+
+  if (todaysCustomers.length === 0) return { checked: 0, called: 0 };
+  logger.info({ count: todaysCustomers.length }, "[voice-birthday-customers] Placing calls");
+
+  let called = 0;
+  for (const customer of todaysCustomers) {
+    try {
+      if (await alreadyLoggedCustomerToday(customer.id, "customer-call", utcDateStr)) {
+        logger.info({ customerId: customer.id }, "[voice-birthday-customers] Already called today — skipping");
+        continue;
+      }
+
+      // Find the most recent vendor this customer ordered from (for quota)
+      const [lastOrder] = await db
+        .select({ vendorId: ordersTable.vendorId, vendorName: vendorsTable.name })
+        .from(ordersTable)
+        .innerJoin(vendorsTable, eq(vendorsTable.id, ordersTable.vendorId))
+        .where(eq(ordersTable.customerId, customer.id))
+        .orderBy(sql`${ordersTable.createdAt} DESC`)
+        .limit(1);
+
+      const vendorId   = lastOrder?.vendorId ?? null;
+      const vendorName = lastOrder?.vendorName ?? "Awa Biz Suite";
+
+      if (!vendorId) {
+        // No orders yet — skip voice call (no vendor for quota)
+        logger.info({ customerId: customer.id }, "[voice-birthday-customers] No vendor orders — skipping call");
+        continue;
+      }
+
+      const message =
+        `Hello ${customer.name}! ` +
+        `${vendorName} is calling to wish you a very happy birthday! ` +
+        `We hope you have a wonderful day filled with joy. Thank you for being with us! 🎉`;
+
+      const result = await placeCall({
+        to: customer.phone!,
+        message,
+        purpose: "birthday",
+        vendorId,
+      });
+
+      await db.insert(birthdayMessageLogsTable).values({
+        vendorId,
+        vendorName,
+        channel: result.status === "placed" ? "customer-call" : "customer-call-failed",
+        customerId: customer.id,
+        recipientName: customer.name,
+        recipientEmail: customer.email,
+      }).onConflictDoNothing();
+
+      if (result.status === "placed") called++;
+      logger.info({ customerId: customer.id, result: result.status }, "[voice-birthday-customers] Call result");
+      await new Promise(r => setTimeout(r, 300));
+    } catch (err) {
+      logger.error({ err, customerId: customer.id }, "[voice-birthday-customers] Error");
+    }
+  }
+  return { checked: todaysCustomers.length, called };
+}
+
+/**
+ * 08:00 UTC — send birthday emails to registered customers and notify each
+ * vendor who has a relationship with that customer.
+ */
+async function runCustomerBirthdayNotifJob(utcDateStr: string): Promise<{ checked: number; notified: number }> {
+  const [, monthStr, dayStr] = utcDateStr.split("-");
+  const month = Number(monthStr);
+  const day   = Number(dayStr);
+
+  const todaysCustomers = await db
+    .select()
+    .from(customersTable)
+    .where(
+      sql`${customersTable.dateOfBirth} IS NOT NULL
+        AND EXTRACT(MONTH FROM ${customersTable.dateOfBirth}) = ${month}
+        AND EXTRACT(DAY   FROM ${customersTable.dateOfBirth}) = ${day}`,
+    );
+
+  if (todaysCustomers.length === 0) return { checked: 0, notified: 0 };
+  logger.info({ count: todaysCustomers.length }, "[birthday-customers] Processing birthday customers");
+
+  let notified = 0;
+  for (const customer of todaysCustomers) {
+    try {
+      // ── Birthday email to the customer ──────────────────────────────────────
+      if (!(await alreadyLoggedCustomerToday(customer.id, "customer-email", utcDateStr))) {
+        // Find vendor for email branding (most recent)
+        const [lastOrder] = await db
+          .select({ vendorId: ordersTable.vendorId, vendorName: vendorsTable.name })
+          .from(ordersTable)
+          .innerJoin(vendorsTable, eq(vendorsTable.id, ordersTable.vendorId))
+          .where(eq(ordersTable.customerId, customer.id))
+          .orderBy(sql`${ordersTable.createdAt} DESC`)
+          .limit(1);
+
+        const vendorId   = lastOrder?.vendorId   ?? 0;
+        const vendorName = lastOrder?.vendorName ?? "Awa Biz Suite";
+
+        const emailHtml = wrapVendorEmail({
+          bodyHtml: `
+            <div style="text-align:center;margin-bottom:24px;">
+              <span style="font-size:48px;">🎂</span>
+            </div>
+            <h1 style="text-align:center;font-size:22px;color:#1a1a1a;margin:0 0 16px;">
+              Happy Birthday, ${escapeHtml(customer.name)}!
+            </h1>
+            <p style="text-align:center;font-size:15px;line-height:1.7;color:#444;">
+              Wishing you a wonderful birthday from everyone at
+              <strong>${escapeHtml(vendorName)}</strong>. 🎉<br/>
+              We appreciate you being such a valued customer and hope today
+              brings you everything you deserve!
+            </p>`,
+          action: undefined,
+        });
+
+        const result = await sendEmail({
+          to: customer.email,
+          subject: `🎂 Happy Birthday, ${customer.name}!`,
+          html: emailHtml,
+        });
+
+        await db.insert(birthdayMessageLogsTable).values({
+          vendorId: vendorId || 1,
+          vendorName,
+          channel: result.status === "sent" ? "customer-email" : "customer-email-failed",
+          customerId: customer.id,
+          recipientName: customer.name,
+          recipientEmail: customer.email,
+        }).onConflictDoNothing();
+      }
+
+      // ── Notify all vendors who have orders from this customer ───────────────
+      const vendorOrders = await db
+        .selectDistinct({ vendorId: ordersTable.vendorId, vendorName: vendorsTable.name })
+        .from(ordersTable)
+        .innerJoin(vendorsTable, eq(vendorsTable.id, ordersTable.vendorId))
+        .where(eq(ordersTable.customerId, customer.id));
+
+      for (const { vendorId, vendorName } of vendorOrders) {
+        if (await alreadyLoggedCustomerToday(customer.id, `customer-in-app-v${vendorId}`, utcDateStr)) continue;
+
+        await db.insert(vendorNotificationsTable).values({
+          vendorId,
+          type: "birthday",
+          message: `🎂 ${customer.name} (a returning customer) has a birthday today! Consider sending them a special offer.`,
+        }).onConflictDoNothing();
+
+        await db.insert(birthdayMessageLogsTable).values({
+          vendorId,
+          vendorName,
+          channel: `customer-in-app-v${vendorId}`,
+          customerId: customer.id,
+          recipientName: customer.name,
+          recipientEmail: customer.email,
+        }).onConflictDoNothing();
+      }
+
+      notified++;
+    } catch (err) {
+      logger.error({ err, customerId: customer.id }, "[birthday-customers] Error");
+    }
+  }
+  return { checked: todaysCustomers.length, notified };
+}
+
+// ─── Scheduler wiring ─────────────────────────────────────────────────────────
+
 /**
  * Starts the daily birthday scheduler.
- * - Checks every 5 minutes; fires when UTC hour is 08.
- * - `lastRanDate` advances only AFTER a successful run so a DB error at 08:00
+ * - Checks every 5 minutes; fires when UTC hour is 06 (calls) or 08 (notifications).
+ * - `lastRanDate` advances only AFTER a successful run so a DB error at 06:00
  *   UTC doesn't permanently skip that day — the next 5-min tick will retry.
  */
 // Names each job's state is recorded under in job_run_status, for the admin panel.
@@ -414,12 +797,20 @@ export async function tick(): Promise<void> {
   const utcHour    = now.getUTCHours();
   const utcDateStr = now.toISOString().split("T")[0]!;
 
-  // 06:00 UTC — voice birthday calls
+  // 06:00 UTC — voice birthday calls (vendors + leads + customers)
   if (utcHour === 6 && lastCallDate !== utcDateStr) {
     try {
-      const counts = await runBirthdayCallJob(utcDateStr);
+      const [vc, lc, cc] = await Promise.all([
+        runBirthdayCallJob(utcDateStr),
+        runLeadBirthdayCallJob(utcDateStr),
+        runCustomerBirthdayCallJob(utcDateStr),
+      ]);
       lastCallDate = utcDateStr;
-      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.called });
+      await recordJobRun(BIRTHDAY_CALL_JOB_NAME, {
+        success: true,
+        checkedCount: vc.checked + lc.checked + cc.checked,
+        affectedCount: vc.called + lc.called + cc.called,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await recordJobRun(BIRTHDAY_CALL_JOB_NAME, { success: false, error: message });
@@ -427,12 +818,20 @@ export async function tick(): Promise<void> {
     }
   }
 
-  // 08:00 UTC — in-app notifications + email queuing
+  // 08:00 UTC — in-app notifications + email (vendors + leads + customers)
   if (utcHour === 8 && lastNotifDate !== utcDateStr) {
     try {
-      const counts = await runBirthdayJob(utcDateStr);
+      const [vn, ln, cn] = await Promise.all([
+        runBirthdayJob(utcDateStr),
+        runLeadBirthdayNotifJob(utcDateStr),
+        runCustomerBirthdayNotifJob(utcDateStr),
+      ]);
       lastNotifDate = utcDateStr;
-      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: true, checkedCount: counts.checked, affectedCount: counts.notified });
+      await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, {
+        success: true,
+        checkedCount: vn.checked + ln.checked + cn.checked,
+        affectedCount: vn.notified + ln.notified + cn.notified,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await recordJobRun(BIRTHDAY_NOTIFY_JOB_NAME, { success: false, error: message });
@@ -445,5 +844,5 @@ export function startBirthdayScheduler(): void {
   setInterval(() => { tick().catch(() => {}); }, 5 * 60 * 1000);
   tick().catch(() => {}); // no-op outside the trigger hours
 
-  logger.info("[birthday] Scheduler started — calls at 06:00 UTC, notifications at 08:00 UTC");
+  logger.info("[birthday] Scheduler started — vendor + lead + customer calls at 06:00 UTC, notifications at 08:00 UTC");
 }

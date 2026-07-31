@@ -425,6 +425,8 @@ export function PersonDrawer({ person, open, onClose, onUpdated }: Props) {
   const createActivity = useCreatePersonActivity();
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [editBirthday, setEditBirthday] = useState(false);
+  const [birthdayDraft, setBirthdayDraft] = useState("");
 
   const { data: activities = [], isLoading: loadingActivities } = useListPersonActivities(
     person?.id ?? 0,
@@ -452,6 +454,16 @@ export function PersonDrawer({ person, open, onClose, onUpdated }: Props) {
     } catch { toast.error("Failed to update status"); }
   }
 
+  async function handleBirthdaySave() {
+    if (!person) return;
+    try {
+      await updateLead.mutateAsync({ id: person.id, data: { dateOfBirth: birthdayDraft || null } });
+      onUpdated();
+      setEditBirthday(false);
+      toast.success("Birthday saved");
+    } catch { toast.error("Failed to save birthday"); }
+  }
+
   async function handleAddNote() {
     if (!person || !note.trim()) return;
     setSavingNote(true);
@@ -467,6 +479,8 @@ export function PersonDrawer({ person, open, onClose, onUpdated }: Props) {
   if (!person) return null;
 
   const channel = person.channel ?? person.source ?? "manual";
+  // Sync birthday draft when person changes
+  if (birthdayDraft === "" && person.dateOfBirth) setBirthdayDraft(person.dateOfBirth);
 
   // Determine primary social source from activities
   const socialActivity = activities.find((a) => a.type === "social_click");
@@ -568,6 +582,43 @@ export function PersonDrawer({ person, open, onClose, onUpdated }: Props) {
                   <MapPin className="w-4 h-4 shrink-0" /><span>{person.location}</span>
                 </div>
               )}
+              {/* Birthday — inline edit */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span className="text-base shrink-0">🎂</span>
+                {editBirthday ? (
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <Input
+                      type="date"
+                      value={birthdayDraft}
+                      onChange={e => setBirthdayDraft(e.target.value)}
+                      className="h-7 text-xs flex-1"
+                      autoFocus
+                    />
+                    <Button size="sm" variant="default" className="h-7 text-xs px-2"
+                      onClick={handleBirthdaySave} disabled={updateLead.isPending}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2"
+                      onClick={() => setEditBirthday(false)}>
+                      ✕
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className={person.dateOfBirth ? "" : "italic text-muted-foreground/60"}>
+                      {person.dateOfBirth
+                        ? format(new Date(person.dateOfBirth + "T00:00:00"), "MMMM d, yyyy")
+                        : "No birthday set"}
+                    </span>
+                    <button
+                      onClick={() => { setBirthdayDraft(person.dateOfBirth ?? ""); setEditBirthday(true); }}
+                      className="text-[10px] text-primary hover:underline ml-auto"
+                    >
+                      {person.dateOfBirth ? "Edit" : "+ Add"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Attribution / social source */}

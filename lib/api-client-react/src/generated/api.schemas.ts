@@ -1496,6 +1496,8 @@ export interface Lead {
   visitorToken?: string | null;
   pageViews: number;
   /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
   firstSeenAt?: string | null;
   /** @nullable */
   lastSeenAt?: string | null;
@@ -1529,6 +1531,7 @@ export interface LeadUpdate {
   notes?: string;
   score?: number;
   channel?: string;
+  dateOfBirth?: string | null;
 }
 
 export type PersonActivityData = { [key: string]: unknown };
@@ -2136,6 +2139,16 @@ export interface AdCampaign {
   platformAdId?: string | null;
   /** @nullable */
   lastPublishError?: string | null;
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  destinationUrl?: string | null;
+  /** @nullable */
+  utmSource?: string | null;
+  /** @nullable */
+  utmMedium?: string | null;
+  /** @nullable */
+  utmCampaign?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2155,6 +2168,11 @@ export interface AdCampaignInput {
   body?: string;
   cta?: string;
   imageUrl?: string;
+  productId?: number;
+  destinationUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }
 
 export type AdCampaignUpdateAudienceJson = { [key: string]: unknown };
@@ -2169,6 +2187,11 @@ export interface AdCampaignUpdate {
   startDate?: string;
   endDate?: string;
   audienceJson?: AdCampaignUpdateAudienceJson;
+  productId?: number | null;
+  destinationUrl?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
 }
 
 export interface AdCreative {

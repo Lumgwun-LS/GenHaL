@@ -26,6 +26,8 @@ import {
   adEmailCampaignsTable,
   vendorAdAccountsTable,
   socialAccountsTable,
+  productsTable,
+  vendorWebsitesTable,
 } from "@workspace/db";
 import { sendEmail } from "../lib/mailer";
 import { decrypt } from "../lib/encryption";
@@ -259,13 +261,39 @@ router.get("/ads/campaigns", async (req, res): Promise<void> => {
   res.json(rows.map(serializeCampaign));
 });
 
+/** GET /ads/products — vendor's active products + shop slug for ad destination picker */
+router.get("/ads/products", async (req, res): Promise<void> => {
+  const authed = await resolveAuthedVendor(req);
+  if (!authed.vendorId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [products, websites] = await Promise.all([
+    db.select({
+      id: productsTable.id,
+      name: productsTable.name,
+      price: productsTable.price,
+      imageUrl: productsTable.imageUrl,
+      category: productsTable.category,
+    })
+      .from(productsTable)
+      .where(and(eq(productsTable.vendorId, authed.vendorId), eq(productsTable.status, "active")))
+      .orderBy(productsTable.name),
+    db.select({ slug: vendorWebsitesTable.slug })
+      .from(vendorWebsitesTable)
+      .where(eq(vendorWebsitesTable.vendorId, authed.vendorId))
+      .limit(1),
+  ]);
+
+  res.json({ products, shopSlug: websites[0]?.slug ?? null });
+});
+
 /** POST /ads/campaigns */
 router.post("/ads/campaigns", async (req, res): Promise<void> => {
   const authed = await resolveAuthedVendor(req);
   if (!authed.vendorId && !authed.isAdmin) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!authed.vendorId) { res.status(403).json({ error: "A vendor account is required to create campaigns" }); return; }
 
-  const { name, platform, objective, budgetAmount, budgetCurrency, startDate, endDate, audienceJson } = req.body;
+  const { name, platform, objective, budgetAmount, budgetCurrency, startDate, endDate, audienceJson,
+    productId, destinationUrl, utmSource, utmMedium, utmCampaign } = req.body;
   if (!name || !platform) { res.status(400).json({ error: "name and platform are required" }); return; }
 
   const [campaign] = await db.insert(adCampaignsTable).values({
@@ -278,6 +306,11 @@ router.post("/ads/campaigns", async (req, res): Promise<void> => {
     startDate: startDate ?? null,
     endDate: endDate ?? null,
     audienceJson: audienceJson ?? null,
+    productId: productId ?? null,
+    destinationUrl: destinationUrl ?? null,
+    utmSource: utmSource ?? null,
+    utmMedium: utmMedium ?? "paid",
+    utmCampaign: utmCampaign ?? null,
   }).returning();
 
   // If a creative was included in the payload, save it
@@ -322,7 +355,8 @@ router.patch("/ads/campaigns/:id", async (req, res): Promise<void> => {
   if (!existing) { res.status(404).json({ error: "Campaign not found" }); return; }
   if (!authed.isAdmin && existing.vendorId !== authed.vendorId) { res.status(403).json({ error: "Forbidden" }); return; }
 
-  const { name, platform, objective, status, budgetAmount, budgetCurrency, startDate, endDate, audienceJson } = req.body;
+  const { name, platform, objective, status, budgetAmount, budgetCurrency, startDate, endDate, audienceJson,
+    productId, destinationUrl, utmSource, utmMedium, utmCampaign } = req.body;
   const [updated] = await db.update(adCampaignsTable)
     .set({
       ...(name ? { name } : {}),
@@ -334,6 +368,11 @@ router.patch("/ads/campaigns/:id", async (req, res): Promise<void> => {
       ...(startDate !== undefined ? { startDate } : {}),
       ...(endDate !== undefined ? { endDate } : {}),
       ...(audienceJson !== undefined ? { audienceJson } : {}),
+      ...(productId !== undefined ? { productId: productId ?? null } : {}),
+      ...(destinationUrl !== undefined ? { destinationUrl: destinationUrl ?? null } : {}),
+      ...(utmSource !== undefined ? { utmSource: utmSource ?? null } : {}),
+      ...(utmMedium !== undefined ? { utmMedium: utmMedium ?? "paid" } : {}),
+      ...(utmCampaign !== undefined ? { utmCampaign: utmCampaign ?? null } : {}),
     })
     .where(eq(adCampaignsTable.id, id))
     .returning();
@@ -862,6 +901,11 @@ function serializeCampaign(c: typeof adCampaignsTable.$inferSelect) {
     platformAdsetId: c.platformAdsetId,
     platformAdId: c.platformAdId,
     lastPublishError: c.lastPublishError,
+    productId: c.productId,
+    destinationUrl: c.destinationUrl,
+    utmSource: c.utmSource,
+    utmMedium: c.utmMedium,
+    utmCampaign: c.utmCampaign,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

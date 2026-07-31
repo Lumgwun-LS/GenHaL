@@ -37,7 +37,7 @@ import {
   type AdEmailSendResult,
   type AiGeneration,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ import {
   Megaphone, Users, BarChart3, Mail, Plus, Upload, Search, Trash2, Pencil,
   Send, RefreshCw, AlertCircle, CheckCircle2, ChevronRight, ChevronLeft,
   Sparkles, Image, Target, DollarSign, Eye, Play, Pause,
-  ArrowUpRight, Loader2, X,
+  ArrowUpRight, Loader2, X, Link2, Globe, Copy, ShoppingBag,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -61,6 +61,7 @@ import {
 import { format } from "date-fns";
 
 const VENDOR_ID = 1;
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 const AD_PLATFORMS = [
   "Facebook", "Instagram", "LinkedIn", "Google Ads", "YouTube", "TikTok", "X (Twitter)",
@@ -357,17 +358,22 @@ function ContactsTab() {
 type WizardData = {
   platform: string; objective: string; name: string;
   headline: string; body: string; cta: string; imageUrl: string;
+  productId: string; destinationUrl: string; utmSource: string; utmMedium: string; utmCampaign: string;
   ageMin: string; ageMax: string; gender: string; interests: string;
   budgetAmount: string; budgetCurrency: string; startDate: string; endDate: string;
 };
 
+interface AdsProduct { id: number; name: string; price: string; imageUrl?: string | null; category: string; }
+interface AdsProductsResponse { products: AdsProduct[]; shopSlug: string | null; }
+
 const WIZARD_STEPS = [
-  { label: "Platform", icon: Target },
-  { label: "Copy", icon: Sparkles },
-  { label: "Creative", icon: Image },
-  { label: "Audience", icon: Users },
-  { label: "Budget", icon: DollarSign },
-  { label: "Review", icon: Eye },
+  { label: "Platform",    icon: Target },
+  { label: "Copy",        icon: Sparkles },
+  { label: "Destination", icon: Link2 },
+  { label: "Creative",    icon: Image },
+  { label: "Audience",    icon: Users },
+  { label: "Budget",      icon: DollarSign },
+  { label: "Review",      icon: Eye },
 ];
 
 function AdsCreatorTab() {
@@ -376,8 +382,19 @@ function AdsCreatorTab() {
   const [data, setData] = useState<WizardData>({
     platform: "", objective: "awareness", name: "",
     headline: "", body: "", cta: "Learn More", imageUrl: "",
+    productId: "", destinationUrl: "", utmSource: "", utmMedium: "paid", utmCampaign: "",
     ageMin: "18", ageMax: "65", gender: "all", interests: "",
     budgetAmount: "", budgetCurrency: "USD", startDate: "", endDate: "",
+  });
+  const [productSearch, setProductSearch] = useState("");
+
+  const { data: adsProductsData } = useQuery<AdsProductsResponse>({
+    queryKey: ["ads-products"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/ads/products`, { credentials: "include" });
+      if (!res.ok) return { products: [], shopSlug: null };
+      return res.json();
+    },
   });
 
   const generateCaption = useGenerateAiCaption();
@@ -451,6 +468,11 @@ function AdsCreatorTab() {
           body: data.body || undefined,
           cta: data.cta || undefined,
           imageUrl: data.imageUrl || undefined,
+          productId: data.productId ? Number(data.productId) : undefined,
+          destinationUrl: data.destinationUrl || undefined,
+          utmSource: data.utmSource || data.platform.toLowerCase() || undefined,
+          utmMedium: data.utmMedium || "paid",
+          utmCampaign: data.utmCampaign || data.name || undefined,
         },
       });
       qc.invalidateQueries({ queryKey: getListAdCampaignsQueryKey() });
@@ -462,7 +484,7 @@ function AdsCreatorTab() {
 
   const reset = () => {
     setStep(0);
-    setData({ platform: "", objective: "awareness", name: "", headline: "", body: "", cta: "Learn More", imageUrl: "", ageMin: "18", ageMax: "65", gender: "all", interests: "", budgetAmount: "", budgetCurrency: "USD", startDate: "", endDate: "" });
+    setData({ platform: "", objective: "awareness", name: "", headline: "", body: "", cta: "Learn More", imageUrl: "", productId: "", destinationUrl: "", utmSource: "", utmMedium: "paid", utmCampaign: "", ageMin: "18", ageMax: "65", gender: "all", interests: "", budgetAmount: "", budgetCurrency: "USD", startDate: "", endDate: "" });
     setDone(false);
   };
 
@@ -572,6 +594,124 @@ function AdsCreatorTab() {
 
           {step === 2 && (
             <div className="space-y-4">
+              {/* ── Product picker ── */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><ShoppingBag className="w-3.5 h-3.5" /> Link a Product <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                <p className="text-xs text-muted-foreground">When someone clicks your ad, send them straight to this product on your shop.</p>
+                <Input
+                  placeholder="Search products…"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                  {/* "None" option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set("productId")("");
+                      const slug = adsProductsData?.shopSlug ?? "";
+                      const base = slug ? `${window.location.origin}/s/${slug}` : "";
+                      set("destinationUrl")(base);
+                    }}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left text-sm transition-colors ${!data.productId ? "border-primary bg-primary/5" : "hover:bg-muted"}`}
+                  >
+                    <Globe className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">Shop homepage</span>
+                  </button>
+                  {(adsProductsData?.products ?? [])
+                    .filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          set("productId")(String(p.id));
+                          const slug = adsProductsData?.shopSlug ?? "";
+                          const base = slug
+                            ? `${window.location.origin}/s/${slug}?product=${p.id}`
+                            : "";
+                          set("destinationUrl")(base);
+                        }}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-left text-sm transition-colors ${data.productId === String(p.id) ? "border-primary bg-primary/5" : "hover:bg-muted"}`}
+                      >
+                        {p.imageUrl
+                          ? <img src={p.imageUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+                          : <ShoppingBag className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{p.price}</p>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* ── Destination URL ── */}
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1.5"><Link2 className="w-3.5 h-3.5" /> Destination URL</Label>
+                <Input
+                  value={data.destinationUrl}
+                  onChange={(e) => set("destinationUrl")(e.target.value)}
+                  placeholder="https://your-shop.com/s/my-store"
+                />
+              </div>
+
+              {/* ── UTM tags (auto-filled, editable) ── */}
+              <div className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">UTM Tracking Tags</p>
+                <p className="text-xs text-muted-foreground">These are automatically added to your destination URL so you can see exactly how much traffic comes from this ad in your analytics.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">utm_source</Label>
+                    <Input
+                      value={data.utmSource || data.platform.toLowerCase()}
+                      onChange={(e) => set("utmSource")(e.target.value)}
+                      placeholder={data.platform.toLowerCase() || "facebook"}
+                      className="text-xs h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">utm_medium</Label>
+                    <Input value={data.utmMedium} onChange={(e) => set("utmMedium")(e.target.value)} className="text-xs h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">utm_campaign</Label>
+                    <Input
+                      value={data.utmCampaign || data.name}
+                      onChange={(e) => set("utmCampaign")(e.target.value)}
+                      placeholder={data.name || "summer-sale"}
+                      className="text-xs h-8"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Full tagged URL preview ── */}
+              {data.destinationUrl && (() => {
+                try {
+                  const u = new URL(data.destinationUrl);
+                  u.searchParams.set("utm_source", data.utmSource || data.platform.toLowerCase() || "ad");
+                  u.searchParams.set("utm_medium", data.utmMedium || "paid");
+                  u.searchParams.set("utm_campaign", data.utmCampaign || data.name || "campaign");
+                  const full = u.toString();
+                  return (
+                    <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">Full ad link (with tracking)</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-mono text-primary break-all flex-1">{full}</p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { navigator.clipboard.writeText(full); toast.success("Copied!"); }}>
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>Ad Image</Label>
                 <Button variant="outline" size="sm" onClick={handleGenerateImage} disabled={aiLoading}>
@@ -599,7 +739,7 @@ function AdsCreatorTab() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Min Age</Label><Input type="number" min={13} max={65} value={data.ageMin} onChange={(e) => set("ageMin")(e.target.value)} /></div>
@@ -623,7 +763,7 @@ function AdsCreatorTab() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Daily Budget</Label>
@@ -645,7 +785,7 @@ function AdsCreatorTab() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="space-y-4">
               <h3 className="font-semibold">Review your campaign</h3>
               <div className="rounded-lg border divide-y text-sm">
@@ -658,10 +798,11 @@ function AdsCreatorTab() {
                   ["Budget", data.budgetAmount ? `${data.budgetCurrency} ${data.budgetAmount}/day` : "Not set"],
                   ["Dates", data.startDate ? `${data.startDate} → ${data.endDate || "open"}` : "Not set"],
                   ["Audience", `${data.ageMin}–${data.ageMax} yrs, ${data.gender}`],
+                  ["Destination", data.destinationUrl || "Not set"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex px-4 py-2.5 gap-4">
                     <span className="text-muted-foreground w-32 shrink-0">{k}</span>
-                    <span className="font-medium">{v}</span>
+                    <span className="font-medium break-all">{v}</span>
                   </div>
                 ))}
               </div>

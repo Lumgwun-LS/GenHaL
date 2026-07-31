@@ -93,6 +93,7 @@ export * from "./customer-complaints";
 export * from "./integration-error-logs";
 export * from "./integration-support-reports";
 export * from "./vendor-mobile-apps";
+export * from "./vendor-tasks";
 export * from "./blog-posts";
 export * from "./blog-comments";
 export * from "./blog-commenter-bans";

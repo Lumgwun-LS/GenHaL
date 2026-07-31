@@ -15,12 +15,13 @@ export default function CustomerProfile() {
     queryFn: () => fetch(`${BASE}/api/customer/me`).then(r => r.json()),
   });
 
-  const [name,    setName]    = useState("");
-  const [phone,   setPhone]   = useState("");
-  const [country, setCountry] = useState("");
-  const [city,    setCity]    = useState("");
-  const [address, setAddress] = useState("");
-  const [bio,     setBio]     = useState("");
+  const [name,        setName]        = useState("");
+  const [phone,       setPhone]       = useState("");
+  const [country,     setCountry]     = useState("");
+  const [city,        setCity]        = useState("");
+  const [address,     setAddress]     = useState("");
+  const [bio,         setBio]         = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
 
   useEffect(() => {
     if (me && !me.code) {
@@ -30,6 +31,7 @@ export default function CustomerProfile() {
       setCity(me.city ?? "");
       setAddress(me.address ?? "");
       setBio(me.bio ?? "");
+      setDateOfBirth(me.dateOfBirth ?? "");
     } else if (!me && user) {
       setName(user.fullName ?? "");
     }
@@ -66,7 +68,7 @@ export default function CustomerProfile() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { name, phone, country, city, address, bio,
+    const payload = { name, phone, country, city, address, bio, dateOfBirth: dateOfBirth || null,
       email: user?.primaryEmailAddress?.emailAddress ?? me?.email };
     if (isNew) onboard.mutate(payload);
     else save.mutate(payload);
@@ -142,6 +144,15 @@ export default function CustomerProfile() {
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">Address</label>
             <input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">
+              🎂 Birthday
+              <span className="text-muted-foreground normal-case font-normal text-[10px] ml-1">(so we can call and wish you a happy birthday!)</span>
+            </label>
+            <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300" />
           </div>
 
