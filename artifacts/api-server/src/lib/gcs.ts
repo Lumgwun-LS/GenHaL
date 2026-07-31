@@ -69,7 +69,12 @@ export async function uploadBufferToGcs(
 
   const file = storage.bucket(bucketName).file(fileName);
   await file.save(buffer, {
-    metadata: { contentType },
+    metadata: {
+      contentType,
+      // Immutable + long cache: safe because every upload gets a new unique URL.
+      // Browsers and CDNs cache the file forever without re-validating.
+      cacheControl: "public, max-age=31536000, immutable",
+    },
     resumable: false,
   });
 
@@ -81,10 +86,14 @@ export async function uploadBufferToGcs(
  * Download a file from any URL and re-upload it to GCS.
  * Used to mirror Replit object-storage URLs and expiring EAS artifact URLs
  * into permanent GCS hosting.
+ *
+ * @param prefix  GCS path prefix (default "app-store/apks").
+ *                Use "app-store/media" for icons and screenshots.
  */
 export async function mirrorUrlToGcs(
   sourceUrl: string,
-  originalName?: string
+  originalName?: string,
+  prefix = "app-store/apks"
 ): Promise<string> {
   const resp = await fetch(sourceUrl);
   if (!resp.ok) {
@@ -97,5 +106,5 @@ export async function mirrorUrlToGcs(
   const name =
     originalName ??
     (path.basename(new URL(sourceUrl).pathname) || "app.apk");
-  return uploadBufferToGcs(buffer, name, ct);
+  return uploadBufferToGcs(buffer, name, ct, prefix);
 }

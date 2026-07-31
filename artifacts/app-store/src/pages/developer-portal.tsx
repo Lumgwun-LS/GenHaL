@@ -108,6 +108,19 @@ async function uploadFilePresigned(
     xhr.send(file);
   });
 
+  // Step 3: Mirror to GCS for permanent hosting (icons, screenshots, APKs).
+  // The Replit object-storage URL is dev-domain-relative; the GCS URL survives
+  // production deploys. Falls back silently to the Replit URL if GCS is unavailable.
+  try {
+    const { gcsUrl } = await apiFetch<{ gcsUrl: string | null }>("/apps/finalize-media", {
+      method: "POST",
+      body: JSON.stringify({ replitUrl: fileUrl }),
+    });
+    if (gcsUrl) return gcsUrl;
+  } catch {
+    // fall through — Replit URL still works in dev
+  }
+
   return fileUrl;
 }
 

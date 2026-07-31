@@ -19,7 +19,7 @@ import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, is
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { isGcsConfigured, mirrorUrlToGcs } from "../lib/gcs";
+import { isGcsConfigured, mirrorUrlToGcs, uploadBufferToGcs } from "../lib/gcs";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
@@ -965,6 +965,28 @@ router.post("/apps/upload-url", requireAuth(), async (req: any, res: any) => {
   } catch (err) {
     logger.error({ err }, "store/apps/upload-url error");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /store/apps/finalize-media — mirror a Replit presigned-storage upload to GCS.
+// The browser PUTs its file to the Replit presigned URL (no size limit, no API proxy),
+// then calls this endpoint with the Replit URL to get a permanent GCS URL back.
+// Non-fatal: returns { gcsUrl: null } when GCS is not configured or the mirror fails,
+// so the caller can fall back to the original Replit URL.
+router.post("/apps/finalize-media", requireAuth(), async (req: any, res: any) => {
+  try {
+    const { replitUrl } = req.body as { replitUrl?: string };
+    if (!replitUrl || typeof replitUrl !== "string") {
+      return void res.status(400).json({ error: "replitUrl required" });
+    }
+    if (!isGcsConfigured()) {
+      return void res.json({ gcsUrl: null });
+    }
+    const gcsUrl = await mirrorUrlToGcs(replitUrl, undefined, "app-store/media");
+    res.json({ gcsUrl });
+  } catch (err) {
+    logger.warn({ err }, "finalize-media: GCS mirror failed — falling back to Replit URL");
+    res.json({ gcsUrl: null }); // non-fatal
   }
 });
 
@@ -2876,7 +2898,18 @@ router.post(
       // the custom domain in production and on localhost in dev.
       const proto = (req.get("x-forwarded-proto") as string | undefined) ?? req.protocol ?? "https";
       const host  = req.get("host") as string;
-      const publicUrl = `${proto}://${host}/api/media/${objectId}`;
+      const replitUrl = `${proto}://${host}/api/media/${objectId}`;
+
+      // Mirror to GCS for permanent hosting (icons, screenshots, APKs).
+      let publicUrl = replitUrl;
+      if (isGcsConfigured()) {
+        try {
+          publicUrl = await uploadBufferToGcs(buffer, originalname || "file", mimetype, "app-store/media");
+        } catch (gcsErr) {
+          logger.warn({ gcsErr }, "platform-apps upload-file: GCS mirror failed — using Replit URL");
+          publicUrl = replitUrl;
+        }
+      }
 
       res.json({ url: publicUrl, fileName: originalname, fileSize: size, mimeType: mimetype });
     } catch (err) {

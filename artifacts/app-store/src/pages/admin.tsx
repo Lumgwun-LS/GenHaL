@@ -1069,6 +1069,18 @@ async function uploadFile(file: File, onProgress?: (pct: number) => void): Promi
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     xhr.send(file);
   });
+
+  // Step 3: Mirror to GCS for permanent production-safe hosting.
+  try {
+    const { gcsUrl } = await apiFetch<{ gcsUrl: string | null }>("/apps/finalize-media", {
+      method: "POST",
+      body: JSON.stringify({ replitUrl: fileUrl }),
+    });
+    if (gcsUrl) return gcsUrl;
+  } catch {
+    // fall through — Replit URL still works in dev
+  }
+
   return fileUrl;
 }
 
