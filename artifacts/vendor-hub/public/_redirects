@@ -1,7 +1,7 @@
-# Proxy all API calls (including Clerk proxy at /api/__clerk/*) to the Replit API server.
+# Proxy all API calls (including Clerk proxy at /api/__clerk/*) to the production API server.
 # Cloudflare Pages evaluates rules top-to-bottom and stops at the first match.
-# The 200 status means server-side proxy (same-origin to the browser — no CORS).
-/api/*  https://awajimaa-omni-business-suite.replit.app/api/:splat  200
+# The 200 status means server-side proxy (same-origin to the browser — no CORS needed).
+/api/*  https://api.awajimaaai.com/api/:splat  200
 
 # SPA fallback — any path that isn't a static file gets index.html so React Router works.
 /*  /index.html  200

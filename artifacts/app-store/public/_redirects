@@ -1,10 +1,9 @@
 # Proxy /dl/:packageName directly to the API download route.
-# This makes https://awajimaaappstore.com/dl/com.example.app a permanent shareable link
-# that always resolves to the latest live APK version.
-/dl/*   https://awajimaa-omni-business-suite.replit.app/api/store/dl/:splat  200
+# Makes https://awajimaaappstore.com/dl/com.example.app a permanent shareable APK link.
+/dl/*   https://api.awajimaaai.com/api/store/dl/:splat  200
 
 # Proxy all other API calls (including Clerk proxy at /api/__clerk/*) to the API server.
-/api/*  https://awajimaa-omni-business-suite.replit.app/api/:splat  200
+/api/*  https://api.awajimaaai.com/api/:splat  200
 
 # SPA fallback — any path that isn't a static file gets index.html so React Router works.
 /*  /index.html  200

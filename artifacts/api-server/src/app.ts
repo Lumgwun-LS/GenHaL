@@ -86,7 +86,10 @@ const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS
 // First-party Awajimaa domains that are always permitted regardless of env config.
 const FIRST_PARTY_ORIGINS = [
   "https://awajimaaai.com",
+  "https://www.awajimaaai.com",
   "https://awajimaaappstore.com",
+  "https://www.awajimaaappstore.com",
+  "https://api.awajimaaai.com",
   "https://awajimaaapp.io",
   "https://www.awajimaaapp.io",
   "https://app.awajimaaapp.io",
