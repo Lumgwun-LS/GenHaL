@@ -1,9 +1,9 @@
 # Proxy /dl/:packageName directly to the API download route.
 # Makes https://awajimaaappstore.com/dl/com.example.app a permanent shareable APK link.
-/dl/*   https://api.awajimaaai.com/api/store/dl/:splat  200
+/dl/*   https://biz-api.awajimaaai.com/api/store/dl/:splat  200
 
 # Proxy all other API calls (including Clerk proxy at /api/__clerk/*) to the API server.
-/api/*  https://api.awajimaaai.com/api/:splat  200
+/api/*  https://biz-api.awajimaaai.com/api/:splat  200
 
 # SPA fallback — any path that isn't a static file gets index.html so React Router works.
 /*  /index.html  200
