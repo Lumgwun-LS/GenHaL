@@ -1,0 +1,74 @@
+[
+  {
+    "devClerkId": "user_3Gpyx7zWh5b1RfEyVkjRsvFeZls",
+    "email": "lumgwunsolutions@gmail.com",
+    "firstName": "Lumgwun",
+    "lastName": "Solutions",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHcHl4N3pXaDViMVJmRXlWa2pSc3ZGZVpscyIsImluaXRpYWxzIjoiTFMifQ",
+    "createdAt": 1784683048127,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  },
+  {
+    "devClerkId": "user_3Gpyx2QaxKwXvGbKJNi3jpIs4bs",
+    "email": "awajimaaapps@gmail.com",
+    "firstName": "Awajimaa",
+    "lastName": "Apps",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHcHl4MlFheEt3WHZHYktKTmkzanBJczRicyIsImluaXRpYWxzIjoiQUEifQ",
+    "createdAt": 1784683047492,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  },
+  {
+    "devClerkId": "user_3GpywpmezmPNn9MBlxI4JdO7Kmj",
+    "email": "admin@lumgwunsolutions.com",
+    "firstName": "Lumgwun",
+    "lastName": "Admin",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHcHl3cG1lem1QTm45TUJseEk0SmRPN0ttaiIsImluaXRpYWxzIjoiTEEifQ",
+    "createdAt": 1784683046992,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  },
+  {
+    "devClerkId": "user_3GXaCXHBA866HP2bFbKXatG4opn",
+    "email": "task137test1784120240@example.com",
+    "firstName": "",
+    "lastName": "",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHWGFDWEhCQTg2NkhQMmJGYktYYXRHNG9wbiJ9",
+    "createdAt": 1784120240974,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  },
+  {
+    "devClerkId": "user_3GXD9mpfYWU2z3sftE9bRgvMntk",
+    "email": "task133test@example.com",
+    "firstName": "Test",
+    "lastName": "Vendor",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHWEQ5bXBmWVdVMnozc2Z0RTliUmd2TW50ayIsImluaXRpYWxzIjoiVFYifQ",
+    "createdAt": 1784108870812,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  },
+  {
+    "devClerkId": "user_3GLE3QNDHfRbB4aHdQPXmzZycH2",
+    "email": "lumgwuns@gmail.com",
+    "firstName": "LUMGWUN",
+    "lastName": "SOLUTIONS",
+    "username": null,
+    "phone": null,
+    "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18zRzdwcnhmMXphM0FjZElVeTU3NFNDUnZmdm0iLCJyaWQiOiJ1c2VyXzNHTEUzUU5ESGZSYkI0YUhkUVBYbXpaeWNIMiIsImluaXRpYWxzIjoiTFMifQ",
+    "createdAt": 1783742249722,
+    "publicMetadata": {},
+    "privateMetadata": {}
+  }
+]
