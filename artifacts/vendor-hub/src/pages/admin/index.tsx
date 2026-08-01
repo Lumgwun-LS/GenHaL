@@ -373,6 +373,347 @@ function AdminVendorTransactionsDialog({
   );
 }
 
+// ── AdminVendorKYCDialog ──────────────────────────────────────────────────────
+
+type VirtualAccountEntry = {
+  id: number;
+  gateway: string;
+  currency: string;
+  type: string;
+  accountNumber: string;
+  bankName: string | null;
+  accountName: string | null;
+  routingNumber?: string;
+  walletId?: string;
+  createdAt: string;
+};
+
+type VendorKYCData = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  bvnMasked: string | null;
+  kycComplete: boolean;
+  kycSubmittedAt: string | null;
+  squadCustomerIdentifier: string | null;
+  accounts: VirtualAccountEntry[];
+  ngnAccounts: VirtualAccountEntry[];
+  usdAccounts: VirtualAccountEntry[];
+};
+
+const GATEWAY_LABELS: Record<string, string> = {
+  paystack: "Paystack",
+  squad: "Squad",
+  interswitch: "Interswitch",
+};
+
+const CURRENCY_COLORS: Record<string, string> = {
+  NGN: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  USD: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+};
+
+function VirtualAccountCard({ account }: { account: VirtualAccountEntry }) {
+  return (
+    <div className="rounded-md border p-3 text-sm space-y-1.5 bg-muted/20">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-mono font-semibold tracking-wider text-sm">{account.accountNumber}</span>
+        <div className="flex items-center gap-1">
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${CURRENCY_COLORS[account.currency] ?? "bg-muted text-muted-foreground"}`}>
+            {account.currency}
+          </span>
+          <Badge variant="outline" className="text-xs capitalize">{GATEWAY_LABELS[account.gateway] ?? account.gateway}</Badge>
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground">{account.bankName ?? account.gateway}</div>
+      {account.accountName && <div className="text-xs text-muted-foreground">{account.accountName}</div>}
+      {account.routingNumber && <div className="text-xs text-muted-foreground">Routing: {account.routingNumber}</div>}
+      {account.walletId && <div className="text-xs text-muted-foreground font-mono opacity-60">Wallet: {account.walletId}</div>}
+    </div>
+  );
+}
+
+function AdminVendorKYCDialog({
+  vendor,
+  onClose,
+}: {
+  vendor: AdminVendor | null;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<"view" | "edit" | "creating">("view");
+  // KYC form fields
+  const [bvn, setBvn] = useState("");
+  const [dob, setDob] = useState("");
+  const [address, setAddress] = useState("");
+  const [gender, setGender] = useState<"" | "male" | "female" | "other">("");
+  // Which account type is being created
+  const [creatingGateway, setCreatingGateway] = useState<"" | "squad-usd" | "squad-ngn" | "interswitch">("");
+  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: kyc, isLoading } = useQuery<VendorKYCData>({
+    queryKey: ["admin-vendor-kyc", vendor?.id],
+    queryFn: async () => {
+      const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendor!.id}/kyc`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load KYC");
+      return res.json();
+    },
+    enabled: !!vendor,
+  });
+
+  // Pre-fill form from saved data
+  useEffect(() => {
+    if (kyc && step === "edit") {
+      if (kyc.dateOfBirth) setDob(kyc.dateOfBirth);
+      if (kyc.address) setAddress(kyc.address);
+      if (kyc.gender) setGender(kyc.gender as "" | "male" | "female" | "other");
+    }
+  }, [kyc, step]);
+
+  if (!vendor) return null;
+
+  function reset() { setStep("view"); setBvn(""); setDob(""); setAddress(""); setGender(""); setCreatingGateway(""); }
+
+  async function handleSaveKYC() {
+    if (!bvn.trim() || !dob || !address.trim()) {
+      toast.error("BVN, date of birth, and address are all required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendor!.id}/kyc`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ bvn: bvn.trim(), dateOfBirth: dob, address: address.trim(), gender: gender || undefined }),
+      });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Failed");
+      toast.success("KYC details saved.");
+      setBvn("");
+      setStep("view");
+      qc.invalidateQueries({ queryKey: ["admin-vendor-kyc", vendor!.id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save KYC");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateAccount(gateway: "squad-usd" | "squad-ngn" | "interswitch") {
+    setCreatingGateway(gateway);
+    setStep("creating");
+    setSaving(true);
+    const endpointMap: Record<string, string> = {
+      "squad-usd":   "usd-account",
+      "squad-ngn":   "squad-ngn-account",
+      "interswitch": "interswitch-account",
+    };
+    const label = gateway === "squad-usd" ? "Squad USD" : gateway === "squad-ngn" ? "Squad NGN" : "Interswitch";
+    try {
+      const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendor!.id}/${endpointMap[gateway]}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({ error: "Failed" }))) as { error?: string; accountNumber?: string; bankName?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      toast.success(`${label} account created: ${data.accountNumber} (${data.bankName ?? label})`);
+      qc.invalidateQueries({ queryKey: ["admin-vendor-kyc", vendor!.id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `Failed to create ${label} account`);
+    } finally {
+      setSaving(false);
+      setStep("view");
+      setCreatingGateway("");
+    }
+  }
+
+  // Which account types already exist
+  const hasSquadUSD  = kyc?.accounts.some(a => a.gateway === "squad" && a.currency === "USD") ?? false;
+  const hasSquadNGN  = kyc?.accounts.some(a => a.gateway === "squad" && a.currency === "NGN" && a.type === "dedicated") ?? false;
+  const hasInterswitch = kyc?.accounts.some(a => a.gateway === "interswitch") ?? false;
+  const hasPaystackNGN = kyc?.accounts.some(a => a.gateway === "paystack") ?? false;
+
+  return (
+    <Dialog open={!!vendor} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Banknote className="w-5 h-5 text-primary" /> Virtual Accounts — {vendor.name}
+          </DialogTitle>
+          <DialogDescription>
+            KYC details and dedicated bank accounts across Paystack, Squad, and Interswitch.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">Loading…</div>
+        ) : step === "edit" ? (
+          /* ── KYC form ─────────────────────────────────────────────── */
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>BVN <span className="text-destructive">*</span></Label>
+              <Input placeholder="11-digit BVN" value={bvn} onChange={e => setBvn(e.target.value)} maxLength={11} />
+              <p className="text-xs text-muted-foreground">Only the last 4 digits are shown after saving.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Date of Birth <span className="text-destructive">*</span></Label>
+              <Input type="date" value={dob} onChange={e => setDob(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Full Address <span className="text-destructive">*</span></Label>
+              <Textarea placeholder="Street address, city, state, country" value={address} onChange={e => setAddress(e.target.value)} rows={3} />
+            </div>
+            <div className="space-y-2">
+              <Label>Gender <span className="text-xs text-muted-foreground">(required for Squad NGN dedicated)</span></Label>
+              <Select value={gender} onValueChange={v => setGender(v as "male" | "female" | "other")}>
+                <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                  <SelectItem value="other">Other / prefer not to say</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          /* ── View + account creation ───────────────────────────────── */
+          <div className="space-y-5 py-2">
+            {/* KYC status card */}
+            <div className={`rounded-lg border p-4 space-y-2 ${kyc?.kycComplete ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30" : "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/30"}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-medium text-sm">
+                  {kyc?.kycComplete
+                    ? <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> KYC Complete</>
+                    : <><AlertCircle className="w-4 h-4 text-yellow-600" /> KYC Incomplete</>}
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setStep("edit")}>
+                  {kyc?.kycComplete ? "Update" : "Enter KYC"}
+                </Button>
+              </div>
+              {kyc?.kycComplete && (
+                <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
+                  <span>BVN: <span className="font-mono">{kyc.bvnMasked}</span></span>
+                  <span>DOB: {kyc.dateOfBirth}</span>
+                  <span className="col-span-2">Address: {kyc.address}</span>
+                  {kyc.gender && <span className="col-span-2 capitalize">Gender: {kyc.gender}</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Existing accounts */}
+            {kyc?.accounts && kyc.accounts.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold">Active Accounts</h4>
+                {kyc.accounts.map(a => <VirtualAccountCard key={a.id} account={a} />)}
+              </div>
+            )}
+
+            {/* Create new accounts */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Create Account</h4>
+              <div className="grid gap-2">
+                {/* Paystack NGN — auto-provisioned on signup */}
+                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasPaystackNGN ? "opacity-60" : ""}`}>
+                  <div>
+                    <div className="text-sm font-medium">Paystack NGN</div>
+                    <div className="text-xs text-muted-foreground">Auto-provisioned on signup via Wema Bank</div>
+                  </div>
+                  {hasPaystackNGN
+                    ? <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
+                    : <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">Auto</Badge>}
+                </div>
+
+                {/* Squad NGN dedicated */}
+                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasSquadNGN ? "opacity-60" : ""}`}>
+                  <div>
+                    <div className="text-sm font-medium">Squad NGN Dedicated</div>
+                    <div className="text-xs text-muted-foreground">Requires KYC complete + gender</div>
+                  </div>
+                  {hasSquadNGN ? (
+                    <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
+                  ) : (
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-7 text-xs shrink-0"
+                      disabled={!kyc?.kycComplete || saving}
+                      onClick={() => handleCreateAccount("squad-ngn")}
+                      title={!kyc?.kycComplete ? "Complete KYC first" : undefined}
+                    >
+                      {saving && creatingGateway === "squad-ngn" ? "Creating…" : "Create"}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Squad USD */}
+                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasSquadUSD ? "opacity-60" : ""}`}>
+                  <div>
+                    <div className="text-sm font-medium">Squad USD</div>
+                    <div className="text-xs text-muted-foreground">US dollar virtual account with routing number</div>
+                  </div>
+                  {hasSquadUSD ? (
+                    <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
+                  ) : (
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-7 text-xs shrink-0"
+                      disabled={saving}
+                      onClick={() => handleCreateAccount("squad-usd")}
+                    >
+                      {saving && creatingGateway === "squad-usd" ? "Creating…" : "Create"}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Interswitch NGN */}
+                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasInterswitch ? "opacity-60" : ""}`}>
+                  <div>
+                    <div className="text-sm font-medium">Interswitch NGN</div>
+                    <div className="text-xs text-muted-foreground">Quickteller wallet via any partner bank</div>
+                  </div>
+                  {hasInterswitch ? (
+                    <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
+                  ) : (
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-7 text-xs shrink-0"
+                      disabled={saving}
+                      onClick={() => handleCreateAccount("interswitch")}
+                    >
+                      {saving && creatingGateway === "interswitch" ? "Creating…" : "Create"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {!kyc?.kycComplete && (
+                <p className="text-xs text-muted-foreground">
+                  <AlertCircle className="w-3 h-3 inline mr-1" />
+                  Squad NGN dedicated requires KYC. Squad USD and Interswitch can be created without it.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          {step === "edit" ? (
+            <>
+              <Button variant="outline" onClick={() => setStep("view")} disabled={saving}>Back</Button>
+              <Button onClick={handleSaveKYC} disabled={saving}>{saving ? "Saving…" : "Save KYC"}</Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => { reset(); onClose(); }}>Close</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type AuditLogEntry = {
   id: number;
   adminUserId: string;
@@ -2191,6 +2532,7 @@ export default function AdminPanel() {
   const [selectAllVendors, setSelectAllVendors] = useState(false);
   const [trialVendor, setTrialVendor] = useState<AdminVendor | null>(null);
   const [transactionsVendor, setTransactionsVendor] = useState<AdminVendor | null>(null);
+  const [kycVendor, setKycVendor] = useState<AdminVendor | null>(null);
 
   const { data: vendors, isLoading, error } = useQuery({
     queryKey: ["admin-vendors"],
@@ -2775,6 +3117,16 @@ export default function AdminPanel() {
                                 title="View payment transactions"
                               >
                                 <Receipt className="w-3.5 h-3.5" /> Txns
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs text-emerald-600 hover:text-emerald-700"
+                                onClick={() => setKycVendor(vendor)}
+                                data-testid={`button-usd-account-${vendor.id}`}
+                                title="KYC & USD virtual account"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" /> USD
                               </Button>
                             </div>
                           </TableCell>
@@ -3952,6 +4304,10 @@ export default function AdminPanel() {
       <AdminVendorTransactionsDialog
         vendor={transactionsVendor}
         onClose={() => setTransactionsVendor(null)}
+      />
+      <AdminVendorKYCDialog
+        vendor={kycVendor}
+        onClose={() => setKycVendor(null)}
       />
     </div>
   );

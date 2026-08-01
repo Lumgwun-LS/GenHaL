@@ -63,12 +63,31 @@ router.post("/vendor-virtual-accounts/squad-dedicated", async (req, res): Promis
   const missing = ["firstName","lastName","mobileNumber","email","bvn","dob","address","gender"].filter(k => !(req.body as Record<string,string>)[k]);
   if (missing.length) { res.status(400).json({ error: `Missing: ${missing.join(", ")}` }); return; }
 
-  const secretKey = await resolveSquadKey();
-  const customerIdentifier = `vendor-${vendor.id}`;
+  // Duplicate guard — one Squad dedicated NGN account per vendor
+  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+      eq(vendorVirtualAccountsTable.gateway, "squad"),
+      eq(vendorVirtualAccountsTable.currency, "NGN"),
+      eq(vendorVirtualAccountsTable.type, "dedicated"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    )).limit(1);
+  if (existing) { res.status(409).json({ error: "A Squad NGN dedicated account already exists for this vendor." }); return; }
 
-  const result = await squadCreateDedicatedVirtualAccount(secretKey, {
-    customerIdentifier, firstName, lastName, mobileNumber, email, bvn, dob, address, gender,
-  });
+  let secretKey: string;
+  try { secretKey = await resolveSquadKey(); }
+  catch (e) { res.status(503).json({ error: "Squad is not configured." }); return; }
+
+  const customerIdentifier = `vendor-${vendor.id}`;
+  let result: Awaited<ReturnType<typeof squadCreateDedicatedVirtualAccount>>;
+  try {
+    result = await squadCreateDedicatedVirtualAccount(secretKey, {
+      customerIdentifier, firstName, lastName, mobileNumber, email, bvn, dob, address, gender,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `Squad API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
 
   const [saved] = await db.insert(vendorVirtualAccountsTable).values({
     vendorId:      vendor.id,
@@ -97,10 +116,29 @@ router.post("/vendor-virtual-accounts/squad-usd", async (req, res): Promise<void
     res.status(400).json({ error: "firstName, lastName, mobileNumber and email are required" }); return;
   }
 
-  const secretKey = await resolveSquadKey();
-  const result = await squadCreateUSDVirtualAccount(secretKey, {
-    customerIdentifier: `vendor-${vendor.id}-usd`, firstName, lastName, mobileNumber, email,
-  });
+  // Duplicate guard
+  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+      eq(vendorVirtualAccountsTable.gateway, "squad"),
+      eq(vendorVirtualAccountsTable.currency, "USD"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    )).limit(1);
+  if (existing) { res.status(409).json({ error: "A Squad USD account already exists for this vendor." }); return; }
+
+  let secretKey: string;
+  try { secretKey = await resolveSquadKey(); }
+  catch (e) { res.status(503).json({ error: "Squad is not configured." }); return; }
+
+  let result: Awaited<ReturnType<typeof squadCreateUSDVirtualAccount>>;
+  try {
+    result = await squadCreateUSDVirtualAccount(secretKey, {
+      customerIdentifier: `vendor-${vendor.id}-usd`, firstName, lastName, mobileNumber, email,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `Squad API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
 
   const [saved] = await db.insert(vendorVirtualAccountsTable).values({
     vendorId:      vendor.id,
@@ -123,10 +161,19 @@ router.post("/vendor-virtual-accounts/squad-dynamic", async (req, res): Promise<
   const vendor = await requireVendor(req, res); if (vendor === null) return;
 
   const { amount, expiredDate, callbackUrl, isSingleUse } = req.body;
-  const secretKey = await resolveSquadKey();
-  const result = await squadCreateDynamicVirtualAccount(secretKey, {
-    customerIdentifier: `vendor-${vendor.id}-${Date.now()}`, amount, expiredDate, callbackUrl, isSingleUse,
-  });
+
+  let secretKey: string;
+  try { secretKey = await resolveSquadKey(); }
+  catch (e) { res.status(503).json({ error: "Squad is not configured." }); return; }
+
+  let result: Awaited<ReturnType<typeof squadCreateDynamicVirtualAccount>>;
+  try {
+    result = await squadCreateDynamicVirtualAccount(secretKey, {
+      customerIdentifier: `vendor-${vendor.id}-${Date.now()}`, amount, expiredDate, callbackUrl, isSingleUse,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `Squad API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
 
   const [saved] = await db.insert(vendorVirtualAccountsTable).values({
     vendorId:      vendor.id,
@@ -155,8 +202,26 @@ router.post("/vendor-virtual-accounts/interswitch", async (req, res): Promise<vo
     res.status(400).json({ error: "phoneNumber, lastName and otherNames are required" }); return;
   }
 
-  const creds = await resolveISCreds();
-  const result = await interswitchCreateVirtualAccount(creds, { phoneNumber, lastName, otherNames, email, bvn });
+  // Duplicate guard — one Interswitch NGN dedicated account per vendor
+  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+      eq(vendorVirtualAccountsTable.gateway, "interswitch"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    )).limit(1);
+  if (existing) { res.status(409).json({ error: "An Interswitch virtual account already exists for this vendor." }); return; }
+
+  let creds: Awaited<ReturnType<typeof resolveISCreds>>;
+  try { creds = await resolveISCreds(); }
+  catch (e) { res.status(503).json({ error: "Interswitch is not configured." }); return; }
+
+  let result: Awaited<ReturnType<typeof interswitchCreateVirtualAccount>>;
+  try {
+    result = await interswitchCreateVirtualAccount(creds, { phoneNumber, lastName, otherNames, email, bvn });
+  } catch (e) {
+    res.status(502).json({ error: `Interswitch API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
 
   const [saved] = await db.insert(vendorVirtualAccountsTable).values({
     vendorId:      vendor.id,

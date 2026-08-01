@@ -2281,4 +2281,394 @@ router.get("/admin/vendors/:id", async (req, res): Promise<void> => {
   });
 });
 
+// ─── GET /admin/vendors/:id/kyc ───────────────────────────────────────────────
+// Returns KYC fields and USD virtual account status for a vendor.
+
+router.get("/admin/vendors/:id/kyc", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+
+  const [vendor] = await db
+    .select({
+      id:                      vendorsTable.id,
+      name:                    vendorsTable.name,
+      email:                   vendorsTable.email,
+      phone:                   vendorsTable.phone,
+      address:                 vendorsTable.address,
+      dateOfBirth:             vendorsTable.dateOfBirth,
+      gender:                  vendorsTable.gender,
+      bvn:                     vendorsTable.bvn,
+      kycSubmittedAt:          vendorsTable.kycSubmittedAt,
+      squadCustomerIdentifier: vendorsTable.squadCustomerIdentifier,
+    })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, id))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  // All active dedicated accounts across all gateways
+  const allAccounts = await db
+    .select()
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, id),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    ))
+    .orderBy(vendorVirtualAccountsTable.createdAt);
+
+  const serialize = (a: typeof allAccounts[0]) => ({
+    id:            a.id,
+    gateway:       a.gateway,
+    currency:      a.currency,
+    type:          a.type,
+    accountNumber: a.accountNumber,
+    bankName:      a.bankName,
+    accountName:   a.accountName,
+    routingNumber: (a.metadata as Record<string, unknown> | null)?.["routing_number"] as string | undefined,
+    walletId:      (a.metadata as Record<string, unknown> | null)?.["walletId"] as string | undefined,
+    createdAt:     a.createdAt.toISOString(),
+  });
+
+  res.json({
+    id:                      vendor.id,
+    name:                    vendor.name,
+    email:                   vendor.email,
+    phone:                   vendor.phone,
+    address:                 vendor.address,
+    dateOfBirth:             vendor.dateOfBirth,
+    gender:                  vendor.gender,
+    bvnMasked:               vendor.bvn ? `****${vendor.bvn.slice(-4)}` : null,
+    kycComplete:             !!(vendor.bvn && vendor.dateOfBirth && vendor.address),
+    kycSubmittedAt:          vendor.kycSubmittedAt?.toISOString() ?? null,
+    squadCustomerIdentifier: vendor.squadCustomerIdentifier,
+    // All accounts grouped for easy UI consumption
+    accounts:     allAccounts.map(serialize),
+    usdAccounts:  allAccounts.filter(a => a.currency === "USD").map(serialize),
+    ngnAccounts:  allAccounts.filter(a => a.currency === "NGN").map(serialize),
+  });
+});
+
+// ─── PATCH /admin/vendors/:id/kyc ─────────────────────────────────────────────
+// Admin saves KYC fields (BVN, DOB, address, gender) for a vendor.
+
+router.patch("/admin/vendors/:id/kyc", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { bvn, dateOfBirth, address, gender } = req.body as {
+    bvn?: string; dateOfBirth?: string; address?: string; gender?: string;
+  };
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (bvn !== undefined && bvn !== "")          updates.bvn = bvn.trim();
+  if (dateOfBirth !== undefined && dateOfBirth) updates.dateOfBirth = dateOfBirth;
+  if (address !== undefined && address !== "")  updates.address = address.trim();
+  if (gender !== undefined && gender !== "")    updates.gender = gender;
+
+  const [current] = await db
+    .select({ bvn: vendorsTable.bvn, dateOfBirth: vendorsTable.dateOfBirth, address: vendorsTable.address })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, id))
+    .limit(1);
+
+  if (!current) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const newBvn = (updates.bvn as string | undefined) ?? current.bvn;
+  const newDob = (updates.dateOfBirth as string | undefined) ?? current.dateOfBirth;
+  const newAddr = (updates.address as string | undefined) ?? current.address;
+  if (newBvn && newDob && newAddr) updates.kycSubmittedAt = new Date();
+
+  await db.update(vendorsTable).set(updates).where(eq(vendorsTable.id, id));
+
+  res.json({ ok: true, kycComplete: !!(newBvn && newDob && newAddr) });
+});
+
+// ─── POST /admin/vendors/:id/squad-ngn-account ───────────────────────────────
+// Admin triggers Squad NGN dedicated virtual account creation. Requires full KYC + gender.
+
+router.post("/admin/vendors/:id/squad-ngn-account", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+  const { resolveSquadKey, squadCreateDedicatedVirtualAccount } = await import("../lib/squad");
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor.bvn || !vendor.dateOfBirth || !vendor.address) {
+    res.status(422).json({ error: "KYC is incomplete. BVN, date of birth, and address are required." }); return;
+  }
+
+  // Map vendor.gender (male/female/other) → Squad gender code (1=Male, 2=Female)
+  const genderCode: "1" | "2" = vendor.gender === "female" ? "2" : "1";
+
+  // Duplicate guard
+  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, id),
+      eq(vendorVirtualAccountsTable.gateway, "squad"),
+      eq(vendorVirtualAccountsTable.currency, "NGN"),
+      eq(vendorVirtualAccountsTable.type, "dedicated"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    )).limit(1);
+  if (existing) { res.status(409).json({ error: "A Squad NGN dedicated account already exists for this vendor." }); return; }
+
+  let secretKey: string;
+  try { secretKey = await resolveSquadKey(); }
+  catch { res.status(503).json({ error: "Squad is not configured. Add a Squad secret key in Admin → Payment Gateways." }); return; }
+
+  const customerIdentifier = `vendor-${id}`;
+  const nameParts = vendor.name.trim().split(/\s+/);
+  const firstName = nameParts[0] ?? vendor.name;
+  const lastName  = nameParts.slice(1).join(" ") || firstName;
+
+  let result: Awaited<ReturnType<typeof squadCreateDedicatedVirtualAccount>>;
+  try {
+    result = await squadCreateDedicatedVirtualAccount(secretKey, {
+      customerIdentifier,
+      firstName,
+      lastName,
+      mobileNumber: vendor.phone ?? "",
+      email:        vendor.email,
+      bvn:          vendor.bvn,
+      dob:          vendor.dateOfBirth,
+      address:      vendor.address,
+      gender:       genderCode,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `Squad API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
+
+  await db.update(vendorsTable)
+    .set({ squadCustomerIdentifier: customerIdentifier, updatedAt: new Date() })
+    .where(eq(vendorsTable.id, id));
+
+  await db.insert(vendorVirtualAccountsTable).values({
+    vendorId:      id,
+    gateway:       "squad",
+    accountNumber: result.data.virtual_account_number,
+    bankName:      result.data.bank_name,
+    accountName:   result.data.beneficiary_name,
+    currency:      "NGN",
+    type:          "dedicated",
+    referenceCode: result.data.customer_identifier,
+    metadata:      result.data as Record<string, unknown>,
+  }).onConflictDoNothing();
+
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: id,
+    type:     "payment_received",
+    message:  `Your Squad NGN dedicated account is ready: ${result.data.virtual_account_number} (${result.data.bank_name}). Customers can now pay directly into this account.`,
+  }).catch(() => null);
+
+  res.json({
+    ok:              true,
+    accountNumber:   result.data.virtual_account_number,
+    bankName:        result.data.bank_name,
+    beneficiaryName: result.data.beneficiary_name,
+  });
+});
+
+// ─── POST /admin/vendors/:id/interswitch-account ──────────────────────────────
+// Admin triggers Interswitch NGN virtual account (wallet) creation for a vendor.
+
+router.post("/admin/vendors/:id/interswitch-account", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+  const { interswitchCreateVirtualAccount } = await import("../lib/interswitch");
+  const { resolveInterswitchCreds } = await import("../lib/vendor-keys");
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  // Duplicate guard
+  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, id),
+      eq(vendorVirtualAccountsTable.gateway, "interswitch"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    )).limit(1);
+  if (existing) { res.status(409).json({ error: "An Interswitch virtual account already exists for this vendor." }); return; }
+
+  let creds: Awaited<ReturnType<typeof resolveInterswitchCreds>>;
+  try { creds = await resolveInterswitchCreds(); }
+  catch { res.status(503).json({ error: "Interswitch is not configured." }); return; }
+
+  const nameParts = vendor.name.trim().split(/\s+/);
+  const lastName   = nameParts[nameParts.length - 1] ?? vendor.name;
+  const otherNames = nameParts.slice(0, -1).join(" ") || lastName;
+
+  let result: Awaited<ReturnType<typeof interswitchCreateVirtualAccount>>;
+  try {
+    result = await interswitchCreateVirtualAccount(creds, {
+      phoneNumber: vendor.phone ?? "",
+      lastName,
+      otherNames,
+      email: vendor.email,
+      bvn:   vendor.bvn ?? undefined,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `Interswitch API error: ${e instanceof Error ? e.message : String(e)}` }); return;
+  }
+
+  await db.insert(vendorVirtualAccountsTable).values({
+    vendorId:      id,
+    gateway:       "interswitch",
+    accountNumber: result.accountNumber,
+    bankCode:      result.bankCode,
+    bankName:      result.bankName,
+    accountName:   result.accountName,
+    currency:      "NGN",
+    type:          "dedicated",
+    referenceCode: result.walletId,
+    metadata:      { walletId: result.walletId } as Record<string, unknown>,
+  }).onConflictDoNothing();
+
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: id,
+    type:     "payment_received",
+    message:  `Your Interswitch virtual account is ready: ${result.accountNumber} (${result.bankName}). Customers can now pay into this account.`,
+  }).catch(() => null);
+
+  res.json({
+    ok:            true,
+    accountNumber: result.accountNumber,
+    bankName:      result.bankName,
+    accountName:   result.accountName,
+    walletId:      result.walletId,
+  });
+});
+
+// ─── POST /admin/vendors/:id/usd-account ──────────────────────────────────────
+// Admin triggers Squad USD virtual account creation for a vendor.
+// KYC (BVN, dateOfBirth, address) must be complete first.
+
+router.post("/admin/vendors/:id/usd-account", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+  const { resolveSquadKey, squadCreateUSDVirtualAccount } = await import("../lib/squad");
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, id))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor.bvn || !vendor.dateOfBirth || !vendor.address) {
+    res.status(422).json({ error: "KYC is incomplete. Please provide BVN, date of birth, and address before creating a USD account." });
+    return;
+  }
+
+  // Check if USD account already exists
+  const [existing] = await db
+    .select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, id),
+      eq(vendorVirtualAccountsTable.currency, "USD"),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    ))
+    .limit(1);
+
+  if (existing) {
+    res.status(409).json({ error: "This vendor already has an active USD virtual account." });
+    return;
+  }
+
+  let secretKey: string;
+  try {
+    secretKey = await resolveSquadKey();
+  } catch {
+    res.status(503).json({ error: "Squad is not configured. Add a Squad secret key in Admin → Payment Gateways." });
+    return;
+  }
+
+  // Build a stable customer identifier for this vendor
+  const customerIdentifier = vendor.squadCustomerIdentifier ?? `vendor_${id}_usd_${Date.now()}`;
+
+  const nameParts = vendor.name.trim().split(/\s+/);
+  const firstName = nameParts[0] ?? vendor.name;
+  const lastName = nameParts.slice(1).join(" ") || firstName;
+
+  let result: Awaited<ReturnType<typeof squadCreateUSDVirtualAccount>>;
+  try {
+    result = await squadCreateUSDVirtualAccount(secretKey, {
+      customerIdentifier,
+      firstName,
+      lastName,
+      mobileNumber: vendor.phone ?? "",
+      email: vendor.email,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Squad API error";
+    res.status(502).json({ error: `Failed to create USD account: ${msg}` });
+    return;
+  }
+
+  const acct = result.data;
+
+  // Persist Squad customer identifier on the vendor record
+  await db.update(vendorsTable)
+    .set({ squadCustomerIdentifier: customerIdentifier, updatedAt: new Date() })
+    .where(eq(vendorsTable.id, id));
+
+  // Store the account in vendorVirtualAccountsTable
+  await db.insert(vendorVirtualAccountsTable).values({
+    vendorId:      id,
+    gateway:       "squad",
+    accountNumber: acct.virtual_account_number,
+    bankName:      acct.bank_name ?? "Squad",
+    accountName:   acct.beneficiary_name ?? vendor.name,
+    currency:      "USD",
+    type:          "dedicated",
+    referenceCode: customerIdentifier,
+    metadata:      acct as unknown as Record<string, unknown>,
+  }).onConflictDoNothing();
+
+  // Notify vendor
+  await db.insert(vendorNotificationsTable).values({
+    vendorId: id,
+    type:     "payment_received",
+    message:  `Your USD virtual account is ready: ${acct.virtual_account_number} (${acct.bank_name ?? "Squad"}). You can now receive USD payments directly.`,
+  }).catch(() => null);
+
+  res.json({
+    ok: true,
+    accountNumber: acct.virtual_account_number,
+    bankName:      acct.bank_name,
+    routingNumber: acct.routing_number,
+    beneficiaryName: acct.beneficiary_name,
+  });
+});
+
 export default router;

@@ -50,6 +50,10 @@ export const vendorsTable = pgTable("vendors", {
   paystackEmailToken: text("paystack_email_token"),
   // Birthday — used for automated birthday greetings
   dateOfBirth: date("date_of_birth"),
+  // KYC — collected for Squad USD virtual account provisioning (BVN + address + DOB)
+  bvn: text("bvn"),
+  kycSubmittedAt: timestamp("kyc_submitted_at", { withTimezone: true }),
+  squadCustomerIdentifier: text("squad_customer_identifier"),
   // Voice — opt-out of birthday & campaign calls (default opted in)
   voiceCallOptOut: boolean("voice_call_opt_out").notNull().default(false),
   // Push notification categories — vendor-controlled, default on for everyone

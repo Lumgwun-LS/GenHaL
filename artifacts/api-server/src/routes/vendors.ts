@@ -511,4 +511,208 @@ router.get("/vendors/trial-status", async (req, res): Promise<void> => {
   });
 });
 
+// ─── GET /vendors/kyc-status ─────────────────────────────────────────────────
+// Returns the current vendor's KYC completion status and any existing USD account.
+
+router.get("/vendors/kyc-status", async (req, res): Promise<void> => {
+  const { userId: clerkUserId } = getAuth(req);
+  if (!clerkUserId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [vendor] = await db
+    .select({
+      id:                      vendorsTable.id,
+      address:                 vendorsTable.address,
+      dateOfBirth:             vendorsTable.dateOfBirth,
+      bvn:                     vendorsTable.bvn,
+      kycSubmittedAt:          vendorsTable.kycSubmittedAt,
+      squadCustomerIdentifier: vendorsTable.squadCustomerIdentifier,
+    })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const usdAccounts = await db
+    .select()
+    .from(vendorVirtualAccountsTable)
+    .where(
+      eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+    );
+
+  const usd = usdAccounts.filter(a => a.currency === "USD" && a.isActive);
+
+  res.json({
+    kycComplete:    !!(vendor.bvn && vendor.dateOfBirth && vendor.address),
+    kycSubmittedAt: vendor.kycSubmittedAt?.toISOString() ?? null,
+    // Mask BVN — only show last 4 digits
+    bvnMasked:   vendor.bvn ? `****${vendor.bvn.slice(-4)}` : null,
+    dateOfBirth: vendor.dateOfBirth,
+    address:     vendor.address,
+    usdAccounts: usd.map(a => ({
+      accountNumber: a.accountNumber,
+      bankName:      a.bankName,
+      routingNumber: (a.metadata as Record<string, unknown> | null)?.["routing_number"] as string | undefined,
+      createdAt:     a.createdAt.toISOString(),
+    })),
+    allAccounts: usdAccounts.map(a => ({
+      id:            a.id,
+      currency:      a.currency,
+      gateway:       a.gateway,
+      accountNumber: a.accountNumber,
+      bankName:      a.bankName,
+      isActive:      a.isActive,
+      createdAt:     a.createdAt.toISOString(),
+    })),
+  });
+});
+
+// ─── PATCH /vendors/kyc ───────────────────────────────────────────────────────
+// Vendor submits their own KYC details (BVN, date of birth, full address).
+
+router.patch("/vendors/kyc", async (req, res): Promise<void> => {
+  const { userId: clerkUserId } = getAuth(req);
+  if (!clerkUserId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { bvn, dateOfBirth, address } = req.body as {
+    bvn?: string;
+    dateOfBirth?: string;
+    address?: string;
+  };
+
+  const [vendor] = await db
+    .select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (bvn !== undefined && bvn !== "")          updates.bvn = bvn.trim();
+  if (dateOfBirth !== undefined && dateOfBirth) updates.dateOfBirth = dateOfBirth;
+  if (address !== undefined && address !== "")  updates.address = address.trim();
+
+  // Mark kycSubmittedAt when all three fields are present after this update
+  const [current] = await db
+    .select({ bvn: vendorsTable.bvn, dateOfBirth: vendorsTable.dateOfBirth, address: vendorsTable.address })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, vendor.id))
+    .limit(1);
+
+  const newBvn  = (updates.bvn as string | undefined)         ?? current?.bvn;
+  const newDob  = (updates.dateOfBirth as string | undefined) ?? current?.dateOfBirth;
+  const newAddr = (updates.address as string | undefined)     ?? current?.address;
+  if (newBvn && newDob && newAddr) updates.kycSubmittedAt = new Date();
+
+  await db.update(vendorsTable).set(updates).where(eq(vendorsTable.id, vendor.id));
+
+  res.json({ ok: true, kycComplete: !!(newBvn && newDob && newAddr) });
+});
+
+// ─── POST /vendors/usd-account ────────────────────────────────────────────────
+// Vendor requests their own Squad USD virtual account. Requires KYC to be complete.
+
+router.post("/vendors/usd-account", async (req, res): Promise<void> => {
+  const { userId: clerkUserId } = getAuth(req);
+  if (!clerkUserId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (!vendor.bvn || !vendor.dateOfBirth || !vendor.address) {
+    res.status(422).json({ error: "KYC is incomplete. Please complete your KYC details before requesting a USD account." });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(
+      eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+    )
+    .limit(1);
+
+  const hasUsd = await db
+    .select({ id: vendorVirtualAccountsTable.id })
+    .from(vendorVirtualAccountsTable)
+    .where(eq(vendorVirtualAccountsTable.vendorId, vendor.id))
+    .then(rows => rows.some(r => r));
+
+  void existing; // used above implicitly
+
+  const activeUsd = await db
+    .select()
+    .from(vendorVirtualAccountsTable)
+    .where(eq(vendorVirtualAccountsTable.vendorId, vendor.id))
+    .then(rows => rows.find(r => r.currency === "USD" && r.isActive));
+
+  if (activeUsd) {
+    res.status(409).json({ error: "You already have an active USD virtual account." });
+    return;
+  }
+
+  void hasUsd;
+
+  const { resolveSquadKey, squadCreateUSDVirtualAccount } = await import("../lib/squad");
+
+  let secretKey: string;
+  try {
+    secretKey = await resolveSquadKey();
+  } catch {
+    res.status(503).json({ error: "Squad is not currently configured. Please contact support." });
+    return;
+  }
+
+  const customerIdentifier = vendor.squadCustomerIdentifier ?? `vendor_${vendor.id}_usd_${Date.now()}`;
+  const nameParts = vendor.name.trim().split(/\s+/);
+  const firstName = nameParts[0] ?? vendor.name;
+  const lastName  = nameParts.slice(1).join(" ") || firstName;
+
+  let result: Awaited<ReturnType<typeof squadCreateUSDVirtualAccount>>;
+  try {
+    result = await squadCreateUSDVirtualAccount(secretKey, {
+      customerIdentifier,
+      firstName,
+      lastName,
+      mobileNumber: vendor.phone ?? "",
+      email:        vendor.email,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Squad API error";
+    res.status(502).json({ error: `Failed to create USD account: ${msg}` });
+    return;
+  }
+
+  const acct = result.data;
+
+  await db.update(vendorsTable)
+    .set({ squadCustomerIdentifier: customerIdentifier, updatedAt: new Date() })
+    .where(eq(vendorsTable.id, vendor.id));
+
+  await db.insert(vendorVirtualAccountsTable).values({
+    vendorId:      vendor.id,
+    gateway:       "squad",
+    accountNumber: acct.virtual_account_number,
+    bankName:      acct.bank_name ?? "Squad",
+    accountName:   acct.beneficiary_name ?? vendor.name,
+    currency:      "USD",
+    type:          "dedicated",
+    referenceCode: customerIdentifier,
+    metadata:      acct as unknown as Record<string, unknown>,
+  }).onConflictDoNothing();
+
+  res.json({
+    ok:              true,
+    accountNumber:   acct.virtual_account_number,
+    bankName:        acct.bank_name,
+    routingNumber:   acct.routing_number,
+    beneficiaryName: acct.beneficiary_name,
+  });
+});
+
 export default router;
