@@ -345,7 +345,7 @@ function TaskFormDialog({
         workerId:        form.workerId ? parseInt(form.workerId) : undefined,
         taskType:        form.taskType,
         automatedAction: form.automatedAction,
-        taskData:        taskData ? taskData : undefined,
+        taskData:        taskData ? JSON.stringify(taskData) : undefined,
         notes:           form.notes || undefined,
       });
       onClose();
