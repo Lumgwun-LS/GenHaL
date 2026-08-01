@@ -1,0 +1,85 @@
+    16:04:45.260
+    │   browser-tabs-lock@1.3.0, core-js@3.47.0, protobufjs@7.6.5.                 │
+    16:04:45.260
+    │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+    16:04:45.260
+    │   to run scripts.                                                            │
+    16:04:45.260
+    │                                                                              │
+    16:04:45.260
+    ╰──────────────────────────────────────────────────────────────────────────────╯
+    16:04:45.268
+    Done in 46.1s using pnpm v10.26.1
+    16:04:45.440
+    Executing user build command: pnpm install && pnpm --filter @workspace/api-zod build && pnpm --filter @workspace/api-client-react build && pnpm --filter @workspace/vendor-hub build
+    16:04:45.910
+    Scope: all 22 workspace projects
+    16:04:46.117
+    Lockfile is up to date, resolution step is skipped
+    16:04:46.271
+    Already up to date
+    16:04:48.458
+    16:04:48.530
+    . preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+    16:04:48.545
+    . preinstall: Done
+    16:04:48.712
+    ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+    16:04:48.713
+    │                                                                              │
+    16:04:48.714
+    │   Ignored build scripts: @clerk/shared@3.47.7, @google/genai@1.52.0,         │
+    16:04:48.714
+    │   browser-tabs-lock@1.3.0, core-js@3.47.0, protobufjs@7.6.5.                 │
+    16:04:48.714
+    │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+    16:04:48.714
+    │   to run scripts.                                                            │
+    16:04:48.714
+    │                                                                              │
+    16:04:48.714
+    ╰──────────────────────────────────────────────────────────────────────────────╯
+    16:04:48.721
+    Done in 3.1s using pnpm v10.26.1
+    16:04:49.230
+    None of the selected packages has a "build" script
+    16:04:49.942
+    None of the selected packages has a "build" script
+    16:04:50.620
+    16:04:50.620
+    > @workspace/vendor-hub@0.0.0 build /opt/buildhome/repo/artifacts/vendor-hub
+    16:04:50.620
+    > vite build --config vite.config.ts
+    16:04:50.620
+    16:04:50.960
+    failed to load config from /opt/buildhome/repo/artifacts/vendor-hub/vite.config.ts
+    16:04:50.963
+    error during build:
+    16:04:50.963
+    Error: PORT environment variable is required but was not provided.
+    16:04:50.963
+        at file:///opt/buildhome/repo/artifacts/vendor-hub/node_modules/.vite-temp/vite.config.ts.timestamp-1785596690860-9f2d31762fd5e8.mjs:10:9
+    16:04:50.963
+        at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    16:04:50.963
+        at async node:internal/modules/esm/loader:643:26
+    16:04:50.963
+        at async loadConfigFromBundledFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35996:12)
+    16:04:50.963
+        at async bundleAndLoadConfigFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35884:17)
+    16:04:50.963
+        at async loadConfigFromFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35851:42)
+    16:04:50.963
+        at async resolveConfig (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35500:22)
+    16:04:50.963
+        at async createBuilder (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:33955:19)
+    16:04:50.963
+        at async CAC.<anonymous> (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/cli.js:629:10)
+    16:04:50.995
+    /opt/buildhome/repo/artifacts/vendor-hub:
+    16:04:50.995
+     ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/vendor-hub@0.0.0 build: `vite build --config vite.config.ts`
+    16:04:50.995
+    Exit status 1
+    16:04:51.027
+    Failed: error occurred while running build command
