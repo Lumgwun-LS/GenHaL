@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, desc, or } from "drizzle-orm";
-import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable, storeDeveloperAccountsTable } from "@workspace/db";
+import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable, storeDeveloperAccountsTable, vendorVirtualAccountsTable } from "@workspace/db";
 import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
 import { COUNTRY_NAMES } from "../lib/country-names";
@@ -212,6 +212,55 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
       status:       "active",
       feeExempt:    false,
     }).onConflictDoNothing();
+
+    // Auto-provision a Paystack NGN dedicated account for the vendor.
+    // Paystack may confirm the account number synchronously or via the
+    // dedicatedaccount.assign.success webhook (handled in payments/webhooks.ts).
+    void (async () => {
+      try {
+        const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!paystackKey) return;
+        const nameParts = vendor.name.split(" ");
+        const custRes = await fetch("https://api.paystack.co/customer", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: vendor.email,
+            first_name: nameParts[0] ?? vendor.name,
+            last_name: nameParts.slice(1).join(" ") || undefined,
+            phone: vendor.phone ?? undefined,
+          }),
+        });
+        const custData = (await custRes.json()) as { data?: { customer_code?: string } };
+        const customerCode = custData?.data?.customer_code;
+        if (!customerCode) return;
+        await db.update(vendorsTable)
+          .set({ paystackCustomerCode: customerCode, updatedAt: new Date() })
+          .where(eq(vendorsTable.id, vendor.id));
+        // Request dedicated NGN account — Paystack may assign it immediately or async
+        const acctRes = await fetch("https://api.paystack.co/dedicated_account", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ customer: customerCode, preferred_bank: "wema-bank" }),
+        });
+        const acctData = (await acctRes.json()) as { data?: { account_number?: string; bank?: { name?: string } } };
+        if (acctData?.data?.account_number) {
+          await db.insert(vendorVirtualAccountsTable).values({
+            vendorId:      vendor.id,
+            gateway:       "paystack",
+            accountNumber: acctData.data.account_number,
+            bankName:      acctData.data.bank?.name ?? "Wema Bank",
+            accountName:   vendor.name,
+            currency:      "NGN",
+            type:          "dedicated",
+            referenceCode: customerCode,
+            metadata:      acctData.data as Record<string, unknown>,
+          }).onConflictDoNothing();
+        }
+      } catch (e) {
+        console.warn("[onboarding] Paystack dedicated account provisioning failed:", e);
+      }
+    })();
   } catch (err: any) {
     // Only swallow the specific clerk_user_id race — any other unique violation (or error)
     // is unexpected here and should surface rather than being masked as a successful onboard.

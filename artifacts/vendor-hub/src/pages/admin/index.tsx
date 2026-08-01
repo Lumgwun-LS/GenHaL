@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users, BookOpen } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users, BookOpen, Gift, Receipt, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -194,6 +194,182 @@ function KeyStatus({ hasKey, testPassed, label }: { hasKey: boolean; testPassed:
       <AlertCircle className="w-3.5 h-3.5" />
       <span>{label} (untested)</span>
     </div>
+  );
+}
+
+// ── AdminTrialDialog ─────────────────────────────────────────────────────────
+
+const TRIAL_DURATIONS = [7, 14, 21, 30] as const;
+
+function AdminTrialDialog({ vendor, onDone }: { vendor: AdminVendor | null; onDone: () => void }) {
+  const [duration, setDuration] = useState<number>(14);
+  const [saving, setSaving] = useState(false);
+
+  if (!vendor) return null;
+
+  async function handleAssign() {
+    setSaving(true);
+    try {
+      const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendor!.id}/trial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ durationDays: duration }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({ error: "Failed" }))) as { error?: string };
+        throw new Error(err.error ?? "Failed to assign trial");
+      }
+      toast.success(`${duration}-day trial assigned to ${vendor!.name}`);
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to assign trial");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!vendor} onOpenChange={(o) => { if (!o) onDone(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Gift className="w-5 h-5 text-primary" /> Assign Free Trial
+          </DialogTitle>
+          <DialogDescription>
+            Grant <strong>{vendor.name}</strong> a full-access trial period. Only available to vendors on the free plan.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Duration</Label>
+            <Select value={String(duration)} onValueChange={(v) => setDuration(Number(v))}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TRIAL_DURATIONS.map((d) => (
+                  <SelectItem key={d} value={String(d)}>{d} days</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-sm text-muted-foreground bg-muted/40 rounded-md p-3">
+            Trial will expire in {duration} days from now. The vendor will receive an in-app notification.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onDone} disabled={saving}>Cancel</Button>
+          <Button onClick={handleAssign} disabled={saving}>
+            {saving ? "Assigning…" : `Assign ${duration}-Day Trial`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── AdminVendorTransactionsDialog ─────────────────────────────────────────────
+
+type VendorPayment = {
+  id: number;
+  orderId: number | null;
+  provider: string | null;
+  providerReference: string | null;
+  amount: string;
+  currency: string | null;
+  status: string;
+  createdAt: string;
+};
+
+function AdminVendorTransactionsDialog({
+  vendor,
+  onClose,
+}: {
+  vendor: AdminVendor | null;
+  onClose: () => void;
+}) {
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading } = useQuery<{ payments: VendorPayment[]; total: number; page: number; pageSize: number }>({
+    queryKey: ["admin-vendor-payments", vendor?.id, page],
+    queryFn: async () => {
+      const res = await authFetch(`${BASE_URL}/api/admin/vendors/${vendor!.id}/payments?page=${page}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load payments");
+      return res.json();
+    },
+    enabled: !!vendor,
+  });
+
+  if (!vendor) return null;
+
+  const total = data?.total ?? 0;
+  const pageSize = data?.pageSize ?? 20;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function statusColor(status: string) {
+    if (status === "paid" || status === "success") return "text-emerald-600";
+    if (status === "failed" || status === "cancelled") return "text-destructive";
+    return "text-yellow-600";
+  }
+
+  return (
+    <Dialog open={!!vendor} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-primary" /> Transactions — {vendor.name}
+          </DialogTitle>
+          <DialogDescription>{total} total payment{total !== 1 ? "s" : ""}</DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">Loading…</div>
+        ) : !data?.payments.length ? (
+          <div className="py-8 text-center text-muted-foreground">No transactions found for this vendor.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Gateway</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.payments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-xs text-muted-foreground">#{p.id}</TableCell>
+                    <TableCell className="capitalize text-sm">{p.provider ?? "—"}</TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {p.currency ?? ""} {parseFloat(p.amount ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-medium capitalize ${statusColor(p.status)}`}>{p.status}</span>
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      {new Date(p.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-end gap-2 p-3 border-t">
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                <span className="text-xs text-muted-foreground">Page {page} / {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</Button>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2013,6 +2189,8 @@ export default function AdminPanel() {
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<number[]>([]);
   const [selectAllVendors, setSelectAllVendors] = useState(false);
+  const [trialVendor, setTrialVendor] = useState<AdminVendor | null>(null);
+  const [transactionsVendor, setTransactionsVendor] = useState<AdminVendor | null>(null);
 
   const { data: vendors, isLoading, error } = useQuery({
     queryKey: ["admin-vendors"],
@@ -2501,10 +2679,14 @@ export default function AdminPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {vendors?.length === 0 ? (
+                    {(!vendors || vendors.length === 0) ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No vendors found.
+                        <TableCell colSpan={8} className="py-10 text-center">
+                          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                            <Users className="w-10 h-10 opacity-20" />
+                            <p className="font-medium">No vendors registered yet.</p>
+                            <p className="text-xs max-w-xs">Once a user completes the sign-up flow they will appear here.</p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -2552,7 +2734,7 @@ export default function AdminPanel() {
                             {new Date(vendor.createdAt).toLocaleDateString()}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1 flex-wrap">
                               <MessageVendorDialog vendor={vendor} onViewHistory={viewVendorMessageHistory} />
                               <Button
                                 variant="ghost"
@@ -2571,6 +2753,28 @@ export default function AdminPanel() {
                                 data-testid={`button-view-audit-log-${vendor.id}`}
                               >
                                 <ClipboardList className="w-3.5 h-3.5" /> Audit
+                              </Button>
+                              {vendor.subscriptionTier === "free" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1.5 text-xs text-primary hover:text-primary"
+                                  onClick={() => setTrialVendor(vendor)}
+                                  data-testid={`button-assign-trial-${vendor.id}`}
+                                  title="Assign a free trial period"
+                                >
+                                  <Gift className="w-3.5 h-3.5" /> Trial
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                onClick={() => setTransactionsVendor(vendor)}
+                                data-testid={`button-view-transactions-${vendor.id}`}
+                                title="View payment transactions"
+                              >
+                                <Receipt className="w-3.5 h-3.5" /> Txns
                               </Button>
                             </div>
                           </TableCell>
@@ -3739,6 +3943,16 @@ export default function AdminPanel() {
           <BlogModerationPanel />
         </TabsContent>
       </Tabs>
+
+      {/* ── Global admin dialogs ──────────────────────────────────────── */}
+      <AdminTrialDialog
+        vendor={trialVendor}
+        onDone={() => { setTrialVendor(null); refresh(); }}
+      />
+      <AdminVendorTransactionsDialog
+        vendor={transactionsVendor}
+        onClose={() => setTransactionsVendor(null)}
+      />
     </div>
   );
 }

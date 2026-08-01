@@ -184,9 +184,15 @@ router.post("/payments/interswitch/verify-account", async (req, res): Promise<vo
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { bankCode, accountNumber } = req.body;
   if (!bankCode || !accountNumber) { res.status(400).json({ error: "bankCode and accountNumber are required" }); return; }
-  const creds = await resolveInterswitchCreds();
-  const result = await interswitchVerifyAccount(creds, { bankCode, accountNumber });
-  res.json(result);
+  try {
+    const creds = await resolveInterswitchCreds();
+    const result = await interswitchVerifyAccount(creds, { bankCode, accountNumber });
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Account verification failed";
+    const code = (err as { statusCode?: number }).statusCode ?? 502;
+    res.status(code).json({ error: msg });
+  }
 });
 
 // ── POST /payments/interswitch/verify-bvn ────────────────────────────────────
@@ -196,9 +202,15 @@ router.post("/payments/interswitch/verify-bvn", async (req, res): Promise<void> 
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { bvn } = req.body;
   if (!bvn) { res.status(400).json({ error: "bvn is required" }); return; }
-  const creds = await resolveInterswitchCreds();
-  const result = await interswitchVerifyBVN(creds, bvn);
-  res.json(result);
+  try {
+    const creds = await resolveInterswitchCreds();
+    const result = await interswitchVerifyBVN(creds, bvn);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "BVN verification failed";
+    const code = (err as { statusCode?: number }).statusCode ?? 502;
+    res.status(code).json({ error: msg });
+  }
 });
 
 // ── POST /payments/interswitch/refund ─────────────────────────────────────────

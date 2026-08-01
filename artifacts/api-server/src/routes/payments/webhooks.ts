@@ -1580,6 +1580,55 @@ async function processPaystackEvent(event: PaystackWebhookEvent): Promise<{ matc
 
     console.info(`[paystack webhook] ${event.event} — payoutId=${payout.id} vendor=${payout.vendorId}`);
     return { matched: true };
+  } else if (event.event === "dedicatedaccount.assign.success") {
+    // Paystack confirmed a dedicated NGN account for a vendor.
+    // event.data is typed for the common payment shape; cast to any for
+    // the dedicated-account-specific fields.
+    const raw = event.data as Record<string, unknown>;
+    const dedicatedAccount = raw["dedicated_account"] as Record<string, unknown> | undefined;
+    const customerCode = event.data.customer?.customer_code;
+    const accountNumber = dedicatedAccount?.["account_number"] as string | undefined;
+    const bankRaw = dedicatedAccount?.["bank"] as Record<string, unknown> | undefined;
+    const bankName = (bankRaw?.["name"] as string | undefined) ?? "Wema Bank";
+    if (!customerCode || !accountNumber) {
+      console.warn("[paystack webhook] dedicatedaccount.assign.success — missing customer_code or account_number");
+      return { matched: true };
+    }
+
+    // Look up vendor by Paystack customer code
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.paystackCustomerCode, customerCode));
+
+    if (!vendor) {
+      // May belong to an App Store developer — not a vendor, just skip
+      return { matched: true };
+    }
+
+    const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+    await db.insert(vendorVirtualAccountsTable).values({
+      vendorId:      vendor.id,
+      gateway:       "paystack",
+      accountNumber,
+      bankName,
+      accountName:   vendor.name,
+      currency:      "NGN",
+      type:          "dedicated",
+      referenceCode: customerCode,
+      metadata:      (dedicatedAccount ?? {}) as Record<string, unknown>,
+    }).onConflictDoNothing();
+
+    console.info(`[paystack webhook] dedicatedaccount.assign.success — vendor=${vendor.id} account=${accountNumber}`);
+
+    // Send in-app notification to the vendor
+    await db.insert(vendorNotificationsTable).values({
+      vendorId: vendor.id,
+      type:     "payment_received",
+      message:  `Your dedicated NGN bank account is ready: ${accountNumber} (${bankName}). Customers can now pay directly into this account.`,
+    }).catch(() => null);
+
+    return { matched: true };
   } else {
     console.info(`[paystack webhook] unhandled event type skipped — type=${event.event} id=${event.data.id ?? event.data.reference}`);
     return { matched: true };

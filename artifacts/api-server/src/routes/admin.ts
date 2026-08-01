@@ -2176,4 +2176,109 @@ router.get("/admin/platform-users/:clerkUserId", async (req, res) => {
   });
 });
 
+// ─── GET /admin/vendors/:id/payments ─────────────────────────────────────────
+// Returns paginated payment transactions for a specific vendor.
+
+router.get("/admin/vendors/:id/payments", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const page = Math.max(1, Number(req.query.page ?? 1));
+  const pageSize = 20;
+  const offset = (page - 1) * pageSize;
+
+  const payments = await db
+    .select({
+      id:                paymentsTable.id,
+      orderId:           paymentsTable.orderId,
+      provider:          paymentsTable.provider,
+      providerReference: paymentsTable.providerReference,
+      amount:            paymentsTable.amount,
+      currency:          paymentsTable.currency,
+      status:            paymentsTable.status,
+      createdAt:         paymentsTable.createdAt,
+      updatedAt:         paymentsTable.updatedAt,
+    })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.vendorId, id))
+    .orderBy(desc(paymentsTable.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.vendorId, id));
+
+  res.json({
+    payments: payments.map(p => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+    })),
+    page,
+    pageSize,
+    total: total ?? 0,
+  });
+});
+
+// ─── GET /admin/vendors/:id ────────────────────────────────────────────────────
+// Returns full details for a single vendor (profile + virtual accounts).
+
+router.get("/admin/vendors/:id", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid vendor id" }); return; }
+
+  const { vendorVirtualAccountsTable } = await import("@workspace/db/schema");
+
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, id))
+    .limit(1);
+
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const virtualAccounts = await db
+    .select()
+    .from(vendorVirtualAccountsTable)
+    .where(and(
+      eq(vendorVirtualAccountsTable.vendorId, id),
+      eq(vendorVirtualAccountsTable.isActive, true),
+    ));
+
+  res.json({
+    vendor: {
+      id:                vendor.id,
+      name:              vendor.name,
+      email:             vendor.email,
+      phone:             vendor.phone,
+      country:           vendor.country,
+      state:             vendor.state,
+      city:              vendor.city,
+      industry:          vendor.industry,
+      status:            vendor.status,
+      subscriptionTier:  vendor.subscriptionTier,
+      verificationLevel: vendor.verificationLevel,
+      trialEndsAt:       vendor.trialEndsAt?.toISOString() ?? null,
+      trialStartedAt:    vendor.trialStartedAt?.toISOString() ?? null,
+      trialDurationDays: vendor.trialDurationDays ?? null,
+      paystackCustomerCode: vendor.paystackCustomerCode ?? null,
+      createdAt:         vendor.createdAt.toISOString(),
+    },
+    virtualAccounts: virtualAccounts.map(a => ({
+      ...a,
+      createdAt: a.createdAt.toISOString(),
+    })),
+  });
+});
+
 export default router;
