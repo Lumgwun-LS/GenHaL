@@ -7,6 +7,8 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -29,6 +31,11 @@ export default function MessagesPage() {
   const [toName,  setToName]  = useState("");
   const [search,  setSearch]  = useState("");
   const [sendingEmail, setSendingEmail] = useState(true);
+  const [broadcastOpen, setBroadcastOpen]     = useState(false);
+  const [broadcastSubject, setBroadcastSubject] = useState("");
+  const [broadcastBody, setBroadcastBody]     = useState("");
+  const [broadcastEmail, setBroadcastEmail]   = useState(true);
+  const [broadcastSending, setBroadcastSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: contactsData, isLoading: contactsLoading } = useQuery({
@@ -60,6 +67,28 @@ export default function MessagesPage() {
     onError: () => toast.error("Failed to send message"),
   });
 
+  async function handleBroadcast() {
+    if (!broadcastBody.trim()) return;
+    setBroadcastSending(true);
+    try {
+      const res = await fetch(`${BASE}/api/vendor-messages/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: broadcastSubject || undefined, body: broadcastBody, sendEmailNotification: broadcastEmail }),
+      });
+      const data = (await res.json()) as { ok?: boolean; sent?: number; message?: string; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Broadcast failed");
+      toast.success(data.message ?? `Broadcast sent to ${data.sent ?? 0} customers`);
+      setBroadcastOpen(false);
+      setBroadcastSubject(""); setBroadcastBody("");
+      qc.invalidateQueries({ queryKey: ["vendor-msg-contacts"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Broadcast failed");
+    } finally {
+      setBroadcastSending(false);
+    }
+  }
+
   // Scroll to bottom when thread loads
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,11 +119,18 @@ export default function MessagesPage() {
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-lg">Messages</h2>
-              <button onClick={() => { setComposeOpen(true); setSelectedEmail(null); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#7F50FF,#FF7F50)" }}>
-                + New
-              </button>
+              <div className="flex gap-1.5">
+                <button onClick={() => setBroadcastOpen(true)}
+                  title="Broadcast to all customers"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold border border-border text-muted-foreground hover:bg-muted/60 transition-colors">
+                  📢
+                </button>
+                <button onClick={() => { setComposeOpen(true); setSelectedEmail(null); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white"
+                  style={{ background: "linear-gradient(135deg,#7F50FF,#FF7F50)" }}>
+                  + New
+                </button>
+              </div>
             </div>
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search customers…"
@@ -281,6 +317,53 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
+      {/* ── Broadcast dialog ───────────────────────────────────────────── */}
+      <Dialog open={broadcastOpen} onOpenChange={setBroadcastOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>📢 Broadcast to All Customers</DialogTitle>
+            <DialogDescription>
+              Send one message (and email) to every customer you've ever done business with — order customers and CRM leads combined.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground block mb-1.5">Subject (optional)</label>
+              <input
+                value={broadcastSubject}
+                onChange={e => setBroadcastSubject(e.target.value)}
+                placeholder="e.g. Exciting news for our customers!"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 bg-background"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground block mb-1.5">Message *</label>
+              <textarea
+                value={broadcastBody}
+                onChange={e => setBroadcastBody(e.target.value)}
+                rows={5}
+                placeholder="Type your broadcast message here…"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 bg-background resize-none"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={broadcastEmail} onChange={e => setBroadcastEmail(e.target.checked)} className="w-4 h-4 rounded" />
+              Also deliver via email to each customer
+            </label>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setBroadcastOpen(false)}>Cancel</Button>
+            <Button
+              disabled={broadcastSending || !broadcastBody.trim()}
+              onClick={handleBroadcast}
+              className="gap-2"
+              style={{ background: "linear-gradient(135deg,#7F50FF,#FF7F50)", border: "none", color: "#fff" }}
+            >
+              {broadcastSending ? "Sending…" : "Send Broadcast"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

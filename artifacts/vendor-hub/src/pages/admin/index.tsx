@@ -49,8 +49,160 @@ import IntegrationErrorsPanel from "./integration-errors";
 import FeatureTrialsPanel from "./feature-trials";
 import PlatformUsersPanel from "./platform-users";
 import BlogModerationPanel from "./blog-moderation";
+import AdminCustomersPanel from "./customers-panel";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+// ── Admin Customer Newsletter ─────────────────────────────────────────────────
+
+function AdminCustomerNewsletterSection() {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [targetType, setTargetType] = useState<"all" | "vendor">("all");
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState<{ id: number; name: string } | null>(null);
+  const [fromVendorName, setFromVendorName] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [lastResult, setLastResult] = useState<{ sent: number; message: string } | null>(null);
+
+  const { data: vendorResults } = useQuery<{ vendors: { id: number; name: string; email: string }[] }>({
+    queryKey: ["admin-vendor-search-newsletter", vendorSearch],
+    queryFn: () => authFetch(`${BASE_URL}/api/admin/vendors?search=${encodeURIComponent(vendorSearch)}&limit=10`, { credentials: "include" }).then(r => r.json()),
+    enabled: vendorSearch.length > 1 && targetType === "vendor" && !selectedVendor,
+  });
+
+  async function handleSend() {
+    if (!subject.trim() || !body.trim()) return;
+    if (targetType === "vendor" && !selectedVendor) return;
+    setSending(true);
+    setLastResult(null);
+    try {
+      const res = await authFetch(`${BASE_URL}/api/admin/newsletter/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          subject: subject.trim(),
+          body: body.trim(),
+          targetType,
+          vendorId: selectedVendor?.id,
+          fromVendorName,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; sent?: number; message?: string; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed to send");
+      setLastResult({ sent: data.sent ?? 0, message: data.message ?? "Sent." });
+      toast.success(`Customer newsletter queued: ${data.sent ?? 0} recipients`);
+      setSubject(""); setBody("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Mail className="w-5 h-5 text-primary" /> Newsletter to Customers
+        </CardTitle>
+        <CardDescription>
+          Send an email newsletter directly to registered customers. You can target all customers or only those of a specific vendor.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Target */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide">Target audience</Label>
+            <Select value={targetType} onValueChange={v => { setTargetType(v as "all" | "vendor"); setSelectedVendor(null); setVendorSearch(""); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All registered customers</SelectItem>
+                <SelectItem value="vendor">Customers of a specific vendor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {targetType === "vendor" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide">Vendor</Label>
+              {selectedVendor ? (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="px-3 py-1">{selectedVendor.name}</Badge>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setSelectedVendor(null); setVendorSearch(""); }}>Change</Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    placeholder="Search vendor name…"
+                    value={vendorSearch}
+                    onChange={e => setVendorSearch(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  {vendorResults?.vendors && vendorResults.vendors.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-background border border-border rounded-lg shadow-lg overflow-hidden">
+                      {vendorResults.vendors.map(v => (
+                        <button
+                          key={v.id}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                          onClick={() => { setSelectedVendor(v); setVendorSearch(""); }}
+                        >
+                          <span className="font-medium">{v.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{v.email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {targetType === "vendor" && selectedVendor && (
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={fromVendorName}
+              onChange={e => setFromVendorName(e.target.checked)}
+              className="w-4 h-4 rounded"
+            />
+            Send in the name of <strong className="mx-1">{selectedVendor.name}</strong> (from vendor branding)
+          </label>
+        )}
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-wide">Subject</Label>
+          <Input placeholder="Newsletter subject…" value={subject} onChange={e => setSubject(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-wide">Message</Label>
+          <Textarea placeholder="Write your newsletter message…" value={body} onChange={e => setBody(e.target.value)} rows={5} />
+        </div>
+
+        {lastResult && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {lastResult.message}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSend}
+            disabled={sending || !subject.trim() || !body.trim() || (targetType === "vendor" && !selectedVendor)}
+            className="gap-2"
+          >
+            <Send className="w-4 h-4" />
+            {sending ? "Sending…" : `Send Newsletter${targetType === "vendor" && selectedVendor ? ` to ${selectedVendor.name}'s Customers` : " to All Customers"}`}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 const TIERS = ["free", "starter", "pro", "enterprise"] as const;
 const LEVELS = ["unverified", "basic", "verified", "premium"] as const;
@@ -2896,6 +3048,9 @@ export default function AdminPanel() {
           <TabsTrigger value="platform-users" className="flex items-center gap-2">
             <Users className="w-4 h-4" /> Platform Users
           </TabsTrigger>
+          <TabsTrigger value="customers" className="flex items-center gap-2">
+            <Users className="w-4 h-4" /> Customers
+          </TabsTrigger>
           <TabsTrigger value="blog-moderation" className="flex items-center gap-2">
             <BookOpen className="w-4 h-4" /> Blog Moderation
           </TabsTrigger>
@@ -4186,6 +4341,9 @@ export default function AdminPanel() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── Newsletter to Customers ─────────────────────────────────── */}
+          <AdminCustomerNewsletterSection />
         </TabsContent>
 
         {/* ── Payment Conflicts tab ────────────────────────────────────── */}
@@ -4290,6 +4448,11 @@ export default function AdminPanel() {
         {/* ── Platform Users tab ──────────────────────────────────────────── */}
         <TabsContent value="platform-users">
           <PlatformUsersPanel />
+        </TabsContent>
+
+        {/* ── Customers tab ────────────────────────────────────────────────── */}
+        <TabsContent value="customers">
+          <AdminCustomersPanel />
         </TabsContent>
 
         {/* ── Blog Moderation tab ──────────────────────────────────────────── */}

@@ -11,7 +11,7 @@
 
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
-import { eq, and, desc, sql, or } from "drizzle-orm";
+import { eq, and, desc, sql, or, inArray } from "drizzle-orm";
 import {
   db,
   vendorsTable,
@@ -19,12 +19,12 @@ import {
   customerNotificationsTable,
   customersTable,
   ordersTable,
+  leadsTable,
 } from "@workspace/db";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail } from "../lib/email-branding";
 
 const router: IRouter = Router();
-export default router;
 
 // ── Auth helper ────────────────────────────────────────────────────────────────
 
@@ -253,3 +253,105 @@ router.get("/vendor-messages/unread-count", async (req, res): Promise<void> => {
 
   res.json({ unread: Number(row?.count ?? 0) });
 });
+
+// ── POST /vendor-messages/broadcast ──────────────────────────────────────────
+// Vendor sends a message (and optional email) to ALL of their customers at once.
+// Recipients = union of: customers with orders from this vendor + CRM leads.
+
+router.post("/vendor-messages/broadcast", async (req, res): Promise<void> => {
+  const vendor = await resolveAuthedVendor(req);
+  if (!vendor) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { subject, body, sendEmailNotification = true } = req.body as {
+    subject?: string; body: string; sendEmailNotification?: boolean;
+  };
+  if (!body?.trim()) { res.status(400).json({ error: "body is required" }); return; }
+
+  // Collect distinct recipients: order customers + CRM leads
+  const orderCustomers = await db
+    .selectDistinctOn([ordersTable.customerEmail], {
+      email: ordersTable.customerEmail,
+      name:  ordersTable.customerName,
+      customerId: sql<number | null>`null`,
+    })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.vendorId, vendor.id),
+      sql`${ordersTable.customerEmail} is not null`,
+    ));
+
+  const leads = await db
+    .select({ email: leadsTable.email, name: leadsTable.name })
+    .from(leadsTable)
+    .where(and(
+      eq(leadsTable.vendorId, vendor.id),
+      sql`${leadsTable.email} is not null`,
+    ));
+
+  const seen = new Set<string>();
+  const recipients: { email: string; name: string }[] = [];
+  for (const r of [...orderCustomers, ...leads]) {
+    if (r.email && !seen.has(r.email.toLowerCase())) {
+      seen.add(r.email.toLowerCase());
+      recipients.push({ email: r.email, name: r.name });
+    }
+  }
+
+  if (!recipients.length) {
+    res.json({ ok: true, sent: 0, message: "No customers found to broadcast to." });
+    return;
+  }
+
+  // Resolve customer account IDs for in-app notifications
+  const customerMap = new Map<string, number>();
+  const custRows = await db
+    .select({ id: customersTable.id, email: customersTable.email })
+    .from(customersTable)
+    .where(inArray(customersTable.email, recipients.map(r => r.email)));
+  for (const c of custRows) customerMap.set(c.email, c.id);
+
+  const total = recipients.length;
+  res.json({ ok: true, sent: total, message: `Broadcast sent to ${total} customer${total === 1 ? "" : "s"}.` });
+
+  void (async () => {
+    for (const r of recipients) {
+      const customerId = customerMap.get(r.email) ?? null;
+      // Save message record
+      const [msg] = await db.insert(vendorCustomerMessagesTable).values({
+        vendorId:      vendor.id,
+        customerId,
+        customerEmail: r.email,
+        customerName:  r.name,
+        subject:       subject?.trim() || null,
+        body:          body.trim(),
+        direction:     "vendor_to_customer",
+        read:          false,
+      }).returning();
+
+      // In-app notification if customer has an account
+      if (customerId) {
+        await db.insert(customerNotificationsTable).values({
+          customerId,
+          type:     "vendor_message",
+          title:    `📩 Message from ${vendor.name}${subject ? `: ${subject}` : ""}`,
+          message:  body.trim().slice(0, 300),
+          metadata: { vendorId: vendor.id, vendorName: vendor.name, messageId: msg?.id },
+        }).catch(() => {});
+      }
+
+      // Email notification
+      if (sendEmailNotification) {
+        const subjectLine = subject?.trim() || `Message from ${vendor.name}`;
+        const html = wrapVendorEmail({ bodyHtml:
+          `<p style="font-size:16px;margin:0 0 16px">Hi ${r.name.split(" ")[0] ?? r.name},</p>
+           <p style="font-size:15px;line-height:1.7;margin:0 0 20px;white-space:pre-wrap">${body.trim()}</p>
+           <p style="font-size:13px;color:#9ca3af;margin:0">This message was sent to you by ${vendor.name} via Awa Biz Suite.</p>`,
+        });
+        await sendEmail({ to: r.email, subject: subjectLine, html }).catch(() => null);
+      }
+    }
+    console.log(`[vendor-messages/broadcast] vendor ${vendor.id} → ${total} customers`);
+  })();
+});
+
+export default router;

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
-import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable, platformUsersTable, ordersTable, pageViewsTable } from "@workspace/db/schema";
+import { vendorsTable, vendorPaymentCredentialsTable, birthdayMessageLogsTable, voiceCallLogsTable, adminAuditLogTable, adminExportLogsTable, adminExportAcknowledgmentsTable, adminExportAcknowledgmentLogTable, voiceCampaignsTable, voiceCampaignCallsTable, voiceSignatureFailuresTable, voiceSignatureFailureAcknowledgmentsTable, voiceSignatureFailureAcknowledgmentLogTable, vendorNotificationsTable, paymentsTable, platformUsersTable, ordersTable, pageViewsTable, customersTable, leadsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, gt, asc, inArray, sql, isNull, or, ilike, type SQL } from "drizzle-orm";
 import { subscriptionRefundBlacklistTable } from "@workspace/db/schema";
 import { isTwilioConfigured } from "../lib/voice-caller";
@@ -2669,6 +2669,182 @@ router.post("/admin/vendors/:id/usd-account", async (req, res): Promise<void> =>
     routingNumber: acct.routing_number,
     beneficiaryName: acct.beneficiary_name,
   });
+});
+
+// ─── GET /admin/users-summary ─────────────────────────────────────────────────
+
+router.get("/admin/users-summary", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [[vc], [cc], [puc], [vc7], [cc7]] = await Promise.all([
+    db.select({ total: sql<number>`count(*)` }).from(vendorsTable),
+    db.select({ total: sql<number>`count(*)` }).from(customersTable),
+    db.select({ total: sql<number>`count(*)` }).from(platformUsersTable),
+    db.select({ total: sql<number>`count(*)` }).from(vendorsTable).where(gte(vendorsTable.createdAt, sevenDaysAgo)),
+    db.select({ total: sql<number>`count(*)` }).from(customersTable).where(gte(customersTable.createdAt, sevenDaysAgo)),
+  ]);
+
+  res.json({
+    vendors:        Number(vc?.total   ?? 0),
+    customers:      Number(cc?.total   ?? 0),
+    platformUsers:  Number(puc?.total  ?? 0),
+    newVendors7d:   Number(vc7?.total  ?? 0),
+    newCustomers7d: Number(cc7?.total  ?? 0),
+  });
+});
+
+// ─── GET /admin/customers ─────────────────────────────────────────────────────
+// Paginated list of all registered customers. ?search=, ?vendorId=, ?limit=, ?offset=
+
+router.get("/admin/customers", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const limit    = Math.min(Math.max(Number(req.query.limit  ?? 50), 1), 200);
+  const offset   = Math.max(Number(req.query.offset ?? 0), 0);
+  const search   = String(req.query.search ?? "").trim();
+  const vendorId = req.query.vendorId ? Number(req.query.vendorId) : undefined;
+
+  const conditions: SQL[] = [];
+  if (search) {
+    conditions.push(or(
+      ilike(customersTable.name, `%${search}%`),
+      ilike(customersTable.email, `%${search}%`),
+    ) as SQL);
+  }
+  if (vendorId !== undefined && !isNaN(vendorId)) {
+    conditions.push(eq(ordersTable.vendorId, vendorId));
+  }
+  const whereClause = conditions.length ? and(...conditions) : undefined;
+
+  const rows = await db
+    .select({
+      id:           customersTable.id,
+      name:         customersTable.name,
+      email:        customersTable.email,
+      phone:        customersTable.phone,
+      createdAt:    customersTable.createdAt,
+      orderCount:   sql<number>`cast(count(distinct ${ordersTable.id}) as int)`,
+      vendorCount:  sql<number>`cast(count(distinct ${ordersTable.vendorId}) as int)`,
+      totalSpend:   sql<number>`cast(coalesce(sum(${ordersTable.totalAmount}), 0) as numeric)`,
+      firstOrderAt: sql<string | null>`min(${ordersTable.createdAt})`,
+    })
+    .from(customersTable)
+    .leftJoin(ordersTable, eq(ordersTable.customerId, customersTable.id))
+    .where(whereClause)
+    .groupBy(customersTable.id)
+    .orderBy(desc(customersTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const [countRow] = await db
+    .select({ total: sql<number>`cast(count(distinct ${customersTable.id}) as int)` })
+    .from(customersTable)
+    .leftJoin(ordersTable, eq(ordersTable.customerId, customersTable.id))
+    .where(whereClause);
+
+  res.json({
+    customers: rows.map(r => ({
+      ...r,
+      totalSpend:  Number(r.totalSpend),
+      createdAt:   r.createdAt.toISOString(),
+      firstOrderAt: r.firstOrderAt ?? null,
+    })),
+    total: Number(countRow?.total ?? 0),
+    limit,
+    offset,
+  });
+});
+
+// ─── POST /admin/newsletter/customers ─────────────────────────────────────────
+// Sends a newsletter to all customers or to the customers of a specific vendor.
+// When fromVendorName=true and targetType="vendor", the email is attributed to the vendor.
+
+router.post("/admin/newsletter/customers", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const { subject, body, targetType, vendorId: rawVendorId, fromVendorName } = req.body as {
+    subject: string; body: string;
+    targetType: "all" | "vendor";
+    vendorId?: number;
+    fromVendorName?: boolean;
+  };
+
+  if (!subject?.trim()) { res.status(400).json({ error: "subject is required" }); return; }
+  if (!body?.trim())    { res.status(400).json({ error: "body is required" }); return; }
+  const vid = rawVendorId ? Number(rawVendorId) : undefined;
+  if (targetType === "vendor" && !vid) {
+    res.status(400).json({ error: "vendorId is required for vendor-targeted newsletters" }); return;
+  }
+
+  let vendorName: string | null = null;
+  if (targetType === "vendor" && vid) {
+    const [v] = await db.select({ name: vendorsTable.name }).from(vendorsTable).where(eq(vendorsTable.id, vid)).limit(1);
+    if (!v) { res.status(404).json({ error: "Vendor not found" }); return; }
+    vendorName = v.name;
+  }
+
+  // Collect distinct recipients
+  let recipients: { email: string; name: string }[] = [];
+
+  if (targetType === "all") {
+    const rows = await db
+      .select({ email: customersTable.email, name: customersTable.name })
+      .from(customersTable)
+      .where(sql`${customersTable.email} is not null`);
+    recipients = rows.map(r => ({ email: r.email, name: r.name }));
+  } else if (targetType === "vendor" && vid) {
+    // Customers via orders
+    const orderCustomers = await db
+      .selectDistinctOn([customersTable.email], { email: customersTable.email, name: customersTable.name })
+      .from(ordersTable)
+      .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
+      .where(and(eq(ordersTable.vendorId, vid), sql`${customersTable.email} is not null`));
+
+    // CRM leads
+    const leads = await db
+      .select({ email: leadsTable.email, name: leadsTable.name })
+      .from(leadsTable)
+      .where(and(eq(leadsTable.vendorId, vid), sql`${leadsTable.email} is not null`));
+
+    const seen = new Set<string>();
+    for (const r of [...orderCustomers, ...leads]) {
+      if (r.email && !seen.has(r.email.toLowerCase())) {
+        seen.add(r.email.toLowerCase());
+        recipients.push({ email: r.email, name: r.name });
+      }
+    }
+  }
+
+  if (!recipients.length) {
+    res.json({ ok: true, sent: 0, message: "No recipients found." });
+    return;
+  }
+
+  const displayName = fromVendorName && vendorName ? vendorName : "Awa Biz Suite";
+  const total = recipients.length;
+  // Respond immediately — send in background
+  res.json({ ok: true, sent: total, message: `Queued newsletter to ${total} recipient${total === 1 ? "" : "s"}.` });
+
+  void (async () => {
+    for (const r of recipients) {
+      const firstName = r.name.split(" ")[0] ?? r.name;
+      const html = wrapVendorEmail({ bodyHtml:
+        `<p style="font-size:16px;margin:0 0 16px">Hi ${escapeHtml(firstName)},</p>
+         <div style="font-size:15px;line-height:1.7;margin:0 0 24px;white-space:pre-wrap">${escapeHtml(body.trim())}</div>
+         <p style="font-size:12px;color:#9ca3af;margin:0">Sent by ${escapeHtml(displayName)} via Awa Biz Suite.</p>`,
+      });
+      await sendEmail({ to: r.email, subject: subject.trim(), html }).catch(() => null);
+    }
+    console.log(`[admin/newsletter] sent newsletter to ${total} customers`);
+  })();
 });
 
 export default router;
