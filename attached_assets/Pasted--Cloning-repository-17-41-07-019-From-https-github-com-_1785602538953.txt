@@ -1,0 +1,76 @@
+	Cloning repository...
+17:41:07.019	From https://github.com/Lumgwun-LS/Awa-Business-Suite
+17:41:07.019	 * branch            9da80cc57eeaab93493eb7baeafa5c4979c6e02a -> FETCH_HEAD
+17:41:07.019	
+17:41:16.206	HEAD is now at 9da80cc Add integration test confirming vendor and campaign names are resolved correctly after a real backfill run
+17:41:16.206	
+17:41:16.261	
+17:41:16.261	Using v2 root directory strategy
+17:41:16.710	Success: Finished cloning repository files
+17:41:17.826	Checking for configuration in a Wrangler configuration file (BETA)
+17:41:17.826	
+17:41:17.947	No Wrangler configuration file found. Continuing.
+17:41:18.063	Detected the following tools from environment: pnpm@10.11.1, nodejs@22.16.0
+17:41:18.991	Installing project dependencies: pnpm install
+17:41:19.529	Scope: all 20 workspace projects
+17:41:19.641	Lockfile is up to date, resolution step is skipped
+17:41:19.733	Progress: resolved 1, reused 0, downloaded 0, added 0
+17:41:19.899	Packages: +1498
+17:41:19.899	++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+17:41:20.729	Progress: resolved 1498, reused 0, downloaded 98, added 56
+17:41:21.730	Progress: resolved 1498, reused 0, downloaded 267, added 137
+17:41:22.730	Progress: resolved 1498, reused 0, downloaded 465, added 302
+17:41:23.731	Progress: resolved 1498, reused 0, downloaded 534, added 331
+17:41:24.731	Progress: resolved 1498, reused 0, downloaded 686, added 399
+17:41:25.734	Progress: resolved 1498, reused 0, downloaded 853, added 488
+17:41:26.733	Progress: resolved 1498, reused 0, downloaded 898, added 507
+17:41:27.734	Progress: resolved 1498, reused 0, downloaded 925, added 519
+17:41:28.734	Progress: resolved 1498, reused 0, downloaded 1032, added 559
+17:41:29.735	Progress: resolved 1498, reused 0, downloaded 1080, added 579
+17:41:30.774	Progress: resolved 1498, reused 0, downloaded 1160, added 610
+17:41:31.783	Progress: resolved 1498, reused 0, downloaded 1250, added 661
+17:41:32.788	Progress: resolved 1498, reused 0, downloaded 1394, added 816
+17:41:33.790	Progress: resolved 1498, reused 0, downloaded 1445, added 1119
+17:41:34.436	Progress: resolved 1498, reused 0, downloaded 1445, added 1498, done
+17:41:34.984	.../esbuild@0.27.3/node_modules/esbuild postinstall$ node install.js
+17:41:35.073	.../esbuild@0.27.3/node_modules/esbuild postinstall: Done
+17:41:35.468	
+17:41:35.468	devDependencies:
+17:41:35.468	+ prettier 3.8.4
+17:41:35.468	+ typescript 5.9.3
+17:41:35.468	
+17:41:35.468	╭ Warning ─────────────────────────────────────────────────────────────────────╮
+17:41:35.469	│                                                                              │
+17:41:35.469	│   Ignored build scripts: @clerk/shared, @google/genai, browser-tabs-lock,    │
+17:41:35.469	│   core-js, protobufjs.                                                       │
+17:41:35.469	│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+17:41:35.469	│   to run scripts.                                                            │
+17:41:35.469	│                                                                              │
+17:41:35.469	╰──────────────────────────────────────────────────────────────────────────────╯
+17:41:35.470	
+17:41:35.535	. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+17:41:35.554	. preinstall: Done
+17:41:35.769	Done in 16.6s using pnpm v10.11.1
+17:41:35.830	Executing user command: pnpm --filter @workspace/vendor-hub build
+17:41:36.280	
+17:41:36.280	> @workspace/vendor-hub@0.0.0 build /opt/buildhome/repo/artifacts/vendor-hub
+17:41:36.280	> vite build --config vite.config.ts
+17:41:36.280	
+17:41:36.591	failed to load config from /opt/buildhome/repo/artifacts/vendor-hub/vite.config.ts
+17:41:36.592	error during build:
+17:41:36.592	Error: PORT environment variable is required but was not provided.
+17:41:36.592	    at file:///opt/buildhome/repo/artifacts/vendor-hub/node_modules/.vite-temp/vite.config.ts.timestamp-1785602496500-f829012da048.mjs:10:9
+17:41:36.592	    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
+17:41:36.593	    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
+17:41:36.593	    at async loadConfigFromBundledFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35996:12)
+17:41:36.593	    at async bundleAndLoadConfigFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35884:17)
+17:41:36.593	    at async loadConfigFromFile (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35851:42)
+17:41:36.593	    at async resolveConfig (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:35500:22)
+17:41:36.593	    at async createBuilder (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:33955:19)
+17:41:36.593	    at async CAC.<anonymous> (file:///opt/buildhome/repo/node_modules/.pnpm/vite@7.3.5_@types+node@25.9.4_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4_yaml@2.9.0/node_modules/vite/dist/node/cli.js:629:10)
+17:41:36.616	/opt/buildhome/repo/artifacts/vendor-hub:
+17:41:36.617	 ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/vendor-hub@0.0.0 build: `vite build --config vite.config.ts`
+17:41:36.617	Exit status 1
+17:41:36.647	Failed: Error while executing user command. Exited with error code: 1
+17:41:36.652	Failed: build command exited with code: 1
+17:41:37.412	Failed: error occurred while running build command
