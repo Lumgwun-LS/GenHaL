@@ -2417,17 +2417,16 @@ router.post("/admin/vendors/:id/squad-ngn-account", async (req, res): Promise<vo
   // Map vendor.gender (male/female/other) → Squad gender code (1=Male, 2=Female)
   const genderCode: "1" | "2" = vendor.gender === "female" ? "2" : "1";
 
-  // Duplicate guard
-  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+  // Vendors may only have one dedicated NGN account regardless of gateway
+  const [existingNGN] = await db.select({ id: vendorVirtualAccountsTable.id })
     .from(vendorVirtualAccountsTable)
     .where(and(
       eq(vendorVirtualAccountsTable.vendorId, id),
-      eq(vendorVirtualAccountsTable.gateway, "squad"),
       eq(vendorVirtualAccountsTable.currency, "NGN"),
       eq(vendorVirtualAccountsTable.type, "dedicated"),
       eq(vendorVirtualAccountsTable.isActive, true),
     )).limit(1);
-  if (existing) { res.status(409).json({ error: "A Squad NGN dedicated account already exists for this vendor." }); return; }
+  if (existingNGN) { res.status(409).json({ error: "This vendor already has a dedicated NGN account." }); return; }
 
   let secretKey: string;
   try { secretKey = await resolveSquadKey(); }
@@ -2503,15 +2502,16 @@ router.post("/admin/vendors/:id/interswitch-account", async (req, res): Promise<
   const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
-  // Duplicate guard
-  const [existing] = await db.select({ id: vendorVirtualAccountsTable.id })
+  // Vendors may only have one dedicated NGN account regardless of gateway
+  const [existingNGN] = await db.select({ id: vendorVirtualAccountsTable.id })
     .from(vendorVirtualAccountsTable)
     .where(and(
       eq(vendorVirtualAccountsTable.vendorId, id),
-      eq(vendorVirtualAccountsTable.gateway, "interswitch"),
+      eq(vendorVirtualAccountsTable.currency, "NGN"),
+      eq(vendorVirtualAccountsTable.type, "dedicated"),
       eq(vendorVirtualAccountsTable.isActive, true),
     )).limit(1);
-  if (existing) { res.status(409).json({ error: "An Interswitch virtual account already exists for this vendor." }); return; }
+  if (existingNGN) { res.status(409).json({ error: "This vendor already has a dedicated NGN account." }); return; }
 
   let creds: Awaited<ReturnType<typeof resolveInterswitchCreds>>;
   try { creds = await resolveInterswitchCreds(); }

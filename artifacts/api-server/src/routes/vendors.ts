@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, sql, desc, or } from "drizzle-orm";
+import { eq, ilike, sql, desc, or, and } from "drizzle-orm";
 import { db, vendorsTable, bannedIdentifiersTable, platformUsersTable, storeDeveloperAccountsTable, vendorVirtualAccountsTable } from "@workspace/db";
 import { getAuth, clerkClient } from "@clerk/express";
 import { BRAND_THEME_IDS } from "../lib/brand-themes";
@@ -216,8 +216,19 @@ router.post("/vendors/onboarding", async (req, res): Promise<void> => {
     // Auto-provision a Paystack NGN dedicated account for the vendor.
     // Paystack may confirm the account number synchronously or via the
     // dedicatedaccount.assign.success webhook (handled in payments/webhooks.ts).
+    // Skip if the vendor already has any dedicated NGN account (re-onboarding race).
     void (async () => {
       try {
+        const [existingNGN] = await db.select({ id: vendorVirtualAccountsTable.id })
+          .from(vendorVirtualAccountsTable)
+          .where(and(
+            eq(vendorVirtualAccountsTable.vendorId, vendor.id),
+            eq(vendorVirtualAccountsTable.currency, "NGN"),
+            eq(vendorVirtualAccountsTable.type, "dedicated"),
+            eq(vendorVirtualAccountsTable.isActive, true),
+          )).limit(1);
+        if (existingNGN) return;
+
         const paystackKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackKey) return;
         const nameParts = vendor.name.split(" ");

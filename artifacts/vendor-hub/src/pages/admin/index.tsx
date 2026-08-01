@@ -531,11 +531,10 @@ function AdminVendorKYCDialog({
     }
   }
 
-  // Which account types already exist
-  const hasSquadUSD  = kyc?.accounts.some(a => a.gateway === "squad" && a.currency === "USD") ?? false;
-  const hasSquadNGN  = kyc?.accounts.some(a => a.gateway === "squad" && a.currency === "NGN" && a.type === "dedicated") ?? false;
-  const hasInterswitch = kyc?.accounts.some(a => a.gateway === "interswitch") ?? false;
-  const hasPaystackNGN = kyc?.accounts.some(a => a.gateway === "paystack") ?? false;
+  // A vendor may only hold ONE dedicated NGN account total (any gateway).
+  // USD accounts are separate and don't count against this limit.
+  const hasNGN         = kyc?.accounts.some(a => a.currency === "NGN" && a.type === "dedicated") ?? false;
+  const hasSquadUSD    = kyc?.accounts.some(a => a.gateway === "squad" && a.currency === "USD") ?? false;
 
   return (
     <Dialog open={!!vendor} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
@@ -616,39 +615,62 @@ function AdminVendorKYCDialog({
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Create Account</h4>
               <div className="grid gap-2">
-                {/* Paystack NGN — auto-provisioned on signup */}
-                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasPaystackNGN ? "opacity-60" : ""}`}>
-                  <div>
-                    <div className="text-sm font-medium">Paystack NGN</div>
-                    <div className="text-xs text-muted-foreground">Auto-provisioned on signup via Wema Bank</div>
-                  </div>
-                  {hasPaystackNGN
-                    ? <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
-                    : <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">Auto</Badge>}
-                </div>
-
-                {/* Squad NGN dedicated */}
-                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasSquadNGN ? "opacity-60" : ""}`}>
-                  <div>
-                    <div className="text-sm font-medium">Squad NGN Dedicated</div>
-                    <div className="text-xs text-muted-foreground">Requires KYC complete + gender</div>
-                  </div>
-                  {hasSquadNGN ? (
+                {/* NGN dedicated — only one allowed across all gateways */}
+                {hasNGN ? (
+                  <div className="rounded-md border p-3 flex items-center justify-between gap-2 opacity-60">
+                    <div>
+                      <div className="text-sm font-medium">NGN Dedicated Account</div>
+                      <div className="text-xs text-muted-foreground">One NGN dedicated account per vendor</div>
+                    </div>
                     <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
-                  ) : (
-                    <Button
-                      size="sm" variant="outline"
-                      className="h-7 text-xs shrink-0"
-                      disabled={!kyc?.kycComplete || saving}
-                      onClick={() => handleCreateAccount("squad-ngn")}
-                      title={!kyc?.kycComplete ? "Complete KYC first" : undefined}
-                    >
-                      {saving && creatingGateway === "squad-ngn" ? "Creating…" : "Create"}
-                    </Button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Paystack — auto on signup */}
+                    <div className="rounded-md border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium">Paystack NGN</div>
+                        <div className="text-xs text-muted-foreground">Auto-provisioned on signup via Wema Bank</div>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">Auto</Badge>
+                    </div>
 
-                {/* Squad USD */}
+                    {/* Squad NGN dedicated */}
+                    <div className="rounded-md border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium">Squad NGN Dedicated</div>
+                        <div className="text-xs text-muted-foreground">Requires KYC complete + gender</div>
+                      </div>
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-7 text-xs shrink-0"
+                        disabled={!kyc?.kycComplete || saving}
+                        onClick={() => handleCreateAccount("squad-ngn")}
+                        title={!kyc?.kycComplete ? "Complete KYC first" : undefined}
+                      >
+                        {saving && creatingGateway === "squad-ngn" ? "Creating…" : "Create"}
+                      </Button>
+                    </div>
+
+                    {/* Interswitch NGN */}
+                    <div className="rounded-md border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium">Interswitch NGN</div>
+                        <div className="text-xs text-muted-foreground">Quickteller wallet via any partner bank</div>
+                      </div>
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-7 text-xs shrink-0"
+                        disabled={saving}
+                        onClick={() => handleCreateAccount("interswitch")}
+                      >
+                        {saving && creatingGateway === "interswitch" ? "Creating…" : "Create"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                {/* Squad USD — independent of NGN limit */}
                 <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasSquadUSD ? "opacity-60" : ""}`}>
                   <div>
                     <div className="text-sm font-medium">Squad USD</div>
@@ -667,32 +689,12 @@ function AdminVendorKYCDialog({
                     </Button>
                   )}
                 </div>
-
-                {/* Interswitch NGN */}
-                <div className={`rounded-md border p-3 flex items-center justify-between gap-2 ${hasInterswitch ? "opacity-60" : ""}`}>
-                  <div>
-                    <div className="text-sm font-medium">Interswitch NGN</div>
-                    <div className="text-xs text-muted-foreground">Quickteller wallet via any partner bank</div>
-                  </div>
-                  {hasInterswitch ? (
-                    <Badge variant="secondary" className="text-xs shrink-0">Active</Badge>
-                  ) : (
-                    <Button
-                      size="sm" variant="outline"
-                      className="h-7 text-xs shrink-0"
-                      disabled={saving}
-                      onClick={() => handleCreateAccount("interswitch")}
-                    >
-                      {saving && creatingGateway === "interswitch" ? "Creating…" : "Create"}
-                    </Button>
-                  )}
-                </div>
               </div>
 
-              {!kyc?.kycComplete && (
+              {!hasNGN && !kyc?.kycComplete && (
                 <p className="text-xs text-muted-foreground">
                   <AlertCircle className="w-3 h-3 inline mr-1" />
-                  Squad NGN dedicated requires KYC. Squad USD and Interswitch can be created without it.
+                  Squad NGN requires KYC. Interswitch and Squad USD can be created without it.
                 </p>
               )}
             </div>
