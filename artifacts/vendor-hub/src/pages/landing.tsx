@@ -498,7 +498,7 @@ export default function LandingPage() {
           <motion.div 
             id="demo-preview"
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}
-            className="w-full max-w-5xl mx-auto rounded-xl overflow-hidden border border-border/50 shadow-2xl bg-card/40 backdrop-blur-md relative z-20 mb-10"
+            className="mx-4 sm:mx-8 lg:mx-14 rounded-xl overflow-hidden border border-border/50 shadow-2xl bg-card/40 backdrop-blur-md relative z-20 mb-10"
           >
             <div className="flex items-center gap-3 p-3 border-b border-border/50 bg-background/80">
               <Play className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />
