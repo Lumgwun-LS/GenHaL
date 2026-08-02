@@ -503,14 +503,19 @@ export default function LandingPage() {
             </motion.div>
           </div>
           </div>{/* end hero text wrapper */}
+        </section>{/* ── end hero section ── */}
 
-          {/* ── Full-width Video Showcase ── */}
+        {/* ── Full-width Video Showcase — own block so no parent clips it ── */}
+        <div
+          id="demo-preview"
+          className="w-screen relative -mx-0 bg-background pb-12"
+          style={{ marginLeft: "calc(50% - 50vw)", marginRight: "calc(50% - 50vw)" }}
+        >
           <motion.div
-            id="demo-preview"
             initial={{ opacity: 0, y: 56, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full px-4 sm:px-6 lg:px-10 relative z-20 mt-8 mb-12"
+            transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full px-4 sm:px-6 lg:px-10 relative"
           >
             {/* Outer glow halo */}
             <div className="absolute inset-0 mx-4 sm:mx-6 lg:mx-10 rounded-2xl pointer-events-none"
@@ -628,7 +633,7 @@ export default function LandingPage() {
               </div>
             </div>
           </motion.div>
-        </section>
+        </div>{/* ── end w-screen video block ── */}
 
         {/* Features Section */}
         <section className="py-28 relative border-t border-border/50 bg-background/50 overflow-hidden">
