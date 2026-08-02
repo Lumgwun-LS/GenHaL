@@ -127,6 +127,11 @@ app.use(
   })),
 );
 
+// ─── Public: return the Clerk publishable key (safe — it is designed to be public) ──
+app.get("/api/config/pk", (_req, res) => {
+  res.json({ publishableKey: process.env.CLERK_PUBLISHABLE_KEY ?? null });
+});
+
 // ─── Webhook routes need raw body for signature verification ─────────────────
 // These must be mounted BEFORE express.json() so the raw Buffer is preserved.
 app.use(
