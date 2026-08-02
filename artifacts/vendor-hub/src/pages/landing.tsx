@@ -495,70 +495,128 @@ export default function LandingPage() {
             </motion.div>
           </div>
 
-          <motion.div 
+          {/* ── Full-width Video Showcase ── */}
+          <motion.div
             id="demo-preview"
-            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.4 }}
-            className="mx-4 sm:mx-8 lg:mx-14 rounded-xl overflow-hidden border border-border/50 shadow-2xl bg-card/40 backdrop-blur-md relative z-20 mb-10"
+            initial={{ opacity: 0, y: 56, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full px-3 sm:px-5 relative z-20 mb-12"
           >
-            <div className="flex items-center gap-3 p-3 border-b border-border/50 bg-background/80">
-              <Play className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />
-              <span className="text-sm font-semibold truncate">{VIDEOS[activeVideo].title}</span>
-              <div className="ml-auto flex items-center gap-1.5 px-3 shrink-0">
-                 <div className="w-2.5 h-2.5 rounded-full bg-destructive/80" />
-                 <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-              </div>
-            </div>
+            {/* Outer glow halo */}
+            <div className="absolute inset-0 mx-3 sm:mx-5 rounded-2xl pointer-events-none"
+              style={{ boxShadow: "0 0 80px 20px hsl(var(--primary)/0.18), 0 0 160px 40px hsl(var(--primary)/0.08)" }} />
 
-            <div className="relative aspect-[16/9] bg-black overflow-hidden group">
-              <div
-                className="absolute inset-0 flex h-full transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                style={{ width: `${VIDEOS.length * 100}%`, transform: `translateX(-${activeVideo * (100 / VIDEOS.length)}%)` }}
-              >
-                {VIDEOS.map((v) => (
-                  <div key={v.id} className="relative h-full" style={{ width: `${100 / VIDEOS.length}%` }}>
-                    <iframe
-                      src={v.path}
-                      title={v.title}
-                      className="w-full h-full border-0"
-                      loading="lazy"
+            {/* Card */}
+            <div className="relative rounded-2xl overflow-hidden border border-primary/20 shadow-[0_8px_60px_-8px_rgba(0,0,0,0.7)] bg-card/60 backdrop-blur-xl">
+
+              {/* Animated gradient top-border line */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] z-30 pointer-events-none"
+                style={{ background: "linear-gradient(90deg, transparent 0%, hsl(var(--primary)) 40%, hsl(var(--primary)/0.6) 60%, transparent 100%)" }} />
+
+              {/* Chrome bar */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-background/70 backdrop-blur-sm">
+                {/* Traffic lights */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+                </div>
+
+                {/* Animated title pill */}
+                <div className="flex-1 flex justify-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeVideo}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.25 }}
+                      className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted/60 border border-border/50 backdrop-blur"
+                    >
+                      <Play className="w-3 h-3 text-primary fill-primary shrink-0" />
+                      <span className="text-xs font-semibold text-foreground/80 truncate max-w-[200px] sm:max-w-none">
+                        {VIDEOS[activeVideo].title}
+                      </span>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Dot indicators */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {VIDEOS.map((v, i) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      aria-label={`Show ${v.title}`}
+                      onClick={() => setActiveVideo(i)}
+                      className={`rounded-full transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                        i === activeVideo
+                          ? "w-5 h-2 bg-primary shadow-[0_0_6px_2px_hsl(var(--primary)/0.5)]"
+                          : "w-2 h-2 bg-muted-foreground/30 hover:bg-muted-foreground/60"
+                      }`}
                     />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
-              <button
-                type="button"
-                aria-label="Previous video"
-                onClick={() => setActiveVideo((i) => (i - 1 + VIDEOS.length) % VIDEOS.length)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-background/70 backdrop-blur border border-border/60 flex items-center justify-center text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/90 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button
-                type="button"
-                aria-label="Next video"
-                onClick={() => setActiveVideo((i) => (i + 1) % VIDEOS.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-background/70 backdrop-blur border border-border/60 flex items-center justify-center text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/90 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+              {/* Video viewport */}
+              <div className="relative w-full overflow-hidden bg-black group" style={{ aspectRatio: "16/9" }}>
+                {/* Slide track */}
+                <motion.div
+                  className="absolute inset-0 flex h-full"
+                  style={{ width: `${VIDEOS.length * 100}%` }}
+                  animate={{ x: `-${activeVideo * (100 / VIDEOS.length)}%` }}
+                  transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  {VIDEOS.map((v) => (
+                    <div key={v.id} className="relative h-full" style={{ width: `${100 / VIDEOS.length}%` }}>
+                      <iframe
+                        src={v.path}
+                        title={v.title}
+                        className="w-full h-full border-0"
+                        loading="lazy"
+                        allow="autoplay; fullscreen"
+                      />
+                    </div>
+                  ))}
+                </motion.div>
 
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
-                {VIDEOS.map((v, i) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    aria-label={`Show ${v.title}`}
-                    onClick={() => setActiveVideo(i)}
-                    className={`h-1.5 rounded-full transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                      i === activeVideo ? "w-6 bg-primary" : "w-1.5 bg-white/40 hover:bg-white/60"
-                    }`}
+                {/* Prev / Next arrows */}
+                <button
+                  type="button"
+                  aria-label="Previous video"
+                  onClick={() => setActiveVideo((i) => (i - 1 + VIDEOS.length) % VIDEOS.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-background/60 backdrop-blur-md border border-border/50 flex items-center justify-center text-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background/90 hover:scale-110 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next video"
+                  onClick={() => setActiveVideo((i) => (i + 1) % VIDEOS.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-background/60 backdrop-blur-md border border-border/50 flex items-center justify-center text-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background/90 hover:scale-110 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+
+                {/* Inner vignette */}
+                <div className="absolute inset-0 pointer-events-none z-20"
+                  style={{ boxShadow: "inset 0 0 40px 8px rgba(0,0,0,0.35)" }} />
+              </div>
+
+              {/* Bottom progress bar */}
+              <div className="flex h-1 bg-border/30">
+                {VIDEOS.map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="h-full"
+                    style={{ width: `${100 / VIDEOS.length}%` }}
+                    animate={{ backgroundColor: i === activeVideo ? "hsl(var(--primary))" : "transparent" }}
+                    transition={{ duration: 0.3 }}
                   />
                 ))}
               </div>
-
-              <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-b-xl z-20 pointer-events-none" />
             </div>
           </motion.div>
         </section>
