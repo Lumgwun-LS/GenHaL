@@ -2847,4 +2847,102 @@ router.post("/admin/newsletter/customers", async (req, res): Promise<void> => {
   })();
 });
 
+// ─── POST /admin/migrate-clerk-users ─────────────────────────────────────────
+// One-time endpoint: copies dev Clerk users into the current (production) Clerk
+// instance and updates vendors.clerk_user_id in the database.
+// The server's own CLERK_SECRET_KEY is used — sk_live_* when deployed.
+// Safe to call multiple times (already-existing users are detected and skipped).
+
+router.post("/admin/migrate-clerk-users", async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!isAdmin(userId)) { res.status(403).json({ error: "Admin access required." }); return; }
+
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) { res.status(500).json({ error: "CLERK_SECRET_KEY not set." }); return; }
+
+  // Load the exported dev-user list from the repo
+  const { createRequire } = await import("module");
+  const require = createRequire(import.meta.url);
+  let users: Array<{
+    devClerkId: string; email: string; firstName: string; lastName: string;
+    username: string | null; phone: string | null; imageUrl: string | null;
+    publicMetadata: Record<string, unknown>; privateMetadata: Record<string, unknown>;
+  }>;
+  try {
+    // Path relative to dist/ — go up to repo root then scripts/
+    const path = await import("path");
+    const url = await import("url");
+    const fs = await import("fs");
+    const scriptDir = path.default.resolve(
+      path.default.dirname(url.default.fileURLToPath(import.meta.url)),
+      "../../../../scripts/clerk-users-export.json"
+    );
+    users = JSON.parse(fs.default.readFileSync(scriptDir, "utf8"));
+  } catch (e) {
+    res.status(500).json({ error: "Could not read clerk-users-export.json", detail: String(e) });
+    return;
+  }
+
+  async function clerkPost(path: string, body: Record<string, unknown>) {
+    const r = await fetch(`https://api.clerk.com/v1${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: await r.json() };
+  }
+
+  const results: Array<{ email: string; status: string; prodClerkId?: string }> = [];
+
+  for (const user of users) {
+    let prodClerkId: string | null = null;
+    const { status, body } = await clerkPost("/users", {
+      email_address: [user.email],
+      first_name: user.firstName || undefined,
+      last_name: user.lastName || undefined,
+      username: user.username || undefined,
+      public_metadata: user.publicMetadata,
+      private_metadata: user.privateMetadata,
+      skip_password_checks: true,
+      skip_password_requirement: true,
+    });
+
+    if (status === 200 || status === 201) {
+      prodClerkId = (body as { id: string }).id;
+      // Send password reset so the user can log in
+      await clerkPost(`/users/${prodClerkId}/send_reset_password_email`, {});
+      results.push({ email: user.email, status: "created", prodClerkId });
+    } else if ((body as { errors?: Array<{ code: string }> }).errors?.[0]?.code === "form_identifier_exists") {
+      // Already in prod — look up by email
+      const lookup = await fetch(
+        `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(user.email)}`,
+        { headers: { Authorization: `Bearer ${secretKey}` } }
+      );
+      const existing = await lookup.json() as Array<{ id: string }>;
+      prodClerkId = existing[0]?.id ?? null;
+      results.push({ email: user.email, status: "already_exists", prodClerkId: prodClerkId ?? undefined });
+    } else {
+      results.push({ email: user.email, status: `error_${status}` });
+      continue;
+    }
+
+    // Update the database if dev and prod IDs differ
+    if (prodClerkId && prodClerkId !== user.devClerkId) {
+      await db
+        .update(vendorsTable)
+        .set({ clerkUserId: prodClerkId })
+        .where(eq(vendorsTable.clerkUserId, user.devClerkId));
+    }
+
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  const created = results.filter((r) => r.status === "created").length;
+  const existed = results.filter((r) => r.status === "already_exists").length;
+  const failed  = results.filter((r) => r.status.startsWith("error")).length;
+
+  res.json({ summary: { created, existed, failed, total: users.length }, results });
+});
+
 export default router;
