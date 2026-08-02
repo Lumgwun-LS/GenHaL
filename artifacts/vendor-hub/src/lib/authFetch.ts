@@ -13,9 +13,12 @@
  * For Orval-generated hooks the fix is already in custom-fetch.ts.
  */
 
-// CF Pages: set VITE_API_BASE_URL=https://account.awajimaaai.com in env vars.
-// On Replit the var is absent and relative paths work via the platform proxy.
-const _API_ORIGIN = ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+// CF_PAGES=1 is auto-injected by Cloudflare at build time — no dashboard env var needed.
+// On Replit the flag is false and relative paths work via the platform proxy.
+declare const __CF_PAGES__: boolean;
+const _API_ORIGIN = __CF_PAGES__
+  ? 'https://account.awajimaaai.com'
+  : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 function resolveApiUrl(url: string | URL): string | URL {
   if (_API_ORIGIN && typeof url === 'string' && url.startsWith('/')) {

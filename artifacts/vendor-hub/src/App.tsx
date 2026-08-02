@@ -5,11 +5,9 @@ import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
 import { shadcn } from '@clerk/themes';
 import { setBaseUrl } from '@workspace/api-client-react';
 
-// CF Pages: set VITE_API_BASE_URL=https://account.awajimaaai.com so all
-// Orval-generated hooks reach the real server (CF Pages _redirects can't
-// proxy to external origins). On Replit the var is absent — relative paths
-// work via the platform proxy, so setBaseUrl(null) is a safe no-op.
-setBaseUrl((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null);
+// CF_PAGES=1 is auto-injected by Cloudflare at build time — no dashboard env var needed.
+// On Replit the flag is false and relative paths work via the platform proxy.
+setBaseUrl(__CF_PAGES__ ? 'https://account.awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
 import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from 'wouter';
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";

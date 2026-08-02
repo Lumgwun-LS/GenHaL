@@ -1,8 +1,9 @@
-// On Replit, /api/* is proxied to the API server by the platform.
-// On Cloudflare Pages, _redirects cannot proxy to external origins, so
-// VITE_API_BASE_URL must be set to https://account.awajimaaai.com in the CF
-// Pages environment variables to call the API server directly.
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+// CF_PAGES=1 is auto-injected by Cloudflare Pages at build time — no dashboard
+// env var needed. On Replit, relative /api/* paths work via the platform proxy.
+declare const __CF_PAGES__: boolean;
+const API_ORIGIN = __CF_PAGES__
+  ? 'https://account.awajimaaai.com'
+  : ((import.meta.env.VITE_API_BASE_URL ?? '') as string).replace(/\/+$/, '');
 const API_BASE = `${API_ORIGIN}/api/store`;
 
 export class StoreApiError extends Error {
