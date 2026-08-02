@@ -25,7 +25,7 @@ const SOCIAL = [
 const LINKS = [
   { label: "Browse Apps",     href: "/" },
   { label: "Publish an App",  href: "/developer" },
-  { label: "Awa Biz Suite",   href: "/vendor-hub/" },
+  { label: "Awa Biz Suite",   href: "https://awajimaaai.com/" },
   { label: "Awajimaa Schools", href: "https://www.awajimaaschools.com" },
   { label: "Awajimaa Hosting", href: "https://www.awajimaahosting.com" },
 ];
@@ -43,7 +43,7 @@ export default function Footer() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ background: "#fff", borderRadius: 8, padding: "3px 8px", display: "flex", alignItems: "center" }}>
-              <img src="/app-store/logo-color.jpg" alt="Awajimaa" style={{ height: 26, width: "auto", objectFit: "contain" }} />
+              <img src="/logo-color.jpg" alt="Awajimaa" style={{ height: 26, width: "auto", objectFit: "contain" }} />
             </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: 13, color: "#00c853", letterSpacing: 1, textTransform: "uppercase" }}>APP STORE</div>

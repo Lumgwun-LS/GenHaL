@@ -52,7 +52,7 @@ export function CrossAppBanner() {
 
             {/* Back link */}
             <motion.a
-              href="/vendor-hub/"
+              href="https://awajimaaai.com/"
               whileHover={{ x: -4 }}
               whileTap={{ scale: 0.97 }}
               transition={{ type: "spring", stiffness: 420, damping: 24 }}

@@ -431,7 +431,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               Switch To
             </p>
             <a
-              href="/app-store/my-apps?ref=vendor-hub"
+              href="https://awajimaaappstore.com/my-apps?ref=vendor-hub"
               className="group/store flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-150 hover:translate-x-0.5 border border-transparent"
               style={{ background: "linear-gradient(135deg,rgba(124,58,237,0.08),rgba(168,85,247,0.04))", border: "1px solid rgba(124,58,237,0.18)" }}
               onClick={() => setIsMobileOpen(false)}

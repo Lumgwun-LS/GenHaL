@@ -44,7 +44,7 @@ const PLATFORMS = [
   {
     name: "Awa Biz Suite",
     tagline: "Vendor & Business Tools",
-    href: "/vendor-hub/?ref=app-store",
+    href: "https://awajimaaai.com/?ref=app-store",
     icon: "🏢",
     color: "#c4b5fd",
     bg: "rgba(124,58,237,0.12)",
@@ -564,7 +564,7 @@ export default function Nav() {
                 }}
               >
                 <img
-                  src="/app-store/logo-color.jpg"
+                  src="/logo-color.jpg"
                   alt="Awajimaa"
                   style={{
                     height: 28,

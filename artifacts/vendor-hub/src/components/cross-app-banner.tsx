@@ -65,7 +65,7 @@ export function CrossAppBanner() {
       >
         {/* Animated arrow pulse */}
         <a
-          href="/app-store/"
+          href="https://awajimaaappstore.com/"
           style={{
             display: "flex",
             alignItems: "center",
