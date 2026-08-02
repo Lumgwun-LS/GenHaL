@@ -2,7 +2,6 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useEffect, useRef, Component, type ReactNode, type ErrorInfo } from "react";
 import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser, SignIn, SignUp } from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
 import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
@@ -66,10 +65,7 @@ function UserTracker() {
   return null;
 }
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
