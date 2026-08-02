@@ -367,14 +367,64 @@ export default function LandingPage() {
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-              className="md:hidden overflow-hidden border-t border-border/50 bg-background/98 backdrop-blur-xl"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="md:hidden border-t border-border/50 bg-background/98 backdrop-blur-xl"
             >
-              <div className="px-4 py-4 space-y-1">
-                {/* Feature groups */}
+              {/* Scrollable inner container — fills remaining viewport height */}
+              <div
+                className="px-4 py-4 space-y-1 overflow-y-auto overscroll-contain"
+                style={{ maxHeight: "calc(100dvh - 64px)" }}
+              >
+                {/* ── Auth actions — always at the top ── */}
+                {isSignedIn ? (
+                  <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 mb-3">
+                    <Layers className="w-4 h-4" />
+                    Go to Dashboard
+                  </Link>
+                ) : (
+                  <div className="flex flex-col gap-2 mb-3">
+                    <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
+                      Start Free Trial
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                    <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-border/60 bg-muted/30 text-sm font-semibold text-foreground hover:bg-muted/60 transition-colors">
+                      Sign In
+                    </Link>
+                  </div>
+                )}
+
+                <div className="border-t border-border/40 my-2" />
+
+                {/* ── Top-level links ── */}
+                <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  Pricing
+                </Link>
+                <Link href="/developers" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  Documentation
+                </Link>
+                <Link href="/my-activity" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+                  Track Your Orders
+                </Link>
+                <Link href="/vendor-blog" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  Vendor Blog
+                </Link>
+
+                <div className="border-t border-border/40 my-2" />
+
+                {/* ── Feature groups ── */}
                 {NAV_FEATURE_GROUPS.map((group) => (
                   <div key={group.label} className="mb-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 px-3 mb-1">{group.label}</p>
@@ -397,52 +447,8 @@ export default function LandingPage() {
                   </div>
                 ))}
 
-                {/* Divider */}
-                <div className="border-t border-border/40 my-2" />
-
-                {/* Top-level links */}
-                <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
-                  Pricing
-                </Link>
-                <Link href="/developers" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
-                  Documentation
-                </Link>
-                <Link href="/my-activity" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
-                  <ShoppingBag className="w-4 h-4 text-muted-foreground" />
-                  Track Your Orders
-                </Link>
-                <Link href="/vendor-blog" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-foreground">
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
-                  Vendor Blog
-                </Link>
-                {isSignedIn ? (
-                  <div className="pt-2">
-                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
-                      <Layers className="w-4 h-4" />
-                      Go to Dashboard
-                    </Link>
-                  </div>
-                ) : (
-                  <>
-                    <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-semibold text-muted-foreground">
-                      Sign In
-                    </Link>
-                    <div className="pt-2">
-                      <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center justify-center w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/30">
-                        Start Free Trial
-                        <ChevronRight className="ml-2 w-4 h-4" />
-                      </Link>
-                    </div>
-                  </>
-                )}
+                {/* Bottom breathing room so last item isn't flush against edge */}
+                <div className="h-4" />
               </div>
             </motion.div>
           )}
