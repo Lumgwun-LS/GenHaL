@@ -47,6 +47,10 @@ export default defineConfig({
     },
     dedupe: ['react', 'react-dom'],
   },
+  // Expose CF_PAGES flag to runtime code (CF_PAGES=1 is auto-injected by Cloudflare).
+  define: {
+    __CF_PAGES__: JSON.stringify(!!process.env.CF_PAGES),
+  },
   root: path.resolve(import.meta.dirname),
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),

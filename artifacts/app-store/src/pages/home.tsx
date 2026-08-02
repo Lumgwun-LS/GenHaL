@@ -434,17 +434,17 @@ export default function Home() {
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       apiFetch<AppSummary[]>("/apps/featured"),
       apiFetch<AppSummary[]>("/apps/trending"),
       apiFetch<AppSummary[]>("/apps/new-arrivals"),
       apiFetch<Category[]>("/apps/categories"),
     ]).then(([f, t, n, c]) => {
-      setFeatured(f ?? []);
-      setTrending(t ?? []);
-      setNewArrivals(n ?? []);
-      setCategories(c ?? []);
-    }).catch(() => {}).finally(() => setLoading(false));
+      if (f.status === "fulfilled") setFeatured(f.value ?? []);
+      if (t.status === "fulfilled") setTrending(t.value ?? []);
+      if (n.status === "fulfilled") setNewArrivals(n.value ?? []);
+      if (c.status === "fulfilled") setCategories(c.value ?? []);
+    }).finally(() => setLoading(false));
   }, []);
 
   return (

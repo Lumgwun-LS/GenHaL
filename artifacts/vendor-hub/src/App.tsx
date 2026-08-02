@@ -80,16 +80,30 @@ import PublicBlogPost from "@/pages/public-blog/post";
 import VendorBlogPage from "@/pages/vendor-blog/index";
 import MyActivityPage from "@/pages/my-activity/index";
 
+declare const __CF_PAGES__: boolean;
+
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+// On Cloudflare Pages the live key works on any domain — no proxy needed.
+// On Replit dev/preview the proxy routes Clerk FAPI through the API server.
+const clerkProxyUrl = __CF_PAGES__ ? undefined : import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
 }
 
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+// Render a readable error instead of a blank page when the key is missing.
+function MissingKeyScreen() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0b0e14', color: '#e8eaf0', fontFamily: 'sans-serif', gap: 12, padding: 24, textAlign: 'center' }}>
+      <div style={{ fontSize: 40 }}>⚙️</div>
+      <div style={{ fontSize: 20, fontWeight: 700 }}>Configuration required</div>
+      <div style={{ fontSize: 14, color: '#8892a4', maxWidth: 420 }}>
+        The <code style={{ background: '#161d2d', padding: '2px 6px', borderRadius: 4 }}>VITE_CLERK_PUBLISHABLE_KEY</code> environment variable is not set.<br />
+        Add it in your Cloudflare Pages project settings and redeploy.
+      </div>
+    </div>
+  );
 }
 
 const clerkAppearance = {
@@ -447,6 +461,7 @@ function ClerkProviderWithRoutes() {
 }
 
 function App() {
+  if (!clerkPubKey) return <MissingKeyScreen />;
   return (
     <ThemeProvider defaultTheme="dark">
       <WouterRouter base={basePath}>
