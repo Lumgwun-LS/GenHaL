@@ -6,10 +6,23 @@
  *    sign-in (which the browser follows cross-origin, causing "Failed to fetch")
  *  - Always sends Accept: application/json so auth errors return 401, not 302
  *  - Merges credentials: "include" so session cookies are sent as well
+ *  - On Cloudflare Pages, prepends VITE_API_BASE_URL so relative /api/* paths
+ *    reach the real API server (CF Pages _redirects can't proxy external origins)
  *
  * Use this instead of raw fetch() for every /api/* call in vendor-hub pages.
  * For Orval-generated hooks the fix is already in custom-fetch.ts.
  */
+
+// CF Pages: set VITE_API_BASE_URL=https://account.awajimaaai.com in env vars.
+// On Replit the var is absent and relative paths work via the platform proxy.
+const _API_ORIGIN = ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+
+function resolveApiUrl(url: string | URL): string | URL {
+  if (_API_ORIGIN && typeof url === 'string' && url.startsWith('/')) {
+    return `${_API_ORIGIN}${url}`;
+  }
+  return url;
+}
 
 async function getClerkToken(): Promise<string | null> {
   try {
@@ -33,7 +46,7 @@ export async function authFetch(
     headers.set("accept", "application/json");
   }
 
-  return fetch(url, {
+  return fetch(resolveApiUrl(url), {
     credentials: "include",
     ...init,
     headers,

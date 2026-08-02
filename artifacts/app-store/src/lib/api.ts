@@ -1,7 +1,9 @@
-// All API calls go to the shared API server via root-relative /api/store/* paths.
-// The Replit proxy routes /api/* to the API server regardless of which frontend artifact
-// the browser is currently viewing.
-const API_BASE = "/api/store";
+// On Replit, /api/* is proxied to the API server by the platform.
+// On Cloudflare Pages, _redirects cannot proxy to external origins, so
+// VITE_API_BASE_URL must be set to https://account.awajimaaai.com in the CF
+// Pages environment variables to call the API server directly.
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+const API_BASE = `${API_ORIGIN}/api/store`;
 
 export class StoreApiError extends Error {
   constructor(public readonly status: number, message: string) {

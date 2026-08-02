@@ -6,9 +6,12 @@
  */
 
 const PLATFORM = "vendor-hub";
+// CF Pages: set VITE_API_BASE_URL=https://account.awajimaaai.com so analytics
+// beacons reach the real server (CF Pages _redirects can't proxy external origins).
+const _API_ORIGIN = ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-const PV_ENDPOINT  = `${BASE}/api/analytics/pageview`;
-const EVT_ENDPOINT = `${BASE}/api/analytics/event`;
+const PV_ENDPOINT  = `${_API_ORIGIN}${BASE}/api/analytics/pageview`;
+const EVT_ENDPOINT = `${_API_ORIGIN}${BASE}/api/analytics/event`;
 
 // ── Session ID ────────────────────────────────────────────────────────────────
 function getOrCreateSessionId(): string {
