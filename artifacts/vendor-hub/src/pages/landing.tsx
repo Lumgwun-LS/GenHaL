@@ -260,7 +260,7 @@ export default function LandingPage() {
           </div>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden xl:flex items-center gap-0.5">
             {/* Features mega-dropdown */}
             <div className="relative" ref={featuresRef}>
               <button
@@ -355,7 +355,7 @@ export default function LandingPage() {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="xl:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileMenuOpen((v) => !v)}
           >
@@ -371,7 +371,7 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="md:hidden border-t border-border/50 bg-background/98 backdrop-blur-xl"
+              className="xl:hidden border-t border-border/50 bg-background/98 backdrop-blur-xl"
             >
               {/* Scrollable inner container — fills remaining viewport height */}
               <div
