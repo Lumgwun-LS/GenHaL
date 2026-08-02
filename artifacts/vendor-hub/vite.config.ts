@@ -11,7 +11,9 @@ const port = Number(process.env.PORT ?? '3000');
 
 // BASE_PATH defaults to '/' for Cloudflare Pages / standalone builds.
 // Replit injects the real prefixed path at dev/deploy time via the artifact system.
-const basePath = process.env.BASE_PATH ?? '/';
+// CF_PAGES=1 is auto-injected by Cloudflare Pages — always use '/' there regardless
+// of any BASE_PATH env var that may have been set in the CF Pages dashboard.
+const basePath = process.env.CF_PAGES ? '/' : (process.env.BASE_PATH ?? '/');
 
 export default defineConfig({
   base: basePath,

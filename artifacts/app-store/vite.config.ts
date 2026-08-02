@@ -9,8 +9,10 @@ import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 // production `vite build` so the build step doesn't throw.
 const port = Number(process.env.PORT ?? '3000');
 
-// BASE_PATH defaults to /app-store/ — Replit injects the real value at runtime.
-const basePath = process.env.BASE_PATH ?? '/app-store/';
+// BASE_PATH defaults to /app-store/ on Replit — Replit injects the real value at runtime.
+// CF_PAGES=1 is auto-injected by Cloudflare Pages — always use '/' there regardless
+// of any BASE_PATH env var that may have been set in the CF Pages dashboard.
+const basePath = process.env.CF_PAGES ? '/' : (process.env.BASE_PATH ?? '/app-store/');
 
 export default defineConfig({
   base: basePath,
