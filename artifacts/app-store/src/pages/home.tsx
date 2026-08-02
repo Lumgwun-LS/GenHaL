@@ -408,7 +408,7 @@ function PromoVideoSection() {
         }}
       >
         <iframe
-          src="/appstore-promo-video/"
+          src="https://awajimaa-omni-business-suite.replit.app/appstore-promo-video/"
           title="Awajimaa App Store — Promotional Video"
           allow="autoplay; fullscreen"
           style={{

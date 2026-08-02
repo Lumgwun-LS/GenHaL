@@ -40,9 +40,10 @@ const PHONE_NUMBERS = ["+1 917 821 8640", "+234 703 884 3102"];
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
+const REPLIT_BASE = "https://awajimaa-omni-business-suite.replit.app";
 const VIDEOS = [
-  { id: "promo", title: "Awa Biz Suite Promo Video", path: "/vendorhub-promo-video/" },
-  { id: "walkthrough", title: "Awa Biz Suite Walkthrough Video", path: "/vendorhub-walkthrough-video/" },
+  { id: "promo", title: "Awa Biz Suite Promo Video", path: `${REPLIT_BASE}/vendorhub-promo-video/` },
+  { id: "walkthrough", title: "Awa Biz Suite Walkthrough Video", path: `${REPLIT_BASE}/vendorhub-walkthrough-video/` },
 ];
 
 type SiteContent = {
