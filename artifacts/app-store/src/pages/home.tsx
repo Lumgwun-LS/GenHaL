@@ -328,6 +328,14 @@ function AppGrid({ apps, layout = "grid" }: { apps: AppSummary[]; layout?: "grid
     visible: { opacity: 1, y: 0, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
   };
 
+  // When there are only a few apps, lock the column count so cards don't
+  // sit in tiny slots inside a sea of empty auto-fill columns on desktop.
+  const gridCols = layout === "grid"
+    ? apps.length < 5
+      ? `repeat(${apps.length}, minmax(0, 220px))`
+      : "repeat(auto-fill, minmax(180px, 1fr))"
+    : undefined;
+
   return (
     <motion.div
       initial="hidden"
@@ -335,7 +343,7 @@ function AppGrid({ apps, layout = "grid" }: { apps: AppSummary[]; layout?: "grid
       viewport={{ once: true, margin: "-60px" }}
       variants={containerVariants}
       style={layout === "grid"
-        ? { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }
+        ? { display: "grid", gridTemplateColumns: gridCols, gap: 16 }
         : { display: "flex", flexDirection: "column", gap: 8 }}
     >
       {apps.map((app, i) => (
