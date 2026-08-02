@@ -1,7 +1,3 @@
-# Proxy all API calls (including Clerk proxy at /api/__clerk/*) to the production API server.
-# Cloudflare Pages evaluates rules top-to-bottom and stops at the first match.
-# The 200 status means server-side proxy (same-origin to the browser — no CORS needed).
-/api/*  https://account.awajimaaai.com/api/:splat  200
-
-# SPA fallback — any path that isn't a static file gets index.html so React Router works.
-/*  /index.html  200
+# Redirect everything to the live app on the subdomain.
+# Remove this once awajimaaai.com has a valid Clerk live key.
+/*  https://account.awajimaaai.com/:splat  301
