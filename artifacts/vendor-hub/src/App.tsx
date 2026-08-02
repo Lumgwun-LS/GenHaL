@@ -5,9 +5,6 @@ import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
 import { shadcn } from '@clerk/themes';
 import { setBaseUrl } from '@workspace/api-client-react';
 
-// CF_PAGES=1 is auto-injected by Cloudflare at build time — no dashboard env var needed.
-// On Replit the flag is false and relative paths work via the platform proxy.
-setBaseUrl(__CF_PAGES__ ? 'https://account.awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
 import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from 'wouter';
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -86,6 +83,9 @@ import VendorBlogPage from "@/pages/vendor-blog/index";
 import MyActivityPage from "@/pages/my-activity/index";
 
 declare const __CF_PAGES__: boolean;
+
+// Must run after all imports — sets the base URL for all Orval-generated hooks.
+setBaseUrl(__CF_PAGES__ ? 'https://account.awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 // On Cloudflare Pages the live key works on any domain — no proxy needed.
