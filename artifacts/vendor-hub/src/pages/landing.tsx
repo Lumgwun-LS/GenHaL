@@ -457,10 +457,12 @@ export default function LandingPage() {
 
       <main className="flex-1 pt-16">
         {/* Hero Section */}
-        <section className="pt-32 pb-20 px-6 relative overflow-hidden flex flex-col items-center">
+        <section className="pt-32 pb-20 relative overflow-hidden">
           <div className="absolute inset-0 bg-grid-pattern opacity-30 pointer-events-none" style={{ maskImage: "linear-gradient(to bottom, black 40%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 100%)" }} />
           <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none" />
 
+          {/* Hero text — padded & centred independently from the video */}
+          <div className="px-6 flex flex-col items-center">
           <div className="container mx-auto max-w-5xl relative z-10 flex flex-col items-center text-center">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <Badge className="mb-8 border-primary/30 bg-primary/10 text-primary uppercase tracking-wider text-xs py-1.5 px-4 shadow-sm shadow-primary/20">
@@ -500,18 +502,19 @@ export default function LandingPage() {
               </Button>
             </motion.div>
           </div>
+          </div>{/* end hero text wrapper */}
 
           {/* ── Full-width Video Showcase ── */}
           <motion.div
             id="demo-preview"
             initial={{ opacity: 0, y: 56, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full px-3 sm:px-5 relative z-20 mb-12"
+            transition={{ duration: 0.8, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full px-4 sm:px-6 lg:px-10 relative z-20 mt-8 mb-12"
           >
             {/* Outer glow halo */}
-            <div className="absolute inset-0 mx-3 sm:mx-5 rounded-2xl pointer-events-none"
-              style={{ boxShadow: "0 0 80px 20px hsl(var(--primary)/0.18), 0 0 160px 40px hsl(var(--primary)/0.08)" }} />
+            <div className="absolute inset-0 mx-4 sm:mx-6 lg:mx-10 rounded-2xl pointer-events-none"
+              style={{ boxShadow: "0 0 100px 24px hsl(var(--primary)/0.2), 0 0 200px 60px hsl(var(--primary)/0.08)" }} />
 
             {/* Card */}
             <div className="relative rounded-2xl overflow-hidden border border-primary/20 shadow-[0_8px_60px_-8px_rgba(0,0,0,0.7)] bg-card/60 backdrop-blur-xl">
