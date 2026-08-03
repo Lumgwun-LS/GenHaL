@@ -27,7 +27,12 @@ export const vendorMobileAppsTable = pgTable("vendor_mobile_apps", {
   // App Store link (set once published)
   storeAppId:    integer("store_app_id").references(() => storeAppsTable.id, { onDelete: "set null" }),
 
-  // Lifecycle: queued | building | packaging | published | failed
+  // One-time build fee ($100 via Squad)
+  feePaid:       boolean("fee_paid").notNull().default(false),
+  feeRef:        text("fee_ref"),       // Squad transaction reference
+  feeAmount:     integer("fee_amount"), // in cents USD (10000 = $100)
+
+  // Lifecycle: pending_payment | queued | building | packaging | published | failed
   status:        text("status").notNull().default("queued"),
   errorMessage:  text("error_message"),
 

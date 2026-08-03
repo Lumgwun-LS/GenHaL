@@ -98,7 +98,7 @@ const DEFAULT_FEATURES = [
   { title: "Blog & Content Publishing", description: "Write and publish rich-text blog posts with a TipTap editor, cover images, keywords, and SEO excerpts. Visitors can like posts and leave comments — automatically captured as CRM leads." },
   { title: "Connect API & Webhooks", description: "Expose your store data via a secure REST API with API key authentication and OAuth 2.0. Connect third-party tools, trigger webhooks on order and payment events, and build custom integrations from a dedicated developer portal." },
   { title: "Developer Documentation", description: "A full developer docs portal with getting-started guides, API reference, code samples, and a connected business onboarding flow — everything external developers need to build on top of your platform." },
-  { title: "Mobile App Builder", description: "Turn your business into a native Android app — no coding needed. Configure your brand colors, logo, and website URL, and the platform generates and signs an APK automatically, ready to share or publish on the Play Store." },
+  { title: "Mobile App Builder", description: "Turn your business into a native Android app — no coding needed. Configure your brand colors, logo, and website URL, and the platform generates and signs an APK automatically, ready to share or publish on the Play Store. One-time fee: $100." },
   { title: "Unified Social Media", description: "Draft, schedule, and publish to Instagram, Facebook, X, and LinkedIn — including video — from one composer. AI captions, platform-specific formatting, and scheduled auto-posting included." },
   { title: "AI Content & Video Studio", description: "Generate product imagery, social captions, and fully animated multi-scene marketing videos with AI voiceover and music — all without leaving your dashboard." },
   { title: "Interswitch Payment Suite", description: "Accept payments, send bank transfers, pay utility bills (airtime, DSTV, electricity, data), verify accounts and BVNs, create dedicated virtual accounts, and process partial or full refunds — all in one place." },
@@ -205,7 +205,7 @@ const NAV_FEATURE_GROUPS = [
     items: [
       { icon: Webhook,    title: "Connect API", desc: "REST API, OAuth 2.0 & webhooks" },
       { icon: BookMarked, title: "Documentation", desc: "Guides, API reference & code samples" },
-      { icon: Smartphone, title: "Mobile App Builder", desc: "Native Android APK, no code needed" },
+      { icon: Smartphone, title: "Mobile App Builder", desc: "Native Android APK · $100 one-time" },
       { icon: Sparkles,   title: "AI Studio", desc: "Images, captions & multi-scene video" },
     ],
   },
@@ -1234,9 +1234,14 @@ function FeatureCard({ title, description, index }: { title: string; description
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ delay: delay + 0.3, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="text-xl font-bold mb-3 text-foreground tracking-tight relative z-10"
+        className="text-xl font-bold mb-3 text-foreground tracking-tight relative z-10 flex items-center gap-2 flex-wrap"
       >
         {title}
+        {title === "Mobile App Builder" && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/15 text-primary border border-primary/25 tracking-wide">
+            $100 one-time
+          </span>
+        )}
       </motion.h3>
 
       <motion.p

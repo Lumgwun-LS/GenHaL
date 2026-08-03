@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentVendor } from "@/hooks/useCurrentVendor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Smartphone, Globe, Github, ExternalLink, RefreshCw,
   CheckCircle2, XCircle, Clock, Loader2, Zap, Download,
+  CreditCard, AlertTriangle,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -25,6 +25,8 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 // ── types ─────────────────────────────────────────────────────────────────────
+type AppStatus = "pending_payment" | "queued" | "building" | "packaging" | "published" | "failed";
+
 interface MobileAppRecord {
   id:           number;
   source:       string;
@@ -37,20 +39,24 @@ interface MobileAppRecord {
   easBuildId:   string | null;
   apkUrl:       string | null;
   storeAppId:   number | null;
-  status:       "queued" | "building" | "packaging" | "published" | "failed";
+  status:       AppStatus;
+  feePaid:      boolean;
+  feeRef:       string | null;
+  feeAmount:    number | null;
   errorMessage: string | null;
   createdAt:    string;
   updatedAt:    string;
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: MobileAppRecord["status"] }) {
-  const map: Record<MobileAppRecord["status"], { label: string; color: string; icon: React.ReactNode }> = {
-    queued:     { label: "Queued",     color: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30", icon: <Clock className="w-3 h-3" /> },
-    building:   { label: "Building",   color: "bg-blue-500/15 text-blue-400 border-blue-500/30",       icon: <Loader2 className="w-3 h-3 animate-spin" /> },
-    packaging:  { label: "Packaging",  color: "bg-purple-500/15 text-purple-400 border-purple-500/30", icon: <Loader2 className="w-3 h-3 animate-spin" /> },
-    published:  { label: "Published",  color: "bg-green-500/15 text-green-400 border-green-500/30",    icon: <CheckCircle2 className="w-3 h-3" /> },
-    failed:     { label: "Failed",     color: "bg-red-500/15 text-red-400 border-red-500/30",          icon: <XCircle className="w-3 h-3" /> },
+function StatusBadge({ status }: { status: AppStatus }) {
+  const map: Record<AppStatus, { label: string; color: string; icon: React.ReactNode }> = {
+    pending_payment: { label: "Awaiting Payment", color: "bg-orange-500/15 text-orange-400 border-orange-500/30", icon: <CreditCard className="w-3 h-3" /> },
+    queued:          { label: "Queued",           color: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30", icon: <Clock className="w-3 h-3" /> },
+    building:        { label: "Building",         color: "bg-blue-500/15 text-blue-400 border-blue-500/30",       icon: <Loader2 className="w-3 h-3 animate-spin" /> },
+    packaging:       { label: "Packaging",        color: "bg-purple-500/15 text-purple-400 border-purple-500/30", icon: <Loader2 className="w-3 h-3 animate-spin" /> },
+    published:       { label: "Published",        color: "bg-green-500/15 text-green-400 border-green-500/30",    icon: <CheckCircle2 className="w-3 h-3" /> },
+    failed:          { label: "Failed",           color: "bg-red-500/15 text-red-400 border-red-500/30",          icon: <XCircle className="w-3 h-3" /> },
   };
   const s = map[status] ?? map.queued;
   return (
@@ -70,11 +76,23 @@ export default function MobileAppPage() {
   const { vendor } = useCurrentVendor();
   const qc = useQueryClient();
 
-  const [source, setSource]       = useState<"website" | "github" | "gitlab" | "bitbucket">("website");
-  const [url, setUrl]             = useState("");
-  const [appName, setAppName]     = useState("");
+  const [source, setSource]         = useState<"website" | "github" | "gitlab" | "bitbucket">("website");
+  const [url, setUrl]               = useState("");
+  const [appName, setAppName]       = useState("");
   const [repoBranch, setRepoBranch] = useState("");
-  const [formError, setFormError] = useState("");
+  const [formError, setFormError]   = useState("");
+
+  // Read URL params injected by Squad callback redirect
+  const [paymentNotice, setPaymentNotice] = useState<"success" | "failed" | "">("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") === "1") setPaymentNotice("success");
+    if (params.get("payment_error"))  setPaymentNotice("failed");
+    // Clean up query string without reloading
+    if (params.get("paid") || params.get("payment_error") || params.get("build_id")) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   // ── fetch existing builds ──────────────────────────────────────────────────
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -82,17 +100,19 @@ export default function MobileAppPage() {
     queryFn:  () => apiFetch<{ apps: MobileAppRecord[] }>("/vendors/me/mobile-app"),
     refetchInterval: (query) => {
       const apps = query.state.data?.apps ?? [];
-      const hasPending = apps.some((a) => a.status === "building" || a.status === "queued");
+      const hasPending = apps.some((a) =>
+        a.status === "building" || a.status === "queued" || a.status === "pending_payment"
+      );
       return hasPending ? 15_000 : false;
     },
   });
 
   const apps = data?.apps ?? [];
 
-  // ── submit mutation ────────────────────────────────────────────────────────
-  const submit = useMutation({
+  // ── checkout mutation — creates record + Squad checkout ────────────────────
+  const checkout = useMutation({
     mutationFn: () =>
-      apiFetch<{ app: MobileAppRecord }>("/vendors/me/mobile-app", {
+      apiFetch<{ app: MobileAppRecord; checkoutUrl: string }>("/vendors/me/mobile-app/checkout", {
         method: "POST",
         body: JSON.stringify({
           source,
@@ -102,11 +122,20 @@ export default function MobileAppPage() {
           appName:     appName || vendor?.name,
         }),
       }),
-    onSuccess: () => {
-      setUrl(""); setAppName(""); setRepoBranch(""); setFormError("");
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["mobile-apps"] });
+      // Redirect to Squad checkout
+      window.location.href = data.checkoutUrl;
     },
-    onError: (e: any) => setFormError(e?.message ?? "Failed to start build"),
+    onError: (e: any) => setFormError(e?.message ?? "Failed to initiate checkout"),
+  });
+
+  // ── re-initiate payment for existing pending_payment record ────────────────
+  const reinitiate = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch<{ checkoutUrl: string }>(`/vendors/me/mobile-app/${id}/payment/reinitiate`, { method: "POST" }),
+    onSuccess: (data) => { window.location.href = data.checkoutUrl; },
+    onError: (e: any) => setFormError(e?.message ?? "Failed to open payment page"),
   });
 
   // ── delete mutation ────────────────────────────────────────────────────────
@@ -128,12 +157,16 @@ export default function MobileAppPage() {
     setFormError("");
     if (!url.trim()) { setFormError("Please enter a URL."); return; }
     try { new URL(url); } catch { setFormError("Enter a valid URL including https://"); return; }
-    submit.mutate();
+    checkout.mutate();
   }
 
-  // ── active build (most recent non-failed) ─────────────────────────────────
+  // A build is "active" (blocks new submissions) if it's running or awaiting payment
   const activeApp = apps.find((a) => a.status !== "failed");
-  const hasActive = !!activeApp && (activeApp.status === "building" || activeApp.status === "queued");
+  const hasActive = !!activeApp && (
+    activeApp.status === "building" ||
+    activeApp.status === "queued" ||
+    activeApp.status === "pending_payment"
+  );
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -148,12 +181,30 @@ export default function MobileAppPage() {
         </div>
       </div>
 
+      {/* Payment outcome notice */}
+      {paymentNotice === "success" && (
+        <Alert className="border-green-500/30 bg-green-500/10">
+          <CheckCircle2 className="w-4 h-4 text-green-400" />
+          <AlertDescription className="text-green-300 ml-2">
+            Payment confirmed — your app build is now in progress!
+          </AlertDescription>
+        </Alert>
+      )}
+      {paymentNotice === "failed" && (
+        <Alert className="border-red-500/30 bg-red-500/10">
+          <AlertTriangle className="w-4 h-4 text-red-400" />
+          <AlertDescription className="text-red-300 ml-2">
+            Payment was not completed. You can retry from the build card below.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* How it works */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: <Globe className="w-4 h-4" />,       step: "1", label: "Paste your URL",    desc: "Website or Git repo" },
-          { icon: <Zap className="w-4 h-4" />,         step: "2", label: "We build the APK",  desc: "~20 min" },
-          { icon: <Download className="w-4 h-4" />,    step: "3", label: "Auto-published",    desc: "Listed on Awajimaa App Store + download link" },
+          { icon: <Globe className="w-4 h-4" />,    step: "1", label: "Paste your URL",   desc: "Website or Git repo" },
+          { icon: <CreditCard className="w-4 h-4" />, step: "2", label: "Pay once — $100", desc: "Secure checkout via Squad" },
+          { icon: <Download className="w-4 h-4" />, step: "3", label: "Auto-published",   desc: "Listed on Awajimaa App Store + download link" },
         ].map((s) => (
           <div key={s.step} className="flex items-start gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
             <div className="w-7 h-7 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 flex-shrink-0">
@@ -172,7 +223,7 @@ export default function MobileAppPage() {
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-white">Generate Your App</CardTitle>
-            <CardDescription>We'll wrap your website in a native shell with your branding.</CardDescription>
+            <CardDescription>We'll wrap your website in a native shell with your branding. One-time fee: <span className="text-violet-400 font-semibold">$100</span>.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -242,11 +293,16 @@ export default function MobileAppPage() {
 
               <Button
                 type="submit"
-                disabled={submit.isPending}
+                disabled={checkout.isPending}
                 className="w-full bg-violet-600 hover:bg-violet-700 text-white"
               >
-                {submit.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting build…</> : "Build My App"}
+                {checkout.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Preparing checkout…</>
+                  : <><CreditCard className="w-4 h-4 mr-2" />Build My App — $100</>}
               </Button>
+              <p className="text-xs text-zinc-500 text-center">
+                Secure payment via Squad · One-time fee · Build starts immediately after payment
+              </p>
             </form>
           </CardContent>
         </Card>
@@ -270,7 +326,7 @@ export default function MobileAppPage() {
             <Card key={app.id} className="bg-zinc-900 border-zinc-800">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-white text-sm truncate">{app.appName}</span>
                       <StatusBadge status={app.status} />
@@ -279,11 +335,32 @@ export default function MobileAppPage() {
                     <div className="mt-1 text-xs text-zinc-500 truncate">
                       {app.websiteUrl ?? app.repoUrl}
                     </div>
+
+                    {/* Pending payment */}
+                    {app.status === "pending_payment" && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-orange-300">
+                          Payment not yet completed. Click below to open the payment page.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => { setFormError(""); reinitiate.mutate(app.id); }}
+                          disabled={reinitiate.isPending}
+                          className="h-7 px-3 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+                        >
+                          {reinitiate.isPending
+                            ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Opening…</>
+                            : <><CreditCard className="w-3 h-3 mr-1" />Complete Payment — $100</>}
+                        </Button>
+                      </div>
+                    )}
+
                     {app.status === "building" && (
                       <div className="mt-2 text-xs text-blue-400">
                         Building your app — typically 15–20 min. This page auto-refreshes.
                       </div>
                     )}
+
                     {app.status === "published" && app.apkUrl && (
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <a
@@ -309,6 +386,7 @@ export default function MobileAppPage() {
                         )}
                       </div>
                     )}
+
                     {app.status === "failed" && (
                       <div className="mt-2 space-y-2">
                         {app.errorMessage && (
@@ -323,7 +401,7 @@ export default function MobileAppPage() {
                             <ExternalLink className="w-3 h-3" />View build logs
                           </a>
                         )}
-                        <div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Button
                             size="sm"
                             onClick={() => retry.mutate(app.id)}
@@ -333,11 +411,12 @@ export default function MobileAppPage() {
                             {retry.isPending ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Retrying…</> : <><RefreshCw className="w-3 h-3 mr-1" />Retry Build</>}
                           </Button>
                           {hasActive && (
-                            <span className="ml-2 text-xs text-zinc-500">Wait for the current build to finish first</span>
+                            <span className="text-xs text-zinc-500">Wait for the current build to finish first</span>
                           )}
                         </div>
                       </div>
                     )}
+
                     {app.easBuildId && app.status === "building" && (
                       <a
                         href={`https://github.com/lumgwun/AwaAIApps/actions/runs/${app.easBuildId}`}
@@ -362,7 +441,7 @@ export default function MobileAppPage() {
           ))}
 
           {/* Show form again if all builds are done/failed */}
-          {hasActive === false && apps.every((a) => a.status === "published" || a.status === "failed") && (
+          {!hasActive && apps.every((a) => a.status === "published" || a.status === "failed") && (
             <Button
               variant="outline" className="w-full border-dashed border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500"
               onClick={() => { setUrl(""); setAppName(""); }}

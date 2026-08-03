@@ -1,9 +1,15 @@
 /**
  * Mobile App Generation routes
  *
- * POST /vendors/me/mobile-app        — submit website or repo URL, kick off APK build
- * GET  /vendors/me/mobile-app        — get current build status for this vendor
- * DELETE /vendors/me/mobile-app/:id  — cancel / remove a build record
+ * POST /vendors/me/mobile-app/checkout          — pay $100 via Squad and queue a build
+ * POST /vendors/me/mobile-app/payment/verify    — manually verify Squad payment + trigger build
+ * GET  /vendors/me/mobile-app/payment/callback  — Squad redirect after checkout
+ * POST /vendors/me/mobile-app/:id/payment/reinitiate — re-open Squad checkout for pending record
+ * GET  /vendors/me/mobile-app                   — get build history for this vendor
+ * POST /vendors/me/mobile-app/:id/retry         — retry a failed build (fee already paid)
+ * DELETE /vendors/me/mobile-app/:id             — remove a build record
+ * POST /admin/mobile-apps/:id/retry             — admin: retry any vendor's build
+ * GET  /admin/mobile-apps                       — admin: list all builds
  */
 
 import { Router } from "express";
@@ -11,9 +17,13 @@ import { eq, and } from "drizzle-orm";
 import { db, vendorsTable, vendorMobileAppsTable } from "@workspace/db";
 import { getAuth, requireAuth } from "@clerk/express";
 import { generateVendorApp, toAppSlug, toPackageName } from "../lib/app-generator";
+import { resolveSquadKey, squadInitiatePayment, squadVerifyTransaction } from "../lib/squad";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+/** One-time build fee: $100 USD = 10 000 cents */
+const BUILD_FEE_USD_CENTS = 10_000;
 
 /** Resolve the vendor row for the authenticated Clerk user.
  *  Admins (ADMIN_USER_IDS) get an auto-created enterprise vendor record so they
@@ -62,25 +72,39 @@ async function getVendor(req: any, res: any) {
   return null;
 }
 
-// ── GET /vendors/me/mobile-app ───────────────────────────────────────────────
-router.get("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) => {
-  try {
-    const vendor = await getVendor(req, res);
-    if (!vendor) return;
-    const apps = await db
-      .select()
-      .from(vendorMobileAppsTable)
-      .where(eq(vendorMobileAppsTable.vendorId, vendor.id))
-      .orderBy(vendorMobileAppsTable.createdAt);
-    res.json({ apps });
-  } catch (err) {
-    logger.error({ err }, "GET /vendors/me/mobile-app error");
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+/** Build trigger shared by checkout-verify and retry flows */
+async function triggerBuild(record: typeof vendorMobileAppsTable.$inferSelect, vendor: typeof vendorsTable.$inferSelect) {
+  const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
+  void (async () => {
+    try {
+      const result = await generateVendorApp({
+        recordId:   record.id,
+        vendorId:   vendor.id,
+        vendorName: vendor.name,
+        websiteUrl: targetUrl,
+        iconUrl:    record.iconUrl,
+        appName:    record.appName,
+      });
+      await db.update(vendorMobileAppsTable).set({
+        easBuildId:  result.runId,
+        appSlug:     result.slug,
+        packageName: result.packageName,
+        status:      "building",
+        updatedAt:   new Date(),
+      }).where(eq(vendorMobileAppsTable.id, record.id));
+      logger.info({ recordId: record.id, runId: result.runId }, "[mobile-apps] build queued");
+    } catch (err: any) {
+      logger.error({ err, recordId: record.id }, "[mobile-apps] build trigger failed");
+      await db.update(vendorMobileAppsTable).set({
+        status: "failed", errorMessage: err?.message ?? "Build trigger failed", updatedAt: new Date(),
+      }).where(eq(vendorMobileAppsTable.id, record.id));
+    }
+  })();
+}
 
-// ── POST /vendors/me/mobile-app ──────────────────────────────────────────────
-router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) => {
+// ── POST /vendors/me/mobile-app/checkout ─────────────────────────────────────
+// Creates a pending_payment build record and returns a Squad $100 checkout URL.
+router.post("/vendors/me/mobile-app/checkout", requireAuth(), async (req: any, res: any) => {
   try {
     const vendor = await getVendor(req, res);
     if (!vendor) return;
@@ -97,19 +121,48 @@ router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) 
       return void res.status(400).json({ error: "Provide a valid URL (include https://)" });
     }
 
-    // Prevent two simultaneous builds
-    const [existing] = await db
+    // Block if a build is actively running
+    const [building] = await db
       .select({ id: vendorMobileAppsTable.id })
       .from(vendorMobileAppsTable)
       .where(and(eq(vendorMobileAppsTable.vendorId, vendor.id), eq(vendorMobileAppsTable.status, "building")))
       .limit(1);
-    if (existing)
+    if (building)
       return void res.status(409).json({ error: "A build is already in progress. Wait for it to finish." });
 
     const slug        = toAppSlug(vendor.name, vendor.id);
     const packageName = toPackageName(slug);
     const finalName   = ((appName as string | undefined) ?? vendor.name).slice(0, 30);
 
+    // Super-admins bypass Squad payment — build starts immediately
+    const { userId } = getAuth(req);
+    const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const isAdmin = userId ? adminIds.includes(userId) : false;
+
+    if (isAdmin) {
+      const [record] = await db
+        .insert(vendorMobileAppsTable)
+        .values({
+          vendorId:    vendor.id,
+          source,
+          websiteUrl:  source === "website" ? (websiteUrl as string) : null,
+          repoUrl:     source !== "website" ? (repoUrl as string)    : null,
+          repoBranch:  (repoBranch as string | undefined) ?? null,
+          appName:     finalName,
+          appSlug:     slug,
+          packageName,
+          iconUrl:     vendor.logoUrl ?? null,
+          status:      "building",
+          feePaid:     true,
+          feeAmount:   0,
+        })
+        .returning();
+      res.status(202).json({ app: serializeApp(record), adminBypass: true });
+      triggerBuild(record, vendor);
+      return;
+    }
+
+    // Create record in pending_payment state
     const [record] = await db
       .insert(vendorMobileAppsTable)
       .values({
@@ -122,47 +175,188 @@ router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) 
         appSlug:     slug,
         packageName,
         iconUrl:     vendor.logoUrl ?? null,
-        status:      "building",
+        status:      "pending_payment",
+        feeAmount:   BUILD_FEE_USD_CENTS,
       })
       .returning();
 
-    res.status(202).json({ app: record });
+    // Initiate Squad checkout
+    try {
+      const secretKey     = await resolveSquadKey();
+      const transactionRef = `MABLD-${vendor.id}-${record.id}-${Date.now()}`;
+      const host           = `${req.protocol}://${req.get("host")}`;
+      const callbackUrl    = `${host}/api/vendors/me/mobile-app/payment/callback?transaction_ref=${transactionRef}`;
 
-    // Fire-and-forget build trigger
-    void (async () => {
-      try {
-        const result = await generateVendorApp({
-          recordId:   record.id,
-          vendorId:   vendor.id,
-          vendorName: vendor.name,
-          websiteUrl: targetUrl,
-          iconUrl:    vendor.logoUrl,
-          appName:    finalName,
-        });
-        await db.update(vendorMobileAppsTable).set({
-          easBuildId:  result.runId,
-          appSlug:     result.slug,
-          packageName: result.packageName,
-          status:      "building",
-          updatedAt:   new Date(),
-        }).where(eq(vendorMobileAppsTable.id, record.id));
-        logger.info({ recordId: record.id, runId: result.runId }, "[mobile-apps] build queued");
-      } catch (err: any) {
-        logger.error({ err, recordId: record.id }, "[mobile-apps] build trigger failed");
-        await db.update(vendorMobileAppsTable).set({
-          status: "failed", errorMessage: err?.message ?? "Unknown error", updatedAt: new Date(),
-        }).where(eq(vendorMobileAppsTable.id, record.id));
-      }
-    })();
+      const result = await squadInitiatePayment(secretKey, {
+        email:          vendor.email,
+        amount:         BUILD_FEE_USD_CENTS,
+        currency:       "USD",
+        transactionRef,
+        customerName:   vendor.name,
+        callbackUrl,
+        metadata:       { purpose: "mobile_app_build_fee", recordId: record.id, vendorId: vendor.id },
+      });
+
+      await db.update(vendorMobileAppsTable).set({
+        feeRef: transactionRef, updatedAt: new Date(),
+      }).where(eq(vendorMobileAppsTable.id, record.id));
+
+      res.json({ app: { ...record, feeRef: transactionRef }, checkoutUrl: result.data.checkout_url });
+    } catch (err: any) {
+      // Clean up the record if Squad fails to initiate
+      await db.delete(vendorMobileAppsTable).where(eq(vendorMobileAppsTable.id, record.id)).catch(() => {});
+      logger.error({ err }, "[mobile-apps] Squad checkout initiation failed");
+      res.status(502).json({ error: err?.message ?? "Payment gateway error. Please try again." });
+    }
   } catch (err) {
-    logger.error({ err }, "POST /vendors/me/mobile-app error");
+    logger.error({ err }, "POST /vendors/me/mobile-app/checkout error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /vendors/me/mobile-app/payment/verify ───────────────────────────────
+// Frontend calls this after Squad redirects back, to confirm payment and start build.
+router.post("/vendors/me/mobile-app/payment/verify", requireAuth(), async (req: any, res: any) => {
+  try {
+    const vendor = await getVendor(req, res);
+    if (!vendor) return;
+
+    const { transactionRef } = req.body;
+    if (!transactionRef)
+      return void res.status(400).json({ error: "transactionRef is required" });
+
+    const [record] = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(and(eq(vendorMobileAppsTable.feeRef, transactionRef), eq(vendorMobileAppsTable.vendorId, vendor.id)))
+      .limit(1);
+    if (!record) return void res.status(404).json({ error: "Build record not found for this reference" });
+    if (record.feePaid) return res.json({ ok: true, alreadyPaid: true, app: serializeApp(record) });
+
+    const secretKey = await resolveSquadKey();
+    const verify    = await squadVerifyTransaction(secretKey, transactionRef);
+
+    if (verify.data.transaction_status !== "Success")
+      return void res.status(402).json({ error: "Payment not completed yet", transactionStatus: verify.data.transaction_status });
+
+    await db.update(vendorMobileAppsTable).set({
+      feePaid: true, status: "building", updatedAt: new Date(),
+    }).where(eq(vendorMobileAppsTable.id, record.id));
+
+    triggerBuild({ ...record, status: "building", feePaid: true }, vendor);
+    res.json({ ok: true, app: serializeApp({ ...record, feePaid: true, status: "building" }) });
+  } catch (err: any) {
+    logger.error({ err }, "POST /vendors/me/mobile-app/payment/verify error");
+    res.status(500).json({ error: err?.message ?? "Verification failed" });
+  }
+});
+
+// ── GET /vendors/me/mobile-app/payment/callback ───────────────────────────────
+// Squad redirects the buyer here after checkout. Verifies and triggers build.
+router.get("/vendors/me/mobile-app/payment/callback", async (req: any, res: any) => {
+  const { transaction_ref } = req.query as { transaction_ref?: string };
+  // Frontend base — vendor-hub is path-mounted at /vendor-hub
+  const frontendBase = "/vendor-hub/mobile-app";
+
+  if (!transaction_ref)
+    return res.redirect(`${frontendBase}?payment_error=missing_ref`);
+
+  try {
+    const [record] = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(eq(vendorMobileAppsTable.feeRef, transaction_ref))
+      .limit(1);
+
+    if (!record)
+      return res.redirect(`${frontendBase}?payment_error=not_found`);
+    if (record.feePaid)
+      return res.redirect(`${frontendBase}?build_id=${record.id}&paid=1`);
+
+    const secretKey = await resolveSquadKey();
+    const verify    = await squadVerifyTransaction(secretKey, transaction_ref);
+
+    if (verify.data.transaction_status !== "Success")
+      return res.redirect(`${frontendBase}?payment_error=payment_failed&build_id=${record.id}&ref=${transaction_ref}`);
+
+    await db.update(vendorMobileAppsTable).set({
+      feePaid: true, status: "building", updatedAt: new Date(),
+    }).where(eq(vendorMobileAppsTable.id, record.id));
+
+    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, record.vendorId));
+    if (vendor) triggerBuild({ ...record, status: "building", feePaid: true }, vendor);
+
+    res.redirect(`${frontendBase}?build_id=${record.id}&paid=1`);
+  } catch (err: any) {
+    logger.error({ err }, "GET /vendors/me/mobile-app/payment/callback error");
+    res.redirect(`${frontendBase}?payment_error=verification_failed`);
+  }
+});
+
+// ── POST /vendors/me/mobile-app/:id/payment/reinitiate ───────────────────────
+// Re-opens Squad checkout for an existing pending_payment record (e.g. expired link).
+router.post("/vendors/me/mobile-app/:id/payment/reinitiate", requireAuth(), async (req: any, res: any) => {
+  try {
+    const vendor = await getVendor(req, res);
+    if (!vendor) return;
+
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+
+    const [record] = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(and(eq(vendorMobileAppsTable.id, id), eq(vendorMobileAppsTable.vendorId, vendor.id)));
+    if (!record)                           return void res.status(404).json({ error: "Not found" });
+    if (record.feePaid)                    return void res.status(409).json({ error: "Already paid — build is in progress" });
+    if (record.status !== "pending_payment") return void res.status(409).json({ error: "Cannot re-initiate for this build status" });
+
+    const secretKey      = await resolveSquadKey();
+    const transactionRef = `MABLD-${vendor.id}-${record.id}-${Date.now()}`;
+    const host           = `${req.protocol}://${req.get("host")}`;
+    const callbackUrl    = `${host}/api/vendors/me/mobile-app/payment/callback?transaction_ref=${transactionRef}`;
+
+    const result = await squadInitiatePayment(secretKey, {
+      email:          vendor.email,
+      amount:         BUILD_FEE_USD_CENTS,
+      currency:       "USD",
+      transactionRef,
+      customerName:   vendor.name,
+      callbackUrl,
+      metadata:       { purpose: "mobile_app_build_fee", recordId: record.id, vendorId: vendor.id },
+    });
+
+    await db.update(vendorMobileAppsTable).set({
+      feeRef: transactionRef, updatedAt: new Date(),
+    }).where(eq(vendorMobileAppsTable.id, id));
+
+    res.json({ checkoutUrl: result.data.checkout_url, transactionRef });
+  } catch (err: any) {
+    logger.error({ err }, "POST /vendors/me/mobile-app/:id/payment/reinitiate error");
+    res.status(502).json({ error: err?.message ?? "Payment gateway error. Please try again." });
+  }
+});
+
+// ── GET /vendors/me/mobile-app ───────────────────────────────────────────────
+router.get("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) => {
+  try {
+    const vendor = await getVendor(req, res);
+    if (!vendor) return;
+    const apps = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(eq(vendorMobileAppsTable.vendorId, vendor.id))
+      .orderBy(vendorMobileAppsTable.createdAt);
+    res.json({ apps: apps.map(serializeApp) });
+  } catch (err) {
+    logger.error({ err }, "GET /vendors/me/mobile-app error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // ── POST /vendors/me/mobile-app/:id/retry ────────────────────────────────────
-// Lets a vendor re-trigger the GitHub Actions build for their own failed record
-// without deleting and resubmitting. Blocked if another build is already running.
+// Lets a vendor re-trigger the GitHub Actions build for their own failed record.
+// The fee must already have been paid.
 router.post("/vendors/me/mobile-app/:id/retry", requireAuth(), async (req: any, res: any) => {
   try {
     const vendor = await getVendor(req, res);
@@ -177,6 +371,7 @@ router.post("/vendors/me/mobile-app/:id/retry", requireAuth(), async (req: any, 
       .where(and(eq(vendorMobileAppsTable.id, id), eq(vendorMobileAppsTable.vendorId, vendor.id)));
 
     if (!record) return void res.status(404).json({ error: "Not found" });
+    if (!record.feePaid) return void res.status(402).json({ error: "Payment required before retrying" });
     if (record.status === "building" || record.status === "queued")
       return void res.status(409).json({ error: "Build is already in progress" });
 
@@ -189,36 +384,12 @@ router.post("/vendors/me/mobile-app/:id/retry", requireAuth(), async (req: any, 
     if (running)
       return void res.status(409).json({ error: "Another build is already in progress. Wait for it to finish." });
 
-    // Reset to building before triggering
     await db.update(vendorMobileAppsTable).set({
       status: "building", errorMessage: null, updatedAt: new Date(),
     }).where(eq(vendorMobileAppsTable.id, id));
 
     res.json({ ok: true, message: "Retry started" });
-
-    // Fire-and-forget re-dispatch
-    const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
-    void (async () => {
-      try {
-        const result = await generateVendorApp({
-          recordId:   record.id,
-          vendorId:   vendor.id,
-          vendorName: vendor.name,
-          websiteUrl: targetUrl,
-          iconUrl:    record.iconUrl,
-          appName:    record.appName,
-        });
-        await db.update(vendorMobileAppsTable).set({
-          easBuildId: result.runId, status: "building", updatedAt: new Date(),
-        }).where(eq(vendorMobileAppsTable.id, id));
-        logger.info({ recordId: id, runId: result.runId }, "[mobile-apps] retry build queued");
-      } catch (err: any) {
-        logger.error({ err, recordId: id }, "[mobile-apps] retry build trigger failed");
-        await db.update(vendorMobileAppsTable).set({
-          status: "failed", errorMessage: err?.message ?? "Unknown error", updatedAt: new Date(),
-        }).where(eq(vendorMobileAppsTable.id, id));
-      }
-    })();
+    triggerBuild({ ...record, status: "building" }, vendor);
   } catch (err) {
     logger.error({ err }, "POST /vendors/me/mobile-app/:id/retry error");
     res.status(500).json({ error: "Internal server error" });
@@ -242,7 +413,6 @@ router.post("/admin/mobile-apps/:id/retry", requireAuth(), async (req: any, res:
     if (record.status === "building" || record.status === "queued")
       return void res.status(409).json({ error: "Build is already in progress" });
 
-    // Fetch the vendor record for name/icon
     const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, record.vendorId));
     if (!vendor) return void res.status(404).json({ error: "Vendor not found for this build" });
 
@@ -251,29 +421,7 @@ router.post("/admin/mobile-apps/:id/retry", requireAuth(), async (req: any, res:
     }).where(eq(vendorMobileAppsTable.id, id));
 
     res.json({ ok: true, message: "Admin retry started", recordId: id });
-
-    const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
-    void (async () => {
-      try {
-        const result = await generateVendorApp({
-          recordId:   record.id,
-          vendorId:   vendor.id,
-          vendorName: vendor.name,
-          websiteUrl: targetUrl,
-          iconUrl:    record.iconUrl,
-          appName:    record.appName,
-        });
-        await db.update(vendorMobileAppsTable).set({
-          easBuildId: result.runId, status: "building", updatedAt: new Date(),
-        }).where(eq(vendorMobileAppsTable.id, id));
-        logger.info({ recordId: id, runId: result.runId }, "[mobile-apps] admin retry build queued");
-      } catch (err: any) {
-        logger.error({ err, recordId: id }, "[mobile-apps] admin retry build trigger failed");
-        await db.update(vendorMobileAppsTable).set({
-          status: "failed", errorMessage: err?.message ?? "Unknown error", updatedAt: new Date(),
-        }).where(eq(vendorMobileAppsTable.id, id));
-      }
-    })();
+    triggerBuild({ ...record, status: "building" }, vendor);
   } catch (err) {
     logger.error({ err }, "POST /admin/mobile-apps/:id/retry error");
     res.status(500).json({ error: "Internal server error" });
@@ -320,6 +468,8 @@ router.get("/admin/mobile-apps", requireAuth(), async (req: any, res: any) => {
         appSlug:      vendorMobileAppsTable.appSlug,
         packageName:  vendorMobileAppsTable.packageName,
         status:       vendorMobileAppsTable.status,
+        feePaid:      vendorMobileAppsTable.feePaid,
+        feeAmount:    vendorMobileAppsTable.feeAmount,
         errorMessage: vendorMobileAppsTable.errorMessage,
         easBuildId:   vendorMobileAppsTable.easBuildId,
         apkUrl:       vendorMobileAppsTable.apkUrl,
@@ -344,5 +494,15 @@ router.get("/admin/mobile-apps", requireAuth(), async (req: any, res: any) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function serializeApp(app: typeof vendorMobileAppsTable.$inferSelect & { [k: string]: any }) {
+  return {
+    ...app,
+    createdAt: app.createdAt instanceof Date ? app.createdAt.toISOString() : String(app.createdAt ?? ""),
+    updatedAt: app.updatedAt instanceof Date ? app.updatedAt.toISOString() : String(app.updatedAt ?? ""),
+    lastCheckedAt: app.lastCheckedAt instanceof Date ? app.lastCheckedAt.toISOString() : (app.lastCheckedAt ?? null),
+  };
+}
 
 export default router;
