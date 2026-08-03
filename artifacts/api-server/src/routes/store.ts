@@ -1212,6 +1212,17 @@ router.post("/developers/register", requireAuth(), async (req, res) => {
 
     res.status(201).json({ ...serializeDev(dev), totalApps: 0, totalDownloads: 0 });
     notifyAdminSignup({ platform: "app-store", name: displayName, email });
+
+    // Auto-create a Vendor Hub account using the same Clerk identity so the developer
+    // can log into both platforms with one set of credentials.
+    void db.insert(vendorsTable).values({
+      clerkUserId:    userId!,
+      name:           displayName,
+      email,
+      country:        country ?? "Nigeria",
+      industry:       "General",
+      externalSource: "appstore",
+    } as any).onConflictDoNothing();
   } catch (err) {
     logger.error({ err }, "registerDeveloper error");
     res.status(500).json({ error: "Internal server error" });
