@@ -1,0 +1,82 @@
+[
+  {
+    "id": "a1000001-0000-4000-8000-000000000001",
+    "position": 1,
+    "filepath": "src/pages/slides/Slide01Title.tsx",
+    "title": "Awajimaa",
+    "description": "Title slide — Africa's All-in-One Business Operating System",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000002-0000-4000-8000-000000000002",
+    "position": 2,
+    "filepath": "src/pages/slides/Slide02Problem.tsx",
+    "title": "African businesses are running on duct tape",
+    "description": "The problem — 44M SMEs, fragmented tools, no local infrastructure",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000003-0000-4000-8000-000000000003",
+    "position": 3,
+    "filepath": "src/pages/slides/Slide03Solution.tsx",
+    "title": "One platform. Everything a business needs.",
+    "description": "The solution — three products sharing one backend",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000004-0000-4000-8000-000000000004",
+    "position": 4,
+    "filepath": "src/pages/slides/Slide04BizSuite.tsx",
+    "title": "Awa Biz Suite: run your entire business in one place",
+    "description": "Core product capabilities — payments, commerce, finance, CRM, marketing, social",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000005-0000-4000-8000-000000000005",
+    "position": 5,
+    "filepath": "src/pages/slides/Slide05AI.tsx",
+    "title": "AI is built in — not bolted on",
+    "description": "Seven AI capabilities built into the platform",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000006-0000-4000-8000-000000000006",
+    "position": 6,
+    "filepath": "src/pages/slides/Slide06AppStore.tsx",
+    "title": "Awajimaa App Store: Africa's developer marketplace",
+    "description": "App marketplace with AI review, version management, and auto-listing",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000007-0000-4000-8000-000000000007",
+    "position": 7,
+    "filepath": "src/pages/slides/Slide07DevEcosystem.tsx",
+    "title": "The developer & partner ecosystem",
+    "description": "OAuth server, API keys, webhooks, developer portal",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000008-0000-4000-8000-000000000008",
+    "position": 8,
+    "filepath": "src/pages/slides/Slide08WhatBuilt.tsx",
+    "title": "What we've already built",
+    "description": "Traction — seven shipped milestones across the platform",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000009-0000-4000-8000-000000000009",
+    "position": 9,
+    "filepath": "src/pages/slides/Slide09BusinessModel.tsx",
+    "title": "How we make money",
+    "description": "Five revenue streams — SaaS, marketplace, usage, partnerships, mobile",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1000010-0000-4000-8000-000000000010",
+    "position": 10,
+    "filepath": "src/pages/slides/Slide10CTA.tsx",
+    "title": "Let's build Africa's business infrastructure together",
+    "description": "Closing slide with contact info",
+    "speakerNotes": ""
+  }
+]

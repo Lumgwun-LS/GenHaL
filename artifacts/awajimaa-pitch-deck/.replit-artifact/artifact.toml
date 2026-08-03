@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/awajimaa-pitch-deck/"
+title = "Awajimaa Pitch Deck"
+description = "10-slide investor/partner pitch deck for the Awajimaa ecosystem — Africa's all-in-one business operating system. Covers the problem, product suite, AI capabilities, App Store, developer ecosystem, traction, business model, and CTA."
+version = "1.0.0"
+id = "artifacts/awajimaa-pitch-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-pitch-deck/" ]
+localPort = 19889
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-pitch-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-pitch-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-pitch-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19889"
+BASE_PATH = "/awajimaa-pitch-deck/"

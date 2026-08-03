@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/awajimaa-one-pager/"
+title = "Awajimaa One-Pager"
+description = "A print-optimized single-page PDF overview of the Awajimaa ecosystem — for investors, partners, and enterprise customers. Covers the product suite, key capabilities, business model, and contact info."
+version = "1.0.0"
+id = "artifacts/awajimaa-one-pager"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-one-pager/" ]
+localPort = 20045
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-one-pager run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-one-pager", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-one-pager/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20045"
+BASE_PATH = "/awajimaa-one-pager/"
