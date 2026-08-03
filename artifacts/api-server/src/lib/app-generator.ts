@@ -60,12 +60,16 @@ function callbackBase(): string {
 // ── public API ───────────────────────────────────────────────────────────────
 
 export interface GenerateAppOptions {
-  recordId:   number;
-  vendorId:   number;
-  vendorName: string;
-  websiteUrl: string;
-  iconUrl?:   string | null;
-  appName?:   string;
+  recordId:     number;
+  vendorId:     number;
+  vendorName:   string;
+  websiteUrl:   string;
+  iconUrl?:     string | null;
+  appName?:     string;
+  /** Full URL of the Awa Biz Suite vendor dashboard.
+   *  Replaces DASHBOARD_URL_PLACEHOLDER in the Android template so the
+   *  in-app Owner Mode button can navigate the vendor to their dashboard. */
+  dashboardUrl?: string;
 }
 
 export interface GenerateAppResult {
@@ -104,6 +108,7 @@ export async function generateVendorApp(opts: GenerateAppOptions): Promise<Gener
         app_name:        appName,
         package_name:    packageName,
         website_url:     websiteUrl,
+        dashboard_url:   opts.dashboardUrl ?? "",
         icon_url:        iconUrl ?? "",
         callback_url:    callback,
         callback_secret: secret,

@@ -75,15 +75,23 @@ async function getVendor(req: any, res: any) {
 /** Build trigger shared by checkout-verify and retry flows */
 async function triggerBuild(record: typeof vendorMobileAppsTable.$inferSelect, vendor: typeof vendorsTable.$inferSelect) {
   const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
+
+  // Owner-mode dashboard URL — points to the Awa Biz Suite vendor dashboard.
+  // The Android template injects this as DASHBOARD_URL_PLACEHOLDER so vendors
+  // can tap the in-app ⚙ button to manage their business without leaving their branded app.
+  const appDomain   = process.env.PUBLIC_APP_DOMAIN ?? process.env.REPLIT_DEV_DOMAIN ?? "";
+  const dashboardUrl = appDomain ? `https://${appDomain}/dashboard` : "";
+
   void (async () => {
     try {
       const result = await generateVendorApp({
-        recordId:   record.id,
-        vendorId:   vendor.id,
-        vendorName: vendor.name,
-        websiteUrl: targetUrl,
-        iconUrl:    record.iconUrl,
-        appName:    record.appName,
+        recordId:     record.id,
+        vendorId:     vendor.id,
+        vendorName:   vendor.name,
+        websiteUrl:   targetUrl,
+        iconUrl:      record.iconUrl,
+        appName:      record.appName,
+        dashboardUrl,
       });
       await db.update(vendorMobileAppsTable).set({
         easBuildId:  result.runId,
