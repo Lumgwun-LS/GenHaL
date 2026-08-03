@@ -116,6 +116,13 @@ export default function MobileAppPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["mobile-apps"] }),
   });
 
+  // ── retry mutation ─────────────────────────────────────────────────────────
+  const retry = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/vendors/me/mobile-app/${id}/retry`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["mobile-apps"] }),
+  });
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
@@ -293,25 +300,51 @@ export default function MobileAppPage() {
                         )}
                         {app.easBuildId && (
                           <a
-                            href={`https://expo.dev/accounts/lumgwun-solutions/projects/builds/${app.easBuildId}`}
+                            href={`https://github.com/lumgwun/AwaAIApps/actions/runs/${app.easBuildId}`}
                             target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400"
                           >
-                            <ExternalLink className="w-3 h-3" />EAS logs
+                            <ExternalLink className="w-3 h-3" />Build logs
                           </a>
                         )}
                       </div>
                     )}
-                    {app.status === "failed" && app.errorMessage && (
-                      <div className="mt-2 text-xs text-red-400">{app.errorMessage}</div>
+                    {app.status === "failed" && (
+                      <div className="mt-2 space-y-2">
+                        {app.errorMessage && (
+                          <div className="text-xs text-red-400">{app.errorMessage}</div>
+                        )}
+                        {app.easBuildId && (
+                          <a
+                            href={`https://github.com/lumgwun/AwaAIApps/actions/runs/${app.easBuildId}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400"
+                          >
+                            <ExternalLink className="w-3 h-3" />View build logs
+                          </a>
+                        )}
+                        <div>
+                          <Button
+                            size="sm"
+                            onClick={() => retry.mutate(app.id)}
+                            disabled={retry.isPending || hasActive}
+                            className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                          >
+                            {retry.isPending ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Retrying…</> : <><RefreshCw className="w-3 h-3 mr-1" />Retry Build</>}
+                          </Button>
+                          {hasActive && (
+                            <span className="ml-2 text-xs text-zinc-500">Wait for the current build to finish first</span>
+                          )}
+                        </div>
+                      </div>
                     )}
                     {app.easBuildId && app.status === "building" && (
                       <a
-                        href={`https://expo.dev/accounts/lumgwun-solutions/projects/awajimaa-apps/builds/${app.easBuildId}`}
+                        href={`https://github.com/lumgwun/AwaAIApps/actions/runs/${app.easBuildId}`}
                         target="_blank" rel="noopener noreferrer"
                         className="mt-2 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
                       >
-                        <ExternalLink className="w-3 h-3" />Track build on Expo
+                        <ExternalLink className="w-3 h-3" />Track build on GitHub Actions
                       </a>
                     )}
                   </div>

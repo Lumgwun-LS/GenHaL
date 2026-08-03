@@ -160,6 +160,126 @@ router.post("/vendors/me/mobile-app", requireAuth(), async (req: any, res: any) 
   }
 });
 
+// ── POST /vendors/me/mobile-app/:id/retry ────────────────────────────────────
+// Lets a vendor re-trigger the GitHub Actions build for their own failed record
+// without deleting and resubmitting. Blocked if another build is already running.
+router.post("/vendors/me/mobile-app/:id/retry", requireAuth(), async (req: any, res: any) => {
+  try {
+    const vendor = await getVendor(req, res);
+    if (!vendor) return;
+
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+
+    const [record] = await db
+      .select()
+      .from(vendorMobileAppsTable)
+      .where(and(eq(vendorMobileAppsTable.id, id), eq(vendorMobileAppsTable.vendorId, vendor.id)));
+
+    if (!record) return void res.status(404).json({ error: "Not found" });
+    if (record.status === "building" || record.status === "queued")
+      return void res.status(409).json({ error: "Build is already in progress" });
+
+    // Check no other build is already running for this vendor
+    const [running] = await db
+      .select({ id: vendorMobileAppsTable.id })
+      .from(vendorMobileAppsTable)
+      .where(and(eq(vendorMobileAppsTable.vendorId, vendor.id), eq(vendorMobileAppsTable.status, "building")))
+      .limit(1);
+    if (running)
+      return void res.status(409).json({ error: "Another build is already in progress. Wait for it to finish." });
+
+    // Reset to building before triggering
+    await db.update(vendorMobileAppsTable).set({
+      status: "building", errorMessage: null, updatedAt: new Date(),
+    }).where(eq(vendorMobileAppsTable.id, id));
+
+    res.json({ ok: true, message: "Retry started" });
+
+    // Fire-and-forget re-dispatch
+    const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
+    void (async () => {
+      try {
+        const result = await generateVendorApp({
+          recordId:   record.id,
+          vendorId:   vendor.id,
+          vendorName: vendor.name,
+          websiteUrl: targetUrl,
+          iconUrl:    record.iconUrl,
+          appName:    record.appName,
+        });
+        await db.update(vendorMobileAppsTable).set({
+          easBuildId: result.runId, status: "building", updatedAt: new Date(),
+        }).where(eq(vendorMobileAppsTable.id, id));
+        logger.info({ recordId: id, runId: result.runId }, "[mobile-apps] retry build queued");
+      } catch (err: any) {
+        logger.error({ err, recordId: id }, "[mobile-apps] retry build trigger failed");
+        await db.update(vendorMobileAppsTable).set({
+          status: "failed", errorMessage: err?.message ?? "Unknown error", updatedAt: new Date(),
+        }).where(eq(vendorMobileAppsTable.id, id));
+      }
+    })();
+  } catch (err) {
+    logger.error({ err }, "POST /vendors/me/mobile-app/:id/retry error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /admin/mobile-apps/:id/retry ────────────────────────────────────────
+// Admin-only: retry any vendor's failed build by record ID.
+router.post("/admin/mobile-apps/:id/retry", requireAuth(), async (req: any, res: any) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) return void res.status(401).json({ error: "Unauthorized" });
+    const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!adminIds.includes(userId)) return void res.status(403).json({ error: "Admin only" });
+
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return void res.status(400).json({ error: "Invalid id" });
+
+    const [record] = await db.select().from(vendorMobileAppsTable).where(eq(vendorMobileAppsTable.id, id));
+    if (!record) return void res.status(404).json({ error: "Not found" });
+    if (record.status === "building" || record.status === "queued")
+      return void res.status(409).json({ error: "Build is already in progress" });
+
+    // Fetch the vendor record for name/icon
+    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, record.vendorId));
+    if (!vendor) return void res.status(404).json({ error: "Vendor not found for this build" });
+
+    await db.update(vendorMobileAppsTable).set({
+      status: "building", errorMessage: null, updatedAt: new Date(),
+    }).where(eq(vendorMobileAppsTable.id, id));
+
+    res.json({ ok: true, message: "Admin retry started", recordId: id });
+
+    const targetUrl = record.websiteUrl ?? record.repoUrl ?? "";
+    void (async () => {
+      try {
+        const result = await generateVendorApp({
+          recordId:   record.id,
+          vendorId:   vendor.id,
+          vendorName: vendor.name,
+          websiteUrl: targetUrl,
+          iconUrl:    record.iconUrl,
+          appName:    record.appName,
+        });
+        await db.update(vendorMobileAppsTable).set({
+          easBuildId: result.runId, status: "building", updatedAt: new Date(),
+        }).where(eq(vendorMobileAppsTable.id, id));
+        logger.info({ recordId: id, runId: result.runId }, "[mobile-apps] admin retry build queued");
+      } catch (err: any) {
+        logger.error({ err, recordId: id }, "[mobile-apps] admin retry build trigger failed");
+        await db.update(vendorMobileAppsTable).set({
+          status: "failed", errorMessage: err?.message ?? "Unknown error", updatedAt: new Date(),
+        }).where(eq(vendorMobileAppsTable.id, id));
+      }
+    })();
+  } catch (err) {
+    logger.error({ err }, "POST /admin/mobile-apps/:id/retry error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── DELETE /vendors/me/mobile-app/:id ────────────────────────────────────────
 router.delete("/vendors/me/mobile-app/:id", requireAuth(), async (req: any, res: any) => {
   try {
@@ -175,6 +295,52 @@ router.delete("/vendors/me/mobile-app/:id", requireAuth(), async (req: any, res:
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "DELETE /vendors/me/mobile-app/:id error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /admin/mobile-apps ────────────────────────────────────────────────────
+// Admin-only: list all vendor_mobile_apps records with vendor names.
+router.get("/admin/mobile-apps", requireAuth(), async (req: any, res: any) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) return void res.status(401).json({ error: "Unauthorized" });
+    const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!adminIds.includes(userId)) return void res.status(403).json({ error: "Admin only" });
+
+    const rows = await db
+      .select({
+        id:           vendorMobileAppsTable.id,
+        vendorId:     vendorMobileAppsTable.vendorId,
+        vendorName:   vendorsTable.name,
+        appName:      vendorMobileAppsTable.appName,
+        source:       vendorMobileAppsTable.source,
+        websiteUrl:   vendorMobileAppsTable.websiteUrl,
+        repoUrl:      vendorMobileAppsTable.repoUrl,
+        appSlug:      vendorMobileAppsTable.appSlug,
+        packageName:  vendorMobileAppsTable.packageName,
+        status:       vendorMobileAppsTable.status,
+        errorMessage: vendorMobileAppsTable.errorMessage,
+        easBuildId:   vendorMobileAppsTable.easBuildId,
+        apkUrl:       vendorMobileAppsTable.apkUrl,
+        storeAppId:   vendorMobileAppsTable.storeAppId,
+        createdAt:    vendorMobileAppsTable.createdAt,
+        updatedAt:    vendorMobileAppsTable.updatedAt,
+      })
+      .from(vendorMobileAppsTable)
+      .leftJoin(vendorsTable, eq(vendorsTable.id, vendorMobileAppsTable.vendorId))
+      .orderBy(vendorMobileAppsTable.updatedAt);
+
+    const builds = rows.map((r) => ({
+      ...r,
+      vendorName: r.vendorName ?? `Vendor #${r.vendorId}`,
+      createdAt:  r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt ?? ""),
+      updatedAt:  r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt ?? ""),
+    }));
+
+    res.json({ builds });
+  } catch (err) {
+    logger.error({ err }, "GET /admin/mobile-apps error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

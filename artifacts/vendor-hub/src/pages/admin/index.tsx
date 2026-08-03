@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users, BookOpen, Gift, Receipt, Copy, ExternalLink } from "lucide-react";
+import { ShieldCheck, ShieldOff, CreditCard, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Cake, Mail, Bell, Phone, PhoneCall, PhoneOff, PhoneMissed, Download, ClipboardList, ArrowRight, Layout, BarChart3, Send, MessageSquare, RefreshCw, DollarSign, Cpu, TrendingUp, Globe, Banknote, Sparkles, Users, BookOpen, Gift, Receipt, Copy, ExternalLink, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Redirect, Link } from "wouter";
@@ -50,6 +50,7 @@ import FeatureTrialsPanel from "./feature-trials";
 import PlatformUsersPanel from "./platform-users";
 import BlogModerationPanel from "./blog-moderation";
 import AdminCustomersPanel from "./customers-panel";
+import MobileAppBuildsPanel from "./mobile-app-builds";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -3054,6 +3055,9 @@ export default function AdminPanel() {
           <TabsTrigger value="blog-moderation" className="flex items-center gap-2">
             <BookOpen className="w-4 h-4" /> Blog Moderation
           </TabsTrigger>
+          <TabsTrigger value="mobile-app-builds" className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" /> Mobile Builds
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Vendors tab ─────────────────────────────────────────────── */}
@@ -4458,6 +4462,11 @@ export default function AdminPanel() {
         {/* ── Blog Moderation tab ──────────────────────────────────────────── */}
         <TabsContent value="blog-moderation">
           <BlogModerationPanel />
+        </TabsContent>
+
+        {/* ── Mobile App Builds tab ─────────────────────────────────────────── */}
+        <TabsContent value="mobile-app-builds">
+          <MobileAppBuildsPanel />
         </TabsContent>
       </Tabs>
 

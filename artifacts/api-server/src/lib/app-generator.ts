@@ -91,6 +91,9 @@ export async function generateVendorApp(opts: GenerateAppOptions): Promise<Gener
   // ── Dispatch workflow_dispatch ─────────────────────────────────────────────
   logger.info({ slug, recordId }, "[app-generator] Dispatching GitHub Actions build");
 
+  // Capture before dispatch so we can filter runs created >= this time (race-condition fix)
+  const dispatchTime = new Date();
+
   const dispatchRes = await fetch(`${base}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
     method:  "POST",
     headers: ghHeaders(),
@@ -116,21 +119,57 @@ export async function generateVendorApp(opts: GenerateAppOptions): Promise<Gener
     );
   }
 
-  // GitHub returns 204 — give Actions ~5 s to register the run, then fetch the latest run ID
-  await new Promise<void>((r) => setTimeout(r, 5_000));
+  // ── Reliably resolve our run ID ────────────────────────────────────────────
+  //
+  // Strategy: filter runs by created_at >= (dispatchTime - buffer), then pick
+  // the newest non-completed candidate. This avoids the race where two nearly
+  // simultaneous dispatches each pick up the other's run via a naive "latest" query.
+  //
+  // We capture dispatchedAfter *before* the fetch (with a 3 s clock-skew buffer)
+  // so that any run registered by GitHub after our POST is included.
+  const dispatchedAfter = new Date(dispatchTime.getTime() - 3_000);
+  // GitHub search filter format: ">=ISO_DATE"
+  const createdFilter = encodeURIComponent(`>=${dispatchedAfter.toISOString().replace(/\.\d+Z$/, "Z")}`);
 
-  const runsRes = await fetch(
-    `${base}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1&event=workflow_dispatch`,
-    { headers: ghHeaders() },
-  );
-  if (!runsRes.ok) {
-    // Non-fatal — the scheduler will still pick up the run eventually via its own poll
-    logger.warn({ status: runsRes.status }, "[app-generator] Could not fetch run ID after dispatch (non-fatal)");
-    return { slug, packageName, runId: "pending" };
+  let runId = "pending";
+
+  // Poll up to 6 times × 5 s = 30 s. GitHub can take several seconds to register a queued run.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await new Promise<void>((r) => setTimeout(r, 5_000));
+
+    const runsRes = await fetch(
+      `${base}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=10&event=workflow_dispatch&created=${createdFilter}`,
+      { headers: ghHeaders() },
+    );
+
+    if (!runsRes.ok) {
+      logger.warn({ status: runsRes.status, attempt }, "[app-generator] Run-list fetch failed (will retry)");
+      continue;
+    }
+
+    const runsData = await runsRes.json() as {
+      workflow_runs?: Array<{ id: number; status: string; created_at: string }>;
+    };
+
+    // Prefer runs that are still in flight (queued / in_progress / waiting)
+    const candidates = (runsData.workflow_runs ?? []).filter(
+      (r) => r.status !== "completed",
+    );
+
+    if (candidates.length > 0) {
+      // Most recently created = ours (dispatched just now)
+      candidates.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      runId = String(candidates[0].id);
+      break;
+    }
+
+    logger.debug({ attempt }, "[app-generator] No in-flight run yet — retrying");
   }
 
-  const runsData = await runsRes.json() as { workflow_runs?: Array<{ id: number }> };
-  const runId = String(runsData.workflow_runs?.[0]?.id ?? "pending");
+  if (runId === "pending") {
+    // Non-fatal — the build-scheduler will still detect the run via its own periodic poll
+    logger.warn({ slug, recordId }, "[app-generator] Could not resolve GitHub run ID after 30 s; storing 'pending'");
+  }
 
   logger.info({ slug, recordId, runId }, "[app-generator] GitHub Actions run queued");
   return { slug, packageName, runId };
