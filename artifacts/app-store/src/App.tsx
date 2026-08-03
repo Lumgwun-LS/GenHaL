@@ -39,6 +39,7 @@ import AppPublicLanding from "./pages/app-public-landing";
 import MyApps from "./pages/my-apps";
 import NotFound from "./pages/not-found";
 import DownloadRedirect from "./pages/download-redirect";
+import Unsubscribe from "./pages/unsubscribe";
 
 function PageViewTracker() {
   const [location] = useLocation();
@@ -176,6 +177,7 @@ function AppRoutes() {
             <Route path="/developer" component={DeveloperPortal} />
             <Route path="/admin" component={Admin} />
             <Route path="/dl/:identifier" component={DownloadRedirect} />
+            <Route path="/unsubscribe" component={Unsubscribe} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route component={NotFound} />

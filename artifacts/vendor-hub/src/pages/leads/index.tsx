@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Search, Plus, Users, Globe, Instagram, Facebook,
   Twitter, Link2, FileText, ShoppingBag, BarChart3,
-  ArrowUpRight, Kanban, Settings, Eye,
+  ArrowUpRight, Kanban, Settings, Eye, Smartphone,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ const CHANNELS = [
   { value: "order",      label: "Order",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
   { value: "manual",     label: "Manual",      icon: <Plus className="w-3.5 h-3.5" /> },
   { value: "other",      label: "Other",       icon: null },
+  { value: "app_store",  label: "App Store",   icon: <Smartphone className="w-3.5 h-3.5" /> },
 ];
 
 const CHANNEL_MAP: Record<string, { label: string; icon: React.ReactNode }> = Object.fromEntries(

@@ -592,6 +592,34 @@ router.post("/apps/:slug/subscribe-updates", async (req: any, res: any) => {
   }
 });
 
+// ─── Unsubscribe token helpers ────────────────────────────────────────────────
+function _unsubSecret() {
+  return process.env.SESSION_SECRET ?? "awajimaa-store-unsub-dev";
+}
+function makeUnsubToken(appId: number, email: string): string {
+  const emailB64 = Buffer.from(email).toString("base64url");
+  const payload = `${appId}:${emailB64}`;
+  const sig = crypto.createHmac("sha256", _unsubSecret()).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+function verifyUnsubToken(token: string): { appId: number; email: string } | null {
+  try {
+    const dotIdx = token.lastIndexOf(".");
+    if (dotIdx < 0) return null;
+    const payload = token.substring(0, dotIdx);
+    const sig = token.substring(dotIdx + 1);
+    const expected = crypto.createHmac("sha256", _unsubSecret()).update(payload).digest("hex");
+    if (sig.length !== expected.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"))) return null;
+    const colonIdx = payload.indexOf(":");
+    if (colonIdx < 0) return null;
+    const appId = parseInt(payload.substring(0, colonIdx));
+    const email = Buffer.from(payload.substring(colonIdx + 1), "base64url").toString();
+    if (isNaN(appId) || !email) return null;
+    return { appId, email };
+  } catch { return null; }
+}
+
 /** Send update notification emails to all subscribers of an app. Fire-and-forget. */
 async function notifySubscribersOfNewVersion(appId: number, appName: string, appSlug: string, newVersion: string, downloadUrl: string | null) {
   try {
@@ -602,29 +630,52 @@ async function notifySubscribersOfNewVersion(appId: number, appName: string, app
     const storeUrl = `https://awajimaaappstore.com/app/${appSlug}`;
     const safeApp = escapeHtml(appName);
     const safeVersion = escapeHtml(newVersion);
-    const html = wrapVendorEmail({
-      vendorName: "App Store User",
-      bodyHtml: `
-        <h2 style="margin:0 0 16px">🆕 ${safeApp} — v${safeVersion} is here</h2>
-        <p style="margin:0 0 12px;color:#8892a4">A new version of <strong style="color:#e8eaf0">${safeApp}</strong> you downloaded is now available on the Awajimaa App Store.</p>
-        <table style="width:100%;background:#0d1a12;border:1px solid rgba(0,200,83,0.2);border-radius:10px;padding:16px;margin:0 0 20px;border-spacing:0">
-          <tr><td style="color:#8892a4;font-size:13px">Version</td><td style="color:#00c853;font-weight:700;font-size:15px">v${safeVersion}</td></tr>
-        </table>
-        ${downloadUrl ? `<p style="margin:0 0 20px"><a href="${escapeHtml(downloadUrl)}" style="display:inline-block;background:#00c853;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:15px">⬇️ Download v${safeVersion}</a></p>` : ""}
-        <p style="margin:0 0 8px"><a href="${escapeHtml(storeUrl)}" style="color:#00c853;font-size:13px">View app page →</a></p>
-        <p style="margin:24px 0 0;font-size:11px;color:#4a5568">You received this because you downloaded ${safeApp} from the Awajimaa App Store. Reply to unsubscribe.</p>
-      `,
-    });
     await Promise.allSettled(
-      subs.map(({ email }) =>
-        sendEmail({ to: email, subject: `${appName} v${newVersion} is available — download now`, html })
-      )
+      subs.map(({ email }) => {
+        const unsubToken = makeUnsubToken(appId, email);
+        const unsubUrl = `https://awajimaaappstore.com/unsubscribe?t=${encodeURIComponent(unsubToken)}`;
+        const html = wrapVendorEmail({
+          bodyHtml: `
+            <h2 style="margin:0 0 16px">🆕 ${safeApp} — v${safeVersion} is here</h2>
+            <p style="margin:0 0 12px;color:#8892a4">A new version of <strong style="color:#e8eaf0">${safeApp}</strong> you downloaded is now available on the Awajimaa App Store.</p>
+            <table style="width:100%;background:#0d1a12;border:1px solid rgba(0,200,83,0.2);border-radius:10px;padding:16px;margin:0 0 20px;border-spacing:0">
+              <tr><td style="color:#8892a4;font-size:13px">Version</td><td style="color:#00c853;font-weight:700;font-size:15px">v${safeVersion}</td></tr>
+            </table>
+            ${downloadUrl ? `<p style="margin:0 0 20px"><a href="${escapeHtml(downloadUrl)}" style="display:inline-block;background:#00c853;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:15px">⬇️ Download v${safeVersion}</a></p>` : ""}
+            <p style="margin:0 0 8px"><a href="${escapeHtml(storeUrl)}" style="color:#00c853;font-size:13px">View app page →</a></p>
+            <p style="margin:24px 0 0;font-size:11px;color:#4a5568">You received this because you downloaded ${safeApp} from the Awajimaa App Store. <a href="${escapeHtml(unsubUrl)}" style="color:#4a5568">Unsubscribe</a></p>
+          `,
+        });
+        return sendEmail({ to: email, subject: `${appName} v${newVersion} is available — download now`, html });
+      })
     );
     logger.info({ appId, count: subs.length }, "notifySubscribers: emails sent");
   } catch (err) {
     logger.error({ err }, "notifySubscribersOfNewVersion error");
   }
 }
+
+// DELETE /store/unsubscribe — one-click unsubscribe from app update notifications
+router.delete("/unsubscribe", async (req: any, res: any) => {
+  try {
+    const token = String(req.body?.token ?? "");
+    const parsed = verifyUnsubToken(token);
+    if (!parsed) return void res.status(400).json({ error: "Invalid or expired unsubscribe link" });
+
+    const app = await db.query.storeAppsTable.findFirst({
+      where: eq(storeAppsTable.id, parsed.appId),
+    });
+    // Delete subscriber row (idempotent — no error if already removed)
+    await db.delete(storeAppSubscribersTable)
+      .where(and(eq(storeAppSubscribersTable.appId, parsed.appId), eq(storeAppSubscribersTable.email, parsed.email)));
+
+    logger.info({ appId: parsed.appId, email: parsed.email }, "[store-unsub] Subscriber removed");
+    res.json({ ok: true, app: app?.name ?? null });
+  } catch (err) {
+    logger.error({ err }, "unsubscribe error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 /**
  * Upsert the downloader as a CRM lead under the app developer's vendor account.
@@ -639,7 +690,11 @@ async function addDownloaderToCrm(developerClerkUserId: string | null, email: st
     const vendor = await db.query.vendorsTable.findFirst({
       where: eq(vendorsTable.clerkUserId, developerClerkUserId),
     });
-    if (!vendor) return; // developer hasn't created a vendor account — skip
+    if (!vendor) {
+      // Developer exists but has no vendor account under the same Clerk identity
+      logger.warn({ developerClerkUserId, appName }, "[store-crm] No vendor account found for app developer — downloader not added to CRM. Developer may have registered with a different Clerk account.");
+      return;
+    }
 
     // Upsert the lead: find by vendor + email, create if absent
     const existing = await db.query.leadsTable.findFirst({
@@ -657,8 +712,8 @@ async function addDownloaderToCrm(developerClerkUserId: string | null, email: st
         vendorId: vendor.id,
         name: derivedName,
         email,
-        channel: "other",
-        source: "other",
+        channel: "app_store",
+        source: "app_store",
         status: "new",
         notes: `Acquired via app store download of "${appName}"`,
       }).returning({ id: leadsTable.id });

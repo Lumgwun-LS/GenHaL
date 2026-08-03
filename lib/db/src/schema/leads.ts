@@ -17,6 +17,7 @@ export const PERSON_CHANNELS = [
   "order",
   "manual",
   "other",
+  "app_store",
 ] as const;
 
 export const leadsTable = pgTable("leads", {
