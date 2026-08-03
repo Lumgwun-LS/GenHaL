@@ -15,6 +15,9 @@ import {
   storeOfflinePaymentsTable,
   storeUploadTrialsTable,
   storeAppSubscribersTable,
+  leadsTable,
+  personActivitiesTable,
+  vendorsTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, isNotNull } from "drizzle-orm";
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
@@ -555,6 +558,7 @@ router.post("/apps/:slug/subscribe-updates", async (req: any, res: any) => {
   try {
     const app = await db.query.storeAppsTable.findFirst({
       where: and(eq(storeAppsTable.slug, String(req.params.slug)), eq(storeAppsTable.status, "approved")),
+      with: { developer: true },
     });
     if (!app) return void res.status(404).json({ error: "App not found" });
 
@@ -577,6 +581,10 @@ router.post("/apps/:slug/subscribe-updates", async (req: any, res: any) => {
     await db.insert(storeAppSubscribersTable)
       .values({ appId: app.id, email })
       .onConflictDoNothing();
+
+    // Add to the developer's CRM (fire-and-forget — never block the response)
+    addDownloaderToCrm(app.developer?.clerkUserId ?? null, email, app.name).catch(() => {});
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "subscribeUpdates error");
@@ -615,6 +623,59 @@ async function notifySubscribersOfNewVersion(appId: number, appName: string, app
     logger.info({ appId, count: subs.length }, "notifySubscribers: emails sent");
   } catch (err) {
     logger.error({ err }, "notifySubscribersOfNewVersion error");
+  }
+}
+
+/**
+ * Upsert the downloader as a CRM lead under the app developer's vendor account.
+ * Walk: developerClerkUserId → vendors.clerkUserId → lead upsert + activity.
+ * Fire-and-forget — never throws to caller.
+ */
+async function addDownloaderToCrm(developerClerkUserId: string | null, email: string, appName: string) {
+  try {
+    if (!developerClerkUserId) return;
+
+    // Resolve the vendor account that owns this developer profile
+    const vendor = await db.query.vendorsTable.findFirst({
+      where: eq(vendorsTable.clerkUserId, developerClerkUserId),
+    });
+    if (!vendor) return; // developer hasn't created a vendor account — skip
+
+    // Upsert the lead: find by vendor + email, create if absent
+    const existing = await db.query.leadsTable.findFirst({
+      where: and(eq(leadsTable.vendorId, vendor.id), eq(leadsTable.email, email)),
+    });
+
+    let leadId: number;
+    if (existing) {
+      leadId = existing.id;
+    } else {
+      // Derive a display name from the email local-part (e.g. "john.doe" → "John Doe")
+      const localPart = email.split("@")[0] ?? "App User";
+      const derivedName = localPart.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      const [inserted] = await db.insert(leadsTable).values({
+        vendorId: vendor.id,
+        name: derivedName,
+        email,
+        channel: "other",
+        source: "other",
+        status: "new",
+        notes: `Acquired via app store download of "${appName}"`,
+      }).returning({ id: leadsTable.id });
+      leadId = inserted.id;
+    }
+
+    // Record the download as a CRM activity
+    await db.insert(personActivitiesTable).values({
+      vendorId: vendor.id,
+      personId: leadId,
+      type: "manual_note",
+      data: { note: `Downloaded "${appName}" from Awajimaa App Store` },
+    });
+
+    logger.info({ vendorId: vendor.id, leadId, email }, "[store-crm] Downloader added to CRM");
+  } catch (err) {
+    logger.error({ err }, "[store-crm] addDownloaderToCrm error");
   }
 }
 
