@@ -17,6 +17,10 @@ export interface Developer {
   avatarUrl?: string | null;
   status: "active" | "suspended";
   feeExempt?: boolean;
+  /** True once the one-time developer account fee has been paid. */
+  registrationFeePaid?: boolean;
+  /** Clerk user ID of the second seat holder (owner + 1 member = 2 users max). */
+  memberClerkUserId?: string | null;
   paystackCustomerCode?: string | null;
   dedicatedNgnAccount?: DedicatedAccount | null;
   dedicatedUsdAccount?: DedicatedAccount | null;

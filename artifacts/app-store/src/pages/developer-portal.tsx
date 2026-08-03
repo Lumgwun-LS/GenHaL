@@ -2497,9 +2497,193 @@ function AiLaunchTab({ dev, onAppCreated }: { dev: Developer; onAppCreated: (app
   );
 }
 
+// ── AccountPaymentModal ───────────────────────────────────────────────────────
+// One-time developer account activation fee (NGN 50,000 / $100 USD).
+
+function AccountPaymentModal({ dev, onClose }: { dev: Developer; onClose: () => void }) {
+  const african = isAfricanCountry(dev.country);
+  const feeLabel = african ? "NGN 50,000" : "$100 USD";
+  const accentColor = african ? "#00c853" : "#a78bfa";
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const gateways = african
+    ? [
+        { id: "paystack"    as const, icon: "💳", name: "Paystack",          desc: "Cards, bank transfer, USSD" },
+        { id: "interswitch" as const, icon: "🏦", name: "Interswitch / Quickteller", desc: "Nigerian bank cards" },
+      ]
+    : [
+        { id: "squad"  as const, icon: "💸", name: "Squad",  desc: "Card / bank — USD" },
+        { id: "stripe" as const, icon: "💳", name: "Stripe", desc: "International cards — USD" },
+      ];
+
+  async function pay(gateway: string) {
+    setError(""); setLoading(true);
+    try {
+      const result = await apiFetch<any>("/payments/account/initiate", {
+        method: "POST",
+        body: JSON.stringify({ gateway }),
+      });
+      if (result.authorizationUrl) { window.location.href = result.authorizationUrl; return; }
+      if (result.checkoutUrl)      { window.location.href = result.checkoutUrl; return; }
+      if (result.paymentUrl) {
+        // Interswitch — POST form submit
+        const form = document.createElement("form");
+        form.method = "POST"; form.action = result.paymentUrl;
+        Object.entries(result.formData ?? {}).forEach(([k, v]) => {
+          const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v as string; form.appendChild(i);
+        });
+        document.body.appendChild(form); form.submit(); return;
+      }
+    } catch (err: any) { setError(err.message ?? "Could not initiate payment."); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 18, padding: 28, maxWidth: 460, width: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Activate Developer Account</h2>
+            <p style={{ color: "#8892a4", fontSize: 13, lineHeight: 1.5 }}>
+              One-time fee of <strong style={{ color: accentColor }}>{feeLabel}</strong>. Submit unlimited apps after payment.
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8892a4", fontSize: 22, cursor: "pointer", padding: 0 }}>×</button>
+        </div>
+
+        {error && <div style={{ background: "rgba(255,82,82,0.08)", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#ff5252", fontSize: 13 }}>{error}</div>}
+
+        <div style={{ fontWeight: 700, fontSize: 12, color: "#8892a4", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Choose Payment Method</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {gateways.map(gw => (
+            <button
+              key={gw.id}
+              disabled={loading}
+              onClick={() => pay(gw.id)}
+              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", cursor: loading ? "not-allowed" : "pointer", textAlign: "left", opacity: loading ? 0.6 : 1 }}
+            >
+              <span style={{ fontSize: 24 }}>{gw.icon}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#e8eaf0" }}>{gw.name}</div>
+                <div style={{ fontSize: 12, color: "#8892a4" }}>{gw.desc}</div>
+              </div>
+              <span style={{ marginLeft: "auto", color: accentColor, fontSize: 13, fontWeight: 700 }}>Pay {feeLabel}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── TeamTab ───────────────────────────────────────────────────────────────────
+// Manage the second seat on this developer account (owner + 1 member = 2 users max).
+
+function TeamTab({ dev, onUpdated }: { dev: Developer; onUpdated: (d: Developer) => void }) {
+  const isOwner = dev.clerkUserId === useUser().user?.id;
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function addMember() {
+    if (!input.trim()) return;
+    setError(""); setSuccess(""); setLoading(true);
+    try {
+      const updated = await apiFetch<Developer>("/developers/me/member", {
+        method: "PUT",
+        body: JSON.stringify({ memberClerkUserId: input.trim() }),
+      });
+      onUpdated(updated); setInput(""); setSuccess("Member added successfully.");
+    } catch (err: any) { setError(err.message ?? "Failed to add member."); }
+    finally { setLoading(false); }
+  }
+
+  async function removeMember() {
+    setError(""); setSuccess(""); setLoading(true);
+    try {
+      const updated = await apiFetch<Developer>("/developers/me/member", { method: "DELETE" });
+      onUpdated(updated); setSuccess("Member removed.");
+    } catch (err: any) { setError(err.message ?? "Failed to remove member."); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>👥 Team Members</h2>
+      <p style={{ color: "#8892a4", fontSize: 14, marginBottom: 28, lineHeight: 1.6 }}>
+        Your developer account supports <strong style={{ color: "#e8eaf0" }}>2 users</strong> — the account owner plus one team member. Both share the same account, apps, and analytics.
+      </p>
+
+      {/* Seat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+        <div style={{ background: "#0d1117", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 14, padding: 18 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#00c853", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Seat 1 — Owner</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{dev.displayName}</div>
+          <div style={{ fontSize: 13, color: "#8892a4" }}>{dev.email}</div>
+        </div>
+        <div style={{ background: "#0d1117", border: `1px solid ${dev.memberClerkUserId ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: dev.memberClerkUserId ? "#a78bfa" : "#556070", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Seat 2 — Member</div>
+          {dev.memberClerkUserId
+            ? <>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Active</div>
+                <div style={{ fontSize: 12, color: "#8892a4", wordBreak: "break-all" }}>{dev.memberClerkUserId}</div>
+              </>
+            : <div style={{ color: "#556070", fontSize: 13 }}>Empty — invite a team member</div>
+          }
+        </div>
+      </div>
+
+      {error   && <div style={{ background: "rgba(255,82,82,0.08)",  border: "1px solid rgba(255,82,82,0.2)",  borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#ff5252",  fontSize: 13 }}>{error}</div>}
+      {success && <div style={{ background: "rgba(0,200,83,0.08)",   border: "1px solid rgba(0,200,83,0.2)",   borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#00c853",  fontSize: 13 }}>{success}</div>}
+
+      {!isOwner && (
+        <div style={{ color: "#8892a4", fontSize: 13, padding: "14px 18px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+          ℹ️ Only the account owner can add or remove team members.
+        </div>
+      )}
+
+      {isOwner && (
+        <div style={{ background: "#0d1117", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: "#c0c8d8" }}>
+            {dev.memberClerkUserId ? "Replace or remove member" : "Add a team member"}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+            <input
+              className="input"
+              style={{ flex: 1 }}
+              placeholder="Clerk User ID (e.g. user_2abc…)"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addMember()}
+            />
+            <button className="btn-green" disabled={loading || !input.trim()} onClick={addMember} style={{ whiteSpace: "nowrap" }}>
+              {loading ? "…" : "Add Member"}
+            </button>
+          </div>
+          {dev.memberClerkUserId && (
+            <button
+              className="btn-outline"
+              disabled={loading}
+              onClick={removeMember}
+              style={{ fontSize: 13, color: "#ff5252", borderColor: "rgba(255,82,82,0.3)" }}
+            >
+              Remove current member
+            </button>
+          )}
+          <p style={{ color: "#556070", fontSize: 12, marginTop: 12, lineHeight: 1.5 }}>
+            The team member must already have a Replit / Clerk account. You can find their Clerk User ID in your admin dashboard, or ask them to share it from their profile.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main DeveloperPortal ──────────────────────────────────────────────────────
 
-type View = "dashboard" | "apps" | "platforms" | "submit" | "ai-launch";
+type View = "dashboard" | "apps" | "platforms" | "submit" | "ai-launch" | "team";
 
 export default function DeveloperPortal() {
   const { isSignedIn } = useUser();
@@ -2510,6 +2694,7 @@ export default function DeveloperPortal() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("dashboard");
   const [paymentApp, setPaymentApp] = useState<App | null>(null);
+  const [showAccountPayment, setShowAccountPayment] = useState(false);
 
   const searchParams = new URLSearchParams(searchString);
   const paymentGateway = searchParams.get("payment");
@@ -2517,6 +2702,8 @@ export default function DeveloperPortal() {
   const paymentRef = searchParams.get("reference") ?? searchParams.get("trxref") ?? searchParams.get("ref");
   const paymentStatus = searchParams.get("status");
   const justRegistered = searchParams.get("registered") === "1";
+  // type=account → this callback is for the developer account fee, not a per-app fee
+  const paymentType = searchParams.get("type") ?? "app";
 
   const loadData = useCallback(async () => {
     if (!isSignedIn) return;
@@ -2535,24 +2722,37 @@ export default function DeveloperPortal() {
   const paymentTxnRef    = searchParams.get("transaction_ref") ?? searchParams.get("txnRef");
 
   useEffect(() => {
-    if (paymentGateway === "paystack" && paymentRef) {
-      apiFetch("/payments/paystack/verify", { method: "POST", body: JSON.stringify({ reference: paymentRef }) })
-        .then(() => loadData()).catch(() => {});
-    } else if (paymentGateway === "interswitch" && paymentStatus === "success") {
-      loadData();
-    } else if (paymentGateway === "squad" && paymentStatus === "success" && paymentTxnRef) {
-      // Squad redirected back — server already verified in the callback, just reload
-      loadData();
-    } else if (paymentGateway === "squad" && paymentTxnRef) {
-      // Squad callback without status=success — try explicit verify
-      apiFetch("/payments/squad/verify", { method: "POST", body: JSON.stringify({ transactionRef: paymentTxnRef }) })
-        .then(() => loadData()).catch(() => {});
-    } else if (paymentGateway === "stripe" && paymentSessionId) {
-      // Stripe redirected back — verify the session
-      apiFetch("/payments/stripe/verify-usd", { method: "POST", body: JSON.stringify({ sessionId: paymentSessionId }) })
-        .then(() => loadData()).catch(() => {});
+    if (!paymentGateway) return;
+
+    if (paymentType === "account") {
+      // Callbacks for the one-time developer account fee
+      if (paymentGateway === "paystack" && paymentRef) {
+        apiFetch("/payments/account/paystack/verify", { method: "POST", body: JSON.stringify({ reference: paymentRef }) })
+          .then(() => loadData()).catch(() => {});
+      } else if (paymentGateway === "squad" && paymentTxnRef) {
+        apiFetch("/payments/account/squad/verify", { method: "POST", body: JSON.stringify({ transactionRef: paymentTxnRef }) })
+          .then(() => loadData()).catch(() => {});
+      } else {
+        loadData();
+      }
+    } else {
+      // Callbacks for per-app fees (legacy — new apps go straight to review)
+      if (paymentGateway === "paystack" && paymentRef) {
+        apiFetch("/payments/paystack/verify", { method: "POST", body: JSON.stringify({ reference: paymentRef }) })
+          .then(() => loadData()).catch(() => {});
+      } else if (paymentGateway === "interswitch" && paymentStatus === "success") {
+        loadData();
+      } else if (paymentGateway === "squad" && paymentStatus === "success" && paymentTxnRef) {
+        loadData();
+      } else if (paymentGateway === "squad" && paymentTxnRef) {
+        apiFetch("/payments/squad/verify", { method: "POST", body: JSON.stringify({ transactionRef: paymentTxnRef }) })
+          .then(() => loadData()).catch(() => {});
+      } else if (paymentGateway === "stripe" && paymentSessionId) {
+        apiFetch("/payments/stripe/verify-usd", { method: "POST", body: JSON.stringify({ sessionId: paymentSessionId }) })
+          .then(() => loadData()).catch(() => {});
+      }
     }
-  }, [paymentGateway, paymentRef, paymentStatus, paymentTxnRef, paymentSessionId]);
+  }, [paymentGateway, paymentRef, paymentStatus, paymentTxnRef, paymentSessionId, paymentType]);
 
   if (!isSignedIn) return (
     <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 20px", textAlign: "center" }}>
@@ -2569,7 +2769,7 @@ export default function DeveloperPortal() {
     <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 20px", textAlign: "center" }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
       <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Become a Developer</h2>
-      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store — free registration, then NGN 50,000 (African) / $100 USD (International) per app published.</p>
+      <p style={{ color: "#8892a4", marginBottom: 28 }}>Join Africa App Store. Pay a one-time account fee (NGN 50,000 African · $100 USD International) and submit unlimited apps — no per-app charges ever.</p>
       <Link href="/developer/signup" className="btn-green" style={{ display: "inline-flex", fontSize: 15, padding: "12px 32px" }}>Create Developer Account →</Link>
     </div>
   );
@@ -2579,14 +2779,31 @@ export default function DeveloperPortal() {
     { id: "apps",       label: `📱 My Apps (${apps.length})` },
     { id: "ai-launch",  label: "🤖 AI Launch" },
     { id: "platforms",  label: "🔗 Platforms" },
+    { id: "team",       label: "👥 Team" },
   ];
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 20px 80px" }}>
       {/* Banners */}
-      {justRegistered && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, color: "#00c853", fontSize: 14 }}>🎉 Welcome! Your developer account is ready. Your dedicated NGN bank account will appear once provisioned by Paystack.</div>}
-      {paymentGateway && paymentStatus === "success" && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, color: "#00c853", fontSize: 14 }}>✅ Payment confirmed! Your app is under review.</div>}
-      {paymentGateway && paymentStatus === "failed" && <div style={{ background: "rgba(255,82,82,0.08)", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, color: "#ff5252", fontSize: 14 }}>❌ Payment not completed. Try again from your apps list.</div>}
+      {justRegistered && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 16, color: "#00c853", fontSize: 14 }}>🎉 Welcome! Your developer account is created. Complete the one-time account payment below to start submitting apps.</div>}
+      {paymentGateway && paymentStatus === "success" && paymentType === "account" && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 16, color: "#00c853", fontSize: 14 }}>✅ Account payment confirmed! You can now submit unlimited apps.</div>}
+      {paymentGateway && paymentStatus === "success" && paymentType !== "account" && <div style={{ background: "rgba(0,200,83,0.08)", border: "1px solid rgba(0,200,83,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 16, color: "#00c853", fontSize: 14 }}>✅ Payment confirmed! Your app is under review.</div>}
+      {paymentGateway && paymentStatus === "failed" && <div style={{ background: "rgba(255,82,82,0.08)", border: "1px solid rgba(255,82,82,0.2)", borderRadius: 12, padding: "14px 18px", marginBottom: 16, color: "#ff5252", fontSize: 14 }}>❌ Payment not completed. Please try again.</div>}
+
+      {/* Account fee payment banner — shown until the one-time fee is paid */}
+      {!dev.feeExempt && !dev.registrationFeePaid && (
+        <div style={{ background: "rgba(255,179,0,0.06)", border: "1px solid rgba(255,179,0,0.25)", borderRadius: 14, padding: "18px 20px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontWeight: 700, color: "#ffb300", marginBottom: 4 }}>💳 One-time developer account payment required</div>
+            <div style={{ fontSize: 13, color: "#8892a4" }}>
+              Pay <strong style={{ color: "#e8eaf0" }}>{isAfricanCountry(dev.country) ? "NGN 50,000" : "$100 USD"}</strong> once to activate your account and submit unlimited apps.
+            </div>
+          </div>
+          <button className="btn-green" style={{ fontSize: 14, padding: "10px 22px", whiteSpace: "nowrap" }} onClick={() => setShowAccountPayment(true)}>
+            Activate Account →
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
@@ -2650,8 +2867,14 @@ export default function DeveloperPortal() {
       {/* Platforms */}
       {view === "platforms" && <PlatformsTab dev={dev} />}
 
-      {/* Payment modal */}
+      {/* Team */}
+      {view === "team" && <TeamTab dev={dev} onUpdated={setDev} />}
+
+      {/* Payment modal — per-app (legacy) */}
       {paymentApp && <PaymentModal app={paymentApp} devCountry={dev?.country} onClose={() => { setPaymentApp(null); loadData(); }} />}
+
+      {/* Account-level payment modal */}
+      {showAccountPayment && <AccountPaymentModal dev={dev} onClose={() => { setShowAccountPayment(false); loadData(); }} />}
     </div>
   );
 }

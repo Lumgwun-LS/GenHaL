@@ -272,6 +272,10 @@ function serializeDev(dev: any) {
     avatarUrl: dev.avatarUrl ?? null,
     status: dev.status,
     feeExempt: dev.feeExempt ?? false,
+    /** True once the one-time account fee has been paid (not per-app). */
+    registrationFeePaid: dev.registrationFeePaid ?? false,
+    /** Clerk user ID occupying the second seat (owner + 1 member = 2 max). */
+    memberClerkUserId: dev.memberClerkUserId ?? null,
     paystackCustomerCode: dev.paystackCustomerCode ?? null,
     dedicatedNgnAccount: dev.dedicatedNgnAccount ?? null,
     dedicatedUsdAccount: dev.dedicatedUsdAccount ?? null,
@@ -325,14 +329,21 @@ async function isSuperAdmin(req: any): Promise<boolean> {
 async function requireDeveloper(req: any, res: any) {
   const { userId } = getAuth(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
+
+  // Match by owner (clerkUserId) OR second-seat member (memberClerkUserId).
+  // This allows both users on a two-seat account to access all developer routes.
   const dev = await db.query.storeDeveloperAccountsTable.findFirst({
-    where: eq(storeDeveloperAccountsTable.clerkUserId, userId),
+    where: or(
+      eq(storeDeveloperAccountsTable.clerkUserId, userId),
+      eq(storeDeveloperAccountsTable.memberClerkUserId, userId),
+    ),
   });
+
   // Admins can use all developer routes even without a registered developer account.
   // If they also have a developer account, use it; otherwise synthesise a minimal record.
   if (!dev) {
     if (await checkIsAdmin(req)) {
-      return { id: 0, clerkUserId: userId, status: "active", displayName: "Admin", email: "" } as any;
+      return { id: 0, clerkUserId: userId, status: "active", displayName: "Admin", email: "", registrationFeePaid: true, feeExempt: true } as any;
     }
     res.status(404).json({ error: "Developer account not found. Register first." });
     return null;
@@ -1205,7 +1216,8 @@ router.post("/developers/register", requireAuth(), async (req, res) => {
       country: country ?? "Nigeria",
       status: "active",
       feeExempt: isFeeExempt,
-      registrationFeePaid: true,
+      // Fee-exempt accounts (super-admins) are pre-activated; everyone else pays once.
+      registrationFeePaid: isFeeExempt,
       paystackCustomerCode: customerCode ?? null,
       dedicatedNgnAccount: dedicatedNgnAccount,
     } as any).returning();
@@ -1314,11 +1326,13 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
     if (existing) slug = `${slug}-${Date.now()}`;
 
     const isFeeExempt = (dev as any).feeExempt === true;
+    const isAccountFeePaid = isFeeExempt || (dev as any).registrationFeePaid === true;
     const clerkUserId = (req as any).auth?.userId;
 
-    // Check for an active upload trial (grants the developer a free-to-submit window)
+    // Gate: the developer must have completed the one-time account fee before submitting.
+    // Upload trials are an exception (admin-granted window for testing).
     let isTrialUpload = false;
-    if (!isFeeExempt) {
+    if (!isAccountFeePaid) {
       const now = new Date();
       const activeTrial = await db.query.storeUploadTrialsTable.findFirst({
         where: and(
@@ -1328,6 +1342,14 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
         ),
       });
       isTrialUpload = activeTrial != null;
+
+      if (!isTrialUpload) {
+        return void res.status(402).json({
+          error: "Developer account payment required",
+          message: "Complete your one-time developer account payment before submitting apps.",
+          code: "ACCOUNT_FEE_UNPAID",
+        });
+      }
     }
 
     const [app] = await db.insert(storeAppsTable).values({
@@ -1339,12 +1361,11 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
       currentVersion: currentVersion ?? null,
       packageName: packageName ?? null,
       publicId: generatePublicId(clerkUserId),
-      // Fee-exempt developers skip the payment step entirely.
-      // Trial-upload developers also go straight to review but are flagged for later payment.
-      status: (isFeeExempt || isTrialUpload) ? "pending_review" : "pending_payment",
-      publishingFeePaid: isFeeExempt,
+      // Account fee already paid → go straight to review. Trial uploads are flagged for later.
+      status: "pending_review",
+      publishingFeePaid: true,
       trialUpload: isTrialUpload,
-      publishingFeeAmountKobo: PUBLISHING_FEE_KOBO,
+      publishingFeeAmountKobo: 0,
     } as any).returning();
     res.status(201).json(serializeApp(app, dev));
 
@@ -1743,6 +1764,19 @@ router.post("/webhooks/paystack", async (req, res) => {
       }
     }
 
+    // One-time developer account fee
+    if (event === "charge.success" && data?.metadata?.purpose === "developer_account_fee") {
+      const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+        where: eq(storeDeveloperAccountsTable.paymentRef, data.reference) as any,
+      });
+      if (dev && !(dev as any).registrationFeePaid) {
+        await db.update(storeDeveloperAccountsTable)
+          .set({ registrationFeePaid: true, paystackReference: data.reference, updatedAt: new Date() } as any)
+          .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        logger.info({ developerId: dev.id, reference: data.reference }, "[store] Developer account fee confirmed via Paystack webhook");
+      }
+    }
+
     if (event === "dedicatedaccount.assign.success" && data?.dedicated_account?.account_number) {
       const customerCode = data.customer?.customer_code;
       if (customerCode) {
@@ -1763,6 +1797,274 @@ router.post("/webhooks/paystack", async (req, res) => {
   } catch (err) {
     logger.error({ err }, "paystackWebhook error");
     res.status(500).send("Error");
+  }
+});
+
+// ─── ACCOUNT-LEVEL PAYMENT ROUTES ─────────────────────────────────────────────
+// One-time fee charged per developer account (not per app).
+// Uses same gateway infrastructure as per-app routes but targets
+// storeDeveloperAccountsTable instead of storeAppsTable.
+
+// POST /store/payments/account/initiate
+router.post("/payments/account/initiate", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const { gateway } = req.body;
+    if (!gateway) return void res.status(400).json({ error: "gateway is required" });
+
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
+    });
+    if (!dev) return void res.status(404).json({ error: "Developer account not found" });
+    if ((dev as any).registrationFeePaid) return void res.status(400).json({ error: "Account fee already paid" });
+    if ((dev as any).feeExempt) return void res.status(400).json({ error: "Your account is fee-exempt — no payment needed" });
+
+    const baseUrl = getBaseUrl(req);
+    const african = isAfricanCountry(dev.country);
+
+    if (african) {
+      if (gateway === "paystack") {
+        const callbackUrl = `${baseUrl}/app-store/developer?payment=paystack&type=account`;
+        const txn = await initPaystackTransaction(
+          dev.email || `dev${dev.id}@africaappstore.com`,
+          PUBLISHING_FEE_KOBO,
+          { purpose: "developer_account_fee", developerId: dev.id },
+          callbackUrl,
+        );
+        if (!txn) return void res.status(500).json({ error: "Could not initialize Paystack payment" });
+        await db.update(storeDeveloperAccountsTable)
+          .set({ paymentRef: txn.reference, paymentGateway: "paystack", registrationFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+          .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        return void res.json({ gateway: "paystack", authorizationUrl: txn.authorization_url, reference: txn.reference });
+
+      } else if (gateway === "interswitch") {
+        const txnRef = `ACCT-${dev.id}-${Date.now()}`;
+        const redirectUrl = `${baseUrl}/api/store/payments/account/interswitch/callback`;
+        const { paymentUrl, formData } = buildInterswitchFormData(txnRef, redirectUrl);
+        await db.update(storeDeveloperAccountsTable)
+          .set({ paymentRef: txnRef, paymentGateway: "interswitch", registrationFeeAmountKobo: PUBLISHING_FEE_KOBO, updatedAt: new Date() } as any)
+          .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        return void res.json({ gateway: "interswitch", paymentUrl, formData });
+
+      } else {
+        return void res.status(400).json({ error: "For African developers, gateway must be 'paystack' or 'interswitch'" });
+      }
+    } else {
+      if (gateway === "squad") {
+        const squadKey = await resolveSquadKey();
+        const txnRef = `ACCT-USD-${dev.id}-${Date.now()}`;
+        const callbackUrl = `${baseUrl}/api/store/payments/account/squad/callback`;
+        const result = await squadInitiatePayment(squadKey, {
+          email: dev.email || `dev${dev.id}@africaappstore.com`,
+          amount: PUBLISHING_FEE_USD_CENTS,
+          currency: "USD",
+          initiateType: "redirect",
+          callbackUrl,
+          transactionRef: txnRef,
+          customerName: dev.displayName ?? undefined,
+          metadata: { purpose: "developer_account_fee", developerId: dev.id },
+        });
+        await db.update(storeDeveloperAccountsTable)
+          .set({ paymentRef: txnRef, paymentGateway: "squad", registrationFeeAmountKobo: PUBLISHING_FEE_USD_CENTS, updatedAt: new Date() } as any)
+          .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        return void res.json({ gateway: "squad", checkoutUrl: result.data.checkout_url, transactionRef: txnRef });
+
+      } else if (gateway === "stripe") {
+        const stripeKey = process.env.STRIPE_SECRET_KEY;
+        if (!stripeKey) return void res.status(503).json({ error: "Stripe is not configured on this platform" });
+        const stripe = new Stripe(stripeKey);
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          customer_email: dev.email ?? undefined,
+          line_items: [{
+            price_data: {
+              currency: "usd",
+              product_data: { name: "Africa App Store — Developer Account" },
+              unit_amount: PUBLISHING_FEE_USD_CENTS,
+            },
+            quantity: 1,
+          }],
+          metadata: { purpose: "developer_account_fee", developerId: String(dev.id) },
+          success_url: `${baseUrl}/app-store/developer?payment=stripe&type=account&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${baseUrl}/app-store/developer?payment=stripe&type=account&status=cancelled`,
+        });
+        await db.update(storeDeveloperAccountsTable)
+          .set({ stripePaymentIntentId: session.id, paymentGateway: "stripe", registrationFeeAmountKobo: PUBLISHING_FEE_USD_CENTS, updatedAt: new Date() } as any)
+          .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        return void res.json({ gateway: "stripe", checkoutUrl: session.url!, sessionId: session.id });
+
+      } else {
+        return void res.status(400).json({ error: "For non-African developers, gateway must be 'squad' or 'stripe'" });
+      }
+    }
+  } catch (err: any) {
+    logger.error({ err }, "initiateAccountPayment error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// POST /store/payments/account/squad/verify — client-side confirm after Squad redirect
+router.post("/payments/account/squad/verify", requireAuth(), async (req, res) => {
+  try {
+    const { transactionRef } = req.body;
+    if (!transactionRef) return void res.status(400).json({ error: "transactionRef required" });
+    const squadKey = await resolveSquadKey();
+    const result = await squadVerifyTransaction(squadKey, transactionRef);
+    if (result.data.transaction_status !== "success") return void res.status(400).json({ error: "Payment not yet confirmed" });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.paymentRef, transactionRef) as any,
+    });
+    if (dev && !(dev as any).registrationFeePaid) {
+      await db.update(storeDeveloperAccountsTable)
+        .set({ registrationFeePaid: true, updatedAt: new Date() } as any)
+        .where(eq(storeDeveloperAccountsTable.id, dev.id));
+    }
+    res.json({ status: "success" });
+  } catch (err: any) {
+    logger.error({ err }, "verifyAccountSquad error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// GET /store/payments/account/squad/callback — Squad redirect
+router.get("/payments/account/squad/callback", async (req, res) => {
+  const { transaction_ref } = req.query as Record<string, string>;
+  const baseUrl = getBaseUrl(req);
+  try {
+    if (transaction_ref) {
+      const squadKey = await resolveSquadKey();
+      const result = await squadVerifyTransaction(squadKey, transaction_ref).catch(() => null);
+      if (result?.data?.transaction_status === "success") {
+        const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+          where: eq(storeDeveloperAccountsTable.paymentRef, transaction_ref) as any,
+        });
+        if (dev && !(dev as any).registrationFeePaid) {
+          await db.update(storeDeveloperAccountsTable)
+            .set({ registrationFeePaid: true, updatedAt: new Date() } as any)
+            .where(eq(storeDeveloperAccountsTable.id, dev.id));
+        }
+        return void res.redirect(`${baseUrl}/app-store/developer?payment=squad&type=account&status=success&transaction_ref=${transaction_ref}`);
+      }
+    }
+    res.redirect(`${baseUrl}/app-store/developer?payment=squad&type=account&status=failed`);
+  } catch {
+    res.redirect(`${baseUrl}/app-store/developer?payment=squad&type=account&status=failed`);
+  }
+});
+
+// POST /store/payments/account/paystack/verify — client-side confirm
+router.post("/payments/account/paystack/verify", requireAuth(), async (req, res) => {
+  try {
+    const { reference } = req.body;
+    if (!reference) return void res.status(400).json({ error: "reference required" });
+    const data = await verifyPaystackTransaction(reference);
+    if (data?.status !== "success") return void res.status(400).json({ error: "Payment not verified" });
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.paymentRef, reference) as any,
+    });
+    if (dev && !(dev as any).registrationFeePaid) {
+      await db.update(storeDeveloperAccountsTable)
+        .set({ registrationFeePaid: true, paystackReference: reference, updatedAt: new Date() } as any)
+        .where(eq(storeDeveloperAccountsTable.id, dev.id));
+    }
+    res.json({ status: "success" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// GET /store/payments/account/interswitch/callback — Interswitch redirect
+router.get("/payments/account/interswitch/callback", async (req, res) => {
+  const { txnRef, responseCode, amount } = req.query as Record<string, string>;
+  const baseUrl = getBaseUrl(req);
+  try {
+    if (responseCode === "00" && txnRef) {
+      const verification = await verifyInterswitchPayment(txnRef, parseInt(amount ?? "0") || PUBLISHING_FEE_KOBO);
+      if (verification?.ResponseCode === "00") {
+        const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+          where: eq(storeDeveloperAccountsTable.paymentRef, txnRef) as any,
+        });
+        if (dev && !(dev as any).registrationFeePaid) {
+          await db.update(storeDeveloperAccountsTable)
+            .set({ registrationFeePaid: true, updatedAt: new Date() } as any)
+            .where(eq(storeDeveloperAccountsTable.id, dev.id));
+          return void res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&type=account&status=success`);
+        }
+      }
+    }
+    res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&type=account&status=failed`);
+  } catch (err) {
+    logger.error({ err }, "accountInterswitchCallback error");
+    res.redirect(`${baseUrl}/app-store/developer?payment=interswitch&type=account&status=failed`);
+  }
+});
+
+// Also handle account fee via the Paystack webhook (charge.success with purpose=developer_account_fee)
+// (wired into the existing webhooks/paystack handler below via purpose check)
+
+// ─── MEMBER MANAGEMENT ─────────────────────────────────────────────────────────
+// Each developer account supports up to 2 Clerk users: the owner + 1 member.
+// Only the account owner (clerkUserId match) can add/remove the second seat.
+
+// PUT /store/developers/me/member — set second seat
+router.put("/developers/me/member", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    // Must be the owner — members themselves cannot reassign the seat
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
+    });
+    if (!dev) return void res.status(403).json({ error: "Only the account owner can manage members." });
+
+    const { memberClerkUserId } = req.body;
+    if (!memberClerkUserId || typeof memberClerkUserId !== "string")
+      return void res.status(400).json({ error: "memberClerkUserId is required" });
+    if (memberClerkUserId === userId)
+      return void res.status(400).json({ error: "You cannot add yourself as a member." });
+
+    // Ensure the Clerk ID isn't already an owner of another account
+    const ownerConflict = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.clerkUserId, memberClerkUserId),
+    });
+    if (ownerConflict)
+      return void res.status(409).json({ error: "That user already owns a developer account and cannot be added as a member." });
+
+    // Ensure not already a member on a different account
+    const memberConflict = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.memberClerkUserId, memberClerkUserId) as any,
+    });
+    if (memberConflict && memberConflict.id !== dev.id)
+      return void res.status(409).json({ error: "That user already has a seat on another developer account." });
+
+    const [updated] = await db.update(storeDeveloperAccountsTable)
+      .set({ memberClerkUserId, updatedAt: new Date() } as any)
+      .where(eq(storeDeveloperAccountsTable.id, dev.id))
+      .returning();
+    res.json(serializeDev(updated));
+  } catch (err: any) {
+    logger.error({ err }, "addMember error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
+  }
+});
+
+// DELETE /store/developers/me/member — remove second seat
+router.delete("/developers/me/member", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const dev = await db.query.storeDeveloperAccountsTable.findFirst({
+      where: eq(storeDeveloperAccountsTable.clerkUserId, userId!),
+    });
+    if (!dev) return void res.status(403).json({ error: "Only the account owner can manage members." });
+
+    const [updated] = await db.update(storeDeveloperAccountsTable)
+      .set({ memberClerkUserId: null, updatedAt: new Date() } as any)
+      .where(eq(storeDeveloperAccountsTable.id, dev.id))
+      .returning();
+    res.json(serializeDev(updated));
+  } catch (err: any) {
+    logger.error({ err }, "removeMember error");
+    res.status(500).json({ error: err.message ?? "Internal server error" });
   }
 });
 

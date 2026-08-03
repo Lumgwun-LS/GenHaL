@@ -63,7 +63,7 @@ export default function DeveloperSignup() {
         <div style={{ fontSize: 52, marginBottom: 12 }}>🌍</div>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>Create Developer Account</h1>
         <p style={{ color: "#8892a4", fontSize: 14, lineHeight: 1.6 }}>
-          Registration is <strong style={{ color: "#00c853" }}>free</strong>. A dedicated NGN bank account will be created for you automatically. Publishing each app costs <strong style={{ color: "#00c853" }}>NGN 50,000</strong>.
+          Create your account, then pay a <strong style={{ color: "#00c853" }}>one-time account fee</strong> (NGN 50,000 · African / $100 USD · International) to activate it. After that, submit unlimited apps — no per-app charges ever.
         </p>
       </div>
 

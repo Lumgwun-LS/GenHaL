@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, jsonb, integer } from "drizzle-orm/pg-core";
 
 export const storeDeveloperAccountsTable = pgTable("store_developer_accounts", {
   id: serial("id").primaryKey(),
@@ -28,13 +28,19 @@ export const storeDeveloperAccountsTable = pgTable("store_developer_accounts", {
     routingNumber?: string;
   } | null>(),
   suspensionReason: text("suspension_reason"),
-  // Legacy columns kept for DB compatibility
-  registrationFeePaid: boolean("registration_fee_paid").notNull().default(true),
+  // ── Account-level fee (one-time, not per-app) ────────────────────────────────
+  // New accounts start unpaid (false). Existing rows keep their prior value.
+  registrationFeePaid: boolean("registration_fee_paid").notNull().default(false),
+  registrationFeeAmountKobo: integer("registration_fee_amount_kobo"),
   paymentGateway: text("payment_gateway"),
   paymentRef: text("payment_ref"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   paystackReference: text("paystack_reference"),
   paypalOrderId: text("paypal_order_id"),
+  // ── Two-seat member support ───────────────────────────────────────────────────
+  // Owner = clerkUserId (seat 1). Member = memberClerkUserId (seat 2, optional).
+  // Both can access all developer routes for this account.
+  memberClerkUserId: text("member_clerk_user_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
