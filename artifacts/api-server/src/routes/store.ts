@@ -14,6 +14,7 @@ import {
   storeUserSignupsTable,
   storeOfflinePaymentsTable,
   storeUploadTrialsTable,
+  storeAppSubscribersTable,
 } from "@workspace/db";
 import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, isNotNull } from "drizzle-orm";
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
@@ -548,6 +549,74 @@ router.post("/apps/:slug/download", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// POST /store/apps/:slug/subscribe-updates — unauthenticated email opt-in for version notifications
+router.post("/apps/:slug/subscribe-updates", async (req: any, res: any) => {
+  try {
+    const app = await db.query.storeAppsTable.findFirst({
+      where: and(eq(storeAppsTable.slug, String(req.params.slug)), eq(storeAppsTable.status, "approved")),
+    });
+    if (!app) return void res.status(404).json({ error: "App not found" });
+
+    let email = String(req.body?.email ?? "").trim().toLowerCase();
+
+    // If signed-in user passed the sentinel, resolve their real email from Clerk
+    if (email === "__clerk__") {
+      const { userId } = getAuth(req);
+      if (!userId) return void res.status(401).json({ error: "Not signed in" });
+      try {
+        const { clerkClient } = await import("@clerk/express");
+        const user = await clerkClient.users.getUser(userId);
+        email = user.emailAddresses[0]?.emailAddress ?? "";
+      } catch { email = ""; }
+    }
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return void res.status(400).json({ error: "A valid email address is required" });
+    }
+    await db.insert(storeAppSubscribersTable)
+      .values({ appId: app.id, email })
+      .onConflictDoNothing();
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "subscribeUpdates error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** Send update notification emails to all subscribers of an app. Fire-and-forget. */
+async function notifySubscribersOfNewVersion(appId: number, appName: string, appSlug: string, newVersion: string, downloadUrl: string | null) {
+  try {
+    const subs = await db.select({ email: storeAppSubscribersTable.email })
+      .from(storeAppSubscribersTable)
+      .where(eq(storeAppSubscribersTable.appId, appId));
+    if (!subs.length) return;
+    const storeUrl = `https://awajimaaappstore.com/app/${appSlug}`;
+    const safeApp = escapeHtml(appName);
+    const safeVersion = escapeHtml(newVersion);
+    const html = wrapVendorEmail({
+      vendorName: "App Store User",
+      bodyHtml: `
+        <h2 style="margin:0 0 16px">🆕 ${safeApp} — v${safeVersion} is here</h2>
+        <p style="margin:0 0 12px;color:#8892a4">A new version of <strong style="color:#e8eaf0">${safeApp}</strong> you downloaded is now available on the Awajimaa App Store.</p>
+        <table style="width:100%;background:#0d1a12;border:1px solid rgba(0,200,83,0.2);border-radius:10px;padding:16px;margin:0 0 20px;border-spacing:0">
+          <tr><td style="color:#8892a4;font-size:13px">Version</td><td style="color:#00c853;font-weight:700;font-size:15px">v${safeVersion}</td></tr>
+        </table>
+        ${downloadUrl ? `<p style="margin:0 0 20px"><a href="${escapeHtml(downloadUrl)}" style="display:inline-block;background:#00c853;color:#000;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:15px">⬇️ Download v${safeVersion}</a></p>` : ""}
+        <p style="margin:0 0 8px"><a href="${escapeHtml(storeUrl)}" style="color:#00c853;font-size:13px">View app page →</a></p>
+        <p style="margin:24px 0 0;font-size:11px;color:#4a5568">You received this because you downloaded ${safeApp} from the Awajimaa App Store. Reply to unsubscribe.</p>
+      `,
+    });
+    await Promise.allSettled(
+      subs.map(({ email }) =>
+        sendEmail({ to: email, subject: `${appName} v${newVersion} is available — download now`, html })
+      )
+    );
+    logger.info({ appId, count: subs.length }, "notifySubscribers: emails sent");
+  } catch (err) {
+    logger.error({ err }, "notifySubscribersOfNewVersion error");
+  }
+}
 
 // POST /store/apps/:slug/event — public beacon: "view" on page load, "uninstall" when reported
 router.post("/apps/:slug/event", async (req, res) => {
@@ -2096,6 +2165,9 @@ router.post("/admin/apps/:id/versions/:versionId/activate", requireAuth(), async
     await db.update(storeAppsTable)
       .set({ downloadUrl: version.fileUrl, currentVersion: version.version, updatedAt: now })
       .where(eq(storeAppsTable.id, appId));
+
+    // Notify subscribers of the new version (fire-and-forget)
+    notifySubscribersOfNewVersion(appId, app.name, app.slug, version.version, version.fileUrl).catch(() => {});
 
     res.json({ ok: true, message: `v${version.version} is now live` });
   } catch (err) {

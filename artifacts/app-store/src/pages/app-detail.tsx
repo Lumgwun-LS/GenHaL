@@ -71,6 +71,10 @@ export default function AppDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
 
+  const [showSubscribe, setShowSubscribe] = useState<"idle"|"prompt"|"submitting"|"done"|"signed-in-done">("idle");
+  const [subEmail, setSubEmail] = useState("");
+  const [subError, setSubError] = useState("");
+
   const viewFired = useRef(false);
 
   useEffect(() => {
@@ -95,7 +99,29 @@ export default function AppDetail() {
       const { downloadUrl, webUrl } = await apiFetch<{ downloadUrl: string; webUrl: string | null }>(`/apps/${slug}/download`, { method: "POST" });
       const target = downloadUrl || webUrl;
       if (target) window.open(target, "_blank");
+      // Show update-notification opt-in after download
+      if (isSignedIn) {
+        // Signed-in: silently subscribe via their Clerk session email (handled server-side)
+        apiFetch(`/apps/${slug}/subscribe-updates`, { method: "POST", body: JSON.stringify({ email: "__clerk__" }) }).catch(() => {});
+        setShowSubscribe("signed-in-done");
+      } else {
+        setShowSubscribe("prompt");
+      }
     } catch {}
+  }
+
+  async function handleSubscribeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!app || !subEmail) return;
+    setSubError("");
+    setShowSubscribe("submitting");
+    try {
+      await apiFetch(`/apps/${slug}/subscribe-updates`, { method: "POST", body: JSON.stringify({ email: subEmail }) });
+      setShowSubscribe("done");
+    } catch {
+      setSubError("Something went wrong. Please try again.");
+      setShowSubscribe("prompt");
+    }
   }
 
   function handleUninstall() {
@@ -173,6 +199,65 @@ export default function AppDetail() {
               🗑 Report Uninstall
             </button>
           </div>
+
+          {/* ── Update notification opt-in ── */}
+          {showSubscribe !== "idle" && (
+            <div style={{
+              marginTop: 14, padding: "14px 16px", borderRadius: 12,
+              background: showSubscribe === "done" || showSubscribe === "signed-in-done"
+                ? "rgba(0,200,83,0.08)" : "rgba(255,179,0,0.06)",
+              border: `1px solid ${showSubscribe === "done" || showSubscribe === "signed-in-done"
+                ? "rgba(0,200,83,0.2)" : "rgba(255,179,0,0.2)"}`,
+            }}>
+              {showSubscribe === "signed-in-done" && (
+                <p style={{ margin: 0, fontSize: 13, color: "#00c853" }}>
+                  🔔 You'll be notified when a new version is released.
+                </p>
+              )}
+              {showSubscribe === "done" && (
+                <p style={{ margin: 0, fontSize: 13, color: "#00c853" }}>
+                  ✅ Done! We'll email you when a new version drops.
+                </p>
+              )}
+              {(showSubscribe === "prompt" || showSubscribe === "submitting") && (
+                <form onSubmit={handleSubscribeSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#ffb300" }}>
+                    🔔 Get notified when a new version is released
+                  </p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input
+                      type="email"
+                      required
+                      placeholder="your@email.com"
+                      value={subEmail}
+                      onChange={e => setSubEmail(e.target.value)}
+                      style={{
+                        flex: 1, minWidth: 200, padding: "8px 12px", borderRadius: 7,
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                        color: "#e8eaf0", fontSize: 13, outline: "none",
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={showSubscribe === "submitting"}
+                      className="btn-green"
+                      style={{ padding: "8px 18px", fontSize: 13, opacity: showSubscribe === "submitting" ? 0.6 : 1 }}
+                    >
+                      {showSubscribe === "submitting" ? "…" : "Notify me"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSubscribe("idle")}
+                      style={{ background: "none", border: "none", color: "#8892a4", fontSize: 13, cursor: "pointer", padding: "8px 4px" }}
+                    >
+                      No thanks
+                    </button>
+                  </div>
+                  {subError && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{subError}</p>}
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Canonical download link */}
           {app.canonicalDownloadUrl && (
