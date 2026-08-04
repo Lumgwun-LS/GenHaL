@@ -36,6 +36,67 @@ SMTP_USER = "b2d3a7001@smtp-brevo.com"
 TWILIO_PHONE_NUMBER = "+16813753205"
 PUBLIC_APP_DOMAIN = "awajimaaappstore.com"
 GCS_BUCKET_NAME = "awajimaa-ai"
+CI = "true"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 18571
+externalPort = 3002
+
+[[ports]]
+localPort = 19306
+externalPort = 6800
+
+[[ports]]
+localPort = 19679
+externalPort = 5000
+
+[[ports]]
+localPort = 19821
+externalPort = 8099
+
+[[ports]]
+localPort = 19851
+externalPort = 3003
+
+[[ports]]
+localPort = 19889
+externalPort = 3000
+
+[[ports]]
+localPort = 20045
+externalPort = 6000
+
+[[ports]]
+localPort = 21732
+externalPort = 4200
+
+[[ports]]
+localPort = 22220
+externalPort = 8008
+
+[[ports]]
+localPort = 24410
+externalPort = 3001
+
+[[ports]]
+localPort = 24599
+externalPort = 5173
+
+[[ports]]
+localPort = 24916
+externalPort = 8000
+
+[[ports]]
+localPort = 25241
+externalPort = 80
