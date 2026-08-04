@@ -557,7 +557,7 @@ router.post("/apps/:slug/download", async (req, res) => {
     await db.update(storeAppsTable).set({ totalDownloads: app.totalDownloads + 1 }).where(eq(storeAppsTable.id, app.id));
     const authData = getAuth(req);
     logAppEvent(app.id, "install", req, { clerkUserId: authData.userId ?? undefined, sessionId: req.body?.sessionId });
-    res.json({ downloadUrl: app.downloadUrl ?? "", webUrl: app.webUrl ?? null });
+    res.json({ downloadUrl: canonicalDownloadUrl(app), webUrl: app.webUrl ?? null });
   } catch (err) {
     logger.error({ err }, "downloadApp error");
     res.status(500).json({ error: "Internal server error" });
