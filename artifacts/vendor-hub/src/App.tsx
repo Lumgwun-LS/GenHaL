@@ -81,6 +81,10 @@ import PublicBlogIndex from "@/pages/public-blog/index";
 import PublicBlogPost from "@/pages/public-blog/post";
 import VendorBlogPage from "@/pages/vendor-blog/index";
 import MyActivityPage from "@/pages/my-activity/index";
+import PublicSupportPage from "@/pages/help/index";
+import TicketViewPage from "@/pages/ticket-view/index";
+import SupportPage from "@/pages/support/index";
+import TicketDetailPage from "@/pages/support/ticket";
 
 declare const __CF_PAGES__: boolean;
 
@@ -395,6 +399,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/docs/:slug" component={DocsPage} />
           <Route path="/become-a-connected-business" component={BecomeAConnectedBusinessPage} />
           <Route path="/partner/:slug" component={PartnerToolkitPage} />
+          <Route path="/help/:vendorId" component={PublicSupportPage} />
+          <Route path="/ticket/:token" component={TicketViewPage} />
 
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />
@@ -438,6 +444,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/connected-business" component={() => <AuthenticatedRoute component={ConnectedBusinessPage} />} />
 
           <Route path="/messages" component={() => <AuthenticatedRoute component={MessagesPage} />} />
+          <Route path="/support/:id" component={() => <AuthenticatedRoute component={TicketDetailPage} />} />
+          <Route path="/support" component={() => <AuthenticatedRoute component={SupportPage} />} />
           <Route path="/wallet"      component={() => <AuthenticatedRoute component={WalletPage} />} />
           <Route path="/interswitch" component={() => <AuthenticatedRoute component={InterswitchPage} />} />
 

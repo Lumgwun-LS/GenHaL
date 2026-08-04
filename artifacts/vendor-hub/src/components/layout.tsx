@@ -45,6 +45,7 @@ import {
   Smartphone,
   BookOpen,
   CheckSquare,
+  TicketCheck,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { useState, useCallback } from "react";
@@ -176,6 +177,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/inventory", label: "Inventory",  icon: Archive },
       { href: "/orders",    label: "Orders",     icon: ShoppingCart },
       { href: "/messages",  label: "Messages",   icon: Inbox },
+      { href: "/support",   label: "Support Tickets", icon: TicketCheck },
       { href: "/wallet",        label: "Wallet",        icon: Landmark },
       { href: "/interswitch",   label: "Interswitch",   icon: CreditCard },
     ],

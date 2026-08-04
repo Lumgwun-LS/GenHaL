@@ -1,3 +1,4 @@
+- [Support Ticket System](support-ticket-system.md) — vendor-shareable /help/:vendorId form, /ticket/:token tracking, /support dashboard; quota by plan (not RESOURCE_KEYS), upload URL follows media-library pattern.
 - [Auth scoping audit](auth-scoping-audit.md) — 12 route files had full-table-scan + in-memory filter (no auth); fixed with resolveAuthedVendor + DB-level WHERE; public routes and canonical new-route pattern documented.
 - [VendorHub AI video generation](vendorhub-ai-video-generation.md) — no text-to-video support in OpenAI/Gemini AI Integrations; videos are built by animating the AI image with ffmpeg (Ken Burns + caption overlay) instead.
 - [VendorHub stack decisions](vendorhub-stack.md) — multivendor platform: React+Vite frontend, Express API, Drizzle+Postgres, Clerk auth, all routes auth-gated via requireAuth middleware.

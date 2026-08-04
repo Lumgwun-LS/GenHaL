@@ -81,6 +81,8 @@ import internalMobileAppRouter from "./internal-mobile-app";
 import tasksRouter from "./tasks";
 import blogRouter from "./blog";
 import publicBlogRouter from "./public-blog";
+import supportPublicRouter from "./support-public";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -154,6 +156,9 @@ router.use(internalMobileAppRouter);
 // Public blog — no auth required (visitor-facing pages)
 router.use(publicBlogRouter);
 
+// Public support ticket form — no auth required (customer-facing)
+router.use(supportPublicRouter);
+
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
 
@@ -222,5 +227,6 @@ router.use(integrationErrorsRouter);
 router.use(mobileAppsRouter);
 router.use(tasksRouter);
   router.use(blogRouter);
+router.use(supportRouter);
 
 export default router;
