@@ -1,9 +1,17 @@
 // CF_PAGES=1 is auto-injected by Cloudflare Pages at build time — no dashboard
 // env var needed. On Replit, relative /api/* paths work via the platform proxy.
+// When served via the custom domain (awajimaaappstore.com) the static artifact
+// owns that host, so relative /api/* calls never reach the API server — we must
+// use the absolute origin instead.
 declare const __CF_PAGES__: boolean;
-const API_ORIGIN = __CF_PAGES__
-  ? 'https://account.awajimaaai.com'
-  : ((import.meta.env.VITE_API_BASE_URL ?? '') as string).replace(/\/+$/, '');
+const _onCustomDomain =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'awajimaaappstore.com' ||
+    window.location.hostname === 'www.awajimaaappstore.com');
+const API_ORIGIN =
+  __CF_PAGES__ || _onCustomDomain
+    ? 'https://account.awajimaaai.com'
+    : ((import.meta.env.VITE_API_BASE_URL ?? '') as string).replace(/\/+$/, '');
 const API_BASE = `${API_ORIGIN}/api/store`;
 
 export class StoreApiError extends Error {

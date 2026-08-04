@@ -68,7 +68,14 @@ function UserTracker() {
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+// When served via the custom domain (awajimaaappstore.com) the URL has no
+// /app-store/ prefix, so Wouter's base must be "" not "/app-store".
+const _builtBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+const _onCustomDomain =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "awajimaaappstore.com" ||
+    window.location.hostname === "www.awajimaaappstore.com");
+const basePath = _onCustomDomain ? "" : _builtBase;
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
