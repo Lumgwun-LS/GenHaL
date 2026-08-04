@@ -15,7 +15,6 @@ localPort = 19851
 run = "pnpm --filter @workspace/app-store run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/app-store", "run", "build" ]
 serve = "static"
 publicDir = "artifacts/app-store/dist/public"
 
