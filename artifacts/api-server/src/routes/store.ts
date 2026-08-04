@@ -23,7 +23,7 @@ import { eq, desc, asc, ilike, and, sql, or, gte, count, inArray, isNull, lt, is
 import { squadInitiatePayment, squadVerifyTransaction, resolveSquadKey, verifySquadWebhookSignature } from "../lib/squad";
 import { storeGeneratedMedia } from "../lib/generated-media-storage";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { isGcsConfigured, mirrorUrlToGcs, uploadBufferToGcs } from "../lib/gcs";
+import { isR2Configured, mirrorUrlToR2, uploadBufferToR2 } from "../lib/r2";
 import { sendEmail } from "../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../lib/email-branding";
 
@@ -1175,10 +1175,10 @@ router.post("/apps/finalize-media", requireAuth(), async (req: any, res: any) =>
     if (!replitUrl || typeof replitUrl !== "string") {
       return void res.status(400).json({ error: "replitUrl required" });
     }
-    if (!isGcsConfigured()) {
+    if (!isR2Configured()) {
       return void res.json({ gcsUrl: null });
     }
-    const gcsUrl = await mirrorUrlToGcs(replitUrl, undefined, "app-store/media");
+    const gcsUrl = await mirrorUrlToR2(replitUrl, undefined, "app-store/media");
     res.json({ gcsUrl });
   } catch (err) {
     logger.warn({ err }, "finalize-media: GCS mirror failed — falling back to Replit URL");
@@ -2514,9 +2514,9 @@ router.post("/admin/apps/:id/versions", requireAuth(), _versionUpload.single("fi
     }
 
     // Mirror to GCS for permanent, non-expiring hosting
-    if (fileUrl && isGcsConfigured()) {
+    if (fileUrl && isR2Configured()) {
       try {
-        const gcsUrl = await mirrorUrlToGcs(fileUrl);
+        const gcsUrl = await mirrorUrlToR2(fileUrl);
         fileUrl = gcsUrl;
         logger.info({ gcsUrl }, "APK mirrored to GCS");
       } catch (gcsErr) {
@@ -3403,9 +3403,9 @@ router.post(
 
       // Mirror to GCS for permanent hosting (icons, screenshots, APKs).
       let publicUrl = replitUrl;
-      if (isGcsConfigured()) {
+      if (isR2Configured()) {
         try {
-          publicUrl = await uploadBufferToGcs(buffer, originalname || "file", mimetype, "app-store/media");
+          publicUrl = await uploadBufferToR2(buffer, originalname || "file", mimetype, "app-store/media");
         } catch (gcsErr) {
           logger.warn({ gcsErr }, "platform-apps upload-file: GCS mirror failed — using Replit URL");
           publicUrl = replitUrl;
@@ -3512,9 +3512,9 @@ router.post("/admin/platform-apps", requireAuth(), async (req: any, res: any) =>
 
     // Mirror the APK to GCS for permanent hosting before persisting the URL
     let finalDownloadUrl = downloadUrl;
-    if (isGcsConfigured()) {
+    if (isR2Configured()) {
       try {
-        finalDownloadUrl = await mirrorUrlToGcs(downloadUrl);
+        finalDownloadUrl = await mirrorUrlToR2(downloadUrl);
         logger.info({ gcsUrl: finalDownloadUrl }, "platform-app APK mirrored to GCS");
       } catch (gcsErr) {
         logger.warn({ err: gcsErr }, "GCS mirror failed for platform-app — keeping original URL");
