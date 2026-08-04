@@ -128,7 +128,7 @@ export default function DeveloperSignup() {
         </button>
 
         <p style={{ fontSize: 12, color: "#8892a4", textAlign: "center" }}>
-          By registering you agree to the Africa App Store developer terms. NGN 50,000 publishing fee applies per app.
+          By registering you agree to the Africa App Store developer terms. A one-time account activation fee applies — submit unlimited apps after that.
         </p>
       </form>
     </div>

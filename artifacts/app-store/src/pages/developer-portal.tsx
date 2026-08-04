@@ -403,7 +403,7 @@ function PublishOverlay({
                 style={{ color: "#8892a4", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
                 {feeExempt
                   ? "Your app is in the review queue — you'll get a notification once it's live."
-                  : "Complete the NGN 50,000 publishing fee to enter the review queue and go live."}
+                  : "Your app has been submitted and is pending review."}
               </motion.p>
 
               {/* App card */}
@@ -455,7 +455,7 @@ function PublishOverlay({
                 {!feeExempt && (
                   <button className="btn-green" onClick={onPayFee}
                     style={{ width: "100%", padding: "13px 0", fontSize: 15, fontWeight: 700, borderRadius: 12 }}>
-                    💳 Pay NGN 50,000 Publishing Fee →
+                    💳 Pay One-Time Account Fee →
                   </button>
                 )}
                 <button onClick={onViewApps}
@@ -881,7 +881,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
         </div>
         {error && <div style={{ background: "rgba(255,82,82,0.1)", border: "1px solid rgba(255,82,82,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ff5252", fontSize: 14 }}>❌ {error}</div>}
         <div style={{ background: "rgba(255,179,0,0.08)", border: "1px solid rgba(255,179,0,0.2)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#c0c8d8" }}>
-          💳 After submission you'll pay the publishing fee (<strong style={{ color: "#ffb300" }}>NGN 50,000</strong> for African developers · <strong style={{ color: "#a78bfa" }}>$100 USD</strong> for international developers) via your preferred payment method.
+          ✅ Your account fee is paid — this app goes straight to review at no extra charge.
         </div>
         <motion.button
           className="btn-green"
@@ -960,7 +960,7 @@ function OfflinePaymentModal({ app, onClose }: { app: App; onClose: () => void }
         ) : (
           <>
             <h3 style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>Pay via Bank Transfer</h3>
-            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>Transfer <strong style={{ color: "#00c853" }}>NGN 50,000</strong> to the account below, then upload your proof of payment.</p>
+            <p style={{ color: "#8892a4", fontSize: 13, marginBottom: 20 }}>Transfer the one-time account activation fee to the account below, then upload your proof of payment.</p>
 
             {/* Account details */}
             <div style={{ background: "rgba(0,200,83,0.06)", border: "1px solid rgba(0,200,83,0.15)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>

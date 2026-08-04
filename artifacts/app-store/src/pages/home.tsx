@@ -510,7 +510,7 @@ export default function Home() {
           >
             <motion.div animate={{ y: [0, -12, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }} style={{ fontSize: 64, marginBottom: 16 }}>🌍</motion.div>
             <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Be the first to publish</h2>
-            <p style={{ color: "#8892a4", marginBottom: 24 }}>Africa App Store is open. Publish your app for NGN 50,000.</p>
+            <p style={{ color: "#8892a4", marginBottom: 24 }}>Africa App Store is open. One-time account fee — then submit unlimited apps.</p>
             <Link href="/developer" className="btn-green btn-glow" style={{ display: "inline-flex" }}>Publish Your App</Link>
           </motion.div>
         )}
@@ -554,8 +554,8 @@ export default function Home() {
               transition={{ delay: 0.25 }}
               style={{ color: "#8892a4", fontSize: 14, maxWidth: 460, lineHeight: 1.6 }}
             >
-              Reach 1.4 billion people across 54 African countries. Flat publishing fee of{" "}
-              <strong style={{ color: "#00c853" }}>NGN 50,000</strong> per app — no hidden charges. AI-reviewed for quality and security.
+              Reach 1.4 billion people across 54 African countries. Pay a one-time account fee —{" "}
+              <strong style={{ color: "#00c853" }}>then submit unlimited apps</strong>. No per-app charges. AI-reviewed for quality and security.
             </motion.p>
           </div>
           <motion.div
