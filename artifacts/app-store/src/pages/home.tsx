@@ -257,7 +257,7 @@ function HeroSection() {
         >
           {[
             { display: `${cnt54}`, label: "Countries Served" },
-            { display: "₦50K",    label: "Publishing Fee" },
+            { display: "1×",      label: "Account Fee, Unlimited Apps" },
             { display: `${cnt100}%`, label: "AI-Reviewed" },
           ].map((s) => (
             <motion.div
