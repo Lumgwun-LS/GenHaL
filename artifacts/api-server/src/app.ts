@@ -109,8 +109,8 @@ app.use(
       if (process.env.NODE_ENV !== "production") return callback(null, true);
       // In production, check against explicit allowlist
       if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      // Also allow any *.replit.dev / *.replit.app preview domains
-      if (/\.(replit\.dev|replit\.app)$/.test(new URL(origin).hostname)) return callback(null, true);
+      // Also allow any *.replit.dev / *.replit.app / *.pages.dev preview domains
+      if (/\.(replit\.dev|replit\.app|pages\.dev)$/.test(new URL(origin).hostname)) return callback(null, true);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
   }),
