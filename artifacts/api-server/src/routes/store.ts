@@ -1315,6 +1315,15 @@ router.post("/developers/me/apps", requireAuth(), async (req, res) => {
     }
     if (!downloadUrl) return void res.status(400).json({ error: "downloadUrl is required — every app must have a direct download or install link" });
 
+    // AAB files require Google Play infrastructure and cannot be installed directly by users.
+    const { fileName } = req.body as { fileName?: string };
+    if (fileName && fileName.toLowerCase().endsWith(".aab")) {
+      return void res.status(400).json({
+        error: "AAB files are not accepted. AAB is a Google Play publishing format and cannot be directly installed by users. Please upload an APK instead.",
+        code: "AAB_NOT_SUPPORTED",
+      });
+    }
+
     // Package name uniqueness check (optional but must be unique if provided)
     if (packageName) {
       const pkgConflict = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.packageName, packageName) } as any);

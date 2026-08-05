@@ -514,6 +514,15 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
   const ssUploadRef = useRef<HTMLInputElement>(null);
 
   async function uploadApk(file: File) {
+    // AAB files cannot be directly installed by users — they require Google Play's
+    // infrastructure to convert to device-optimized APKs. Reject them early.
+    if (file.name.toLowerCase().endsWith(".aab")) {
+      setError(
+        "AAB files cannot be installed directly by users — they only work on Google Play. " +
+        "Please export an APK from Android Studio (Build → Build APK) and upload that instead."
+      );
+      return;
+    }
     setApkFile(file); setApkUploading(true); setApkProgress(0);
     try {
       const url = await uploadFilePresigned(file, setApkProgress);
@@ -604,7 +613,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
       setError("Please upload an app icon before submitting."); return;
     }
     if (!form.downloadUrl) {
-      setError("Please upload your app file (APK / IPA / AAB) before submitting."); return;
+      setError("Please upload your app file (APK or IPA) before submitting."); return;
     }
     if (categories.length === 0) {
       setError("Select at least one category."); return;
@@ -642,6 +651,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
           categories,
           screenshots: ssUrls,
           packageName: form.packageName || undefined,
+          fileName: apkFile?.name || undefined,
         }),
       });
       apiResult = { ok: true, app };
@@ -736,7 +746,7 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
 
         {/* App File — upload only, hosted on platform */}
         <div>
-          <label className="form-label">App File (APK / IPA / AAB) *</label>
+          <label className="form-label">App File (APK / IPA) *</label>
           {apkFile && !apkUploading ? (
             /* Uploaded state */
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(0,200,83,0.07)", border: "1px solid rgba(0,200,83,0.25)", borderRadius: 10 }}>
@@ -772,13 +782,13 @@ function AppSubmitForm({ dev, onCreated }: { dev: Developer; onCreated: (app: Ap
                 <>
                   <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
                   <div style={{ fontSize: 14, color: "#00c853", fontWeight: 600 }}>Click to upload your app file</div>
-                  <div style={{ fontSize: 12, color: "#8892a4", marginTop: 4 }}>APK · IPA · AAB · ZIP · up to 250 MB</div>
+                  <div style={{ fontSize: 12, color: "#8892a4", marginTop: 4 }}>APK · IPA · ZIP · up to 250 MB &nbsp;·&nbsp; AAB not supported</div>
                   <div style={{ fontSize: 11, color: "#8892a4", marginTop: 2 }}>The download link is generated automatically and hosted on this platform</div>
                 </>
               )}
             </div>
           )}
-          <input ref={apkInputRef} type="file" accept=".apk,.ipa,.zip,.aab" style={{ display: "none" }}
+          <input ref={apkInputRef} type="file" accept=".apk,.ipa,.zip" style={{ display: "none" }}
             onChange={e => { const f = e.target.files?.[0]; if (f) uploadApk(f); (e.target as HTMLInputElement).value = ""; }} />
         </div>
 
