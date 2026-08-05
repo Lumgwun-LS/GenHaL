@@ -38,7 +38,6 @@ import aiQuickCreateRouter from "./ai-quick-create";
 import sitesRouter from "./sites";
 import workersRouter from "./workers";
 import storeRouter from "./store";
-import storeSeedRouter from "./one-time-store-seed";
 import invoicesRouter from "./invoices";
 import invoicesPublicRouter from "./invoices-public";
 import storeAiLaunchRouter from "./store-ai-launch";
@@ -115,9 +114,6 @@ router.use(mediaRouter);
 
 // External / Awajimaa bridge — has its own auth (API key + JWT), no Clerk required
 router.use("/external", externalRouter);
-
-// ONE-TIME store seed — remove after first use (token: awa-store-seed-2026-Xk9mPqL4)
-router.use(storeSeedRouter);
 
 // Awajimaa App Store — auth handled per-route inside storeRouter (public browse + auth-gated portal)
 router.use("/store", storeRouter);
