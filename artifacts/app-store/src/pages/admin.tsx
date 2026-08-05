@@ -1363,7 +1363,7 @@ function OurAppsTab() {
       // Upload any new screenshots
       if (screenshotFiles.length > 0) {
         setUploadStatus("Uploading screenshots…");
-        const urls = await Promise.all(screenshotFiles.map(uploadFile));
+        const urls = await Promise.all(screenshotFiles.map(f => uploadFile(f)));
         screenshots = [...screenshots, ...urls];
       }
 
