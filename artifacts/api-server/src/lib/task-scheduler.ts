@@ -198,6 +198,10 @@ async function runAutomationJob(): Promise<{ executed: number }> {
           ? data.platforms
           : ["instagram", "facebook"];
 
+        // Fetch vendor links to weave into the caption naturally
+        const { getVendorLinks, linksSystemContext } = await import("./vendor-links");
+        const vendorLinks = await getVendorLinks(task.vendorId).catch(() => null);
+
         let caption = topic;
         try {
           const aiRes = await openai.chat.completions.create({
@@ -207,7 +211,8 @@ async function runAutomationJob(): Promise<{ executed: number }> {
                 role: "system",
                 content:
                   "You are a professional social media content creator. Write an engaging, concise post " +
-                  "for a business audience. Include relevant emojis. Keep it under 280 characters.",
+                  "for a business audience. Include relevant emojis. Keep it under 280 characters." +
+                  linksSystemContext(vendorLinks),
               },
               { role: "user", content: `Write a social media post about: ${topic}` },
             ],

@@ -1,7 +1,20 @@
 ---
 name: VendorHub AI content generation
-description: Real image/caption generation backend for the Social Media Manager feature, and route auth pattern for AI endpoints.
+description: Real image/caption generation backend for the Social Media Manager feature, vendor links injection into AI prompts, and route auth pattern for AI endpoints.
 ---
+
+## Vendor links auto-injected into all AI-generated content
+`lib/vendor-links.ts` — `getVendorLinks(vendorId)` queries website slug + published mobile app slug + builds support URL; `linksSystemContext()` formats for system-prompt injection; `linksFooter()` formats for long-form content footer.
+
+Injected in every AI generation entry point (graceful degradation: `.catch(() => null)` so a DB failure never blocks generation):
+- `/ai/generate-caption` — appended to system prompt
+- `/ai/analyze-video-caption` (Gemini, video captions) — appended to instruction string
+- `/ai/generate-content` Content Studio `social_post` type — appended to system prompt
+- `/ai/generate-content` Content Studio `article`/`academic` — `linksFooter()` appended to the returned content string via `generateLongForm(..., links)` param
+- `task-scheduler.ts` `post_social_media` — dynamic import + inject into system prompt
+
+Links included per vendor (only those that exist): website, shop, published mobile app, support ticket page (always).
+AI is instructed: weave in only 1–2 most relevant links naturally — never dump all at once.
 
 `/ai/generate-image` and `/ai/generate-caption` use the Replit-managed OpenAI AI
 Integration (`@workspace/integrations-openai-ai-server`) — `generateImageBuffer`

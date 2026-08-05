@@ -12,6 +12,7 @@ const GenerateAiContentBody = z.object({
 });
 import { getAuth } from "@clerk/express";
 import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable, vendorContentLibraryTable } from "@workspace/db";
+import { getVendorLinks, linksSystemContext, linksFooter, type VendorLinks } from "../lib/vendor-links";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -467,6 +468,9 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
   };
   const limit = platformLimits[platform?.toLowerCase() ?? ""] ?? 500;
 
+  // Fetch vendor's public links to weave into the caption
+  const vendorLinks = await getVendorLinks(vendorId).catch(() => null);
+
   let result: string;
   let status: "completed" | "failed" = "completed";
   try {
@@ -476,7 +480,7 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
       messages: [
         {
           role: "system",
-          content: `You write short, high-converting social media captions for small business vendors. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes or preamble.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}`,
+          content: `You write short, high-converting social media captions for small business vendors. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes or preamble.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}${linksSystemContext(vendorLinks)}`,
         },
         { role: "user", content: `Write a caption about: ${topic}` },
       ],
@@ -618,7 +622,10 @@ router.post("/ai/analyze-video-caption", async (req, res): Promise<void> => {
   };
   const limit = platformLimits[platform?.toLowerCase() ?? ""] ?? 500;
 
-  const instruction = `Watch this video and write ONE short, high-converting social media caption that accurately reflects what actually happens/is shown in it — do not invent details it doesn't contain. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes, no preamble, no description of the video itself.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}`;
+  // Fetch vendor's public links to weave into the caption
+  const vendorLinks = await getVendorLinks(vendorId).catch(() => null);
+
+  const instruction = `Watch this video and write ONE short, high-converting social media caption that accurately reflects what actually happens/is shown in it — do not invent details it doesn't contain. Tone: ${toneDesc}. Target platform: ${platform ?? "general"}. Hard limit: ${limit} characters. Never use placeholder brackets. Return only the caption text, no quotes, no preamble, no description of the video itself.${includeHashtags ? " End with 3-5 relevant hashtags." : " Do not include hashtags."}${includeEmoji ? " Use 1-3 tasteful emoji." : " Do not use emoji."}${linksSystemContext(vendorLinks)}`;
 
   let result: string;
   let status: "completed" | "failed" = "completed";
@@ -772,6 +779,7 @@ async function generateLongForm(
   tone: string,
   language: string,
   style: "article" | "academic",
+  links?: VendorLinks | null,
 ): Promise<string> {
   const toneMap: Record<string, string> = {
     professional: "professional and authoritative",
@@ -801,7 +809,7 @@ async function generateLongForm(
         { role: "user", content: `Write an article about: ${topic}` },
       ],
     });
-    return (response.choices[0]?.message?.content ?? "").trim();
+    return (response.choices[0]?.message?.content ?? "").trim() + linksFooter(links ?? null);
   } else {
     const response = await openai.chat.completions.create({
       model: "gpt-5.4-mini",
@@ -815,7 +823,7 @@ async function generateLongForm(
         { role: "user", content: `Write an academic paper about: ${topic}` },
       ],
     });
-    return (response.choices[0]?.message?.content ?? "").trim();
+    return (response.choices[0]?.message?.content ?? "").trim() + linksFooter(links ?? null);
   }
 }
 
@@ -843,6 +851,9 @@ router.post("/ai/generate-content", async (req, res): Promise<void> => {
 
   const usageVendor = await getVendorForUsage(vendorId);
   if (!usageVendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  // Fetch vendor's public links once — injected into every generator below
+  const vendorLinks = await getVendorLinks(vendorId).catch(() => null);
 
   // Count quota upfront so concurrent requests can't jointly overshoot limits.
   const textTypes = outputTypes.filter((t: string) => ["social_post", "article", "academic"].includes(t));
@@ -899,7 +910,7 @@ router.post("/ai/generate-content", async (req, res): Promise<void> => {
           messages: [
             {
               role: "system",
-              content: `You write high-converting social media captions for small business vendors. Tone: ${toneDesc}. End with 3-5 relevant hashtags. Use 1-3 tasteful emoji. Hard limit: 500 characters. Return only the caption text, no preamble.${captionLangInstruction}`,
+              content: `You write high-converting social media captions for small business vendors. Tone: ${toneDesc}. End with 3-5 relevant hashtags. Use 1-3 tasteful emoji. Hard limit: 500 characters. Return only the caption text, no preamble.${captionLangInstruction}${linksSystemContext(vendorLinks)}`,
             },
             { role: "user", content: `Topic: ${topic}` },
           ],
@@ -909,7 +920,7 @@ router.post("/ai/generate-content", async (req, res): Promise<void> => {
       }
 
       if (type === "article" || type === "academic") {
-        const content = await generateLongForm(topic, toneStr, langStr, type as "article" | "academic");
+        const content = await generateLongForm(topic, toneStr, langStr, type as "article" | "academic", vendorLinks);
         const [saved] = await db.insert(vendorContentLibraryTable).values({ vendorId, type, topic, content }).returning();
         return { type, result: { status: "completed", content, wordCount: content.split(/\s+/).filter(Boolean).length, libraryId: saved.id } };
       }
