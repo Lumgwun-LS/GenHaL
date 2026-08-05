@@ -65,6 +65,7 @@ import connectedBusinessRouter from "./connected-business";
 import embedRouter from "./embed";
 import customerRouter from "./customer";
 import vendorMessagesRouter from "./vendor-messages";
+import vendorCustomersRouter from "./vendor-customers";
 import vendorVirtualAccountsRouter from "./vendor-virtual-accounts";
 import walletRouter, { walletPublicRouter } from "./wallet";
 import analyticsVisitsRouter from "./analytics-visits";
@@ -222,6 +223,7 @@ router.use(architectRouter);
 router.use(developerRouter);
 router.use(customerRouter);
 router.use(vendorMessagesRouter);
+router.use(vendorCustomersRouter);
 router.use(vendorVirtualAccountsRouter);
 router.use(walletRouter);
 // Admin rating/complaint management (auth-gated inside the router)

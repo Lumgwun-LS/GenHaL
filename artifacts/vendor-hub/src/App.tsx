@@ -28,6 +28,8 @@ import Products from "@/pages/products";
 import Inventory from "@/pages/inventory";
 import Orders from "@/pages/orders";
 import OrderDetail from "@/pages/orders/detail";
+import Customers from "@/pages/customers";
+import CustomerDetail from "@/pages/customers/detail";
 import Leads from "@/pages/leads";
 import EmailCampaigns from "@/pages/email-campaigns";
 import EmailCampaignEditor from "@/pages/email-campaigns/detail";
@@ -414,6 +416,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/inventory" component={() => <AuthenticatedRoute component={Inventory} />} />
           <Route path="/orders" component={() => <AuthenticatedRoute component={Orders} />} />
           <Route path="/orders/:id" component={() => <AuthenticatedRoute component={OrderDetail} />} />
+          <Route path="/customers" component={() => <AuthenticatedRoute component={Customers} />} />
+          <Route path="/customers/:email" component={() => <AuthenticatedRoute component={CustomerDetail} />} />
           <Route path="/leads" component={() => <AuthenticatedRoute component={Leads} />} />
           <Route path="/email-campaigns" component={() => <AuthenticatedRoute component={EmailCampaigns} />} />
           <Route path="/email-campaigns/:id" component={() => <AuthenticatedRoute component={EmailCampaignEditor} />} />
