@@ -198,8 +198,13 @@ function AppRoutes() {
 }
 
 export default function App() {
+  // Wouter v3: passing base="" (empty string) breaks route matching — only set
+  // the base prop when it's actually non-empty (i.e. on the Replit deployment
+  // where basePath="/app-store"). On the custom domain (CF Pages) basePath is
+  // "" so we let Wouter use its default pathname matching.
+  const routerProps = basePath ? { base: basePath } : {};
   return (
-    <WouterRouter base={basePath}>
+    <WouterRouter {...routerProps}>
       <AppRoutes />
     </WouterRouter>
   );
