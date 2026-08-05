@@ -3,14 +3,27 @@
  * Mounted BEFORE requireAuth in routes/index.ts.
  *
  * Public support link format: /help/:vendorId (served by vendor-hub frontend)
- * These API endpoints power that page.
+ *
+ * Customer verification flow:
+ *  1. GET /public/support/:vendorId/check-customer?email=xxx
+ *     → Looks up the email in the vendor's CRM (leads table) or past orders.
+ *     → Returns { found, name } so the form can decide whether to show the
+ *       "new visitor" name+phone signup step or just pre-fill and continue.
+ *  2. POST /public/support/:vendorId/tickets
+ *     → customerEmail is now required.
+ *     → Upserts a platform_contact + CRM lead (or finds the existing lead).
+ *     → Stores leadId + platformContactId on the ticket row.
  */
 import { Router } from "express";
 import crypto from "crypto";
-import { db, vendorsTable, productsTable, supportTicketsTable, supportTicketMessagesTable, vendorNotificationsTable } from "@workspace/db";
+import {
+  db, vendorsTable, productsTable, ordersTable,
+  supportTicketsTable, supportTicketMessagesTable, vendorNotificationsTable,
+} from "@workspace/db";
 import { eq, and, desc, count, gte, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { getBillingPeriodStart, getEffectiveTier } from "../lib/usage";
+import { upsertPlatformContact, upsertVendorLead, findVendorLead } from "../lib/platform-contacts";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -44,7 +57,6 @@ router.get("/public/support/:vendorId", async (req, res): Promise<void> => {
 
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
-  // Active products for the dropdown
   const products = await db
     .select({ id: productsTable.id, name: productsTable.name, price: productsTable.price, category: productsTable.category })
     .from(productsTable)
@@ -56,8 +68,44 @@ router.get("/public/support/:vendorId", async (req, res): Promise<void> => {
   res.json({ vendor, products });
 });
 
+// ── GET /public/support/:vendorId/check-customer ──────────────────────────────
+// Check whether an email belongs to an existing CRM contact of this vendor.
+// Returns { found: true, name } or { found: false } — used by the form to
+// show the sign-up step only for new visitors.
+router.get("/public/support/:vendorId/check-customer", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  // 1. Check CRM leads first
+  const lead = await findVendorLead(vendorId, email.trim());
+  if (lead) {
+    res.json({ found: true, name: lead.name, source: "crm" }); return;
+  }
+
+  // 2. Fall back to orders (customer may have bought without being in CRM)
+  const [order] = await db
+    .select({ customerName: ordersTable.customerName })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.vendorId, vendorId),
+      eq(sql`lower(${ordersTable.customerEmail})`, email.trim().toLowerCase()),
+    ))
+    .limit(1);
+
+  if (order) {
+    res.json({ found: true, name: order.customerName, source: "order" }); return;
+  }
+
+  res.json({ found: false });
+});
+
 // ── POST /public/support/:vendorId/tickets ────────────────────────────────────
-// Customer submits a new support ticket. Enforces per-plan monthly quota.
+// Customer submits a new support ticket.
+// customerEmail is required — used to gate and identify the customer.
 router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void> => {
   const vendorId = parseInt(req.params.vendorId ?? "");
   if (isNaN(vendorId)) { res.status(400).json({ error: "Invalid vendor ID" }); return; }
@@ -78,12 +126,23 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
   };
 
   if (!customerName?.trim()) { res.status(400).json({ error: "customerName is required" }); return; }
+  if (!customerEmail?.trim()) { res.status(400).json({ error: "customerEmail is required — customers must verify their identity before submitting a ticket" }); return; }
   if (!subject?.trim()) { res.status(400).json({ error: "subject is required" }); return; }
   if (!message?.trim()) { res.status(400).json({ error: "message is required" }); return; }
 
   // Fetch vendor + tier for quota check
   const [vendor] = await db
-    .select({ id: vendorsTable.id, name: vendorsTable.name, subscriptionTier: vendorsTable.subscriptionTier, trialEndsAt: vendorsTable.trialEndsAt, featureTrialTier: vendorsTable.featureTrialTier, featureTrialExpiresAt: vendorsTable.featureTrialExpiresAt, currentPeriodStart: vendorsTable.currentPeriodStart, createdAt: vendorsTable.createdAt, status: vendorsTable.status })
+    .select({
+      id: vendorsTable.id,
+      name: vendorsTable.name,
+      subscriptionTier: vendorsTable.subscriptionTier,
+      trialEndsAt: vendorsTable.trialEndsAt,
+      featureTrialTier: vendorsTable.featureTrialTier,
+      featureTrialExpiresAt: vendorsTable.featureTrialExpiresAt,
+      currentPeriodStart: vendorsTable.currentPeriodStart,
+      createdAt: vendorsTable.createdAt,
+      status: vendorsTable.status,
+    })
     .from(vendorsTable)
     .where(and(eq(vendorsTable.id, vendorId), eq(vendorsTable.status, "active")));
 
@@ -104,6 +163,17 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
     }
   }
 
+  // Upsert platform contact + vendor CRM lead
+  const [platformContactId, leadId] = await Promise.all([
+    upsertPlatformContact(customerEmail.trim(), { name: customerName.trim(), phone: customerPhone?.trim() }),
+    upsertVendorLead(vendorId, customerEmail.trim(), {
+      name: customerName.trim(),
+      phone: customerPhone?.trim(),
+      channel: "support",
+      source: "support_ticket",
+    }),
+  ]);
+
   const ticketToken = crypto.randomBytes(24).toString("hex");
 
   const [ticket] = await db.transaction(async (tx) => {
@@ -111,7 +181,7 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
       vendorId,
       ticketToken,
       customerName: customerName.trim(),
-      customerEmail: customerEmail?.trim() || null,
+      customerEmail: customerEmail.trim().toLowerCase(),
       customerPhone: customerPhone?.trim() || null,
       subject: subject.trim(),
       category,
@@ -120,6 +190,8 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
       invoiceRef: invoiceRef?.trim() || null,
       orderRef: orderRef?.trim() || null,
       postId: postId ?? null,
+      leadId,
+      platformContactId,
     }).returning();
 
     await tx.insert(supportTicketMessagesTable).values({
@@ -131,7 +203,6 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
       attachmentTypes: attachmentTypes.length ? attachmentTypes : null,
     });
 
-    // Notify vendor
     await tx.insert(vendorNotificationsTable).values({
       vendorId,
       type: "support_ticket",
@@ -142,7 +213,7 @@ router.post("/public/support/:vendorId/tickets", async (req, res): Promise<void>
     return [t];
   });
 
-  logger.info({ ticketId: ticket!.id, vendorId }, "[support] New ticket created");
+  logger.info({ ticketId: ticket!.id, vendorId, leadId, platformContactId }, "[support] New ticket created");
 
   res.status(201).json({ ticketId: ticket!.id, ticketToken, message: "Ticket submitted successfully." });
 });
@@ -216,7 +287,6 @@ router.post("/public/support/ticket/:token/messages", async (req, res): Promise<
       attachmentTypes: attachmentTypes.length ? attachmentTypes : null,
     }).returning();
 
-    // Re-open if resolved
     if (ticket.status === "resolved") {
       await tx.update(supportTicketsTable)
         .set({ status: "open", updatedAt: new Date() })
@@ -241,7 +311,6 @@ router.post("/public/support/ticket/:token/messages", async (req, res): Promise<
 });
 
 // ── POST /public/support/upload-url ───────────────────────────────────────────
-// Returns a presigned upload URL for ticket attachment (public, rate-limited by IP).
 router.post("/public/support/upload-url", async (req, res): Promise<void> => {
   const base = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
   if (!base) { res.status(500).json({ error: "No public domain configured" }); return; }

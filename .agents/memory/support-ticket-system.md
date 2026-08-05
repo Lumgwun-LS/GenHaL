@@ -44,6 +44,27 @@ Object storage presigned URLs pattern (same as media-library.ts):
 4. `publicUrl = https://${PUBLIC_APP_DOMAIN || REPLIT_DEV_DOMAIN}/api/media/${objectId}`
 5. `trySetObjectEntityAclPolicy(objectPath, { owner: "system:vendor-upload", visibility: "public" })`
 
+## Customer verification gate (added after initial build)
+The form now uses an email-first flow:
+1. `GET /public/support/:vendorId/check-customer?email=xxx` — checks CRM leads + orders
+2. Returning customer: pre-fill name, skip sign-up step
+3. New visitor: show name + phone fields; on submit creates a CRM lead + platform_contact
+4. `customerEmail` is now required on ticket submission.
+
+## Platform contacts table
+`platform_contacts` — cross-vendor email-keyed registry. One row per unique email.
+`upsertPlatformContact()` + `upsertVendorLead()` helpers in `lib/platform-contacts.ts`.
+Called from support-public.ts on every ticket submission.
+support_tickets.leadId + support_tickets.platformContactId link ticket → CRM + registry.
+
+## Email open tracking (replaces hardcoded 22% simulation)
+`email_tracking_events` — one row per outgoing email, with a unique token.
+Pixel endpoint: `GET /api/track/pixel/:token` (public, no auth) — returns 1×1 GIF, increments openCount.
+`createTrackingEvent()` + `buildPixelUrl()` helpers exported from `routes/email-tracking.ts`.
+`wrapVendorEmail()` now accepts optional `trackingPixelUrl` — injects pixel before `</div>`.
+Email campaigns now create one tracking event per recipient; `open_count` on campaign row starts at 0 and increments as pixels fire (via `UPDATE email_campaigns SET open_count = open_count + 1`).
+Migration: `0120_platform_contacts_email_tracking.sql` (applied to dev DB).
+
 ## Vendor notification on new ticket
 `vendorNotificationsTable` insert with `type: "support_ticket"` and `resourceId: ticketId`.
 No push notification wired yet — future enhancement.

@@ -83,6 +83,7 @@ import blogRouter from "./blog";
 import publicBlogRouter from "./public-blog";
 import supportPublicRouter from "./support-public";
 import supportRouter from "./support";
+import emailTrackingRouter from "./email-tracking";
 
 const router: IRouter = Router();
 
@@ -158,6 +159,9 @@ router.use(publicBlogRouter);
 
 // Public support ticket form — no auth required (customer-facing)
 router.use(supportPublicRouter);
+
+// Email open-tracking pixel — public, no auth
+router.use(emailTrackingRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

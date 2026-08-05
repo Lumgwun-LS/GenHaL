@@ -34,6 +34,10 @@ export const supportTicketsTable = pgTable("support_tickets", {
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   /** When the vendor last viewed this ticket's messages */
   vendorLastReadAt: timestamp("vendor_last_read_at", { withTimezone: true }),
+  /** CRM lead row for this customer (set when ticket is submitted) */
+  leadId: integer("lead_id"),
+  /** Platform-wide contact registry row for this customer */
+  platformContactId: integer("platform_contact_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

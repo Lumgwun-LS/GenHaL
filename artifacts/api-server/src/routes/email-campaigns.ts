@@ -206,8 +206,9 @@ router.post("/email-campaigns/:id/send", async (req, res): Promise<void> => {
         status: "sent",
         sentCount,
         sentAt: new Date(),
-        openCount: Math.floor(sentCount * 0.22),
-        clickCount: Math.floor(sentCount * 0.05),
+        // openCount starts at 0 and is incremented by the tracking pixel handler
+        openCount: 0,
+        clickCount: 0,
       }).where(eq(emailCampaignsTable.id, campaign.id));
     });
   } catch (err) {
@@ -261,23 +262,36 @@ router.post("/email-campaigns/:id/send", async (req, res): Promise<void> => {
 
     let delivered = 0;
     for (const r of recipients) {
-      const firstName = r.name.split(" ")[0] ?? r.name;
-      const html = wrapVendorEmail({ bodyHtml:
-        `<p style="font-size:16px;margin:0 0 12px">Hi ${escapeHtml(firstName)},</p>
-         <div style="font-size:15px;line-height:1.7;margin:0 0 24px;white-space:pre-wrap">${escapeHtml(campaign.name)}</div>
-         <p style="font-size:12px;color:#9ca3af">Sent by ${escapeHtml(vendorName)} via Awa Biz Suite.</p>`,
-      });
-      await sendEmail({ to: r.email, subject: campaign.name, html }).catch(() => null);
-      delivered++;
+      try {
+        // Create a tracking event row before sending — gives us the pixel token
+        const { createTrackingEvent, buildPixelUrl } = await import("./email-tracking");
+        const token = await createTrackingEvent({
+          emailType: "campaign",
+          recipientEmail: r.email,
+          campaignId: campaign.id,
+          vendorId,
+        }).catch(() => null as string | null);
+
+        const pixelUrl = token ? buildPixelUrl(token) : undefined;
+
+        const firstName = r.name.split(" ")[0] ?? r.name;
+        const html = wrapVendorEmail({
+          trackingPixelUrl: pixelUrl,
+          bodyHtml:
+            `<p style="font-size:16px;margin:0 0 12px">Hi ${escapeHtml(firstName)},</p>
+             <div style="font-size:15px;line-height:1.7;margin:0 0 24px;white-space:pre-wrap">${escapeHtml(campaign.body ?? campaign.name)}</div>
+             <p style="font-size:12px;color:#9ca3af">Sent by ${escapeHtml(vendorName)} via Awa Biz Suite.</p>`,
+        });
+        await sendEmail({ to: r.email, subject: campaign.subject ?? campaign.name, html });
+        delivered++;
+      } catch {
+        // Skip failed recipients; don't abort the whole campaign
+      }
     }
 
     if (delivered > 0) {
       await db.update(emailCampaignsTable)
-        .set({
-          sentCount: delivered,
-          openCount: Math.floor(delivered * 0.22),
-          clickCount: Math.floor(delivered * 0.05),
-        })
+        .set({ sentCount: delivered })
         .where(eq(emailCampaignsTable.id, campaign.id))
         .catch(() => null);
     }

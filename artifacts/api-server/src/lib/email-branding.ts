@@ -33,9 +33,12 @@ export type EmailAction = {
  * Wraps a piece of body HTML with a consistent header, an optional call-to-action
  * button, and a footer with social + cross-service links. `bodyHtml` should be the
  * content-specific part only (heading, message, etc.) — no outer <div>/wrapper.
+ *
+ * Pass `trackingPixelUrl` (from `buildPixelUrl(token)`) to inject a 1×1 open-tracking
+ * pixel at the bottom of the email. Omit for emails that don't need tracking.
  */
-export function wrapVendorEmail(opts: { bodyHtml: string; action?: EmailAction }): string {
-  const { bodyHtml, action } = opts;
+export function wrapVendorEmail(opts: { bodyHtml: string; action?: EmailAction; trackingPixelUrl?: string }): string {
+  const { bodyHtml, action, trackingPixelUrl } = opts;
 
   const actionHtml = action
     ? `
@@ -64,6 +67,7 @@ export function wrapVendorEmail(opts: { bodyHtml: string; action?: EmailAction }
       <p style="text-align: center; font-size: 12px; color: #999; margin: 0 0 12px;">${escapeHtml(BRAND_NAME)}</p>
       <p style="text-align: center; margin: 0 0 10px;">${socialLinksHtml}</p>
       <p style="text-align: center; margin: 0;">${serviceLinksHtml}</p>
+      ${trackingPixelUrl ? `<img src="${escapeAttr(trackingPixelUrl)}" width="1" height="1" style="display:block;width:1px;height:1px;overflow:hidden;opacity:0;border:0" alt="">` : ""}
     </div>`;
 }
 
