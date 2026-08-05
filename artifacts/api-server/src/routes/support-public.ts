@@ -17,10 +17,12 @@
 import { Router } from "express";
 import crypto from "crypto";
 import {
-  db, vendorsTable, productsTable, ordersTable,
+  db, vendorsTable, productsTable, ordersTable, orderItemsTable,
+  invoicesTable, invoiceItemsTable, paymentsTable,
+  vendorCustomerMessagesTable, vendorWebsitesTable,
   supportTicketsTable, supportTicketMessagesTable, vendorNotificationsTable,
 } from "@workspace/db";
-import { eq, and, desc, count, gte, sql } from "drizzle-orm";
+import { eq, and, desc, count, gte, sql, inArray, ne, sum, max, countDistinct } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { getBillingPeriodStart, getEffectiveTier } from "../lib/usage";
 import { upsertPlatformContact, upsertVendorLead, findVendorLead } from "../lib/platform-contacts";
@@ -308,6 +310,477 @@ router.post("/public/support/ticket/:token/messages", async (req, res): Promise<
   });
 
   res.status(201).json(msg);
+});
+
+// ── GET /public/support/:vendorId/my-transactions ─────────────────────────────
+// Returns all orders for a given customer email at this vendor, with line items.
+// Used by the vendor website's embedded customer dashboard.
+router.get("/public/support/:vendorId/my-transactions", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  const orders = await db
+    .select({
+      id:            ordersTable.id,
+      status:        ordersTable.status,
+      paymentStatus: ordersTable.paymentStatus,
+      totalAmount:   ordersTable.totalAmount,
+      currency:      ordersTable.currency,
+      notes:         ordersTable.notes,
+      createdAt:     ordersTable.createdAt,
+      updatedAt:     ordersTable.updatedAt,
+    })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.vendorId, vendorId),
+      eq(sql`lower(${ordersTable.customerEmail})`, email.trim().toLowerCase()),
+    ))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(50);
+
+  const orderIds = orders.map(o => o.id);
+  const items = orderIds.length > 0
+    ? await db
+        .select({
+          id:          orderItemsTable.id,
+          orderId:     orderItemsTable.orderId,
+          productName: orderItemsTable.productName,
+          quantity:    orderItemsTable.quantity,
+          unitPrice:   orderItemsTable.unitPrice,
+          totalPrice:  orderItemsTable.totalPrice,
+        })
+        .from(orderItemsTable)
+        .where(inArray(orderItemsTable.orderId, orderIds))
+    : [];
+
+  const itemsByOrder = items.reduce<Record<number, typeof items>>((acc, item) => {
+    (acc[item.orderId] ??= []).push(item);
+    return acc;
+  }, {});
+
+  res.json({
+    orders: orders.map(o => ({ ...o, items: itemsByOrder[o.id] ?? [] })),
+  });
+});
+
+// ── GET /public/support/:vendorId/my-invoices ─────────────────────────────────
+// Returns all non-draft invoices for a given customer email at this vendor, with line items.
+router.get("/public/support/:vendorId/my-invoices", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  const invoices = await db
+    .select({
+      id:             invoicesTable.id,
+      customerName:   invoicesTable.customerName,
+      currency:       invoicesTable.currency,
+      subtotal:       invoicesTable.subtotal,
+      discountAmount: invoicesTable.discountAmount,
+      taxAmount:      invoicesTable.taxAmount,
+      totalAmount:    invoicesTable.totalAmount,
+      status:         invoicesTable.status,
+      dueDate:        invoicesTable.dueDate,
+      shareToken:     invoicesTable.shareToken,
+      notes:          invoicesTable.notes,
+      sentAt:         invoicesTable.sentAt,
+      createdAt:      invoicesTable.createdAt,
+      updatedAt:      invoicesTable.updatedAt,
+    })
+    .from(invoicesTable)
+    .where(and(
+      eq(invoicesTable.vendorId, vendorId),
+      eq(sql`lower(${invoicesTable.customerEmail})`, email.trim().toLowerCase()),
+      ne(invoicesTable.status, "draft"),
+    ))
+    .orderBy(desc(invoicesTable.createdAt))
+    .limit(50);
+
+  const invoiceIds = invoices.map(i => i.id);
+  const items = invoiceIds.length > 0
+    ? await db
+        .select({
+          id:          invoiceItemsTable.id,
+          invoiceId:   invoiceItemsTable.invoiceId,
+          description: invoiceItemsTable.description,
+          quantity:    invoiceItemsTable.quantity,
+          unitPrice:   invoiceItemsTable.unitPrice,
+          totalPrice:  invoiceItemsTable.totalPrice,
+          type:        invoiceItemsTable.type,
+        })
+        .from(invoiceItemsTable)
+        .where(inArray(invoiceItemsTable.invoiceId, invoiceIds))
+    : [];
+
+  const itemsByInvoice = items.reduce<Record<number, typeof items>>((acc, item) => {
+    (acc[item.invoiceId] ??= []).push(item);
+    return acc;
+  }, {});
+
+  res.json({
+    invoices: invoices.map(i => ({
+      ...i,
+      sentAt:    i.sentAt?.toISOString() ?? null,
+      createdAt: i.createdAt.toISOString(),
+      updatedAt: i.updatedAt.toISOString(),
+      items:     itemsByInvoice[i.id] ?? [],
+    })),
+  });
+});
+
+// ── GET /public/support/:vendorId/my-products ─────────────────────────────────
+// Returns distinct products a customer has ordered from this vendor, aggregated.
+router.get("/public/support/:vendorId/my-products", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  const rows = await db
+    .select({
+      productId:     orderItemsTable.productId,
+      productName:   orderItemsTable.productName,
+      category:      productsTable.category,
+      imageUrl:      productsTable.imageUrl,
+      currency:      ordersTable.currency,
+      totalQty:      sum(orderItemsTable.quantity).mapWith(Number),
+      totalSpent:    sum(orderItemsTable.totalPrice),
+      orderCount:    countDistinct(ordersTable.id).mapWith(Number),
+      lastOrderedAt: max(ordersTable.createdAt),
+    })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, and(
+      eq(orderItemsTable.orderId, ordersTable.id),
+      eq(ordersTable.vendorId, vendorId),
+      eq(sql`lower(${ordersTable.customerEmail})`, email.trim().toLowerCase()),
+    ))
+    .leftJoin(productsTable, eq(orderItemsTable.productId, productsTable.id))
+    .groupBy(
+      orderItemsTable.productId,
+      orderItemsTable.productName,
+      productsTable.category,
+      productsTable.imageUrl,
+      ordersTable.currency,
+    )
+    .orderBy(desc(max(ordersTable.createdAt)));
+
+  res.json({
+    products: rows.map(r => ({
+      productId:     r.productId,
+      productName:   r.productName,
+      category:      r.category ?? null,
+      imageUrl:      r.imageUrl ?? null,
+      currency:      r.currency,
+      totalQty:      r.totalQty ?? 0,
+      totalSpent:    r.totalSpent ?? "0",
+      orderCount:    r.orderCount ?? 0,
+      lastOrderedAt: r.lastOrderedAt?.toISOString() ?? new Date().toISOString(),
+    })),
+  });
+});
+
+// ── GET /public/support/:vendorId/my-refunds ──────────────────────────────────
+// Returns all refunded payments linked to this customer's orders at this vendor.
+router.get("/public/support/:vendorId/my-refunds", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  // Refunded payments linked to this customer's orders
+  const refunds = await db
+    .select({
+      paymentId:         paymentsTable.id,
+      provider:          paymentsTable.provider,
+      providerReference: paymentsTable.providerReference,
+      amount:            paymentsTable.amount,
+      currency:          paymentsTable.currency,
+      refundedAt:        paymentsTable.updatedAt,
+      orderId:           paymentsTable.orderId,
+    })
+    .from(paymentsTable)
+    .innerJoin(ordersTable, and(
+      eq(paymentsTable.orderId, ordersTable.id),
+      eq(ordersTable.vendorId, vendorId),
+      eq(sql`lower(${ordersTable.customerEmail})`, email.trim().toLowerCase()),
+    ))
+    .where(eq(paymentsTable.status, "refunded"))
+    .orderBy(desc(paymentsTable.updatedAt))
+    .limit(50);
+
+  // Fetch order items for each refunded order
+  const orderIds = refunds.map(r => r.orderId).filter((id): id is number => id !== null);
+  const items = orderIds.length > 0
+    ? await db
+        .select({
+          id:          orderItemsTable.id,
+          orderId:     orderItemsTable.orderId,
+          productName: orderItemsTable.productName,
+          quantity:    orderItemsTable.quantity,
+          unitPrice:   orderItemsTable.unitPrice,
+          totalPrice:  orderItemsTable.totalPrice,
+        })
+        .from(orderItemsTable)
+        .where(inArray(orderItemsTable.orderId, orderIds))
+    : [];
+
+  const itemsByOrder = items.reduce<Record<number, typeof items>>((acc, item) => {
+    (acc[item.orderId] ??= []).push(item);
+    return acc;
+  }, {});
+
+  res.json({
+    refunds: refunds.map(r => ({
+      paymentId:         r.paymentId,
+      provider:          r.provider,
+      providerReference: r.providerReference,
+      amount:            r.amount,
+      currency:          r.currency,
+      refundedAt:        r.refundedAt.toISOString(),
+      orderId:           r.orderId,
+      orderItems:        r.orderId ? (itemsByOrder[r.orderId] ?? []) : [],
+    })),
+  });
+});
+
+// ── GET /public/support/:vendorId/my-messages ─────────────────────────────────
+// Returns all messages in the thread between this customer and the vendor.
+// Also marks all vendor_to_customer messages as read.
+router.get("/public/support/:vendorId/my-messages", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+  const normalised = email.trim().toLowerCase();
+
+  const msgs = await db
+    .select({
+      id:        vendorCustomerMessagesTable.id,
+      direction: vendorCustomerMessagesTable.direction,
+      subject:   vendorCustomerMessagesTable.subject,
+      body:      vendorCustomerMessagesTable.body,
+      read:      vendorCustomerMessagesTable.read,
+      createdAt: vendorCustomerMessagesTable.createdAt,
+    })
+    .from(vendorCustomerMessagesTable)
+    .where(and(
+      eq(vendorCustomerMessagesTable.vendorId, vendorId),
+      eq(sql`lower(${vendorCustomerMessagesTable.customerEmail})`, normalised),
+    ))
+    .orderBy(vendorCustomerMessagesTable.createdAt);
+
+  // Mark all vendor→customer messages as read when customer opens inbox
+  await db.update(vendorCustomerMessagesTable)
+    .set({ read: true, readAt: new Date() })
+    .where(and(
+      eq(vendorCustomerMessagesTable.vendorId, vendorId),
+      eq(sql`lower(${vendorCustomerMessagesTable.customerEmail})`, normalised),
+      eq(vendorCustomerMessagesTable.direction, "vendor_to_customer"),
+      eq(vendorCustomerMessagesTable.read, false),
+    ));
+
+  res.json({
+    messages: msgs.map(m => ({ ...m, createdAt: m.createdAt.toISOString() })),
+  });
+});
+
+// ── POST /public/support/:vendorId/my-messages ────────────────────────────────
+// Customer sends a message to the vendor.
+router.post("/public/support/:vendorId/my-messages", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  if (isNaN(vendorId)) { res.status(400).json({ error: "Invalid vendorId" }); return; }
+
+  const { customerEmail, customerName, subject, body } = req.body as {
+    customerEmail: string; customerName?: string; subject?: string; body: string;
+  };
+  if (!customerEmail?.trim()) { res.status(400).json({ error: "customerEmail is required" }); return; }
+  if (!body?.trim())           { res.status(400).json({ error: "body is required" }); return; }
+
+  // Confirm vendor exists
+  const [vendor] = await db.select({ id: vendorsTable.id })
+    .from(vendorsTable).where(eq(vendorsTable.id, vendorId)).limit(1);
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const [msg] = await db.insert(vendorCustomerMessagesTable).values({
+    vendorId,
+    customerId:    null,
+    customerEmail: customerEmail.trim().toLowerCase(),
+    customerName:  customerName?.trim() || customerEmail.split("@")[0],
+    subject:       subject?.trim() || null,
+    body:          body.trim(),
+    direction:     "customer_to_vendor",
+    read:          false,
+  }).returning();
+
+  res.status(201).json({ message: { ...msg!, createdAt: msg!.createdAt.toISOString() } });
+});
+
+// ── GET /public/support/:vendorId/my-vendors ──────────────────────────────────
+// Returns all vendors this customer has interacted with (orders, tickets, messages).
+router.get("/public/support/:vendorId/my-vendors", async (req, res): Promise<void> => {
+  const { email } = req.query as { email?: string };
+  if (!email?.trim()) { res.status(400).json({ error: "email is required" }); return; }
+  const normalised = email.trim().toLowerCase();
+
+  // 1) Vendors from orders — with aggregated spend + order count
+  const orderRows = await db
+    .select({
+      vendorId:   ordersTable.vendorId,
+      currency:   ordersTable.currency,
+      orderCount: countDistinct(ordersTable.id).mapWith(Number),
+      totalSpent: sum(ordersTable.totalAmount),
+      lastAt:     max(ordersTable.createdAt),
+    })
+    .from(ordersTable)
+    .where(eq(sql`lower(${ordersTable.customerEmail})`, normalised))
+    .groupBy(ordersTable.vendorId, ordersTable.currency);
+
+  // 2) Vendors from support tickets
+  const ticketRows = await db
+    .select({
+      vendorId: supportTicketsTable.vendorId,
+      lastAt:   max(supportTicketsTable.createdAt),
+    })
+    .from(supportTicketsTable)
+    .where(eq(sql`lower(${supportTicketsTable.customerEmail})`, normalised))
+    .groupBy(supportTicketsTable.vendorId);
+
+  // 3) Vendors from messages
+  const msgRows = await db
+    .select({
+      vendorId: vendorCustomerMessagesTable.vendorId,
+      lastAt:   max(vendorCustomerMessagesTable.createdAt),
+    })
+    .from(vendorCustomerMessagesTable)
+    .where(eq(sql`lower(${vendorCustomerMessagesTable.customerEmail})`, normalised))
+    .groupBy(vendorCustomerMessagesTable.vendorId);
+
+  // Merge into a map keyed by vendorId
+  type VMap = {
+    orderCount: number; totalSpent: string; currency: string;
+    lastAt: Date | null; sources: Set<string>;
+  };
+  const vmap = new Map<number, VMap>();
+
+  for (const r of orderRows) {
+    vmap.set(r.vendorId, {
+      orderCount: r.orderCount, totalSpent: r.totalSpent ?? "0",
+      currency: r.currency, lastAt: r.lastAt ?? null,
+      sources: new Set(["orders"]),
+    });
+  }
+  for (const r of ticketRows) {
+    const existing = vmap.get(r.vendorId);
+    if (existing) {
+      existing.sources.add("tickets");
+      if (r.lastAt && (!existing.lastAt || r.lastAt > existing.lastAt)) existing.lastAt = r.lastAt;
+    } else {
+      vmap.set(r.vendorId, { orderCount: 0, totalSpent: "0", currency: "USD", lastAt: r.lastAt ?? null, sources: new Set(["tickets"]) });
+    }
+  }
+  for (const r of msgRows) {
+    const existing = vmap.get(r.vendorId);
+    if (existing) {
+      existing.sources.add("messages");
+      if (r.lastAt && (!existing.lastAt || r.lastAt > existing.lastAt)) existing.lastAt = r.lastAt;
+    } else {
+      vmap.set(r.vendorId, { orderCount: 0, totalSpent: "0", currency: "USD", lastAt: r.lastAt ?? null, sources: new Set(["messages"]) });
+    }
+  }
+
+  if (vmap.size === 0) { res.json({ vendors: [] }); return; }
+
+  const vendorIds = Array.from(vmap.keys());
+
+  // Fetch vendor details + site slugs
+  const vendors = await db
+    .select({
+      id:          vendorsTable.id,
+      name:        vendorsTable.name,
+      logoUrl:     vendorsTable.logoUrl,
+      description: vendorsTable.description,
+      category:    vendorsTable.category,
+      city:        vendorsTable.city,
+      country:     vendorsTable.country,
+      siteSlug:    vendorWebsitesTable.slug,
+      sitePublished: vendorWebsitesTable.published,
+      siteLogo:    vendorWebsitesTable.logoUrl,
+    })
+    .from(vendorsTable)
+    .leftJoin(vendorWebsitesTable, and(
+      eq(vendorWebsitesTable.vendorId, vendorsTable.id),
+      eq(vendorWebsitesTable.published, true),
+    ))
+    .where(inArray(vendorsTable.id, vendorIds));
+
+  const result = vendors
+    .map(v => {
+      const stats = vmap.get(v.id)!;
+      return {
+        vendorId:          v.id,
+        name:              v.name,
+        logoUrl:           v.siteLogo ?? v.logoUrl ?? null,
+        description:       v.description ?? null,
+        category:          v.category ?? null,
+        city:              v.city ?? null,
+        country:           v.country ?? null,
+        siteSlug:          v.siteSlug ?? null,
+        orderCount:        stats.orderCount,
+        totalSpent:        stats.totalSpent,
+        currency:          stats.currency,
+        lastInteractionAt: stats.lastAt?.toISOString() ?? new Date().toISOString(),
+        sources:           Array.from(stats.sources),
+      };
+    })
+    .sort((a, b) => new Date(b.lastInteractionAt).getTime() - new Date(a.lastInteractionAt).getTime());
+
+  res.json({ vendors: result });
+});
+
+// ── GET /public/support/:vendorId/my-tickets ──────────────────────────────────
+// Returns all tickets for a given customer email at this vendor.
+// Used by the vendor website's embedded support portal to show ticket history.
+router.get("/public/support/:vendorId/my-tickets", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.vendorId ?? "");
+  const { email } = req.query as { email?: string };
+
+  if (isNaN(vendorId) || !email?.trim()) {
+    res.status(400).json({ error: "vendorId and email are required" }); return;
+  }
+
+  const tickets = await db
+    .select({
+      id:          supportTicketsTable.id,
+      ticketToken: supportTicketsTable.ticketToken,
+      subject:     supportTicketsTable.subject,
+      category:    supportTicketsTable.category,
+      status:      supportTicketsTable.status,
+      priority:    supportTicketsTable.priority,
+      productName: supportTicketsTable.productName,
+      createdAt:   supportTicketsTable.createdAt,
+      updatedAt:   supportTicketsTable.updatedAt,
+    })
+    .from(supportTicketsTable)
+    .where(and(
+      eq(supportTicketsTable.vendorId, vendorId),
+      eq(sql`lower(${supportTicketsTable.customerEmail})`, email.trim().toLowerCase()),
+    ))
+    .orderBy(desc(supportTicketsTable.updatedAt))
+    .limit(50);
+
+  res.json({ tickets });
 });
 
 // ── POST /public/support/upload-url ───────────────────────────────────────────

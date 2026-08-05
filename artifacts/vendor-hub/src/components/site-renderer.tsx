@@ -4,6 +4,7 @@
  * Features: scroll-triggered CSS animations, animated hero, mobile nav, responsive.
  */
 import { useEffect, useRef, useState } from "react";
+import { SiteSupportPortal } from "./site-support-portal";
 
 export type SiteSectionType =
   | "hero" | "about" | "products" | "gallery"
@@ -1558,6 +1559,12 @@ export function SiteRenderer({ data, className, immediateReveal }: {
                 {s.type === "products" ? str(s.content.title) || "Products" : s.type.charAt(0).toUpperCase() + s.type.slice(1)}
               </a>
             ))}
+            {data.vendorId && (
+              <a href="#site-support" className="sv-navlink"
+                style={{ color: palette.text + "cc", textDecoration: "none", fontSize: ".9rem", fontWeight: 600 }}>
+                Support
+              </a>
+            )}
           </nav>
 
           {/* Hamburger (mobile) */}
@@ -1600,6 +1607,15 @@ export function SiteRenderer({ data, className, immediateReveal }: {
                 {s.type === "products" ? str(s.content.title) || "Products" : s.type.charAt(0).toUpperCase() + s.type.slice(1)}
               </a>
             ))}
+            {data.vendorId && (
+              <a href="#site-support" onClick={closeMobile}
+                style={{
+                  color: palette.text, textDecoration: "none", fontSize: "1rem",
+                  fontWeight: 600, padding: "0.5rem 0",
+                }}>
+                Support
+              </a>
+            )}
           </div>
         )}
       </header>
@@ -1622,6 +1638,18 @@ export function SiteRenderer({ data, className, immediateReveal }: {
           </div>
         );
       })}
+
+      {/* ── Support portal ───────────────────────────────────────────────────── */}
+      {data.vendorId && (
+        <div id="site-support">
+          <SiteSupportPortal
+            vendorId={data.vendorId}
+            themeColor={themeColor}
+            palette={palette}
+            vendorName={vendorName}
+          />
+        </div>
+      )}
 
       {/* ── Footer ───────────────────────────────────────────────────────────── */}
       <footer className="sv-obs" style={{ background: palette.text, color: "#fff", padding: "3.5rem 2rem 2rem" }}>
