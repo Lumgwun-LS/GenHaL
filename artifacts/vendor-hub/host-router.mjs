@@ -22,8 +22,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PORT = parseInt(process.env.PORT || '22220', 10);
 
-const CLERK_PROXY_PATH = '/api/__clerk';
-const API_SERVER_HOST  = 'api.awajimaaai.com';
+const CLERK_PROXY_PATH  = '/api/__clerk';
+// clerk.awajimaaai.com is the Clerk custom FAPI domain (encoded in pk_live key).
+// api.awajimaaai.com is a different host that serves HTML — do NOT use it for Clerk.
+const CLERK_FAPI_HOST   = 'clerk.awajimaaai.com';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -89,34 +91,35 @@ function serveStatic(root, reqUrl, res) {
 }
 
 /**
- * Proxy a request to the API server's Clerk proxy endpoint.
- * Preserves all headers and streams both request and response bodies.
+ * Proxy a request to the Clerk FAPI (clerk.awajimaaai.com).
+ * Strips the /api/__clerk prefix so that, e.g.:
+ *   incoming: /api/__clerk/v1/environment
+ *   forwarded: /v1/environment
  */
 function proxyClerk(req, res) {
   const incomingHost = req.headers['x-forwarded-host'] || req.headers['host'] || '';
 
-  // Build forwarded headers — preserve everything the client sent,
-  // update host/forwarded fields so the API server sees the real origin.
+  // Strip the /api/__clerk mount-point so Clerk FAPI receives the bare /v1/... path.
+  const clerkPath = (req.url || '/').replace(/^\/api\/__clerk/, '') || '/';
+
   const headers = {
     ...req.headers,
-    host: API_SERVER_HOST,
+    host: CLERK_FAPI_HOST,
     'x-forwarded-host': incomingHost,
     'x-forwarded-proto': 'https',
   };
-  // Remove connection-level headers that shouldn't be forwarded.
   delete headers['connection'];
   delete headers['keep-alive'];
 
   const options = {
-    hostname: API_SERVER_HOST,
+    hostname: CLERK_FAPI_HOST,
     port: 443,
     method: req.method,
-    path: req.url,   // preserves /api/__clerk + any sub-path + query string
+    path: clerkPath,   // /v1/... (prefix stripped)
     headers,
   };
 
   const proxyReq = httpsRequest(options, (proxyRes) => {
-    // Strip hop-by-hop headers from the upstream response.
     const resHeaders = { ...proxyRes.headers };
     delete resHeaders['connection'];
     delete resHeaders['keep-alive'];
@@ -128,13 +131,10 @@ function proxyClerk(req, res) {
 
   proxyReq.on('error', (err) => {
     console.error('[clerk-proxy] upstream error:', err.message);
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'text/plain' });
-    }
+    if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end('Bad Gateway');
   });
 
-  // Forward the request body (e.g. POST /v1/client/sign_ins).
   req.pipe(proxyReq, { end: true });
 }
 
@@ -155,7 +155,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Host router listening on :${PORT}`);
-  console.log(`  /api/__clerk          → proxy → ${API_SERVER_HOST}`);
+  console.log(`  /api/__clerk/*        → proxy (prefix stripped) → ${CLERK_FAPI_HOST}`);
   console.log(`  awajimaaappstore.com  → ${APP_STORE_ROOT}`);
   console.log(`  * (default)           → ${BIZ_SUITE_ROOT}`);
 });
