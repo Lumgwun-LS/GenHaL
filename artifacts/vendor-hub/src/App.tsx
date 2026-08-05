@@ -91,12 +91,14 @@ import TicketDetailPage from "@/pages/support/ticket";
 declare const __CF_PAGES__: boolean;
 
 // Must run after all imports — sets the base URL for all Orval-generated hooks.
-setBaseUrl(__CF_PAGES__ ? 'https://account.awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
+setBaseUrl(__CF_PAGES__ ? 'https://awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 // On Cloudflare Pages the live key works on any domain — no proxy needed.
 // On Replit dev/preview the proxy routes Clerk FAPI through the API server.
-const clerkProxyUrl = __CF_PAGES__ ? undefined : import.meta.env.VITE_CLERK_PROXY_URL;
+// On CF Pages (awajimaaai.com): route Clerk through /api/__clerk so the _redirects
+// edge-proxy forwards to clerk.awajimaaai.com — no direct browser → clerk. DNS needed.
+const clerkProxyUrl = __CF_PAGES__ ? 'https://awajimaaai.com/api/__clerk' : import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function stripBase(path: string): string {

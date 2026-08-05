@@ -1,3 +1,8 @@
-# Redirect everything to the live app on the subdomain.
-# Remove this once awajimaaai.com has a valid Clerk live key.
-/*  https://account.awajimaaai.com/:splat  301
+# Proxy Clerk FAPI calls — strip /api/__clerk so Clerk receives the bare /v1/... path
+/api/__clerk/*  https://clerk.awajimaaai.com/:splat  200
+
+# Proxy all other API calls to the Replit API server
+/api/*  https://account.awajimaaai.com/api/:splat  200
+
+# SPA fallback — all unmatched paths serve index.html for React Router
+/*  /index.html  200
