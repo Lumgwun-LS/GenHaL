@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import Layout from "@/components/layout";
+import { Layout } from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, Users, ShoppingCart, MessageSquare, TicketCheck, TrendingUp } from "lucide-react";

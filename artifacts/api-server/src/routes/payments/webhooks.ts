@@ -28,6 +28,7 @@ import { resolveGatewayField } from "../../lib/platform-gateways";
 import { resolvePaystackKey } from "../../lib/vendor-keys";
 import { syncSaleFromPayment } from "../../lib/sales-sync";
 import { notifyVendorPaymentStatus } from "../../lib/push";
+import { notifyCustomerRefund } from "../../lib/customer-refund-notify";
 import { sendEmail } from "../../lib/mailer";
 import { wrapVendorEmail, escapeHtml } from "../../lib/email-branding";
 import { getSubscriptionPlan } from "../../lib/subscription-plans";
@@ -1148,6 +1149,25 @@ async function attemptPaystackLateArrivalRefund(reference: string): Promise<void
     console.info(
       `[paystack webhook] late-arrival refund issued — payment=${payment.id} vendor=${payment.vendorId} reference=${reference}`,
     );
+
+    // Notify the customer (best-effort — never rethrow).
+    if (payment.orderId) {
+      const [order] = await db
+        .select({ customerEmail: ordersTable.customerEmail, customerName: ordersTable.customerName })
+        .from(ordersTable)
+        .where(eq(ordersTable.id, payment.orderId))
+        .limit(1);
+      if (order?.customerEmail) {
+        void notifyCustomerRefund({
+          customerEmail: order.customerEmail,
+          customerName:  order.customerName ?? null,
+          amount:        payment.amount,
+          currency:      payment.currency ?? "NGN",
+          orderId:       payment.orderId,
+          vendorName:    vendor?.name ?? null,
+        });
+      }
+    }
   } catch (err) {
     await escalateLateArrivalRefundFailure(
       payment,
@@ -1739,6 +1759,25 @@ async function attemptFlutterwaveLateArrivalRefund(reference: string): Promise<v
     console.info(
       `[flutterwave webhook] late-arrival refund issued — payment=${payment.id} vendor=${payment.vendorId} reference=${reference} flwTxId=${flwTxId}`,
     );
+
+    // Notify the customer (best-effort — never rethrow).
+    if (payment.orderId) {
+      const [order] = await db
+        .select({ customerEmail: ordersTable.customerEmail, customerName: ordersTable.customerName })
+        .from(ordersTable)
+        .where(eq(ordersTable.id, payment.orderId))
+        .limit(1);
+      if (order?.customerEmail) {
+        void notifyCustomerRefund({
+          customerEmail: order.customerEmail,
+          customerName:  order.customerName ?? null,
+          amount:        payment.amount,
+          currency:      payment.currency ?? "NGN",
+          orderId:       payment.orderId,
+          vendorName:    null,
+        });
+      }
+    }
   } catch (err) {
     await escalateLateArrivalRefundFailure(
       payment,

@@ -150,8 +150,10 @@ type MyVendor = {
   sources: string[];
 };
 
-type View = "email" | "list" | "new-ticket" | "detail";
-type Tab  = "support" | "transactions" | "invoices" | "products" | "refunds" | "messages" | "vendors";
+type ReportRef = { type: string; id: string | number; label: string };
+
+type View = "email" | "list" | "new-ticket" | "detail" | "report";
+type Tab  = "support" | "transactions" | "invoices" | "products" | "refunds" | "messages" | "vendors" | "report";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -255,6 +257,14 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [myVendors, setMyVendors]             = useState<MyVendor[]>([]);
   const [loadingVendors, setLoadingVendors]   = useState(false);
+  // ── Report Vendor state ─────────────────────────────────────────────────────
+  const [reportRef, setReportRef]             = useState<ReportRef | null>(null);
+  const [reportCategory, setReportCategory]   = useState("transaction");
+  const [reportSubject, setReportSubject]     = useState("");
+  const [reportBody, setReportBody]           = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportResult, setReportResult]       = useState<{ id: number } | null>(null);
+  const [reportError, setReportError]         = useState<string | null>(null);
   const [msgBody, setMsgBody]                 = useState("");
   const [msgSubject, setMsgSubject]           = useState("");
   const [sendingMsg, setSendingMsg]           = useState(false);
@@ -413,6 +423,59 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
       setRefunds(data.refunds ?? []);
     } catch { /* silent — show empty state */ }
     setLoadingRefunds(false);
+  }
+
+  const REPORT_CATS = [
+    { value: "transaction", label: "🛒 Transaction Issue",  desc: "Wrong charge, missing item, not as described" },
+    { value: "product",     label: "📦 Product Issue",      desc: "Counterfeit, damaged, or dangerous product" },
+    { value: "invoice",     label: "📋 Invoice Dispute",    desc: "Incorrect invoice or unexpected charge" },
+    { value: "message",     label: "💬 Message Abuse",      desc: "Harassment, threats, or inappropriate content" },
+    { value: "fraud",       label: "🚨 Fraud / Scam",       desc: "I believe this vendor is operating fraudulently" },
+    { value: "other",       label: "📝 Other",               desc: "Something else not listed above" },
+  ];
+
+  function openReport(ref: ReportRef) {
+    const catLabel: Record<string, string> = {
+      transaction: "Issue with Order", product: "Product Issue",
+      invoice: "Invoice Dispute", message: "Message Abuse",
+    };
+    setReportRef(ref);
+    setReportCategory(ref.type);
+    setReportSubject(`${catLabel[ref.type] ?? "Report"} – ${ref.label}`);
+    setReportBody("");
+    setReportResult(null);
+    setReportError(null);
+    setActiveTab("report");
+    setView("list");
+  }
+
+  async function submitReport() {
+    if (!reportBody.trim()) return;
+    setSubmittingReport(true); setReportError(null);
+    try {
+      const orderId = reportRef?.type === "transaction" ? parseInt(String(reportRef.id)) || undefined : undefined;
+      const fullBody = reportRef
+        ? `[Reference: ${reportRef.type} – ${reportRef.label}]\n\n${reportBody.trim()}`
+        : reportBody.trim();
+      const r = await fetch(`${BASE_URL}/api/complaints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorId,
+          orderId,
+          customerEmail: email.trim(),
+          customerName:  customerName.trim() || undefined,
+          subject:       reportSubject.trim() || "Vendor Report",
+          body:          fullBody,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      setReportResult({ id: data.id });
+    } catch {
+      setReportError("Failed to submit. Please try again.");
+    }
+    setSubmittingReport(false);
   }
 
   async function fetchVendors(emailAddr: string) {
@@ -626,16 +689,16 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
               </p>
               <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: palette.text + "80" }}>
                 Signed in as <span style={{ fontWeight: 700 }}>{email}</span>
-                <button onClick={() => { setView("email"); setCustomerInfo(null); setTickets([]); setTransactions([]); setInvoices([]); setProducts([]); setRefunds([]); setMessages([]); setMyVendors([]); setActiveTab("support"); }} style={{ marginLeft: 10, background: "none", border: "none", cursor: "pointer", color: themeColor, fontSize: "0.78rem", fontWeight: 700, padding: 0 }}>Change</button>
+                <button onClick={() => { setView("email"); setCustomerInfo(null); setTickets([]); setTransactions([]); setInvoices([]); setProducts([]); setRefunds([]); setMessages([]); setMyVendors([]); setReportRef(null); setReportResult(null); setActiveTab("support"); }} style={{ marginLeft: 10, background: "none", border: "none", cursor: "pointer", color: themeColor, fontSize: "0.78rem", fontWeight: 700, padding: 0 }}>Change</button>
               </p>
             </div>
 
             {/* Tabs */}
             <div style={{ display: "flex", borderBottom: "2px solid rgba(0,0,0,0.08)", marginBottom: "1.25rem", gap: 0 }}>
-              {(["support", "transactions", "invoices", "products", "refunds", "messages", "vendors"] as Tab[]).map(tab => {
-                const labels: Record<Tab, string> = { support: "🎫 Support", transactions: "🧾 Orders", invoices: "📋 Invoices", products: "📦 Products", refunds: "💸 Refunds", messages: "💬 Messages", vendors: "🏪 My Vendors" };
+              {(["support", "transactions", "invoices", "products", "refunds", "messages", "vendors", "report"] as Tab[]).map(tab => {
+                const labels: Record<Tab, string> = { support: "🎫 Support", transactions: "🧾 Orders", invoices: "📋 Invoices", products: "📦 Products", refunds: "💸 Refunds", messages: "💬 Messages", vendors: "🏪 My Vendors", report: "🚩 Report" };
                 const unreadMsgs = messages.filter(m => m.direction === "vendor_to_customer" && !m.read).length;
-                const counts: Record<Tab, number> = { support: tickets.length, transactions: transactions.length, invoices: invoices.length, products: products.length, refunds: refunds.length, messages: unreadMsgs || messages.length, vendors: myVendors.length };
+                const counts: Record<Tab, number> = { support: tickets.length, transactions: transactions.length, invoices: invoices.length, products: products.length, refunds: refunds.length, messages: unreadMsgs || messages.length, vendors: myVendors.length, report: 0 };
                 const active = activeTab === tab;
                 return (
                   <button key={tab} onClick={() => setActiveTab(tab)} style={{
@@ -761,18 +824,26 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                             <p style={{ margin: 0, fontWeight: 800, fontSize: "1rem", color: palette.text }}>
                               Total: <span style={{ color: themeColor }}>{tx.currency} {parseFloat(tx.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </p>
-                            <button
-                              style={btn(false)}
-                              onClick={() => {
-                                setFormOrder(String(tx.id));
-                                setFormSubject(`Issue with Order #${tx.id}`);
-                                setFormCategory("order");
-                                setSubmitResult(null);
-                                setView("new-ticket");
-                              }}
-                            >
-                              🎫 Get Support
-                            </button>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button
+                                style={btn(false)}
+                                onClick={() => {
+                                  setFormOrder(String(tx.id));
+                                  setFormSubject(`Issue with Order #${tx.id}`);
+                                  setFormCategory("order");
+                                  setSubmitResult(null);
+                                  setView("new-ticket");
+                                }}
+                              >
+                                🎫 Get Support
+                              </button>
+                              <button
+                                style={{ ...btn(false), borderColor: "#ef4444", color: "#ef4444" }}
+                                onClick={() => openReport({ type: "transaction", id: tx.id, label: `Order #${tx.id} – ${tx.currency} ${parseFloat(tx.totalAmount).toFixed(2)}` })}
+                              >
+                                🚩 Report
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -875,18 +946,26 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                                 {inv.notes}
                               </p>
                             ) : <span />}
-                            <button
-                              style={btn(false)}
-                              onClick={() => {
-                                setFormInvoice(String(inv.id));
-                                setFormSubject(`Query on Invoice #${inv.id}`);
-                                setFormCategory("invoice");
-                                setSubmitResult(null);
-                                setView("new-ticket");
-                              }}
-                            >
-                              🎫 Dispute / Query
-                            </button>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button
+                                style={btn(false)}
+                                onClick={() => {
+                                  setFormInvoice(String(inv.id));
+                                  setFormSubject(`Query on Invoice #${inv.id}`);
+                                  setFormCategory("invoice");
+                                  setSubmitResult(null);
+                                  setView("new-ticket");
+                                }}
+                              >
+                                🎫 Dispute / Query
+                              </button>
+                              <button
+                                style={{ ...btn(false), borderColor: "#ef4444", color: "#ef4444" }}
+                                onClick={() => openReport({ type: "invoice", id: inv.id, label: `Invoice #${inv.id}` })}
+                              >
+                                🚩 Report
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -957,7 +1036,7 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                             </div>
 
                             {/* Support CTA */}
-                            <div style={{ marginTop: "0.75rem" }}>
+                            <div style={{ marginTop: "0.75rem", display: "flex", gap: 8, flexWrap: "wrap" }}>
                               <button
                                 style={btn(false)}
                                 onClick={() => {
@@ -968,6 +1047,12 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                                 }}
                               >
                                 🎫 Get Support
+                              </button>
+                              <button
+                                style={{ ...btn(false), borderColor: "#ef4444", color: "#ef4444" }}
+                                onClick={() => openReport({ type: "product", id: p.productId ?? p.productName, label: p.productName })}
+                              >
+                                🚩 Report
                               </button>
                             </div>
                           </div>
@@ -1263,6 +1348,12 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                             >
                               🎫 Get Support
                             </button>
+                            <button
+                              style={{ ...btn(false), fontSize: "0.82rem", padding: "0.45rem 1rem", borderColor: "#ef4444", color: "#ef4444" }}
+                              onClick={() => openReport({ type: "fraud", id: v.vendorId, label: v.name })}
+                            >
+                              🚩 Report Vendor
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1270,6 +1361,175 @@ export function SiteSupportPortal({ vendorId, themeColor, palette, vendorName = 
                   );
                 })}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Report tab ───────────────────────────────────────────────────── */}
+        {view === "list" && activeTab === "report" && (
+          <div style={card}>
+            {reportResult ? (
+              /* Success state */
+              <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+                <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>✅</div>
+                <p style={{ margin: "0 0 0.4rem", fontWeight: 800, fontSize: "1.1rem", color: palette.text }}>Report Submitted</p>
+                <p style={{ margin: "0 0 0.3rem", color: palette.text + "70", fontSize: "0.88rem" }}>
+                  Reference <strong style={{ color: palette.text }}>#{reportResult.id}</strong>
+                </p>
+                <p style={{ margin: "0 0 1.75rem", color: palette.text + "65", fontSize: "0.82rem", maxWidth: 360, marginInline: "auto" }}>
+                  Our team has received your report and will review it. We'll contact you at <strong>{email}</strong> if we need more information.
+                </p>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button style={btn()} onClick={() => { setReportResult(null); setReportRef(null); setReportBody(""); setReportSubject(""); }}>Submit Another</button>
+                  <button style={btn(false)} onClick={() => setActiveTab("support")}>Back to Support</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.1rem", fontWeight: 800, color: palette.text }}>🚩 Report a Problem</h3>
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: palette.text + "65", lineHeight: 1.5 }}>
+                    Use this form to report an issue with this vendor directly to our platform team. We review every report confidentially.
+                  </p>
+                </div>
+
+                {/* Pre-filled reference pill */}
+                {reportRef && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.25rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "0.55rem 0.85rem" }}>
+                    <span style={{ fontSize: "0.8rem", color: "#b91c1c", fontWeight: 700 }}>Reporting about:</span>
+                    <span style={{ fontSize: "0.8rem", color: "#7f1d1d", flex: 1 }}>{reportRef.label}</span>
+                    <button
+                      onClick={() => { setReportRef(null); setReportSubject(""); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#b91c1c", fontSize: "1rem", padding: 0, lineHeight: 1 }}
+                      title="Clear"
+                    >×</button>
+                  </div>
+                )}
+
+                {/* Category chips */}
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: palette.text + "80", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Category
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {REPORT_CATS.map(cat => (
+                      <button
+                        key={cat.value}
+                        title={cat.desc}
+                        onClick={() => {
+                          setReportCategory(cat.value);
+                          if (!reportRef) {
+                            setReportSubject(cat.label.replace(/^[^\s]+\s/, ""));
+                          }
+                        }}
+                        style={{
+                          padding: "0.4rem 0.85rem", borderRadius: 20, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+                          border: reportCategory === cat.value ? `2px solid ${themeColor}` : "2px solid transparent",
+                          background: reportCategory === cat.value ? themeColor + "18" : (palette.text === "#fff" ? "rgba(255,255,255,0.1)" : "#f3f4f6"),
+                          color: reportCategory === cat.value ? themeColor : palette.text + "90",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                  {reportCategory && (
+                    <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: palette.text + "55" }}>
+                      {REPORT_CATS.find(c => c.value === reportCategory)?.desc}
+                    </p>
+                  )}
+                </div>
+
+                {/* Reference picker — only shown when no pre-filled ref */}
+                {!reportRef && ["transaction", "invoice", "product"].includes(reportCategory) && (
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: palette.text + "80", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Select {reportCategory === "transaction" ? "Order" : reportCategory === "invoice" ? "Invoice" : "Product"} (optional)
+                    </label>
+                    <select
+                      value=""
+                      onChange={e => {
+                        if (!e.target.value) return;
+                        const [id, ...rest] = e.target.value.split("|");
+                        const label = rest.join("|");
+                        setReportRef({ type: reportCategory, id, label });
+                        setReportSubject(`${REPORT_CATS.find(c => c.value === reportCategory)?.label.replace(/^[^\s]+\s/, "") ?? "Issue"} – ${label}`);
+                      }}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1.5px solid ${palette.text}30`, background: palette.bg, color: palette.text, fontSize: "0.85rem" }}
+                    >
+                      <option value="">— Choose one —</option>
+                      {reportCategory === "transaction" && transactions.map(tx => (
+                        <option key={tx.id} value={`${tx.id}|Order #${tx.id} – ${tx.currency} ${parseFloat(tx.totalAmount).toFixed(2)}`}>
+                          Order #{tx.id} — {tx.currency} {parseFloat(tx.totalAmount).toFixed(2)} ({tx.paymentStatus})
+                        </option>
+                      ))}
+                      {reportCategory === "invoice" && invoices.map(inv => (
+                        <option key={inv.id} value={`${inv.id}|Invoice #${inv.id}`}>
+                          Invoice #{inv.id}
+                        </option>
+                      ))}
+                      {reportCategory === "product" && products.map(p => (
+                        <option key={p.productId ?? p.productName} value={`${p.productId ?? p.productName}|${p.productName}`}>
+                          {p.productName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Subject */}
+                <div style={{ marginBottom: "1.1rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: palette.text + "80", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={reportSubject}
+                    onChange={e => setReportSubject(e.target.value)}
+                    placeholder="Brief summary of the issue"
+                    maxLength={300}
+                    style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1.5px solid ${palette.text}30`, background: palette.bg, color: palette.text, fontSize: "0.88rem", boxSizing: "border-box" }}
+                  />
+                </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: palette.text + "80", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Description <span style={{ color: "#ef4444" }}>*</span>
+                  </label>
+                  <textarea
+                    value={reportBody}
+                    onChange={e => setReportBody(e.target.value)}
+                    placeholder="Describe what happened in as much detail as possible. Include dates, amounts, and any relevant context."
+                    rows={5}
+                    maxLength={4000}
+                    style={{ width: "100%", padding: "0.65rem 0.75rem", borderRadius: 8, border: `1.5px solid ${palette.text}30`, background: palette.bg, color: palette.text, fontSize: "0.85rem", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                  />
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: palette.text + "45", textAlign: "right" }}>
+                    {reportBody.length}/4000
+                  </p>
+                </div>
+
+                {reportError && (
+                  <p style={{ margin: "0 0 1rem", color: "#ef4444", fontSize: "0.82rem" }}>⚠️ {reportError}</p>
+                )}
+
+                {/* Disclaimer + submit */}
+                <div style={{ borderTop: `1px solid ${palette.text}15`, paddingTop: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                  <p style={{ margin: 0, fontSize: "0.72rem", color: palette.text + "50", flex: 1 }}>
+                    Reports are reviewed by our trust &amp; safety team. False reports may result in account action.
+                  </p>
+                  <button
+                    style={{ ...btn(), opacity: !reportBody.trim() || submittingReport ? 0.5 : 1 }}
+                    disabled={!reportBody.trim() || submittingReport}
+                    onClick={submitReport}
+                  >
+                    {submittingReport ? "Submitting…" : "🚩 Submit Report"}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}

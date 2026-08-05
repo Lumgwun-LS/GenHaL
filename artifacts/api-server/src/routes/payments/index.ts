@@ -17,6 +17,7 @@ import stripeConnectRouter from "./stripe-connect";
 import { retryWebhookEventById } from "./webhooks";
 import { resolveGatewayField, callWithPlatformStripe, getPlatformCredentials } from "../../lib/platform-gateways";
 import { notifyVendorPaymentStatus } from "../../lib/push";
+import { notifyCustomerRefund } from "../../lib/customer-refund-notify";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -350,17 +351,14 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
 
   await notifyVendorPaymentStatus(payment.vendorId, "refunded", payment.amount, payment.currency);
 
-  // Notify the customer by email (best-effort — don't fail the refund if email fails).
+  // Notify the customer via in-app notification + email (best-effort).
   if (customerEmail) {
-    const amountStr = `${parseFloat(payment.amount).toFixed(2)} ${(payment.currency ?? "USD").toUpperCase()}`;
-    const bodyHtml = `
-      <p>Hello${customerName ? ` ${escapeHtml(customerName)}` : ""},</p>
-      <p>Your refund of <strong>${escapeHtml(amountStr)}</strong> for order #${escapeHtml(String(payment.orderId))} has been processed and is on its way back to your original payment method.</p>
-      <p>Depending on your bank, it may take 3–10 business days to appear.</p>
-      <p>If you have any questions, please contact the seller directly.</p>
-    `;
-    sendEmail({ to: customerEmail, subject: "Your refund has been processed", html: wrapVendorEmail({ bodyHtml }) }).catch((e) => {
-      console.warn("[payments] customer refund email failed:", e);
+    void notifyCustomerRefund({
+      customerEmail,
+      customerName,
+      amount:   payment.amount,
+      currency: payment.currency ?? "USD",
+      orderId:  payment.orderId ?? null,
     });
   }
 
