@@ -1,6 +1,8 @@
-# Proxy /dl/:packageName directly to the API download route.
-# Makes https://awajimaaappstore.com/dl/com.example.app a permanent shareable APK link.
-/dl/*   https://account.awajimaaai.com/api/store/dl/:splat  200
+# Download links: redirect browser directly to the API download route.
+# Status 302 (browser redirect) works for cross-origin on Cloudflare Pages.
+# Status 200 (proxy) only works for same-origin rewrites — do NOT use it here.
+# Chain: awajimaaappstore.com/dl/:pkg → API /api/store/dl/:pkg → 302 → R2 APK
+/dl/*   https://account.awajimaaai.com/api/store/dl/:splat  302
 
 # Proxy all other API calls (including Clerk proxy at /api/__clerk/*) to the API server.
 /api/*  https://account.awajimaaai.com/api/:splat  200

@@ -183,6 +183,7 @@ function AppRoutes() {
             <Route path="/developer/signup" component={DeveloperSignup} />
             <Route path="/developer" component={DeveloperPortal} />
             <Route path="/admin" component={Admin} />
+            <Route path="/browse" component={Search} />
             <Route path="/dl/:identifier" component={DownloadRedirect} />
             <Route path="/unsubscribe" component={Unsubscribe} />
             <Route path="/sign-in/*?" component={SignInPage} />
