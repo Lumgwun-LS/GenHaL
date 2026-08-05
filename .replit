@@ -38,6 +38,9 @@ PUBLIC_APP_DOMAIN = "awajimaaappstore.com"
 GCS_BUCKET_NAME = "awajimaa-ai"
 CI = "true"
 
+[userenv.production]
+VITE_CLERK_PROXY_URL = "https://api.awajimaaai.com/api/__clerk"
+
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
 
