@@ -3813,6 +3813,7 @@ export default router;
   try {
     const NEW_APK   = "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/downloads/1785998121011-5f7efea146a67a03.apk";
     const NEW_VER   = "1.1.0";
+    const ICON_URL  = "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/icons/awajimaa-app-icon.jpg";
     const SCREENSHOTS = [
       "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998126505-0f2bef00a96a48d7.png",
       "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998127620-6eb9d626d461c5d7.png",
@@ -3850,20 +3851,22 @@ export default router;
       .set({ status: "deprecated" } as any)
       .where(and(eq(storeAppVersionsTable.appId, 1), sql`version != ${NEW_VER}`, eq(storeAppVersionsTable.status, "live")));
 
-    // 3. Sync app-level download_url + version label + screenshots
+    // 3. Sync app-level download_url + version label + screenshots + icon
     const currentScreenshots = (app as any).screenshots as string[] ?? [];
     const needsScreenshots = currentScreenshots.length < SCREENSHOTS.length;
     const badUrl = (app as any).downloadUrl !== NEW_APK;
-    if (badUrl || needsScreenshots) {
+    const badIcon = (app as any).iconUrl !== ICON_URL;
+    if (badUrl || needsScreenshots || badIcon) {
       await db.update(storeAppsTable)
         .set({
           downloadUrl: NEW_APK,
           currentVersion: NEW_VER,
           screenshots: SCREENSHOTS,
+          iconUrl: ICON_URL,
           updatedAt: new Date(),
         } as any)
         .where(eq(storeAppsTable.id, 1));
-      logger.info("[store-fix] Updated Awajimaa App download_url + screenshots");
+      logger.info("[store-fix] Updated Awajimaa App download_url + screenshots + icon");
     }
   } catch (err) {
     logger.warn({ err }, "[store-fix] Could not run Awajimaa App fix — will retry on next restart");
