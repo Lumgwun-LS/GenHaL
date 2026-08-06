@@ -42,12 +42,14 @@ export default function Footer() {
         {/* Brand */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ background: "#fff", borderRadius: 8, padding: "3px 8px", display: "flex", alignItems: "center" }}>
-              <img src="/logo-color.jpg" alt="Awajimaa" style={{ height: 26, width: "auto", objectFit: "contain" }} />
-            </div>
+            <img
+              src="/awajimaa-app-icon.jpg"
+              alt="Awajimaa App Store"
+              style={{ height: 38, width: 38, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
+            />
             <div>
-              <div style={{ fontWeight: 800, fontSize: 13, color: "#00c853", letterSpacing: 1, textTransform: "uppercase" }}>APP STORE</div>
-              <div style={{ fontSize: 9, color: "#5a6478", letterSpacing: 0.5, marginTop: 1 }}>by Awajimaa</div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: "#e8eaf0", letterSpacing: "-0.2px" }}>Awajimaa</div>
+              <div style={{ fontWeight: 700, fontSize: 10, color: "#00c853", letterSpacing: 1, textTransform: "uppercase", marginTop: 1 }}>App Store</div>
             </div>
           </div>
           <p style={{ fontSize: 13, color: "#7a8499", lineHeight: 1.7, maxWidth: 260 }}>

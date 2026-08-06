@@ -319,14 +319,22 @@ function MobileDrawer({
                   marginBottom: 16,
                 }}
               >
-                <div
-                  style={{
-                    fontWeight: 800,
-                    fontSize: 16,
-                    color: "#e8eaf0",
-                  }}
-                >
-                  Awajimaa
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <img
+                    src="/awajimaa-app-icon.jpg"
+                    alt="Awajimaa App Store"
+                    style={{ height: 26, width: 26, borderRadius: 6, objectFit: "cover" }}
+                  />
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 15,
+                      color: "#e8eaf0",
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    Awajimaa <span style={{ color: "#00c853" }}>App Store</span>
+                  </div>
                 </div>
                 <motion.button
                   onClick={onClose}
@@ -554,37 +562,42 @@ export default function Nav() {
                 textDecoration: "none",
               }}
             >
-              <div
+              <img
+                src="/awajimaa-app-icon.jpg"
+                alt="Awajimaa App Store"
                 style={{
-                  background: "#fff",
+                  height: 34,
+                  width: 34,
                   borderRadius: 8,
-                  padding: "3px 8px",
-                  display: "flex",
-                  alignItems: "center",
+                  display: "block",
+                  objectFit: "cover",
+                  flexShrink: 0,
                 }}
-              >
-                <img
-                  src="/logo-color.jpg"
-                  alt="Awajimaa"
+              />
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+                <div
                   style={{
-                    height: 28,
-                    width: "auto",
-                    display: "block",
-                    objectFit: "contain",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: "#e8eaf0",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "-0.2px",
                   }}
-                />
-              </div>
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: 10,
-                  color: "#00c853",
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                APP STORE
+                >
+                  Awajimaa
+                </div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 10,
+                    color: "#00c853",
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  App Store
+                </div>
               </div>
             </Link>
           </motion.div>
