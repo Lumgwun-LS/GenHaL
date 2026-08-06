@@ -3806,3 +3806,25 @@ router.delete("/admin/platform-apps/:id", requireAuth(), async (req: any, res: a
 });
 
 export default router;
+
+// ─── Startup data-fix: correct circular download_url for Awajimaa App ────────
+// The initial seed set download_url to the API route itself (circular).
+// This idempotent fix runs once on module load and is safe to leave in place.
+(async function fixCircularDownloadUrl() {
+  try {
+    const CIRCULAR_URL = "https://awajimaaappstore.com/api/store/dl/awajimaa-app";
+    const APK_URL = "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/downloads/1785904199246-7f2786647ca2-awajimaa-app-v1.0.0.apk";
+    const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, 1) });
+    if (app && (app as any).downloadUrl === CIRCULAR_URL) {
+      await db.update(storeAppsTable)
+        .set({ downloadUrl: APK_URL, currentVersion: "1.0.0", updatedAt: new Date() } as any)
+        .where(eq(storeAppsTable.id, 1));
+      await db.update(storeAppVersionsTable)
+        .set({ status: "live", activatedAt: new Date() } as any)
+        .where(and(eq(storeAppVersionsTable.appId, 1), eq(storeAppVersionsTable.version, "1.0.0")));
+      logger.info("[store-fix] Corrected circular download_url for app id=1");
+    }
+  } catch (err) {
+    logger.warn({ err }, "[store-fix] Could not run startup download_url fix — will retry on next restart");
+  }
+})();
