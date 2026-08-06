@@ -71,6 +71,7 @@ import { requireAuth, getAuth, clerkClient } from "@clerk/express";
 import { logger } from "../lib/logger";
 import { notifyAdminSignup } from "../lib/signup-notify";
 import { sendLoginNotification } from "../lib/login-notify";
+import { sendSlackAlert } from "../lib/slack";
 import crypto from "crypto";
 
 const router = Router();
@@ -1459,6 +1460,33 @@ router.patch("/developers/me/apps/:id", requireAuth(), async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(storeAppsTable.id, appId)).returning();
     res.json(serializeApp(updated, dev));
+
+    // ── Notify admins if the download URL changed on a live/approved app (fire-and-forget) ──
+    const urlChanged = downloadUrl && downloadUrl !== app.downloadUrl;
+    const isApproved = (app as any).status === "approved";
+    if (urlChanged && isApproved) {
+      const adminEmails = (process.env.SUPER_ADMIN_EMAILS ?? "Lumgwunsolutions@gmail.com")
+        .split(",").map((s) => s.trim()).filter(Boolean);
+      sendEmail({
+        to: adminEmails.join(", "),
+        subject: `[App Store] Download URL updated for "${app.name}"`,
+        html: wrapVendorEmail({
+          bodyHtml: `
+            <h1 style="text-align:center;font-size:18px;color:#1a1a1a;margin:0 0 16px;">🔗 App Download URL Changed</h1>
+            <p style="font-size:14px;line-height:1.6;color:#444;">
+              <strong>${escapeHtml(dev.displayName ?? "A developer")}</strong> updated the download link for
+              <strong>${escapeHtml(app.name)}</strong>.
+            </p>
+            <table style="width:100%;font-size:13px;color:#444;border-collapse:collapse;margin:16px 0;">
+              <tr><td style="padding:6px 0;color:#888;width:80px;">Old URL</td><td style="padding:6px 0;word-break:break-all;">${escapeHtml(String(app.downloadUrl ?? ""))}</td></tr>
+              <tr><td style="padding:6px 0;color:#888;">New URL</td><td style="padding:6px 0;word-break:break-all;"><a href="${escapeHtml(downloadUrl)}" style="color:#00c853;">${escapeHtml(downloadUrl)}</a></td></tr>
+              ${currentVersion ? `<tr><td style="padding:6px 0;color:#888;">Version</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(String(currentVersion))}</td></tr>` : ""}
+            </table>
+            <p style="font-size:13px;color:#888;">The new URL is live immediately. Verify it's safe before users download it.</p>`,
+        }),
+      }).catch(() => {});
+      sendSlackAlert(`🔗 *App Download URL Changed*\nApp: *${app.name}* | Developer: ${dev.displayName ?? "unknown"}\nNew URL: ${downloadUrl}`).catch(() => {});
+    }
   } catch (err) {
     logger.error({ err }, "updateApp error");
     res.status(500).json({ error: "Internal server error" });
@@ -1496,9 +1524,37 @@ router.post("/developers/me/apps/:id/versions", requireAuth(), async (req, res) 
       version,
       releaseNotes: releaseNotes ?? null,
       fileUrl: downloadUrl ?? null,
+      // status defaults to 'pending' — admin must activate via /admin/apps/:id/versions/:versionId/activate
     }).returning();
-    if (downloadUrl) await db.update(storeAppsTable).set({ currentVersion: version, downloadUrl, updatedAt: new Date() }).where(eq(storeAppsTable.id, appId));
     res.status(201).json({ ...v, createdAt: v.createdAt.toISOString() });
+
+    // ── Notify admins that a new version is pending activation (fire-and-forget) ──
+    const adminEmails = (process.env.SUPER_ADMIN_EMAILS ?? "Lumgwunsolutions@gmail.com")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    const STORE_ADMIN = "https://awajimaaappstore.com/app-store/admin";
+    const notifyHtml = wrapVendorEmail({
+      bodyHtml: `
+        <h1 style="text-align:center;font-size:18px;color:#1a1a1a;margin:0 0 16px;">📦 New App Version Pending</h1>
+        <p style="font-size:14px;line-height:1.6;color:#444;">
+          <strong>${escapeHtml(dev.displayName ?? "A developer")}</strong> submitted a new version of
+          <strong>${escapeHtml(app.name)}</strong> that needs your review before it goes live.
+        </p>
+        <table style="width:100%;font-size:13px;color:#444;border-collapse:collapse;margin:16px 0;">
+          <tr><td style="padding:6px 0;color:#888;width:120px;">App</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(app.name)}</td></tr>
+          <tr><td style="padding:6px 0;color:#888;">Version</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(version)}</td></tr>
+          ${releaseNotes ? `<tr><td style="padding:6px 0;color:#888;vertical-align:top;">Notes</td><td style="padding:6px 0;">${escapeHtml(releaseNotes)}</td></tr>` : ""}
+          ${downloadUrl ? `<tr><td style="padding:6px 0;color:#888;vertical-align:top;">Download</td><td style="padding:6px 0;word-break:break-all;"><a href="${escapeHtml(downloadUrl)}" style="color:#00c853;">${escapeHtml(downloadUrl)}</a></td></tr>` : ""}
+        </table>
+        <p style="font-size:14px;color:#444;">
+          Go to the <a href="${STORE_ADMIN}" style="color:#00c853;">Admin Panel → Apps → Versions</a> to activate this version.
+        </p>`,
+    });
+    sendEmail({
+      to: adminEmails.join(", "),
+      subject: `[App Store] New version v${version} pending for "${app.name}"`,
+      html: notifyHtml,
+    }).catch(() => {});
+    sendSlackAlert(`📦 *New App Version Pending*\nApp: *${app.name}* | Version: *v${version}* by ${dev.displayName ?? "developer"}\nActivate it in the Admin Panel: ${STORE_ADMIN}`).catch(() => {});
   } catch (err) {
     logger.error({ err }, "addVersion error");
     res.status(500).json({ error: "Internal server error" });
@@ -3852,22 +3908,24 @@ export default router;
       logger.info("[store-fix] Updated Awajimaa App v1.1.0 to live");
     }
 
-    // 3. Sync app-level download_url + version label + screenshots + icon
+    // 3. Sync app-level download_url + version label + screenshots + icon + status
     const currentScreenshots = (app as any).screenshots as string[] ?? [];
     const needsScreenshots = currentScreenshots.length < SCREENSHOTS.length;
     const badUrl = (app as any).downloadUrl !== NEW_APK;
     const badIcon = (app as any).iconUrl !== ICON_URL;
-    if (badUrl || needsScreenshots || badIcon) {
+    const badStatus = (app as any).status !== "approved";  // must never be 'live'
+    if (badUrl || needsScreenshots || badIcon || badStatus) {
       await db.update(storeAppsTable)
         .set({
           downloadUrl: NEW_APK,
           currentVersion: NEW_VER,
           screenshots: SCREENSHOTS,
           iconUrl: ICON_URL,
+          status: "approved",
           updatedAt: new Date(),
         } as any)
         .where(eq(storeAppsTable.id, 1));
-      logger.info("[store-fix] Updated Awajimaa App download_url + screenshots + icon");
+      logger.info("[store-fix] Updated Awajimaa App download_url + screenshots + icon + status");
     }
   } catch (err) {
     logger.warn({ err }, "[store-fix] Could not run Awajimaa App fix — will retry on next restart");
