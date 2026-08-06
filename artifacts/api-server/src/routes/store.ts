@@ -3826,7 +3826,12 @@ export default router;
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, 1) });
     if (!app) return;
 
-    // 1. Register v1.1.0 if it doesn't exist yet
+    // 1. Deprecate old live versions FIRST (before inserting new live row)
+    await db.update(storeAppVersionsTable)
+      .set({ status: "deprecated" } as any)
+      .where(and(eq(storeAppVersionsTable.appId, 1), sql`version != ${NEW_VER}`, eq(storeAppVersionsTable.status, "live")));
+
+    // 2. Register/update v1.1.0
     const existing = await db.query.storeAppVersionsTable.findFirst({
       where: and(eq(storeAppVersionsTable.appId, 1), eq(storeAppVersionsTable.version, NEW_VER)),
     });
@@ -3840,16 +3845,12 @@ export default router;
         activatedAt: new Date(),
       } as any);
       logger.info("[store-fix] Registered Awajimaa App v1.1.0");
-    } else if (existing.status !== "live") {
+    } else if (existing.status !== "live" || existing.fileUrl !== NEW_APK) {
       await db.update(storeAppVersionsTable)
         .set({ status: "live", fileUrl: NEW_APK, activatedAt: new Date() } as any)
         .where(eq(storeAppVersionsTable.id, existing.id));
+      logger.info("[store-fix] Updated Awajimaa App v1.1.0 to live");
     }
-
-    // 2. Deprecate old live versions
-    await db.update(storeAppVersionsTable)
-      .set({ status: "deprecated" } as any)
-      .where(and(eq(storeAppVersionsTable.appId, 1), sql`version != ${NEW_VER}`, eq(storeAppVersionsTable.status, "live")));
 
     // 3. Sync app-level download_url + version label + screenshots + icon
     const currentScreenshots = (app as any).screenshots as string[] ?? [];
