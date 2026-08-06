@@ -1,7 +1,8 @@
-# Proxy Clerk FAPI calls — strip /api/__clerk so Clerk receives the bare /v1/... path
-/api/__clerk/*  https://clerk.awajimaaai.com/:splat  200
+# Clerk API proxy → goes through the API server's clerkProxyMiddleware → frontend-api.clerk.dev
+# No DNS for clerk.awajimaaai.com needed — the API server handles it all.
+/api/__clerk/*  https://account.awajimaaai.com/api/__clerk/:splat  200
 
-# Proxy all other API calls to the Replit API server
+# All other API calls → API server
 /api/*  https://account.awajimaaai.com/api/:splat  200
 
 # SPA fallback — all unmatched paths serve index.html for React Router

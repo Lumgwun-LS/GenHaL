@@ -4,28 +4,24 @@
  * awajimaaappstore.com / www.awajimaaappstore.com
  *   → serves artifacts/app-store/dist/standalone  (built with BASE_PATH=/)
  *
- * everything else (awajimaaai.com, *.replit.app, etc.)
+ * everything else (awajimaaai.com, account.awajimaaai.com, *.replit.app, etc.)
  *   → serves artifacts/vendor-hub/dist/public      (Awa Biz Suite)
  *
- * /api/__clerk (any host)
- *   → proxied to api.awajimaaai.com/api/__clerk    (Clerk Frontend API proxy)
+ * NOTE: /api/* (including /api/__clerk/*) is handled by Replit's path-based routing
+ * before reaching this server — the api-server artifact intercepts those paths.
+ * The API server's clerkProxyMiddleware forwards /api/__clerk/* to frontend-api.clerk.dev.
+ * No Clerk proxy is needed here.
  *
  * Both static roots serve as SPAs: any unmatched path falls back to index.html.
  */
 
 import { createServer } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PORT = parseInt(process.env.PORT || '22220', 10);
-
-const CLERK_PROXY_PATH  = '/api/__clerk';
-// clerk.awajimaaai.com is the Clerk custom FAPI domain (encoded in pk_live key).
-// api.awajimaaai.com is a different host that serves HTML — do NOT use it for Clerk.
-const CLERK_FAPI_HOST   = 'clerk.awajimaaai.com';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -90,61 +86,7 @@ function serveStatic(root, reqUrl, res) {
   }
 }
 
-/**
- * Proxy a request to the Clerk FAPI (clerk.awajimaaai.com).
- * Strips the /api/__clerk prefix so that, e.g.:
- *   incoming: /api/__clerk/v1/environment
- *   forwarded: /v1/environment
- */
-function proxyClerk(req, res) {
-  const incomingHost = req.headers['x-forwarded-host'] || req.headers['host'] || '';
-
-  // Strip the /api/__clerk mount-point so Clerk FAPI receives the bare /v1/... path.
-  const clerkPath = (req.url || '/').replace(/^\/api\/__clerk/, '') || '/';
-
-  const headers = {
-    ...req.headers,
-    host: CLERK_FAPI_HOST,
-    'x-forwarded-host': incomingHost,
-    'x-forwarded-proto': 'https',
-  };
-  delete headers['connection'];
-  delete headers['keep-alive'];
-
-  const options = {
-    hostname: CLERK_FAPI_HOST,
-    port: 443,
-    method: req.method,
-    path: clerkPath,   // /v1/... (prefix stripped)
-    headers,
-  };
-
-  const proxyReq = httpsRequest(options, (proxyRes) => {
-    const resHeaders = { ...proxyRes.headers };
-    delete resHeaders['connection'];
-    delete resHeaders['keep-alive'];
-    delete resHeaders['transfer-encoding'];
-
-    res.writeHead(proxyRes.statusCode || 502, resHeaders);
-    proxyRes.pipe(res, { end: true });
-  });
-
-  proxyReq.on('error', (err) => {
-    console.error('[clerk-proxy] upstream error:', err.message);
-    if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
-    res.end('Bad Gateway');
-  });
-
-  req.pipe(proxyReq, { end: true });
-}
-
 const server = createServer((req, res) => {
-  // Route Clerk proxy requests regardless of host.
-  if (req.url && (req.url === CLERK_PROXY_PATH || req.url.startsWith(CLERK_PROXY_PATH + '/'))) {
-    proxyClerk(req, res);
-    return;
-  }
-
   const host = (req.headers.host || '').split(':')[0].toLowerCase();
   const isAppStore =
     host === 'awajimaaappstore.com' ||
@@ -155,7 +97,6 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Host router listening on :${PORT}`);
-  console.log(`  /api/__clerk/*        → proxy (prefix stripped) → ${CLERK_FAPI_HOST}`);
   console.log(`  awajimaaappstore.com  → ${APP_STORE_ROOT}`);
   console.log(`  * (default)           → ${BIZ_SUITE_ROOT}`);
 });
