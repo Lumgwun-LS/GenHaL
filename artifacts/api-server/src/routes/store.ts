@@ -3807,24 +3807,65 @@ router.delete("/admin/platform-apps/:id", requireAuth(), async (req: any, res: a
 
 export default router;
 
-// ─── Startup data-fix: correct circular download_url for Awajimaa App ────────
-// The initial seed set download_url to the API route itself (circular).
-// This idempotent fix runs once on module load and is safe to leave in place.
-(async function fixCircularDownloadUrl() {
+// ─── Startup data-fix: update Awajimaa App to v1.1.0 + add screenshots ───────
+// Idempotent — checks current state before writing. Safe to leave in place.
+(async function fixAwajimaaApp() {
   try {
-    const CIRCULAR_URL = "https://awajimaaappstore.com/api/store/dl/awajimaa-app";
-    const APK_URL = "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/downloads/1785904199246-7f2786647ca2-awajimaa-app-v1.0.0.apk";
+    const NEW_APK   = "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/downloads/1785998121011-5f7efea146a67a03.apk";
+    const NEW_VER   = "1.1.0";
+    const SCREENSHOTS = [
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998126505-0f2bef00a96a48d7.png",
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998127620-6eb9d626d461c5d7.png",
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998128643-b1dc11426145aa0b.png",
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998129557-fea6246049d4310a.png",
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998130444-4ceab2ac236c7a07.png",
+      "https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/app-store/screenshots/1785998131455-6bfcadffa2980d1a.png",
+    ];
+
     const app = await db.query.storeAppsTable.findFirst({ where: eq(storeAppsTable.id, 1) });
-    if (app && (app as any).downloadUrl === CIRCULAR_URL) {
-      await db.update(storeAppsTable)
-        .set({ downloadUrl: APK_URL, currentVersion: "1.0.0", updatedAt: new Date() } as any)
-        .where(eq(storeAppsTable.id, 1));
+    if (!app) return;
+
+    // 1. Register v1.1.0 if it doesn't exist yet
+    const existing = await db.query.storeAppVersionsTable.findFirst({
+      where: and(eq(storeAppVersionsTable.appId, 1), eq(storeAppVersionsTable.version, NEW_VER)),
+    });
+    if (!existing) {
+      await db.insert(storeAppVersionsTable).values({
+        appId: 1,
+        version: NEW_VER,
+        fileUrl: NEW_APK,
+        fileSize: 109051904, // ~104 MB
+        status: "live",
+        activatedAt: new Date(),
+      } as any);
+      logger.info("[store-fix] Registered Awajimaa App v1.1.0");
+    } else if (existing.status !== "live") {
       await db.update(storeAppVersionsTable)
-        .set({ status: "live", activatedAt: new Date() } as any)
-        .where(and(eq(storeAppVersionsTable.appId, 1), eq(storeAppVersionsTable.version, "1.0.0")));
-      logger.info("[store-fix] Corrected circular download_url for app id=1");
+        .set({ status: "live", fileUrl: NEW_APK, activatedAt: new Date() } as any)
+        .where(eq(storeAppVersionsTable.id, existing.id));
+    }
+
+    // 2. Deprecate old live versions
+    await db.update(storeAppVersionsTable)
+      .set({ status: "deprecated" } as any)
+      .where(and(eq(storeAppVersionsTable.appId, 1), sql`version != ${NEW_VER}`, eq(storeAppVersionsTable.status, "live")));
+
+    // 3. Sync app-level download_url + version label + screenshots
+    const currentScreenshots = (app as any).screenshots as string[] ?? [];
+    const needsScreenshots = currentScreenshots.length < SCREENSHOTS.length;
+    const badUrl = (app as any).downloadUrl !== NEW_APK;
+    if (badUrl || needsScreenshots) {
+      await db.update(storeAppsTable)
+        .set({
+          downloadUrl: NEW_APK,
+          currentVersion: NEW_VER,
+          screenshots: SCREENSHOTS,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(storeAppsTable.id, 1));
+      logger.info("[store-fix] Updated Awajimaa App download_url + screenshots");
     }
   } catch (err) {
-    logger.warn({ err }, "[store-fix] Could not run startup download_url fix — will retry on next restart");
+    logger.warn({ err }, "[store-fix] Could not run Awajimaa App fix — will retry on next restart");
   }
 })();
