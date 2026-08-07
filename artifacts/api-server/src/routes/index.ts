@@ -87,6 +87,7 @@ import supportRouter from "./support";
 import emailTrackingRouter from "./email-tracking";
 import productMediaRouter from "./product-media";
 import orderFulfillmentRouter from "./order-fulfillment";
+import ssoRouter from "./sso";
 
 const router: IRouter = Router();
 
@@ -172,6 +173,9 @@ router.use(orderFulfillmentRouter);
 
 // Email open-tracking pixel — public, no auth
 router.use(emailTrackingRouter);
+
+// Awajimaa Unified SSO bridge — public (check-email + exchange); admin (backfill-notify)
+router.use("/sso", ssoRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);
