@@ -31,9 +31,10 @@ const VENDOR_HUB_URL = process.env.VENDOR_HUB_URL || "https://vendor.awajimaaai.
 const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "").split(",").filter(Boolean);
 
 // ── POST /api/sso/exchange ─────────────────────────────────────────────────
-// Accepts a one-time SSO code from the Spring Boot backend.
-// Validates it server-to-server, then creates/finds a Clerk user and returns
-// a Clerk magic-link sign-in token so the user lands logged in.
+// Accepts a one-time SSO code from either:
+//   • Spring Boot backend  (AwaHub mobile app)
+//   • Awajimaa Schools     (SCH_<b64payload>.<hmac-sig> — verified locally)
+// Creates/finds a Clerk user and returns a magic-link sign-in token.
 router.post("/exchange", async (req: Request, res: Response) => {
   const { code } = req.body as { code?: string };
   if (!code || typeof code !== "string" || code.length < 10) {
@@ -45,27 +46,73 @@ router.post("/exchange", async (req: Request, res: Response) => {
     return;
   }
 
-  // 1. Verify the code with the Spring Boot backend (server-to-server)
   let userInfo: { email: string; phone?: string; name?: string; userId: string; userType?: string };
-  try {
-    const verifyResp = await fetch(`${SPRING_BOOT_URL}/api/auth/sso/verify-code`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-SSO-API-Key": SSO_VERIFY_API_KEY,
-      },
-      body: JSON.stringify({ code }),
-    });
-    if (!verifyResp.ok) {
-      const err = await verifyResp.json().catch(() => ({}));
-      res.status(400).json({ error: (err as any).error || "SSO code invalid or expired" });
+
+  if (code.startsWith("SCH_")) {
+    // ── Schools-issued HMAC-signed code — verify locally (no network round-trip) ──
+    const inner   = code.slice(4);                     // strip "SCH_"
+    const dotIdx  = inner.lastIndexOf(".");
+    if (dotIdx === -1) {
+      res.status(400).json({ error: "Malformed Schools SSO code" });
       return;
     }
-    userInfo = await verifyResp.json();
-  } catch (e: any) {
-    console.error("[SSO exchange] Spring Boot verify failed:", e.message);
-    res.status(502).json({ error: "Could not reach Awajimaa identity server" });
-    return;
+    const payload = inner.slice(0, dotIdx);
+    const sig     = inner.slice(dotIdx + 1);
+
+    const { createHmac } = await import("crypto");
+    const expected = createHmac("sha256", SSO_VERIFY_API_KEY).update(payload).digest("hex");
+    if (expected !== sig) {
+      res.status(400).json({ error: "SSO code signature invalid" });
+      return;
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
+    } catch {
+      res.status(400).json({ error: "SSO code payload malformed" });
+      return;
+    }
+
+    if (!data.exp || data.exp < Math.floor(Date.now() / 1000)) {
+      res.status(400).json({ error: "SSO code has expired — please click Biz Suite AI again." });
+      return;
+    }
+    if (!data.email) {
+      res.status(400).json({ error: "SSO code missing user email" });
+      return;
+    }
+
+    userInfo = {
+      email:    data.email,
+      name:     data.name,
+      userId:   String(data.userId ?? "schools-user"),
+      userType: data.userType ?? "SCHOOL_USER",
+    };
+    console.log("[SSO exchange] Schools HMAC code verified for:", data.email);
+
+  } else {
+    // ── Spring Boot SSO code — validate server-to-server (AwaHub mobile) ──
+    try {
+      const verifyResp = await fetch(`${SPRING_BOOT_URL}/api/auth/sso/verify-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-SSO-API-Key": SSO_VERIFY_API_KEY,
+        },
+        body: JSON.stringify({ code }),
+      });
+      if (!verifyResp.ok) {
+        const err = await verifyResp.json().catch(() => ({}));
+        res.status(400).json({ error: (err as any).error || "SSO code invalid or expired" });
+        return;
+      }
+      userInfo = await verifyResp.json();
+    } catch (e: any) {
+      console.error("[SSO exchange] Spring Boot verify failed:", e.message);
+      res.status(502).json({ error: "Could not reach Awajimaa identity server" });
+      return;
+    }
   }
 
   const email = userInfo.email?.toLowerCase().trim();
