@@ -5,6 +5,7 @@ export * from "./posts";
 export * from "./ai-generations";
 export * from "./vendor-uploads";
 export * from "./products";
+export * from "./product-media";
 export * from "./inventory-transactions";
 export * from "./orders";
 export * from "./leads";

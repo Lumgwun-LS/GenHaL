@@ -36,6 +36,19 @@ export const ordersTable = pgTable("orders", {
   stockApplied: boolean("stock_applied").notNull().default(false),
   /** Set once a cart-abandonment reminder email has been sent — prevents duplicate sends */
   cartReminderSentAt: timestamp("cart_reminder_sent_at", { withTimezone: true }),
+  // ── Fulfillment / delivery tracking ────────────────────────────────────────
+  /** pending | processing | shipped | out_for_delivery | delivered | confirmed | disputed */
+  deliveryStatus: text("delivery_status").notNull().default("pending"),
+  trackingNumber: text("tracking_number"),
+  trackingUrl: text("tracking_url"),
+  shippedAt: timestamp("shipped_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  /** Timestamp when the customer clicked "I received this" via their receipt link */
+  customerConfirmedAt: timestamp("customer_confirmed_at", { withTimezone: true }),
+  /** Vendor's note explaining a refund (displayed to customer) */
+  refundNote: text("refund_note"),
+  /** Unique token emailed to customer so they can confirm receipt without an account */
+  receiptToken: text("receipt_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

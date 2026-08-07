@@ -6,10 +6,34 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, MapPin, Printer } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Mail, Phone, MapPin, Printer, Truck, CheckCircle, Copy, ExternalLink, Package, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useState } from "react";
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+const DELIVERY_STATUSES = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "out_for_delivery", label: "Out for Delivery" },
+  { value: "delivered", label: "Delivered" },
+  { value: "disputed", label: "Disputed" },
+];
+
+const DELIVERY_STATUS_COLORS: Record<string, string> = {
+  pending: "bg-gray-100 text-gray-700",
+  processing: "bg-blue-100 text-blue-700",
+  shipped: "bg-indigo-100 text-indigo-700",
+  out_for_delivery: "bg-purple-100 text-purple-700",
+  delivered: "bg-emerald-100 text-emerald-700",
+  confirmed: "bg-green-100 text-green-700",
+  disputed: "bg-red-100 text-red-700",
+};
 
 export default function OrderDetail() {
   const params = useParams();
@@ -28,15 +52,34 @@ export default function OrderDetail() {
     query: { enabled: Boolean(order?.vendorId), queryKey: getListWorkersQueryKey(workerListParams) },
   });
 
+  // Delivery tracking state
+  const [deliveryStatus, setDeliveryStatus] = useState<string>("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+  const [refundNote, setRefundNote] = useState("");
+  const [deliverySaving, setDeliverySaving] = useState(false);
+
   if (isLoading) return <div className="p-8">Loading order...</div>;
   if (!order) return <div className="p-8">Order not found</div>;
 
+  // Extend order type with new fulfillment fields
+  const ext = order as typeof order & {
+    deliveryStatus?: string;
+    trackingNumber?: string | null;
+    trackingUrl?: string | null;
+    shippedAt?: string | null;
+    deliveredAt?: string | null;
+    customerConfirmedAt?: string | null;
+    refundNote?: string | null;
+    receiptToken?: string | null;
+  };
+
+  const currentDelivery = deliveryStatus || ext.deliveryStatus || "pending";
+  const statusColor = DELIVERY_STATUS_COLORS[currentDelivery] ?? "bg-gray-100 text-gray-700";
+
   const handleUpdateStatus = async (status: string) => {
     try {
-      await updateOrder.mutateAsync({
-        id,
-        data: { status }
-      });
+      await updateOrder.mutateAsync({ id, data: { status } });
       queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
       toast.success(`Order marked as ${status}`);
     } catch (e) {
@@ -46,16 +89,45 @@ export default function OrderDetail() {
 
   const handleAssign = async (field: "branchId" | "workerId", value: string) => {
     try {
-      await updateOrder.mutateAsync({
-        id,
-        data: { [field]: value !== "none" ? Number(value) : null },
-      });
+      await updateOrder.mutateAsync({ id, data: { [field]: value !== "none" ? Number(value) : null } });
       queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
       toast.success("Order updated");
     } catch {
       toast.error("Failed to update order");
     }
   };
+
+  async function handleSaveDelivery() {
+    if (!currentDelivery) return;
+    setDeliverySaving(true);
+    try {
+      const body: Record<string, unknown> = { deliveryStatus: currentDelivery };
+      if (trackingNumber || ext.trackingNumber) body.trackingNumber = trackingNumber || ext.trackingNumber || "";
+      if (trackingUrl || ext.trackingUrl) body.trackingUrl = trackingUrl || ext.trackingUrl || "";
+      if (refundNote || ext.refundNote) body.refundNote = refundNote || ext.refundNote || "";
+
+      const r = await fetch(`${BASE_URL}/api/orders/${id}/delivery`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { const d = await r.json(); toast.error(d.error ?? "Update failed"); return; }
+      toast.success("Delivery status updated — customer has been notified by email");
+      queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(id) });
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setDeliverySaving(false);
+    }
+  }
+
+  function copyReceiptLink() {
+    if (!ext.receiptToken) { toast.error("Save delivery status first to generate the receipt link"); return; }
+    const origin = window.location.origin;
+    navigator.clipboard.writeText(`${origin}/confirm-receipt/${ext.receiptToken}`);
+    toast.success("Receipt confirmation link copied to clipboard");
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 w-full">
@@ -68,6 +140,9 @@ export default function OrderDetail() {
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">Order #{order.id}</h1>
               <Badge variant="outline" className="uppercase text-xs">{order.status}</Badge>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}`}>
+                📦 {DELIVERY_STATUSES.find(s => s.value === currentDelivery)?.label ?? ext.deliveryStatus ?? "Pending"}
+              </span>
             </div>
             <p className="text-muted-foreground">{format(new Date(order.createdAt), 'MMMM do, yyyy h:mm a')}</p>
           </div>
@@ -123,6 +198,122 @@ export default function OrderDetail() {
               </div>
             </div>
           </Card>
+
+          {/* ── Delivery Tracking Card ─────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="w-4 h-4" />
+                Delivery & Fulfillment Tracking
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Customer confirmed */}
+              {ext.customerConfirmedAt && (
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-800">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-medium">Customer confirmed receipt</div>
+                    <div className="text-xs">{format(new Date(ext.customerConfirmedAt), "PPP p")}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Disputed */}
+              {ext.deliveryStatus === "disputed" && (
+                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                  <div className="font-medium">Dispute raised — customer hasn't confirmed receipt</div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Delivery Status</Label>
+                  <Select
+                    value={deliveryStatus || ext.deliveryStatus || "pending"}
+                    onValueChange={setDeliveryStatus}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DELIVERY_STATUSES.map(s => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tracking Number</Label>
+                  <Input
+                    placeholder="e.g. DHL-12345"
+                    defaultValue={ext.trackingNumber ?? ""}
+                    onChange={e => setTrackingNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tracking URL (optional)</Label>
+                <Input
+                  placeholder="https://track.dhl.com/..."
+                  defaultValue={ext.trackingUrl ?? ""}
+                  onChange={e => setTrackingUrl(e.target.value)}
+                />
+              </div>
+
+              {(currentDelivery === "delivered" || currentDelivery === "disputed") && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Note to Customer (for refunds / disputes)</Label>
+                  <Textarea
+                    placeholder="Explain the refund or dispute resolution..."
+                    defaultValue={ext.refundNote ?? ""}
+                    onChange={e => setRefundNote(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleSaveDelivery} disabled={deliverySaving} className="flex-1">
+                  {deliverySaving ? "Saving..." : "Save & Notify Customer"}
+                </Button>
+                <Button variant="outline" onClick={copyReceiptLink} className="gap-2">
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Receipt Link
+                </Button>
+              </div>
+
+              {/* Timeline */}
+              {(ext.shippedAt || ext.deliveredAt || ext.customerConfirmedAt) && (
+                <div className="border-t pt-4 space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Timeline</div>
+                  <div className="space-y-2 text-sm">
+                    {ext.shippedAt && (
+                      <div className="flex items-center gap-3">
+                        <Package className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-muted-foreground">Shipped</span>
+                        <span className="ml-auto font-medium">{format(new Date(ext.shippedAt), "PP p")}</span>
+                      </div>
+                    )}
+                    {ext.deliveredAt && (
+                      <div className="flex items-center gap-3">
+                        <Truck className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-muted-foreground">Delivered</span>
+                        <span className="ml-auto font-medium">{format(new Date(ext.deliveredAt), "PP p")}</span>
+                      </div>
+                    )}
+                    {ext.customerConfirmedAt && (
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                        <span className="text-muted-foreground">Customer confirmed</span>
+                        <span className="ml-auto font-medium">{format(new Date(ext.customerConfirmedAt), "PP p")}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-8">
@@ -161,7 +352,7 @@ export default function OrderDetail() {
           
           <Card>
             <CardHeader>
-              <CardTitle>Fulfillment</CardTitle>
+              <CardTitle>Assignment</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">

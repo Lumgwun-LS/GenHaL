@@ -87,6 +87,8 @@ import PublicSupportPage from "@/pages/help/index";
 import TicketViewPage from "@/pages/ticket-view/index";
 import SupportPage from "@/pages/support/index";
 import TicketDetailPage from "@/pages/support/ticket";
+import ConfirmReceiptPage from "@/pages/confirm-receipt";
+import ProductPublicPage from "@/pages/product-public";
 
 declare const __CF_PAGES__: boolean;
 
@@ -405,6 +407,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/partner/:slug" component={PartnerToolkitPage} />
           <Route path="/help/:vendorId" component={PublicSupportPage} />
           <Route path="/ticket/:token" component={TicketViewPage} />
+          <Route path="/confirm-receipt/:token" component={ConfirmReceiptPage} />
+          <Route path="/product/:vendorId/:productId" component={ProductPublicPage} />
 
           {/* Authenticated Routes */}
           <Route path="/dashboard" component={() => <AuthenticatedRoute component={Dashboard} />} />

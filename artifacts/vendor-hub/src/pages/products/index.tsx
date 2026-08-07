@@ -20,7 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Search, AlertTriangle, Download, Upload, Pencil, Package,
-  X, ChevronRight, ImageIcon, Sparkles, Loader2, Wand2,
+  X, ChevronRight, ImageIcon, Sparkles, Loader2, Wand2, Video, Share2, Copy, Star,
+  Trash2, PlayCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CsvImportDialog } from "@/components/csv-import-dialog";
@@ -33,6 +34,15 @@ const CATEGORIES = ["General", "Electronics", "Clothing", "Food & Beverage", "He
 const UNITS = ["units", "kg", "g", "litres", "ml", "pieces", "pairs", "boxes", "bags", "cartons"];
 
 type VariationGroup = { name: string; optionsRaw: string };
+
+type ProductMedia = {
+  id: number;
+  type: string;
+  url: string;
+  caption?: string | null;
+  sortOrder: number;
+  isPrimary: boolean;
+};
 
 type Product = {
   id: number;
@@ -79,6 +89,11 @@ export default function Products() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [showAiForm, setShowAiForm] = useState(false);
+
+  // Multi-media management state
+  const [productMedia, setProductMedia] = useState<ProductMedia[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
 
   // Add product form state
   const [name, setName] = useState("");
@@ -128,8 +143,86 @@ export default function Products() {
       }
     } catch {}
     setEditVars(parsed);
+    setProductMedia([]);
     setInventoryLogs([]);
+    loadProductMedia(p.id);
     loadInventoryLogs(p.id);
+  }
+
+  async function loadProductMedia(productId: number) {
+    setMediaLoading(true);
+    try {
+      const r = await fetch(`${BASE_URL}/api/products/${productId}/media`, { credentials: "include" });
+      if (r.ok) setProductMedia(await r.json());
+    } catch {}
+    setMediaLoading(false);
+  }
+
+  async function handleUploadMedia(file: File, productId: number) {
+    setMediaUploading(true);
+    try {
+      // 1. Get presigned URL
+      const ur = await fetch(`${BASE_URL}/api/products/media/upload-url`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!ur.ok) throw new Error("Failed to get upload URL");
+      const { uploadUrl, publicUrl } = await ur.json();
+
+      // 2. Upload file
+      await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+
+      // 3. Register media item
+      const type = file.type.startsWith("video/") ? "video" : "image";
+      const mr = await fetch(`${BASE_URL}/api/products/${productId}/media`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: publicUrl, type }),
+      });
+      if (!mr.ok) throw new Error("Failed to add media");
+      const added: ProductMedia = await mr.json();
+      setProductMedia(prev => [...prev, added]);
+      if (added.isPrimary) setEditImageUrl(added.url);
+      toast.success(`${type === "video" ? "Video" : "Image"} uploaded`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
+  async function handleSetPrimary(productId: number, mediaId: number) {
+    const r = await fetch(`${BASE_URL}/api/products/${productId}/media/${mediaId}`, {
+      method: "PATCH", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPrimary: true }),
+    });
+    if (r.ok) {
+      const updated: ProductMedia = await r.json();
+      setProductMedia(prev => prev.map(m => ({ ...m, isPrimary: m.id === updated.id })));
+      setEditImageUrl(updated.url);
+      toast.success("Set as primary image");
+    }
+  }
+
+  async function handleDeleteMedia(productId: number, mediaId: number) {
+    const r = await fetch(`${BASE_URL}/api/products/${productId}/media/${mediaId}`, {
+      method: "DELETE", credentials: "include",
+    });
+    if (r.ok) {
+      setProductMedia(prev => prev.filter(m => m.id !== mediaId));
+      toast.success("Removed");
+    }
+  }
+
+  function copyProductShareLink(productId: number) {
+    const origin = window.location.origin;
+    const vendorIdVal = vendorId;
+    if (!vendorIdVal) return;
+    const link = `${origin}/product/${vendorIdVal}/${productId}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Product link copied to clipboard!");
   }
 
   async function loadInventoryLogs(productId: number) {
@@ -353,7 +446,16 @@ export default function Products() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex items-center gap-1">
+                        <button
+                          title="Copy share link"
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={e => { e.stopPropagation(); copyProductShareLink(p.id); }}
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -376,8 +478,8 @@ export default function Products() {
             <Tabs defaultValue="basic">
               <TabsList className="w-full">
                 <TabsTrigger value="basic" className="flex-1">Basic</TabsTrigger>
-                <TabsTrigger value="image" className="flex-1">
-                  <ImageIcon className="w-3.5 h-3.5 mr-1.5" />Image
+                <TabsTrigger value="media" className="flex-1">
+                  <ImageIcon className="w-3.5 h-3.5 mr-1.5" />Media
                 </TabsTrigger>
                 <TabsTrigger value="variations" className="flex-1">Variations</TabsTrigger>
                 <TabsTrigger value="inventory" className="flex-1">Inventory</TabsTrigger>
@@ -443,56 +545,46 @@ export default function Products() {
                 </div>
               </TabsContent>
 
-              {/* ── Image tab ─────────────────────────────────────────── */}
-              <TabsContent value="image" className="pt-2 space-y-4">
-                {/* Current image preview */}
-                <div className="relative rounded-xl overflow-hidden border bg-muted/30 aspect-video flex items-center justify-center">
-                  {editImageUrl ? (
-                    <>
-                      <img src={editImageUrl} alt={editProduct.name} className="w-full h-full object-contain" />
-                      <button
-                        onClick={() => setEditImageUrl(null)}
-                        className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-7 h-7 flex items-center justify-center transition-colors"
-                        title="Remove image"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground py-8">
-                      <ImageIcon className="w-12 h-12 opacity-20" />
-                      <p className="text-sm">No product image yet</p>
-                    </div>
-                  )}
+              {/* ── Media tab — multiple images + videos ──────────────── */}
+              <TabsContent value="media" className="pt-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Add multiple images and videos. The ⭐ primary image is used in listings and share cards.
+                  </p>
+                  <Button variant="outline" size="sm" className="gap-2 shrink-0"
+                    onClick={() => copyProductShareLink(editProduct.id)}>
+                    <Share2 className="w-3.5 h-3.5" /> Share Link
+                  </Button>
                 </div>
 
-                {/* Actions row */}
+                {/* Upload buttons */}
                 <div className="flex gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    className="flex-1 gap-2"
-                    onClick={() => setMediaPickerOpen(true)}
-                  >
-                    <Upload className="w-4 h-4" />
-                    Pick from Library
-                  </Button>
-                  {editImageUrl && (
-                    <Button
-                      variant="outline"
-                      className="flex-1 gap-2"
-                      onClick={() => setImageEditorOpen(true)}
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      Refine in Editor
+                  <label className="flex-1">
+                    <Button variant="outline" className="w-full gap-2" asChild>
+                      <span>
+                        <Upload className="w-4 h-4" />
+                        {mediaUploading ? "Uploading…" : "Upload Image / Video"}
+                      </span>
                     </Button>
-                  )}
-                  <Button
-                    variant={showAiForm ? "default" : "outline"}
-                    className="flex-1 gap-2"
-                    onClick={() => setShowAiForm(v => !v)}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Generate with AI
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      className="hidden"
+                      disabled={mediaUploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) await handleUploadMedia(file, editProduct.id);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <Button variant="outline" className="flex-1 gap-2"
+                    onClick={() => setMediaPickerOpen(true)}>
+                    <ImageIcon className="w-4 h-4" /> Pick from Library
+                  </Button>
+                  <Button variant={showAiForm ? "default" : "outline"} className="flex-1 gap-2"
+                    onClick={() => setShowAiForm(v => !v)}>
+                    <Sparkles className="w-4 h-4" /> AI Image
                   </Button>
                 </div>
 
@@ -500,48 +592,74 @@ export default function Products() {
                 {showAiForm && (
                   <div className="rounded-xl border p-4 space-y-3 bg-primary/5">
                     <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                      <Sparkles className="w-4 h-4" />
-                      AI Image Generator
+                      <Sparkles className="w-4 h-4" /> AI Image Generator
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Describe what you want the product image to look like. Be specific about style, background, lighting, and context.
-                    </p>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Image description / prompt</Label>
-                      <Textarea
-                        rows={3}
-                        value={aiPrompt}
-                        onChange={e => setAiPrompt(e.target.value)}
-                        placeholder={`e.g. "${editProduct.name} on a clean white background, professional product photography, soft studio lighting, high resolution"`}
-                        className="text-sm resize-none"
-                      />
+                      <Label className="text-xs">Describe the image</Label>
+                      <Textarea rows={2} value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+                        placeholder={`e.g. "${editProduct.name} on a white background, professional product photo"`}
+                        className="text-sm resize-none" />
                     </div>
-                    <Button
-                      className="w-full gap-2"
-                      onClick={handleGenerateAiImage}
-                      disabled={aiGenerating || !aiPrompt.trim()}
-                    >
-                      {aiGenerating ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
-                      ) : (
-                        <><Sparkles className="w-4 h-4" /> Generate Image</>
-                      )}
+                    <Button className="w-full gap-2" onClick={handleGenerateAiImage}
+                      disabled={aiGenerating || !aiPrompt.trim()}>
+                      {aiGenerating
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                        : <><Sparkles className="w-4 h-4" /> Generate Image</>}
                     </Button>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Generated images are saved to your{" "}
-                      <a href={`${BASE_URL}/ai-studio`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                        Media Library
-                      </a>{" "}
-                      and can be refined further in the Design Studio.
-                    </p>
                   </div>
                 )}
 
-                {editImageUrl && (
-                  <div className="text-xs text-muted-foreground text-center">
-                    Image will be saved with the product when you click <strong>Save Changes</strong>.
+                {/* Media grid */}
+                {mediaLoading ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">Loading media…</div>
+                ) : productMedia.length === 0 ? (
+                  <div className="border border-dashed rounded-xl p-8 text-center text-muted-foreground">
+                    <ImageIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">No media yet — upload images or videos above</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {productMedia.map(m => (
+                      <div key={m.id} className="relative group rounded-xl overflow-hidden border bg-muted/30 aspect-square">
+                        {m.type === "video" ? (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                            <PlayCircle className="w-8 h-8 text-white/70" />
+                            <video src={m.url} className="absolute inset-0 w-full h-full object-cover opacity-50" muted />
+                          </div>
+                        ) : (
+                          <img src={m.url} alt={m.caption ?? ""} className="w-full h-full object-cover" />
+                        )}
+                        {m.isPrimary && (
+                          <div className="absolute top-1 left-1">
+                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          {!m.isPrimary && m.type === "image" && (
+                            <button onClick={() => handleSetPrimary(editProduct.id, m.id)}
+                              className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-7 h-7 flex items-center justify-center"
+                              title="Set as primary">
+                              <Star className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteMedia(editProduct.id, m.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center"
+                            title="Remove">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {m.type === "video" && (
+                          <div className="absolute bottom-1 right-1">
+                            <Video className="w-3.5 h-3.5 text-white/80" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground text-center">
+                  ⭐ = primary listing image · hover a tile to set primary or remove
+                </p>
               </TabsContent>
 
               {/* ── Variations tab ────────────────────────────────────── */}
@@ -649,10 +767,27 @@ export default function Products() {
         onClose={() => setMediaPickerOpen(false)}
         typeFilter="image"
         title="Choose Product Image"
-        onSelect={(url) => {
-          setEditImageUrl(url);
+        onSelect={async (url) => {
           setMediaPickerOpen(false);
-          toast.success("Image selected — click Save Changes to apply it.");
+          if (editProduct) {
+            // Add to multi-media list
+            try {
+              const r = await fetch(`${BASE_URL}/api/products/${editProduct.id}/media`, {
+                method: "POST", credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url, type: "image" }),
+              });
+              if (r.ok) {
+                const added: ProductMedia = await r.json();
+                setProductMedia(prev => [...prev, added]);
+                if (added.isPrimary) setEditImageUrl(added.url);
+                toast.success("Image added to product media");
+              }
+            } catch { toast.error("Failed to add image"); }
+          } else {
+            setEditImageUrl(url);
+            toast.success("Image selected");
+          }
         }}
       />
 

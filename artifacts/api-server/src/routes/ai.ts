@@ -9,6 +9,14 @@ const GenerateAiContentBody = z.object({
   outputTypes: z.array(z.enum(["social_post", "article", "academic", "image", "video"])).min(1),
   tone: z.enum(["professional", "casual", "educational", "promotional"]).optional(),
   language: z.enum(["english", "hausa", "yoruba", "igbo"]).optional(),
+  /** Target platform for social posts — affects character limits and link strategy */
+  platform: z.enum(["instagram", "facebook", "linkedin", "twitter", "x"]).optional(),
+  /** Include product/shop link in the post */
+  includeProductLink: z.boolean().optional(),
+  /** Include vendor website link */
+  includeWebsiteLink: z.boolean().optional(),
+  /** Include mobile app link */
+  includeAppLink: z.boolean().optional(),
 });
 import { getAuth } from "@clerk/express";
 import { db, aiGenerationsTable, vendorUploadsTable, vendorsTable, draftVideoScenesTable, vendorContentLibraryTable } from "@workspace/db";
@@ -827,6 +835,36 @@ async function generateLongForm(
   }
 }
 
+/**
+ * Builds a link-injection hint for social post generation.
+ * X/Twitter gets at most ONE link (it eats 23 chars from a 280-char budget).
+ * Other platforms get up to 2 most-relevant links.
+ */
+function buildSocialLinkHint(
+  links: VendorLinks | null,
+  opts: { platform: string | null; includeProductLink?: boolean; includeWebsiteLink?: boolean; includeAppLink?: boolean },
+): string {
+  if (!links) return "";
+
+  const isTwitter = opts.platform === "twitter";
+
+  // Collect candidate links in priority order
+  const candidates: string[] = [];
+  if (opts.includeProductLink !== false && links.shopUrl) candidates.push(`Shop/Products: ${links.shopUrl}`);
+  if (opts.includeWebsiteLink !== false && links.websiteUrl) candidates.push(`Website: ${links.websiteUrl}`);
+  if (opts.includeAppLink !== false && links.mobileAppUrl) candidates.push(`Mobile App: ${links.mobileAppUrl}`);
+
+  if (candidates.length === 0) return linksSystemContext(links);
+
+  const selected = isTwitter ? candidates.slice(0, 1) : candidates.slice(0, 2);
+
+  const forX = isTwitter
+    ? `\n\nX/Twitter note: a URL counts as 23 characters toward your 280-char limit. Include EXACTLY ONE of these links and nothing else:\n${selected.map(l => `• ${l}`).join("\n")}`
+    : `\n\n${links.vendorName}'s links — weave 1-2 of these naturally into the post:\n${selected.map(l => `• ${l}`).join("\n")}`;
+
+  return forX;
+}
+
 /** Number of scene-preview images generated for the "video" output type. */
 const STUDIO_VIDEO_SCENE_COUNT = 2;
 
@@ -840,7 +878,9 @@ const STUDIO_VIDEO_SCENE_COUNT = 2;
 router.post("/ai/generate-content", async (req, res): Promise<void> => {
   const parsed = GenerateAiContentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { vendorId, topic, tone, language } = parsed.data;
+  const { vendorId, topic, tone, language, includeProductLink, includeWebsiteLink, includeAppLink } = parsed.data;
+  // Normalise "x" → "twitter"
+  const platform = parsed.data.platform === "x" ? "twitter" : (parsed.data.platform ?? null);
   // Deduplicate output types so a crafted request with repeated entries
   // can't run the same generator multiple times while paying quota only once.
   const outputTypes = [...new Set(parsed.data.outputTypes)];
@@ -904,18 +944,48 @@ router.post("/ai/generate-content", async (req, res): Promise<void> => {
   const generators = outputTypes.map(async (type: string): Promise<{ type: string; result: ContentResultType }> => {
     try {
       if (type === "social_post") {
+        // Platform-specific character limits
+        const platformLimits: Record<string, number> = {
+          twitter: 280,
+          instagram: 2200,
+          facebook: 63206,
+          linkedin: 3000,
+        };
+        const charLimit = platform ? (platformLimits[platform] ?? 500) : 500;
+
+        // Platform-specific guidance
+        const platformGuidance: Record<string, string> = {
+          twitter: `CRITICAL: X (Twitter) has a HARD 280-character limit (URLs count as 23 chars each). Write the caption first, then if space allows add ONE link, then 1-2 hashtags. Never exceed 280 characters total. No emoji that wastes characters.`,
+          instagram: `Instagram allows 2,200 characters. Write engaging copy, use 1-3 emoji, end with a line break then 5-10 relevant hashtags (hashtags go last). You may include your shop or website link in the caption text since Instagram links aren't clickable but the bio link is.`,
+          facebook: `Facebook allows long posts. Write naturally, include 1-2 links inline, use 1-3 emoji. Hashtags are optional (max 2-3).`,
+          linkedin: `LinkedIn is a professional network. Write a thoughtful 2-4 paragraph post, include your website or product link, use professional language. End with 3-5 relevant hashtags. Limit emoji to 1-2 tasteful ones.`,
+        };
+        const platformHint = platform ? (platformGuidance[platform] ?? "") : "";
+
+        // Build link selection hint based on vendor's links and request flags
+        const linkHint = buildSocialLinkHint(vendorLinks, { platform, includeProductLink, includeWebsiteLink, includeAppLink });
+
         const response = await openai.chat.completions.create({
           model: "gpt-5.4-mini",
-          max_completion_tokens: 500,
+          max_completion_tokens: 600,
           messages: [
             {
               role: "system",
-              content: `You write high-converting social media captions for small business vendors. Tone: ${toneDesc}. End with 3-5 relevant hashtags. Use 1-3 tasteful emoji. Hard limit: 500 characters. Return only the caption text, no preamble.${captionLangInstruction}${linksSystemContext(vendorLinks)}`,
+              content: [
+                `You write high-converting social media captions for small business vendors.`,
+                `Tone: ${toneDesc}.`,
+                platform ? `Target platform: ${platform === "twitter" ? "X (Twitter)" : platform}.` : "",
+                platformHint,
+                `Hard character limit: ${charLimit} characters — count carefully and never exceed it.`,
+                `Return ONLY the caption text, no preamble, no quotes.`,
+                captionLangInstruction,
+                linkHint,
+              ].filter(Boolean).join(" "),
             },
             { role: "user", content: `Topic: ${topic}` },
           ],
         });
-        const content = (response.choices[0]?.message?.content ?? "").trim().slice(0, 500);
+        const content = (response.choices[0]?.message?.content ?? "").trim().slice(0, charLimit);
         return { type, result: { status: "completed", content, wordCount: content.split(/\s+/).filter(Boolean).length } };
       }
 
