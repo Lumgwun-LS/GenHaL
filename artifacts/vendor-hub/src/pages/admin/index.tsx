@@ -51,6 +51,7 @@ import PlatformUsersPanel from "./platform-users";
 import BlogModerationPanel from "./blog-moderation";
 import AdminCustomersPanel from "./customers-panel";
 import MobileAppBuildsPanel from "./mobile-app-builds";
+import UnifiedPlatformNotifyPanel from "./platform-notify";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -3055,6 +3056,9 @@ export default function AdminPanel() {
           <TabsTrigger value="blog-moderation" className="flex items-center gap-2">
             <BookOpen className="w-4 h-4" /> Blog Moderation
           </TabsTrigger>
+          <TabsTrigger value="platform-notify" className="flex items-center gap-2">
+            <Globe className="w-4 h-4" /> Platform Emails
+          </TabsTrigger>
           <TabsTrigger value="mobile-app-builds" className="flex items-center gap-2">
             <Smartphone className="w-4 h-4" /> Mobile Builds
           </TabsTrigger>
@@ -4462,6 +4466,11 @@ export default function AdminPanel() {
         {/* ── Blog Moderation tab ──────────────────────────────────────────── */}
         <TabsContent value="blog-moderation">
           <BlogModerationPanel />
+        </TabsContent>
+
+        {/* ── Platform Notifications tab ─────────────────────────────────────── */}
+        <TabsContent value="platform-notify">
+          <UnifiedPlatformNotifyPanel />
         </TabsContent>
 
         {/* ── Mobile App Builds tab ─────────────────────────────────────────── */}
