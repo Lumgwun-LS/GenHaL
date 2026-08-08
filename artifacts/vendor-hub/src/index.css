@@ -250,3 +250,100 @@
 [data-theme="ekede"]   { --biz-radius:20px; --biz-accent:#F97316; }
 [data-theme="okoroete"]{ --biz-radius:16px; --biz-accent:#10B981; }
 [data-theme="otuo"]    { --biz-radius:8px;  --biz-accent:#A855F7; }
+
+/* ── Nav progress bar ──────────────────────────────────────────────────────── */
+@keyframes navBarShimmer {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(500%); }
+}
+.nav-bar-shimmer {
+  animation: navBarShimmer 0.9s linear infinite;
+  width: 40%;
+}
+
+@keyframes navOrbPulse {
+  0%, 100% { transform: translate(50%,-50%) scale(1); opacity: 1; }
+  50%       { transform: translate(50%,-50%) scale(1.6); opacity: 0.7; }
+}
+.nav-orb-pulse {
+  animation: navOrbPulse 0.55s ease-in-out infinite;
+}
+
+@keyframes navSparklePop {
+  0%   { transform: translate(0,0) scale(1.2); opacity: 1; }
+  100% { transform: translate(var(--tx,0px), var(--ty,-16px)) scale(0); opacity: 0; }
+}
+.nav-sparkle-cluster { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+.nav-sparkle-dot {
+  position: absolute;
+  border-radius: 50%;
+  animation: navSparklePop 0.55s ease-out infinite;
+  top: 0; left: 0;
+  transform-origin: center;
+}
+
+/* ── Glass sidebar (Okoroete) ───────────────────────────────────────────────── */
+.sidebar-glass {
+  background: rgba(1,20,8,0.74) !important;
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+}
+
+/* ── Electric sidebar glow (Unyeada) ────────────────────────────────────────── */
+@keyframes electricPulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.9; }
+}
+.sidebar-electric-edge {
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  animation: electricPulse 2.4s ease-in-out infinite;
+}
+
+/* ── Royal shimmer (Otuo) ───────────────────────────────────────────────────── */
+@keyframes royalGlimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.royal-crown-shine {
+  background: linear-gradient(90deg, #FBBF24 0%, #FDE68A 40%, #FBBF24 60%, #F59E0B 100%);
+  background-size: 200% auto;
+  animation: royalGlimmer 2.5s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Harvest animated fill (Ekede) ──────────────────────────────────────────── */
+@keyframes harvestGlow {
+  0%, 100% { box-shadow: 0 2px 14px rgba(249,115,22,0.15); }
+  50%       { box-shadow: 0 2px 22px rgba(249,115,22,0.35); }
+}
+.harvest-active-item {
+  animation: harvestGlow 2s ease-in-out infinite;
+}
+
+/* ── Nav link hover micro-animations per variant ────────────────────────────── */
+/* Electric: slide-right on hover */
+[data-theme="unyeada"] aside a:hover,
+[data-theme="unyeada"] aside button.nav-item:hover {
+  transform: translateX(3px);
+}
+/* Harvest: lift on hover */
+[data-theme="ekede"] aside a:hover,
+[data-theme="ekede"] aside button.nav-item:hover {
+  transform: translateY(-1px);
+}
+/* Glass: scale on hover */
+[data-theme="okoroete"] aside a:hover,
+[data-theme="okoroete"] aside button.nav-item:hover {
+  transform: scale(1.02);
+}
+/* Royal: no translate, just opacity shift */
+[data-theme="otuo"] aside a:hover,
+[data-theme="otuo"] aside button.nav-item:hover {
+  letter-spacing: 0.06em;
+}
