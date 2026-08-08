@@ -27,7 +27,7 @@ const router = Router();
 
 const SPRING_BOOT_URL = process.env.SPRING_BOOT_URL || "https://api.awajimaaapp.io";
 const SSO_VERIFY_API_KEY = process.env.SSO_VERIFY_API_KEY || "";
-const VENDOR_HUB_URL = process.env.VENDOR_HUB_URL || "https://vendor.awajimaaai.com";
+const VENDOR_HUB_URL = process.env.VENDOR_HUB_URL || "https://account.awajimaaai.com";
 const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "").split(",").filter(Boolean);
 
 // ── POST /api/sso/exchange ─────────────────────────────────────────────────
