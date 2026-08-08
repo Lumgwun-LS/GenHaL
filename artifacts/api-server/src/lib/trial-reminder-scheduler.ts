@@ -75,7 +75,7 @@ async function expireTrials(): Promise<{ expired: number }> {
       ),
     );
 
-  const baseUrl = process.env.VITE_APP_URL ?? "https://awajimaaai.com";
+  const baseUrl = process.env.VITE_APP_URL ?? "https://account.awajimaaai.com";
 
   for (const vendor of expired) {
     try {
@@ -143,7 +143,7 @@ async function tickTrialReminders(): Promise<{ checked: number; reminded: number
     );
 
   let reminded = 0;
-  const baseUrl = process.env.VITE_APP_URL ?? "https://awajimaaai.com";
+  const baseUrl = process.env.VITE_APP_URL ?? "https://account.awajimaaai.com";
   const upgradeUrl = `${baseUrl}/vendor-hub/account`;
 
   for (const vendor of vendors) {

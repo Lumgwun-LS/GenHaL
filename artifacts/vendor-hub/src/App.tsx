@@ -94,14 +94,15 @@ import SsoLoginPage from "@/pages/sso-login";
 declare const __CF_PAGES__: boolean;
 
 // Must run after all imports — sets the base URL for all Orval-generated hooks.
-setBaseUrl(__CF_PAGES__ ? 'https://awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
+// API server lives at api.awajimaaai.com; the CF Pages SPA at account.awajimaaai.com
+// calls it directly (cross-origin, covered by CORS allowlist on the API server).
+setBaseUrl(__CF_PAGES__ ? 'https://api.awajimaaai.com' : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? null));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-// On Cloudflare Pages the live key works on any domain — no proxy needed.
-// On Replit dev/preview the proxy routes Clerk FAPI through the API server.
-// On CF Pages (awajimaaai.com): route Clerk through /api/__clerk so the _redirects
-// edge-proxy forwards to clerk.awajimaaai.com — no direct browser → clerk. DNS needed.
-const clerkProxyUrl = __CF_PAGES__ ? 'https://awajimaaai.com/api/__clerk' : import.meta.env.VITE_CLERK_PROXY_URL;
+// Route Clerk FAPI through the API server's /api/__clerk proxy so no separate
+// clerk.* DNS record is needed. Works for both awajimaaai.com and account.awajimaaai.com
+// because the proxy URL points to the API server, not the SPA domain.
+const clerkProxyUrl = __CF_PAGES__ ? 'https://api.awajimaaai.com/api/__clerk' : import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function stripBase(path: string): string {

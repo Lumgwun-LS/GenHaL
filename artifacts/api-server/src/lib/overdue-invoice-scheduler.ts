@@ -69,7 +69,7 @@ async function tick(): Promise<void> {
     }
 
     const amountStr = `${parseFloat(instalment.amount).toFixed(2)} ${(invoice.currency ?? "USD").toUpperCase()}`;
-    const shareUrl = `${process.env.FRONTEND_URL ?? "https://awajimaaai.com"}/invoice/${invoice.shareToken}`;
+    const shareUrl = `${process.env.FRONTEND_URL ?? "https://account.awajimaaai.com"}/invoice/${invoice.shareToken}`;
 
     // Vendor in-app notification
     db.insert(vendorNotificationsTable)
