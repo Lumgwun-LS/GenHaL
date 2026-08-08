@@ -88,6 +88,7 @@ const FIRST_PARTY_ORIGINS = [
   "https://www.awajimaaai.com",
   "https://awajimaaappstore.com",
   "https://www.awajimaaappstore.com",
+  "https://account.awajimaaai.com",
   "https://api.awajimaaai.com",
   "https://awajimaaapp.io",
   "https://www.awajimaaapp.io",

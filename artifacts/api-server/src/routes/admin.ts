@@ -1583,7 +1583,7 @@ router.post("/admin/vendors/:id/trial", async (req, res): Promise<void> => {
       </p>`;
     const html = wrapVendorEmail({
       bodyHtml,
-      action: { label: "Explore Your Dashboard", url: process.env.VITE_APP_URL ? `${process.env.VITE_APP_URL}/vendor-hub/dashboard` : "https://awajimaaai.com/vendor-hub/dashboard" },
+      action: { label: "Explore Your Dashboard", url: process.env.VITE_APP_URL ? `${process.env.VITE_APP_URL}/vendor-hub/dashboard` : "https://account.awajimaaai.com/vendor-hub/dashboard" },
     });
     await sendEmail({ to: vendor.email, subject: `Your ${durationDays}-day Awa Biz Suite free trial is now active!`, html });
   } catch (emailErr) {

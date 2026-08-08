@@ -13,7 +13,7 @@ import {
   Package, MessageSquare, Mail, Mic2,
 } from "lucide-react";
 
-const BASE = "https://awajimaaai.com";
+const BASE = "https://api.awajimaaai.com";
 const API  = `${BASE}/api/external/features`;
 
 // ── Copy button ───────────────────────────────────────────────────────────────
