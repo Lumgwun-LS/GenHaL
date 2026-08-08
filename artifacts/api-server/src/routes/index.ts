@@ -79,6 +79,7 @@ import crmTrackingRouter from "./crm-tracking";
 import { requireAuth } from "../middlewares/requireAuth";
 import mobileAppsRouter from "./mobile-apps";
 import internalMobileAppRouter from "./internal-mobile-app";
+import internalGrantTrialRouter from "./internal-grant-trial";
 import tasksRouter from "./tasks";
 import blogRouter from "./blog";
 import publicBlogRouter from "./public-blog";
@@ -158,6 +159,9 @@ router.use(crmTrackingRouter);
 
 // Internal callbacks from GitHub Actions (APK upload + build-fail report) — secret-verified, no Clerk
 router.use(internalMobileAppRouter);
+
+// TEMPORARY: grant a feature trial without Clerk auth (SESSION_SECRET protected) — remove after use
+router.use(internalGrantTrialRouter);
 
 // Public blog — no auth required (visitor-facing pages)
 router.use(publicBlogRouter);
