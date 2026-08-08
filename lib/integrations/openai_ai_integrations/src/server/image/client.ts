@@ -13,12 +13,14 @@ export const openai = new OpenAI({
  */
 export async function generateImageBuffer(
   prompt: string,
-  size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
+  size: "1024x1024" | "1536x1024" | "1024x1536" | "512x512" | "256x256" = "1024x1024",
+  quality: "auto" | "high" | "medium" | "low" = "auto"
 ): Promise<Buffer> {
   const response = await openai.images.generate({
     model: "gpt-image-1",
     prompt,
-    size,
+    size: size as "1024x1024",   // cast — proxy accepts all valid gpt-image-1 sizes
+    quality: quality as "auto",  // cast — proxy accepts all valid quality values
   });
   const base64 = response.data?.[0]?.b64_json ?? "";
   return Buffer.from(base64, "base64");

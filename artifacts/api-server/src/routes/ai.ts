@@ -183,7 +183,7 @@ async function buildScenePrompts(basePrompt: string, sceneCount: number): Promis
   if (sceneCount <= 1) return [basePrompt];
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.4-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 400,
       messages: [
         {
@@ -483,7 +483,7 @@ router.post("/ai/generate-caption", async (req, res): Promise<void> => {
   let status: "completed" | "failed" = "completed";
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.4-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 500,
       messages: [
         {
@@ -806,7 +806,7 @@ async function generateLongForm(
 
   if (style === "article") {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.4-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 1500,
       messages: [
         {
@@ -820,7 +820,7 @@ async function generateLongForm(
     return (response.choices[0]?.message?.content ?? "").trim() + linksFooter(links ?? null);
   } else {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.4-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 2000,
       messages: [
         {
@@ -966,7 +966,7 @@ router.post("/ai/generate-content", async (req, res): Promise<void> => {
         const linkHint = buildSocialLinkHint(vendorLinks, { platform, includeProductLink, includeWebsiteLink, includeAppLink });
 
         const response = await openai.chat.completions.create({
-          model: "gpt-5.4-mini",
+          model: "gpt-4o-mini",
           max_completion_tokens: 600,
           messages: [
             {
