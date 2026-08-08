@@ -4,14 +4,13 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { clerkMiddleware, getAuth, requireAuth } from "@clerk/express";
-import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
 import publicCustomerActivityRouter from "./routes/public-customer-activity";
 import { logger } from "./lib/logger";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
-  getClerkProxyHost,
+
 } from "./middlewares/clerkProxyMiddleware";
 import { objectStorageClient, ObjectStorageService } from "./lib/objectStorage";
 import multer from "multer";
@@ -118,13 +117,17 @@ app.use(
 
 // ─── Clerk middleware — mounted early so requireAuth() works on all routes ────
 // (does not need req.body, only reads Authorization header)
+//
+// IMPORTANT: Do NOT use publishableKeyFromHost() here.
+// For live (pk_live_*) keys that function ignores the fallback and derives a new
+// key from clerk.{x-forwarded-host}. When the API is accessed via
+// account.awajimaaai.com the derived key becomes clerk.account.awajimaaai.com —
+// a nonexistent Clerk instance — and every OAuth state check fails with
+// authorization_invalid. Use CLERK_PUBLISHABLE_KEY directly instead.
 app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
+  clerkMiddleware({
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  }),
 );
 
 // ─── Public: return the Clerk publishable key (safe — it is designed to be public) ──
