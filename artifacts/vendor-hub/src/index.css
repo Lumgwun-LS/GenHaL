@@ -174,3 +174,79 @@
   border-radius: 0.5rem;
   overflow-x: auto;
 }
+
+/* ── Themed sidebar: always render as dark regardless of page theme ─────────── */
+[data-theme] aside {
+  color-scheme: dark;
+}
+
+/* Nav links inside the themed dark sidebar — enforce light text */
+[data-theme] aside a,
+[data-theme] aside button {
+  color: rgba(255,255,255,0.65);
+}
+[data-theme] aside a:hover,
+[data-theme] aside button:hover {
+  color: rgba(255,255,255,0.9);
+  background-color: rgba(255,255,255,0.06);
+}
+[data-theme] aside p,
+[data-theme] aside span {
+  color: inherit;
+}
+
+/* ── Biz Suite dashboard entry animations ───────────────────────────────────── */
+
+@keyframes awaBounceInLeft {
+  0%   { opacity:0; transform:translateX(-70px) scale(0.95) }
+  55%  { opacity:1; transform:translateX(10px) scale(1.01) }
+  75%  { transform:translateX(-5px) scale(0.99) }
+  90%  { transform:translateX(3px) }
+  100% { opacity:1; transform:translateX(0) scale(1) }
+}
+@keyframes awaBounceInRight {
+  0%   { opacity:0; transform:translateX(70px) scale(0.95) }
+  55%  { opacity:1; transform:translateX(-10px) scale(1.01) }
+  75%  { transform:translateX(5px) scale(0.99) }
+  100% { opacity:1; transform:translateX(0) scale(1) }
+}
+@keyframes awaBounceIn {
+  0%   { opacity:0; transform:scale(0.65) }
+  45%  { opacity:1; transform:scale(1.06) }
+  65%  { transform:scale(0.95) }
+  80%  { transform:scale(1.03) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaBounceInUp {
+  0%   { opacity:0; transform:translateY(70px) scale(0.95) }
+  55%  { opacity:1; transform:translateY(-10px) scale(1.01) }
+  75%  { transform:translateY(5px) scale(0.99) }
+  100% { opacity:1; transform:translateY(0) scale(1) }
+}
+@keyframes awaZoomIn {
+  0%   { opacity:0; transform:scale(0.45) }
+  55%  { opacity:1; transform:scale(1.05) }
+  75%  { transform:scale(0.97) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaFlipInX {
+  0%   { opacity:0; transform:perspective(600px) rotateX(-90deg) scale(0.9) }
+  40%  { opacity:0.6; transform:perspective(600px) rotateX(18deg) }
+  70%  { transform:perspective(600px) rotateX(-8deg) }
+  100% { opacity:1; transform:perspective(600px) rotateX(0deg) scale(1) }
+}
+@keyframes awaFadeInLeft {
+  0%   { opacity:0; transform:translateX(-28px) }
+  100% { opacity:1; transform:translateX(0) }
+}
+@keyframes awaFadeInUp {
+  0%   { opacity:0; transform:translateY(28px) }
+  100% { opacity:1; transform:translateY(0) }
+}
+
+/* ── Theme CSS variables ───────────────────────────────────────────────────── */
+:root,
+[data-theme="unyeada"] { --biz-radius:12px; --biz-accent:#818CF8; }
+[data-theme="ekede"]   { --biz-radius:20px; --biz-accent:#F97316; }
+[data-theme="okoroete"]{ --biz-radius:16px; --biz-accent:#10B981; }
+[data-theme="otuo"]    { --biz-radius:8px;  --biz-accent:#A855F7; }
