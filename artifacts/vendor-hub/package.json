@@ -90,6 +90,7 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
-    "@workspace/api-zod": "workspace:*"
+    "@workspace/api-zod": "workspace:*",
+    "zustand": "^5.0.14"
   }
 }

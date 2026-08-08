@@ -46,8 +46,11 @@ import {
   BookOpen,
   CheckSquare,
   TicketCheck,
+  Palette,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
+import { ThemePicker } from "@/components/ui/ThemePicker";
+import { useThemeStore } from "@/store/themeStore";
 import { useState, useCallback } from "react";
 import { trackEvent } from "@/lib/analytics";
 import { useCurrentVendor } from "@/hooks/useCurrentVendor";
@@ -338,6 +341,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const search = useSearch();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const { config: themeConfig, theme } = useThemeStore();
   const isAdmin = useIsAdmin();
   const { vendor } = useCurrentVendor();
 
@@ -347,7 +352,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   }, [vendor]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row" data-theme={theme}>
 
       {/* ── Mobile top bar ─────────────────────────────────────── */}
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b bg-card/95 backdrop-blur-md">
@@ -379,18 +384,27 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar ───────────────────────────────────────────── */}
       {/*   mobile: fixed overlay that slides in from left         */}
       {/*   desktop: sticky column that matches the viewport height */}
-      <aside className={cn(
-        // shared
-        "z-50 w-72 bg-card border-r border-border/60 flex flex-col",
-        // mobile: full-height fixed slide-in panel — h-screen + overflow-hidden give flex a definite height so children can scroll
-        "fixed inset-y-0 left-0 h-screen overflow-hidden transition-transform duration-300 ease-in-out",
-        isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
-        // desktop: static sticky column — key fix for scroll
-        "md:sticky md:top-0 md:h-screen md:translate-x-0 md:transition-none md:shadow-none"
-      )}>
+      <aside
+        className={cn(
+          // shared
+          "z-50 w-72 flex flex-col",
+          // mobile: full-height fixed slide-in panel
+          "fixed inset-y-0 left-0 h-screen overflow-hidden transition-transform duration-300 ease-in-out",
+          isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+          // desktop: static sticky column
+          "md:sticky md:top-0 md:h-screen md:translate-x-0 md:transition-none md:shadow-none"
+        )}
+        style={{
+          background: themeConfig.sidebarGradient,
+          borderRight: `1px solid ${themeConfig.sidebarBorderColor}`,
+        }}
+      >
 
         {/* Sidebar header — click logo to go to landing page */}
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50 shrink-0">
+        <div
+          className="flex items-center gap-3 px-4 h-16 shrink-0"
+          style={{ borderBottom: `1px solid ${themeConfig.sidebarBorderColor}` }}
+        >
           <Link
             href="/home"
             className="flex items-center gap-3 flex-1 min-w-0 group/logo"
@@ -398,8 +412,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           >
             <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="w-8 h-8 rounded object-cover shrink-0 group-hover/logo:opacity-80 transition-opacity" />
             <div className="min-w-0">
-              <span className="font-bold text-sm tracking-tight block truncate group-hover/logo:text-primary transition-colors">Awa Biz Suite</span>
-              <span className="text-[10px] text-muted-foreground/60 font-medium">Business Platform</span>
+              <span className="font-bold text-sm tracking-tight block truncate text-white group-hover/logo:text-white/80 transition-colors">Awa Biz Suite</span>
+              <span className="text-[10px] text-white/40 font-medium">Business Platform</span>
             </div>
           </Link>
           {/* Mobile close */}
@@ -411,13 +425,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Scrollable nav — min-h-0 overrides flex's default min-height:auto so the nav can actually shrink and scroll */}
+        {/* Scrollable nav */}
         <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-2 px-2 space-y-0.5
           [&::-webkit-scrollbar]:w-1
           [&::-webkit-scrollbar-track]:bg-transparent
           [&::-webkit-scrollbar-thumb]:rounded-full
-          [&::-webkit-scrollbar-thumb]:bg-border/50
-          [&::-webkit-scrollbar-thumb:hover]:bg-border">
+          [&::-webkit-scrollbar-thumb]:bg-white/20
+          [&::-webkit-scrollbar-thumb:hover]:bg-white/40">
 
           {NAV_GROUPS.map((group, gi) => (
             <NavGroupSection
@@ -481,19 +495,32 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* User bar — pinned to bottom */}
-        <div className="px-3 py-3 border-t border-border/50 shrink-0 flex items-center gap-3 bg-card">
+        <div
+          className="px-3 py-3 shrink-0 flex items-center gap-3"
+          style={{ borderTop: `1px solid ${themeConfig.sidebarBorderColor}` }}
+        >
           <UserButton
             {...{ afterSignOutUrl: "/" } as object}
             appearance={{ elements: { userButtonAvatarBox: "w-8 h-8" } }}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">My Account</p>
+            <p className="text-sm font-medium truncate text-white/80">My Account</p>
           </div>
+          {/* Theme picker trigger */}
+          <button
+            onClick={() => setThemePickerOpen(true)}
+            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+            title="Change dashboard theme"
+          >
+            <Palette className="w-4 h-4" />
+          </button>
           <div className="hidden md:block">
             <NotificationBell />
           </div>
         </div>
       </aside>
+
+      <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
 
       {/* ── Main content ──────────────────────────────────────── */}
       <main className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
