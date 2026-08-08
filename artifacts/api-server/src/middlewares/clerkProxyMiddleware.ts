@@ -75,7 +75,12 @@ export function clerkProxyMiddleware(): RequestHandler {
       proxyReq: (proxyReq, req) => {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = getClerkProxyHost(req) || '';
-        const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
+        // CLERK_PROXY_URL overrides the dynamic host computation.
+        // Set this env var to the exact public URL of this proxy
+        // (e.g. https://account.awajimaaai.com/api/__clerk) so it always
+        // matches the VITE_CLERK_PROXY_URL baked into the frontend bundle,
+        // even when Replit's infrastructure changes the x-forwarded-host.
+        const proxyUrl = process.env.CLERK_PROXY_URL || `${protocol}://${host}${CLERK_PROXY_PATH}`;
 
         proxyReq.setHeader('Clerk-Proxy-Url', proxyUrl);
         proxyReq.setHeader('Clerk-Secret-Key', secretKey);
