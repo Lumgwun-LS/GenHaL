@@ -7,7 +7,7 @@ const _API_ORIGIN =
   typeof window !== "undefined" &&
   (window.location.hostname === "awajimaaappstore.com" ||
     window.location.hostname === "www.awajimaaappstore.com")
-    ? "https://account.awajimaaai.com"
+    ? "https://api.awajimaaai.com"
     : "";
 
 /**

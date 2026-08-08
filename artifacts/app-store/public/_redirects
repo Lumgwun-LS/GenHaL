@@ -2,10 +2,10 @@
 # Status 302 (browser redirect) works for cross-origin on Cloudflare Pages.
 # Status 200 (proxy) only works for same-origin rewrites — do NOT use it here.
 # Chain: awajimaaappstore.com/dl/:pkg → API /api/store/dl/:pkg → 302 → R2 APK
-/dl/*   https://account.awajimaaai.com/api/store/dl/:splat  302
+/dl/*   https://api.awajimaaai.com/api/store/dl/:splat  302
 
 # Proxy all other API calls (including Clerk proxy at /api/__clerk/*) to the API server.
-/api/*  https://account.awajimaaai.com/api/:splat  200
+/api/*  https://api.awajimaaai.com/api/:splat  200
 
 # SPA fallback — any path that isn't a static file gets index.html so React Router works.
 /*  /index.html  200

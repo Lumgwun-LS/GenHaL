@@ -9,7 +9,7 @@ const PLATFORM = "vendor-hub";
 // CF_PAGES=1 is auto-injected by Cloudflare at build time — no dashboard env var needed.
 declare const __CF_PAGES__: boolean;
 const _API_ORIGIN = __CF_PAGES__
-  ? 'https://account.awajimaaai.com'
+  ? 'https://api.awajimaaai.com'
   : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PV_ENDPOINT  = `${_API_ORIGIN}${BASE}/api/analytics/pageview`;
