@@ -17,7 +17,7 @@
 // On Replit the flag is false and relative paths work via the platform proxy.
 declare const __CF_PAGES__: boolean;
 const _API_ORIGIN = __CF_PAGES__
-  ? 'https://account.awajimaaai.com'
+  ? 'https://api.awajimaaai.com'
   : ((import.meta.env as Record<string, string>).VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 function resolveApiUrl(url: string | URL): string | URL {

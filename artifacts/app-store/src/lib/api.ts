@@ -10,7 +10,7 @@ const _onCustomDomain =
     window.location.hostname === 'www.awajimaaappstore.com');
 const API_ORIGIN =
   __CF_PAGES__ || _onCustomDomain
-    ? 'https://account.awajimaaai.com'
+    ? 'https://api.awajimaaai.com'
     : ((import.meta.env.VITE_API_BASE_URL ?? '') as string).replace(/\/+$/, '');
 const API_BASE = `${API_ORIGIN}/api/store`;
 

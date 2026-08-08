@@ -88,7 +88,7 @@ const FIRST_PARTY_ORIGINS = [
   "https://www.awajimaaai.com",
   "https://awajimaaappstore.com",
   "https://www.awajimaaappstore.com",
-  "https://account.awajimaaai.com",
+  "https://api.awajimaaai.com",
   "https://awajimaaapp.io",
   "https://www.awajimaaapp.io",
   "https://app.awajimaaapp.io",
@@ -121,7 +121,7 @@ app.use(
 // IMPORTANT: Do NOT use publishableKeyFromHost() here.
 // For live (pk_live_*) keys that function ignores the fallback and derives a new
 // key from clerk.{x-forwarded-host}. When the API is accessed via
-// account.awajimaaai.com the derived key becomes clerk.account.awajimaaai.com —
+// api.awajimaaai.com the derived key becomes clerk.api.awajimaaai.com —
 // a nonexistent Clerk instance — and every OAuth state check fails with
 // authorization_invalid. Use CLERK_PUBLISHABLE_KEY directly instead.
 app.use(
