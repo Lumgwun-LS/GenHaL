@@ -39,7 +39,7 @@ GCS_BUCKET_NAME = "awajimaa-ai"
 CI = "true"
 
 [userenv.production]
-VITE_CLERK_PROXY_URL = "https://account.awajimaaai.com/api/__clerk"
+VITE_CLERK_PROXY_URL = "https://account.awajimaaai.com"
 VITE_API_BASE_URL = "https://api.awajimaaai.com"
 CLERK_PROXY_URL = "https://account.awajimaaai.com/api/__clerk"
 
