@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useClerk } from "@clerk/react";
+import { useClerk, useSignIn } from "@clerk/react";
 import { Loader2, ShieldCheck, AlertCircle, Smartphone } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -22,6 +22,7 @@ type Stage = "verifying" | "signing-in" | "redirecting" | "error";
 export default function SsoLoginPage() {
   const [, setLocation] = useLocation();
   const { setActive } = useClerk();
+  const { signIn } = useSignIn();
   const [stage, setStage] = useState<Stage>("verifying");
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string>("");
@@ -75,17 +76,21 @@ export default function SsoLoginPage() {
   async function useClerkToken(token: string) {
     try {
       setStage("signing-in");
-      // Use the Clerk sign-in token to establish a session
-      // This is handled by Clerk's own magic-link mechanism via the URL
-      // The token in the URL is consumed by Clerk's JS automatically on load
-      // Give Clerk a moment to process it
-      await new Promise(r => setTimeout(r, 800));
+      if (!signIn) {
+        throw new Error("Sign-in not available yet — please try again.");
+      }
+      // Redeem the Clerk sign-in token issued by the SSO exchange endpoint
+      const result = await signIn.create({
+        strategy: "ticket",
+        ticket: token,
+      });
+      await setActive({ session: result.createdSessionId });
       setStage("redirecting");
       await new Promise(r => setTimeout(r, 500));
       setLocation("/");
     } catch (e: any) {
       setStage("error");
-      setError("Session could not be established. Please sign in manually.");
+      setError(e?.errors?.[0]?.longMessage || e.message || "Session could not be established. Please sign in manually.");
     }
   }
 
