@@ -39,7 +39,9 @@ GCS_BUCKET_NAME = "awajimaa-ai"
 CI = "true"
 
 [userenv.production]
-VITE_CLERK_PROXY_URL = "https://awajimaaai.com/api/__clerk"
+VITE_CLERK_PROXY_URL = "https://account.awajimaaai.com/api/__clerk"
+VITE_API_BASE_URL = "https://api.awajimaaai.com"
+CLERK_PROXY_URL = "https://account.awajimaaai.com/api/__clerk"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d27cc8fc-129c-4580-8bfb-e51fb25d707a"
