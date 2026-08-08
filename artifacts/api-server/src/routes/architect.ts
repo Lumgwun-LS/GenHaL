@@ -341,7 +341,7 @@ router.post("/architect/generate-design", asyncHandler(async (req, res) => {
   let revisedPrompt: string | null = null;
   try {
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt: fullPrompt,
       n: 1,
       size: "1024x1024",
@@ -429,7 +429,7 @@ Return ONLY the DALL-E 3 prompt — no explanation, no preamble.`,
   let revisedPrompt: string | null = null;
   try {
     const imgResponse = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt: fullPrompt,
       n: 1,
       size: "1024x1024",
