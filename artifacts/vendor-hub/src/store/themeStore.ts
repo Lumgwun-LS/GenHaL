@@ -2,11 +2,15 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type DashboardTheme = "unyeada" | "ekede" | "okoroete" | "otuo";
+export type SidebarVariant = "electric" | "harvest" | "glass" | "royal";
 
 export interface ThemeConfig {
   name: string;
   tagline: string;
   emoji: string;
+  layoutLabel: string;
+  layoutDescription: string;
+  sidebarVariant: SidebarVariant;
   /** CSS class added to <aside> override block */
   sidebarClass: string;
   /** Inline-style gradient for sidebar (dark vendor palette) */
@@ -26,6 +30,9 @@ export const THEMES: Record<DashboardTheme, ThemeConfig> = {
     name: "Unyeada",
     tagline: "Bold & Powerful",
     emoji: "⚡",
+    layoutLabel: "Electric",
+    layoutDescription: "Neon borders · Glow effects · Sharp precision",
+    sidebarVariant: "electric",
     sidebarClass: "theme-unyeada",
     sidebarGradient: "linear-gradient(170deg,#070B18 0%,#0D1128 55%,#131530 100%)",
     sidebarBorderColor: "rgba(99,102,241,0.18)",
@@ -39,6 +46,9 @@ export const THEMES: Record<DashboardTheme, ThemeConfig> = {
     name: "Ekede",
     tagline: "The Harvest Day",
     emoji: "🌅",
+    layoutLabel: "Harvest",
+    layoutDescription: "Warm fills · Generous spacing · Amber warmth",
+    sidebarVariant: "harvest",
     sidebarClass: "theme-ekede",
     sidebarGradient: "linear-gradient(170deg,#1A0800 0%,#2D1000 55%,#3D1600 100%)",
     sidebarBorderColor: "rgba(249,115,22,0.22)",
@@ -52,6 +62,9 @@ export const THEMES: Record<DashboardTheme, ThemeConfig> = {
     name: "Okoroete",
     tagline: "The Gathering Place",
     emoji: "🌿",
+    layoutLabel: "Glass",
+    layoutDescription: "Frosted glass · Pill shapes · Soft nature glow",
+    sidebarVariant: "glass",
     sidebarClass: "theme-okoroete",
     sidebarGradient: "linear-gradient(170deg,#011408 0%,#022510 55%,#033318 100%)",
     sidebarBorderColor: "rgba(16,185,129,0.22)",
@@ -65,6 +78,9 @@ export const THEMES: Record<DashboardTheme, ThemeConfig> = {
     name: "Otuo",
     tagline: "The Royal Title",
     emoji: "👑",
+    layoutLabel: "Royal",
+    layoutDescription: "Uppercase elegance · Gold accents · Luxury minimal",
+    sidebarVariant: "royal",
     sidebarClass: "theme-otuo",
     sidebarGradient: "linear-gradient(170deg,#0E0720 0%,#1A0D38 55%,#220E48 100%)",
     sidebarBorderColor: "rgba(168,85,247,0.22)",
