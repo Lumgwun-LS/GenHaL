@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Network, BookOpen, Globe2, Sparkles, LayoutDashboard, Menu, X, UserCircle } from 'lucide-react';
+import { Network, BookOpen, Globe2, Sparkles, LayoutDashboard, Menu, X, UserCircle, Mic } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { name: 'Heritage', href: '/heritage', icon: BookOpen },
     { name: 'Language', href: '/language', icon: Globe2 },
     { name: 'AI Studio', href: '/ai', icon: Sparkles },
+    { name: 'Collect', href: '/collect', icon: Mic },
   ];
 
   return (

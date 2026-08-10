@@ -10,7 +10,11 @@ import {
   genhalLanguagesTable,
   genhalLanguageEntriesTable,
   genhalAiGenerationsTable,
+  genhalLanguageRecordingsTable,
 } from "@workspace/db";
+import { ObjectStorageService } from "../lib/objectStorage";
+
+const objectStorageService = new ObjectStorageService();
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../lib/logger";
@@ -565,6 +569,192 @@ router.get("/genhal/ai/generations", requireAuth(), async (req, res) => {
     res.json(generations.map(g => ({ ...g, createdAt: new Date(g.createdAt).toISOString() })));
   } catch (err) {
     logger.error(err, "listGenhalAiGenerations error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Heritage Collector — Language Recordings ─────────────────────────────────
+
+// POST /genhal/collect/upload-url — get a presigned PUT URL for audio/video/image
+router.post("/genhal/collect/upload-url", requireAuth(), async (req, res) => {
+  try {
+    const { mediaType } = req.body as { mediaType?: "audio" | "video" | "image" };
+    if (!["audio", "video", "image"].includes(mediaType ?? "")) {
+      return res.status(400).json({ error: "mediaType must be 'audio', 'video', or 'image'" });
+    }
+
+    const base = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+    if (!base) return res.status(500).json({ error: "No public domain configured" });
+
+    const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
+    const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+    const mediaUrl = `https://${base}/api/media/${objectId}`;
+
+    await objectStorageService
+      .trySetObjectEntityAclPolicy(objectPath, { owner: "system:genhal-recording", visibility: "public" })
+      .catch(() => {/* best-effort */});
+
+    res.json({ uploadUrl, mediaUrl });
+  } catch (err) {
+    logger.error(err, "genhal/collect/upload-url error");
+    res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+// GET /genhal/collect — list user's recordings
+router.get("/genhal/collect", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const type = req.query.type as string | undefined;
+    const languageCode = req.query.languageCode as string | undefined;
+
+    const conditions = [eq(genhalLanguageRecordingsTable.clerkUserId, userId!)];
+    if (type) conditions.push(eq(genhalLanguageRecordingsTable.type, type));
+    if (languageCode) conditions.push(eq(genhalLanguageRecordingsTable.languageCode, languageCode));
+
+    const rows = await db.select()
+      .from(genhalLanguageRecordingsTable)
+      .where(and(...conditions))
+      .orderBy(desc(genhalLanguageRecordingsTable.createdAt))
+      .limit(100);
+
+    res.json(rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })));
+  } catch (err) {
+    logger.error(err, "listGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /genhal/collect/dataset — aggregate stats for the ML pipeline dashboard
+router.get("/genhal/collect/dataset", requireAuth(), async (req, res) => {
+  try {
+    const byType = await db
+      .select({
+        type: genhalLanguageRecordingsTable.type,
+        status: genhalLanguageRecordingsTable.status,
+        cnt: count(),
+      })
+      .from(genhalLanguageRecordingsTable)
+      .groupBy(genhalLanguageRecordingsTable.type, genhalLanguageRecordingsTable.status);
+
+    const byLanguage = await db
+      .select({
+        languageCode: genhalLanguageRecordingsTable.languageCode,
+        cnt: count(),
+      })
+      .from(genhalLanguageRecordingsTable)
+      .groupBy(genhalLanguageRecordingsTable.languageCode)
+      .orderBy(desc(count()))
+      .limit(20);
+
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(genhalLanguageRecordingsTable);
+
+    const [approvedRow] = await db
+      .select({ approved: count() })
+      .from(genhalLanguageRecordingsTable)
+      .where(eq(genhalLanguageRecordingsTable.status, "approved"));
+
+    res.json({
+      total: Number(totalRow?.total ?? 0),
+      approved: Number(approvedRow?.approved ?? 0),
+      byType: byType.map(r => ({ ...r, cnt: Number(r.cnt) })),
+      byLanguage: byLanguage.map(r => ({ ...r, cnt: Number(r.cnt) })),
+    });
+  } catch (err) {
+    logger.error(err, "genhalCollectDataset error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /genhal/collect — submit a new recording
+router.post("/genhal/collect", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const {
+      type,
+      languageCode,
+      communityId,
+      textContent,
+      audioUrl,
+      videoUrl,
+      photoUrl,
+      transcript,
+      locationLat,
+      locationLng,
+      locationDescription,
+      speakerName,
+      speakerAgeGroup,
+      consentGiven,
+      metadata,
+    } = req.body as Record<string, unknown>;
+
+    if (!type || !languageCode) {
+      return res.status(400).json({ error: "type and languageCode are required" });
+    }
+
+    const [recording] = await db.insert(genhalLanguageRecordingsTable).values({
+      clerkUserId: userId!,
+      type: type as string,
+      languageCode: languageCode as string,
+      communityId: communityId ? Number(communityId) : undefined,
+      textContent: textContent as string | undefined,
+      audioUrl: audioUrl as string | undefined,
+      videoUrl: videoUrl as string | undefined,
+      photoUrl: photoUrl as string | undefined,
+      transcript: transcript as string | undefined,
+      locationLat: locationLat ? String(locationLat) : undefined,
+      locationLng: locationLng ? String(locationLng) : undefined,
+      locationDescription: locationDescription as string | undefined,
+      speakerName: speakerName as string | undefined,
+      speakerAgeGroup: speakerAgeGroup as string | undefined,
+      consentGiven: consentGiven !== false,
+      metadata: metadata as Record<string, unknown> | undefined,
+    }).returning();
+
+    res.status(201).json({ ...recording, createdAt: new Date(recording.createdAt).toISOString() });
+  } catch (err) {
+    logger.error(err, "submitGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /genhal/collect/:id — update quality score, transcript, or status
+router.patch("/genhal/collect/:id", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const id = Number(req.params.id);
+    const { qualityScore, transcript, status } = req.body as Record<string, unknown>;
+
+    const [updated] = await db.update(genhalLanguageRecordingsTable)
+      .set({
+        ...(qualityScore !== undefined && { qualityScore: Number(qualityScore) }),
+        ...(transcript !== undefined && { transcript: transcript as string }),
+        ...(status !== undefined && { status: status as string }),
+      })
+      .where(and(eq(genhalLanguageRecordingsTable.id, id), eq(genhalLanguageRecordingsTable.clerkUserId, userId!)))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "Recording not found" });
+    res.json({ ...updated, createdAt: new Date(updated.createdAt).toISOString() });
+  } catch (err) {
+    logger.error(err, "updateGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /genhal/collect/:id
+router.delete("/genhal/collect/:id", requireAuth(), async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const id = Number(req.params.id);
+    await db.delete(genhalLanguageRecordingsTable)
+      .where(and(eq(genhalLanguageRecordingsTable.id, id), eq(genhalLanguageRecordingsTable.clerkUserId, userId!)));
+    res.status(204).send();
+  } catch (err) {
+    logger.error(err, "deleteGenhalCollect error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

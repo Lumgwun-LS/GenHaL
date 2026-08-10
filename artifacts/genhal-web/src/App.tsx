@@ -16,6 +16,7 @@ import CommunityDetail from '@/pages/heritage/community';
 import LanguageCenter from '@/pages/language/index';
 import Dictionary from '@/pages/language/dictionary';
 import AiStudio from '@/pages/ai/index';
+import HeritageCollector from '@/pages/collect/index';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,8 @@ function Router() {
           <Route path="/language/:code" component={Dictionary} />
           
           <Route path="/ai" component={AiStudio} />
+          
+          <Route path="/collect" component={HeritageCollector} />
           
           <Route component={NotFound} />
         </Switch>
