@@ -172,16 +172,24 @@ export default function Home() {
 
   return (
     <div className="space-y-12 pb-12">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-3xl bg-secondary text-secondary-foreground p-8 md:p-16 flex flex-col justify-center items-start shadow-2xl min-h-[420px]">
+      {/* Hero Section — full-bleed on mobile, card on desktop */}
+      <section className="relative overflow-hidden
+        -mx-4 -mt-4 rounded-none
+        md:mx-0 md:mt-0 md:rounded-3xl
+        bg-secondary text-secondary-foreground
+        px-8 py-14 md:p-16
+        flex flex-col justify-center items-start shadow-2xl min-h-[520px] md:min-h-[480px]">
         {/* background photo */}
-        <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=2572&auto=format&fit=crop')] bg-cover bg-center" />
-        <div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/90 to-transparent" />
+        <div className="absolute inset-0 opacity-15 bg-[url('https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=2572&auto=format&fit=crop')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-secondary/92 to-secondary/40" />
+        {/* top edge glow — connects to mobile header */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-        {/* floating colour orbs */}
-        <FloatingOrb className="w-72 h-72 bg-primary top-[-4rem] right-[-4rem] animation-delay-0" />
-        <FloatingOrb className="w-48 h-48 bg-accent bottom-[-2rem] right-[20%] animation-delay-700" />
-        <FloatingOrb className="w-32 h-32 bg-purple-400 top-[40%] right-[40%] animation-delay-1400" />
+        {/* floating colour orbs — bigger & more dramatic */}
+        <FloatingOrb className="w-96 h-96 bg-primary top-[-6rem] right-[-6rem] animation-delay-0" />
+        <FloatingOrb className="w-64 h-64 bg-accent bottom-[-3rem] right-[15%] animation-delay-700" />
+        <FloatingOrb className="w-40 h-40 bg-purple-400 top-[35%] right-[35%] animation-delay-1400" />
+        <FloatingOrb className="w-24 h-24 bg-amber-500 bottom-[20%] left-[-2rem] animation-delay-500" />
 
         <div className="relative z-10 max-w-2xl space-y-6">
           {/* pill badge */}
@@ -195,11 +203,11 @@ export default function Home() {
 
           {/* headline */}
           <h1
-            className="text-5xl md:text-7xl font-serif font-bold leading-tight
+            className="text-5xl md:text-7xl font-serif font-bold leading-[1.08] tracking-tight
                        animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150"
           >
             Know Your <span className="text-accent">Roots</span>.<br />
-            Tell Your <span className="text-primary-foreground/90">Story</span>.
+            Tell Your Story.
           </h1>
 
           {/* tagline */}

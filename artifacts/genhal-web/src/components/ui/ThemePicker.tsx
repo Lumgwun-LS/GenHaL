@@ -157,32 +157,36 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                   </div>
                 </div>
 
-                {/* Label & badge */}
-                <div className="flex items-center gap-2.5 px-3.5 py-3"
+                {/* Label row */}
+                <div className="px-3.5 pt-3 pb-2"
                   style={{ background: isActive ? `${cfg.accentColor}12` : "rgba(255,255,255,0.04)" }}>
-                  <span className="text-xl leading-none">{cfg.emoji}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn(
-                      "truncate text-sm font-bold text-white",
-                      cfg.sidebarVariant === "royal" && "uppercase tracking-wider text-xs"
-                    )}>
-                      {cfg.name}
-                    </p>
-                    <p className="truncate text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-                      {cfg.tagline}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
+                  {/* Name + check */}
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-base leading-none shrink-0">{cfg.emoji}</span>
+                      <p className={cn(
+                        "text-sm font-bold text-white leading-tight",
+                        cfg.sidebarVariant === "royal" && "uppercase tracking-wide text-xs"
+                      )}>
+                        {cfg.name}
+                      </p>
+                    </div>
                     {isActive ? (
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
                         style={{ background: cfg.accentColor }}>
-                        <Check className="h-3 w-3 text-white" />
+                        <Check className="h-2.5 w-2.5 text-white" />
                       </div>
                     ) : (
-                      <div className="h-5 w-5 shrink-0 rounded-full"
-                        style={{ border: "2px solid rgba(255,255,255,0.18)" }} />
+                      <div className="h-4 w-4 shrink-0 rounded-full"
+                        style={{ border: "1.5px solid rgba(255,255,255,0.2)" }} />
                     )}
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide"
+                  </div>
+                  {/* Tagline + badge */}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] truncate" style={{ color: "rgba(255,255,255,0.38)" }}>
+                      {cfg.tagline}
+                    </p>
+                    <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide"
                       style={{
                         background: `${cfg.accentColor}18`,
                         color: cfg.accentColor,
@@ -191,14 +195,11 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                       {cfg.layoutLabel}
                     </span>
                   </div>
-                </div>
-
-                <div className="px-3.5 pb-3 text-[10px]"
-                  style={{
-                    color: "rgba(255,255,255,0.35)",
-                    background: isActive ? `${cfg.accentColor}06` : "rgba(255,255,255,0.03)",
-                  }}>
-                  {cfg.layoutDescription}
+                  {/* Description */}
+                  <p className="mt-1.5 text-[9px] leading-relaxed"
+                    style={{ color: "rgba(255,255,255,0.3)" }}>
+                    {cfg.layoutDescription}
+                  </p>
                 </div>
               </button>
             );

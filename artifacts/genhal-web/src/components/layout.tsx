@@ -165,7 +165,7 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row" data-theme={theme}>
+    <div className="min-h-screen flex flex-col md:flex-row" style={{ background: 'hsl(222 47% 5%)' }} data-theme={theme}>
       <ThemeFlashOverlay />
       <ThemePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
 
@@ -352,7 +352,7 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0" style={{ background: 'hsl(222 47% 5%)' }}>
         <div className="flex-1 p-4 md:p-8 md:pt-10 max-w-7xl mx-auto w-full">
           {children}
         </div>
