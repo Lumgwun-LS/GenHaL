@@ -88,6 +88,7 @@ import genhalKingdomsRouter from "./genhal-kingdoms";
 import genhalVaultRouter from "./genhal-vault";
 import genhalMembersRouter from "./genhal-members";
 import genhalSubscriptionsRouter from "./genhal-subscriptions";
+import genhalSecretAccountsRouter from "./genhal-secret-accounts";
 import aiGatewayRouter from "./ai-gateway";
 import publicBlogRouter from "./public-blog";
 import supportPublicRouter from "./support-public";
@@ -266,6 +267,7 @@ router.use(genhalKingdomsRouter);
 router.use(genhalVaultRouter);
 router.use(genhalMembersRouter);
 router.use(genhalSubscriptionsRouter);
+router.use(genhalSecretAccountsRouter);
 
 // AI Gateway — key-based auth (X-Gateway-Key), callable by Spring Boot + Python workers
 router.use(aiGatewayRouter);

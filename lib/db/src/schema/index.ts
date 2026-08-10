@@ -121,3 +121,4 @@ export * from "./genhal-civic";
 export * from "./genhal-vault";
 export * from "./genhal-members";
 export * from "./genhal-subscriptions";
+export * from "./genhal-secret-accounts";

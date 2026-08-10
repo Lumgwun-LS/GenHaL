@@ -9,6 +9,7 @@ import {
 import VaultTab from '@/pages/vault/index';
 import MembersTab from '@/pages/members/index';
 import SubscriptionTab from '@/pages/subscription/index';
+import SecretAccountsTab from '@/pages/accounts/index';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -162,6 +163,7 @@ export default function KingdomDetail() {
               { v:'vault',         l:'📂 Vault' },
               { v:'members',       l:'👥 Members' },
               { v:'subscription',  l:'💳 Plan' },
+              { v:'accounts',      l:'🏦 Accounts' },
             ].map(t=><TabsTrigger key={t.v} value={t.v} className="rounded-lg text-xs">{t.l}</TabsTrigger>)}
           </TabsList>
 
@@ -451,6 +453,11 @@ export default function KingdomDetail() {
           {/* ── SUBSCRIPTION ── */}
           <TabsContent value="subscription" className="px-6 md:px-10 py-6">
             <SubscriptionTab unitType="kingdom" unitId={kingdom.id} />
+          </TabsContent>
+
+          {/* ── ACCOUNTS ── */}
+          <TabsContent value="accounts" className="px-6 md:px-10 py-6">
+            <SecretAccountsTab unitType="kingdom" unitId={kingdom.id} unitName={kingdom.name} />
           </TabsContent>
         </Tabs>
       </div>
