@@ -225,11 +225,11 @@
 }
 
 /* ── Per-variant nav link hover animations ─────────────────────────────── */
-[data-theme="nnenna"] aside a:hover,
-[data-theme="nnenna"] aside button.nav-item:hover  { transform: translateX(3px); }
-[data-theme="savanna"] aside a:hover,
-[data-theme="savanna"] aside button.nav-item:hover { transform: translateY(-1px); }
-[data-theme="kpokpo"] aside a:hover,
-[data-theme="kpokpo"] aside button.nav-item:hover  { transform: scale(1.02); }
-[data-theme="oba"] aside a:hover,
-[data-theme="oba"] aside button.nav-item:hover     { letter-spacing: 0.14em; }
+[data-theme="unyeada"] aside a:hover,
+[data-theme="unyeada"] aside button.nav-item:hover  { transform: translateX(3px); }
+[data-theme="ekede"] aside a:hover,
+[data-theme="ekede"] aside button.nav-item:hover    { transform: translateY(-1px); }
+[data-theme="okoroete"] aside a:hover,
+[data-theme="okoroete"] aside button.nav-item:hover { transform: scale(1.02); }
+[data-theme="otuo"] aside a:hover,
+[data-theme="otuo"] aside button.nav-item:hover     { letter-spacing: 0.14em; }

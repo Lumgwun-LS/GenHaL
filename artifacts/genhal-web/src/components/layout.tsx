@@ -56,7 +56,7 @@ function NavItem({
 }) {
   const base = 'flex items-center gap-3 text-sm font-medium transition-all duration-200 nav-item';
 
-  if (variant === 'ember') {
+  if (variant === 'electric') {
     return (
       <Link href={locked ? '/sign-in' : href} onClick={onClick}
         className={cn(base, 'px-4 py-2.5 relative')}
@@ -76,7 +76,7 @@ function NavItem({
     );
   }
 
-  if (variant === 'golden') {
+  if (variant === 'harvest') {
     return (
       <Link href={locked ? '/sign-in' : href} onClick={onClick}
         className={cn(base, 'px-4 py-3 rounded-2xl harvest-active-item-maybe')}
@@ -96,7 +96,7 @@ function NavItem({
     );
   }
 
-  if (variant === 'grove') {
+  if (variant === 'glass') {
     return (
       <Link href={locked ? '/sign-in' : href} onClick={onClick}
         className={cn(base, 'px-4 py-2.5 rounded-full')}
@@ -159,8 +159,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const sidebarStyle = {
     background: config.sidebarGradient,
     borderRight: `1px solid ${config.sidebarBorderColor}`,
-    backdropFilter: config.sidebarVariant === 'grove' ? 'blur(22px) saturate(1.5)' : undefined,
-    WebkitBackdropFilter: config.sidebarVariant === 'grove' ? 'blur(22px) saturate(1.5)' : undefined,
+    backdropFilter: config.sidebarVariant === 'glass' ? 'blur(22px) saturate(1.5)' : undefined,
+    WebkitBackdropFilter: config.sidebarVariant === 'glass' ? 'blur(22px) saturate(1.5)' : undefined,
     transition: 'background 0.5s ease, border-color 0.4s ease',
   };
 
@@ -193,12 +193,12 @@ export function Layout({ children }: { children: ReactNode }) {
         className={cn(
           'fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 flex flex-col',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-          config.sidebarVariant === 'grove' && 'sidebar-grove',
+          config.sidebarVariant === 'glass' && 'sidebar-grove',
         )}
         style={sidebarStyle}
       >
         {/* Electric edge glow */}
-        {config.sidebarVariant === 'ember' && (
+        {config.sidebarVariant === 'electric' && (
           <div className="sidebar-ember-edge" style={{ background: config.accentColor }} />
         )}
 

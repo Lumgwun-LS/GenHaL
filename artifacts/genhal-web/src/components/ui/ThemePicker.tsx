@@ -47,7 +47,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
         <div className="grid grid-cols-2 gap-4 p-5">
           {(Object.entries(THEMES) as [DashboardTheme, (typeof THEMES)[DashboardTheme]][]).map(([key, cfg]) => {
             const isActive = theme === key;
-            const miniSidebarBg = cfg.sidebarVariant === "grove"
+            const miniSidebarBg = cfg.sidebarVariant === "glass"
               ? "rgba(1,20,8,0.85)"
               : cfg.sidebarGradient;
 
@@ -57,8 +57,8 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                 onClick={() => { setTheme(key); onClose(); }}
                 className={cn(
                   "relative overflow-hidden text-left transition-all duration-200",
-                  cfg.sidebarVariant === "grove" ? "rounded-3xl" :
-                  cfg.sidebarVariant === "golden" ? "rounded-3xl" :
+                  cfg.sidebarVariant === "glass" ? "rounded-3xl" :
+                  cfg.sidebarVariant === "harvest" ? "rounded-3xl" :
                   cfg.sidebarVariant === "royal" ? "rounded-lg" : "rounded-2xl",
                   "hover:scale-[1.025] hover:shadow-2xl active:scale-[0.975]",
                 )}
@@ -81,7 +81,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                     style={{
                       background: miniSidebarBg,
                       borderRight: `1px solid ${cfg.sidebarBorderColor}`,
-                      backdropFilter: cfg.sidebarVariant === "grove" ? "blur(8px)" : undefined,
+                      backdropFilter: cfg.sidebarVariant === "glass" ? "blur(8px)" : undefined,
                     }}
                   >
                     <div className="flex items-center gap-1 mb-1.5 px-0.5">
@@ -92,7 +92,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                     </div>
                     {cfg.palette.slice(0, 5).map((c, i) => {
                       const isActiveItem = i === 0;
-                      if (cfg.sidebarVariant === "ember") return (
+                      if (cfg.sidebarVariant === "electric") return (
                         <div key={i} className="flex items-center gap-1 px-1 py-0.5"
                           style={isActiveItem ? { borderLeft: `2px solid ${c}`, background: `${c}12` }
                             : { borderLeft: "2px solid transparent" }}>
@@ -102,7 +102,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                             style={{ background: isActiveItem ? `${c}60` : "rgba(255,255,255,0.08)" }} />
                         </div>
                       );
-                      if (cfg.sidebarVariant === "golden") return (
+                      if (cfg.sidebarVariant === "harvest") return (
                         <div key={i} className="flex items-center gap-1 rounded-lg px-1 py-0.5"
                           style={isActiveItem ? { background: `${c}22`, border: `1px solid ${c}30` } : {}}>
                           <div className="h-1.5 w-1.5 rounded-sm"
@@ -111,7 +111,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                             style={{ background: isActiveItem ? `${c}50` : "rgba(255,255,255,0.08)" }} />
                         </div>
                       );
-                      if (cfg.sidebarVariant === "grove") return (
+                      if (cfg.sidebarVariant === "glass") return (
                         <div key={i} className="flex items-center gap-1 rounded-full px-1 py-0.5"
                           style={isActiveItem ? { background: `${c}28`, border: `1px solid ${c}40` } : {}}>
                           <div className="h-1.5 w-1.5 rounded-full"
