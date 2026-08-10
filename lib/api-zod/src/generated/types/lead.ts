@@ -30,6 +30,8 @@ export interface Lead {
   /** @nullable */
   score?: number | null;
   /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
   utmSource?: string | null;
   /** @nullable */
   utmMedium?: string | null;

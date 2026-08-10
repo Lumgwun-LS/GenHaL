@@ -84,7 +84,7 @@ export default function SsoLoginPage() {
         strategy: "ticket",
         ticket: token,
       });
-      await setActive({ session: result.createdSessionId });
+      await setActive({ session: (result as any).createdSessionId });
       setStage("redirecting");
       await new Promise(r => setTimeout(r, 500));
       setLocation("/");

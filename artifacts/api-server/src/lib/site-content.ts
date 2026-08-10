@@ -334,18 +334,36 @@ const subscriptionPlanPricingSchema = z.object({
   ngn: z.number().min(0).max(100000000),
 });
 
+const planGatewaysSchema = z
+  .object({ stripe: z.boolean(), paystack: z.boolean(), paypal: z.boolean() })
+  .optional();
+
 const subscriptionPlansSchema = z.object({
   plans: z.array(
     z.object({
-      tier: z.enum(["basic", "starter", "pro", "enterprise"]),
+      /**
+       * Slug identifying the tier — used everywhere billing/checkout references a plan.
+       * Must be lowercase letters, numbers, hyphens, or underscores.
+       * Changing an existing tier slug after vendors have subscribed to it will break
+       * tier lookups for those vendors — treat slugs as immutable once in production.
+       */
+      tier: z.string().min(1).max(50).regex(/^[a-z][a-z0-9_-]*$/, {
+        message: "Tier slug must start with a lowercase letter and contain only lowercase letters, numbers, hyphens, or underscores.",
+      }),
       name: z.string().min(1).max(100),
       pricing: subscriptionPlanPricingSchema,
       description: z.string().max(500),
       features: z.array(z.string().max(300)).max(30),
       highlight: z.boolean(),
       quotas: subscriptionPlanQuotasSchema,
+      /**
+       * Per-plan gateway availability. If omitted, all globally-enabled gateways apply.
+       * If set, intersected with the global billing.paymentGateways setting — a gateway
+       * disabled globally is never available even if enabled here.
+       */
+      gateways: planGatewaysSchema,
     }),
-  ).min(1).max(12),
+  ).min(1).max(20),
 });
 
 const paymentGatewaysSchema = z
@@ -360,7 +378,12 @@ const paymentGatewaysSchema = z
 
 const trialSettingsSchema = z.object({
   enabled: z.boolean(),
-  durationDays: z.number().int().min(1).max(365),
+  /** Default duration offered during Stripe checkout trial signup. */
+  defaultDurationDays: z.number().int().min(1).max(365),
+  /** Durations available in the manual admin-assign-trial UI. */
+  availableDurations: z.array(z.number().int().min(1).max(365)).min(1).max(20),
+  /** Legacy field — kept for backwards compat with old site-content records. */
+  durationDays: z.number().int().min(1).max(365).optional(),
 });
 
 const overageRateValue = z.number().min(0).max(10000);

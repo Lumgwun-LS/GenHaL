@@ -1,6 +1,6 @@
-import { useGetGenhalDashboard } from '@workspace/api-client-react';
+import { useGetGenhalDashboard, useListGenhalLanguageOrgs } from '@workspace/api-client-react';
 import { Link } from 'wouter';
-import { Network, BookOpen, Globe2, Sparkles, Users, Layers, MessageSquare } from 'lucide-react';
+import { Network, BookOpen, Globe2, Sparkles, Users, Layers, MessageSquare, Mic2, Film, Music4, PenLine, Building2, Brain } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,8 +63,61 @@ function TrustedByCard({ community }: { community: typeof TRUSTED_COMMUNITIES[0]
   );
 }
 
+interface LangOrg {
+  id: number; name: string; slug: string;
+  description?: string | null; logoUrl?: string | null;
+  website?: string | null; country?: string | null;
+  foundedYear?: number | null; memberCount?: number; languageCodes?: string[];
+}
+
+function LangOrgCard({ org }: { org: LangOrg }) {
+  const initials = org.name.split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const hue = (org.id * 47) % 360;
+  return (
+    <div className="flex-shrink-0 w-60 mx-3">
+      <div className="bg-card border border-border/60 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group cursor-default">
+        <div className="flex items-center gap-3 mb-3">
+          {org.logoUrl ? (
+            <img src={org.logoUrl} alt={org.name}
+              className="w-10 h-10 rounded-xl object-cover shrink-0 transition-transform duration-300 group-hover:scale-110" />
+          ) : (
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0 transition-transform duration-300 group-hover:scale-110"
+              style={{ background: `hsl(${hue},55%,45%)` }}
+            >
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground leading-tight truncate">{org.name}</p>
+            {org.country && <p className="text-xs text-muted-foreground mt-0.5">{org.country}</p>}
+          </div>
+        </div>
+        {(org.languageCodes?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {org.languageCodes!.slice(0, 4).map(code => (
+              <span key={code}
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ background: `hsl(${hue},55%,92%)`, color: `hsl(${hue},55%,30%)` }}>
+                {code}
+              </span>
+            ))}
+            {org.languageCodes!.length > 4 && (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                +{org.languageCodes!.length - 4}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: dashboard, isLoading, error } = useGetGenhalDashboard();
+  const { data: orgsData } = useListGenhalLanguageOrgs();
+  const liveOrgs = orgsData?.orgs ?? [];
   const marqueeRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -187,49 +240,195 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── AI Language Collaboration ── */}
+      <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-350">
+        {/* heading */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-400/25 rounded-full px-4 py-1.5 text-xs font-bold text-purple-400 uppercase tracking-widest">
+            <Brain className="h-3.5 w-3.5" /> AI × African Languages
+          </div>
+          <h2 className="text-3xl md:text-4xl font-serif font-bold text-foreground">
+            Collaborating with Local Language&nbsp;Organizations
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
+            We partner with indigenous language organisations, cultural institutions, and community linguists
+            across Africa to build AI models trained on authentic local language data — powering the next
+            generation of African literature, storytelling, film, and music.
+          </p>
+        </div>
+
+        {/* Feature tiles */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              icon: PenLine,
+              color: "bg-violet-500/10 text-violet-400",
+              border: "border-violet-500/20 hover:border-violet-400/50",
+              title: "Literature & Books",
+              description:
+                "AI writing assistants trained on local corpora help authors write, translate, and publish stories in their mother tongue — preserving narrative traditions for future readers.",
+            },
+            {
+              icon: Film,
+              color: "bg-rose-500/10 text-rose-400",
+              border: "border-rose-500/20 hover:border-rose-400/50",
+              title: "Film & Storytelling",
+              description:
+                "Script generation, dialogue localisation, and subtitle creation powered by models that understand cultural context, proverbs, and the rhythm of African speech.",
+            },
+            {
+              icon: Music4,
+              color: "bg-amber-500/10 text-amber-400",
+              border: "border-amber-500/20 hover:border-amber-400/50",
+              title: "Music Making",
+              description:
+                "Lyric composition, vocal synthesis, and chord suggestions grounded in indigenous musical traditions — Afrobeats, highlife, Mande griot, and beyond.",
+            },
+            {
+              icon: Mic2,
+              color: "bg-emerald-500/10 text-emerald-400",
+              border: "border-emerald-500/20 hover:border-emerald-400/50",
+              title: "Language AI Training",
+              description:
+                "Recordings, texts, and annotations contributed through the GenHaL corpus feed open-access language models — so every donated word strengthens AI for the whole continent.",
+            },
+          ].map(({ icon: Icon, color, border, title, description }, i) => (
+            <div
+              key={title}
+              className={`group relative rounded-2xl border bg-card/60 backdrop-blur-sm p-6 shadow-sm
+                          hover:shadow-xl hover:-translate-y-1 transition-all duration-300
+                          animate-in fade-in slide-in-from-bottom-4 duration-500 ${border}`}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 ${color}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-base text-foreground mb-2">{title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Partnership strip */}
+        <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/8 via-background to-purple-500/8 p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
+          <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
+            <Building2 className="w-8 h-8 text-primary" />
+          </div>
+          <div className="flex-1 text-center md:text-left space-y-1">
+            <h3 className="font-semibold text-lg text-foreground">Partner with GenHaL</h3>
+            <p className="text-sm text-muted-foreground max-w-xl">
+              Is your organisation working to preserve an African language or cultural tradition?
+              Join our network of language partners — contribute corpora, co-develop AI tools, and ensure
+              your community's voice is represented in the models shaping Africa's digital future.
+            </p>
+          </div>
+          <a href="mailto:language@genhal.com">
+            <button className="shrink-0 px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/30 hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200">
+              Become a Partner →
+            </button>
+          </a>
+        </div>
+      </section>
+
       {/* ── Trusted By ── */}
-      <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400">
+      <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400">
         {/* heading */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 bg-primary/8 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-bold text-primary uppercase tracking-widest">
             <Sparkles className="h-3.5 w-3.5" /> Trusted By Communities
           </div>
           <h2 className="text-3xl font-serif font-bold text-foreground">
-            African Kingdoms & Heritage Organisations
+            African Kingdoms, Heritage Organisations & Language Partners
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-            Thousands of families, kingdoms, and cultural organisations across Africa use GenHaL to preserve their identity for generations to come.
+            Thousands of families, kingdoms, cultural organisations, and language institutions across Africa
+            use GenHaL to preserve their identity and language for generations to come.
           </p>
         </div>
 
-        {/* scrolling marquee — two rows scrolling in opposite directions */}
-        <div className="relative overflow-hidden rounded-3xl py-4 space-y-4">
-          {/* fade edges */}
-          <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-background to-transparent pointer-events-none" />
-          <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+        {/* ── Kingdoms / communities marquee ── */}
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">
+            Kingdoms &amp; Heritage Communities
+          </p>
+          <div className="relative overflow-hidden rounded-3xl py-2 space-y-4">
+            {/* fade edges */}
+            <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+            <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-background to-transparent pointer-events-none" />
 
-          {/* Row 1 — scrolls left */}
-          <div className="flex" style={{ animation: 'marquee-left 38s linear infinite' }}>
-            {[...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES].map((c, i) => (
-              <TrustedByCard key={`a-${i}`} community={c} />
-            ))}
+            {/* Row 1 — scrolls left */}
+            <div className="flex" style={{ animation: 'marquee-left 38s linear infinite' }}>
+              {[...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES].map((c, i) => (
+                <TrustedByCard key={`a-${i}`} community={c} />
+              ))}
+            </div>
+
+            {/* Row 2 — scrolls right */}
+            <div className="flex" style={{ animation: 'marquee-right 42s linear infinite' }}>
+              {[...TRUSTED_COMMUNITIES.slice(8), ...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES.slice(0, 8)].map((c, i) => (
+                <TrustedByCard key={`b-${i}`} community={c} />
+              ))}
+            </div>
           </div>
-
-          {/* Row 2 — scrolls right */}
-          <div className="flex" style={{ animation: 'marquee-right 42s linear infinite' }}>
-            {[...TRUSTED_COMMUNITIES.slice(8), ...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES.slice(0, 8)].map((c, i) => (
-              <TrustedByCard key={`b-${i}`} community={c} />
-            ))}
+          <div className="text-center pt-3">
+            <Link href="/kingdoms">
+              <Button variant="outline" className="rounded-full px-6 transition-all hover:scale-105">
+                View All Kingdoms →
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* bottom cta */}
-        <div className="text-center pt-2">
-          <Link href="/kingdoms">
-            <Button variant="outline" className="rounded-full px-6 transition-all hover:scale-105">
-              View All Kingdoms →
-            </Button>
-          </Link>
+        {/* ── Language Organisations (live from DB) ── */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4 px-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Language Organisations — Signed Up
+            </p>
+            <Link href="/language-orgs">
+              <Button variant="ghost" size="sm" className="text-xs rounded-full h-7 px-3">
+                View all →
+              </Button>
+            </Link>
+          </div>
+
+          {liveOrgs.length === 0 ? (
+            /* Empty state — show a "be the first" CTA */
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 flex flex-col items-center gap-4 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-foreground">No language organisations yet</p>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Be the first organisation to register — contribute corpus data and shape the future of
+                  AI for African languages.
+                </p>
+              </div>
+              <Link href="/language-orgs/register">
+                <Button size="sm" className="rounded-full px-5 mt-1">Register your organisation →</Button>
+              </Link>
+            </div>
+          ) : (
+            /* Live scrolling row of DB orgs */
+            <div className="relative overflow-hidden rounded-3xl py-2">
+              <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+              <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+              {/* Duplicate for seamless loop; pause when only a few orgs so it doesn't look weird */}
+              <div
+                className="flex"
+                style={{
+                  animation: liveOrgs.length >= 4
+                    ? 'marquee-left 36s linear infinite'
+                    : undefined,
+                }}
+              >
+                {(liveOrgs.length >= 4 ? [...liveOrgs, ...liveOrgs] : liveOrgs).map((org, i) => (
+                  <LangOrgCard key={`org-${i}`} org={org} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

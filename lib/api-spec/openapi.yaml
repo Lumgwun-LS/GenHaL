@@ -5210,6 +5210,25 @@ paths:
                 items:
                   $ref: "#/components/schemas/GenhalAiGeneration"
 
+  /genhal/language-orgs:
+    get:
+      operationId: listGenhalLanguageOrgs
+      tags: [genhal-language-orgs]
+      summary: List approved language organisations
+      security: []
+      responses:
+        "200":
+          description: Approved language organisations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orgs]
+                properties:
+                  orgs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GenhalLanguageOrg"
 
 components:
   securitySchemes:
@@ -7649,6 +7668,8 @@ components:
           type: ["string", "null"]
         score:
           type: ["integer", "null"]
+        dateOfBirth:
+          type: ["string", "null"]
         utmSource:
           type: ["string", "null"]
         utmMedium:
@@ -7726,6 +7747,8 @@ components:
           type: integer
         channel:
           type: string
+        dateOfBirth:
+          type: ["string", "null"]
 
     PersonActivity:
       type: object
@@ -8775,6 +8798,16 @@ components:
         cta:
           type: string
         imageUrl:
+          type: string
+        productId:
+          type: integer
+        destinationUrl:
+          type: string
+        utmSource:
+          type: string
+        utmMedium:
+          type: string
+        utmCampaign:
           type: string
 
     AdCampaignUpdate:
@@ -9854,6 +9887,35 @@ components:
         audioUrl:
           type: string
         dialect:
+          type: string
+
+    GenhalLanguageOrg:
+      type: object
+      required: [id, name, slug, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        foundedYear:
+          type: ["integer", "null"]
+        memberCount:
+          type: integer
+        languageCodes:
+          type: array
+          items:
+            type: string
+        createdAt:
           type: string
 
     GenhalAiGeneration:

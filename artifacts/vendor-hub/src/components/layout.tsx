@@ -132,7 +132,7 @@ function DashboardFooter() {
   );
 }
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> };
 type NavGroup = { label?: string; items: NavItem[]; defaultOpen?: boolean };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -618,8 +618,8 @@ function SidebarHeader({
         <Link href="/home" className="flex items-center gap-3 flex-1 min-w-0 group/logo" onClick={onClose}>
           <div className="relative shrink-0">
             <div className="absolute inset-0 rounded-full blur-sm" style={{ background: accentColor, opacity: 0.3 }} />
-            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="relative w-8 h-8 rounded-full object-cover ring-1"
-              style={{ ringColor: accentColor }} />
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="relative w-8 h-8 rounded-full object-cover"
+              style={{ boxShadow: `0 0 0 1.5px ${accentColor}` }} />
           </div>
           <div className="min-w-0">
             <span className="font-bold text-sm tracking-tight block truncate text-white/90 group-hover/logo:text-white transition-colors">

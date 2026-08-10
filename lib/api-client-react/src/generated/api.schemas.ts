@@ -1487,6 +1487,8 @@ export interface Lead {
   /** @nullable */
   score?: number | null;
   /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
   utmSource?: string | null;
   /** @nullable */
   utmMedium?: string | null;
@@ -1535,6 +1537,8 @@ export interface LeadUpdate {
   notes?: string;
   score?: number;
   channel?: string;
+  /** @nullable */
+  dateOfBirth?: string | null;
 }
 
 export type PersonActivityData = { [key: string]: unknown };
@@ -2161,6 +2165,11 @@ export interface AdCampaignInput {
   body?: string;
   cta?: string;
   imageUrl?: string;
+  productId?: number;
+  destinationUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }
 
 export type AdCampaignUpdateAudienceJson = { [key: string]: unknown };
@@ -2891,6 +2900,25 @@ export interface GenhalLanguageEntryUpdate {
   dialect?: string;
 }
 
+export interface GenhalLanguageOrg {
+  id: number;
+  name: string;
+  slug: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  foundedYear?: number | null;
+  memberCount?: number;
+  languageCodes?: string[];
+  createdAt: string;
+}
+
 export type GenhalAiGenerationMetadata = { [key: string]: unknown } | null;
 
 export interface GenhalAiGeneration {
@@ -3218,5 +3246,9 @@ limit?: number;
 export type ListGenhalCommunitiesParams = {
 country?: string;
 search?: string;
+};
+
+export type ListGenhalLanguageOrgs200 = {
+  orgs: GenhalLanguageOrg[];
 };
 
