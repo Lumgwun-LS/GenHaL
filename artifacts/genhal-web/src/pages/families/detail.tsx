@@ -16,6 +16,7 @@ import SecretAccountsTab from '@/pages/accounts/index';
 import ClaimsTab from '@/pages/claims/index';
 import PublicGallery from '@/pages/vault/public-gallery';
 import SuccessionTab from '@/pages/succession/index';
+import WillsTab from '@/pages/wills/index';
 
 interface Family {
   id: number;
@@ -134,6 +135,7 @@ export default function FamilyDetail() {
               { v: 'vault',       l: '📂 Vault' },
               { v: 'public',      l: '🌍 Public Archive' },
               { v: 'members',     l: '👥 Members' },
+              { v: 'wills',       l: '📜 Wills' },
               { v: 'succession',  l: '🤝 Succession' },
               { v: 'subscription',l: '💳 Plan' },
               { v: 'accounts',    l: '🏦 Accounts' },
@@ -165,6 +167,7 @@ export default function FamilyDetail() {
                   {[
                     { tab: 'vault',      label: 'Upload Documents' },
                     { tab: 'members',    label: 'Manage Members' },
+                    { tab: 'wills',      label: '📜 Register My Will' },
                     { tab: 'succession', label: 'Set Next of Kin' },
                     { tab: 'claims',     label: 'File Ownership Claim' },
                     { tab: 'accounts',   label: 'Set Up Bank Accounts' },
@@ -195,6 +198,11 @@ export default function FamilyDetail() {
           {/* ── MEMBERS ── */}
           <TabsContent value="members" className="py-6">
             <MembersTab unitType="family" unitId={family.id} />
+          </TabsContent>
+
+          {/* ── WILLS ── */}
+          <TabsContent value="wills" className="py-6">
+            <WillsTab familyId={family.id} />
           </TabsContent>
 
           {/* ── SUCCESSION ── */}

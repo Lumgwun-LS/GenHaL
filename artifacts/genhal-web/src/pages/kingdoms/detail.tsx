@@ -5,6 +5,7 @@ import {
   Flame, Sprout, TrendingUp, ChevronLeft, Loader2, X, Globe2, Star,
   Landmark, ShieldCheck, ChevronDown, ChevronUp, Vote, UserCheck,
   Mountain, Home, ArrowRight, FileText, CreditCard,
+  Languages, Navigation2, Briefcase, GraduationCap, Church,
 } from 'lucide-react';
 import VaultTab from '@/pages/vault/index';
 import MembersTab from '@/pages/members/index';
@@ -34,12 +35,19 @@ interface CouncilMember { id:number; name:string; title:string; role:string; com
 interface CdcMember { id:number; name:string; role:string; electedYear?:number; bio?:string; }
 interface CdcCommittee { id:number; unitType:string; unitId:number; name:string; termStart?:number; termEnd?:number; isCurrent:boolean; mandate?:string; members:CdcMember[]; }
 interface CivicRecord { id:number; type:string; unitType:string; unitId?:number; title:string; content?:string; period?:string; tags:string[]; }
+interface KingdomLanguage { id:number; name:string; localName?:string; languageCode?:string; isOfficial:boolean; speakerCount?:number; notes?:string; }
+interface KingdomGeopoint { id:number; name:string; type:string; latitude?:number; longitude?:number; description?:string; imageUrl?:string; }
+interface KingdomEconomicActivity { id:number; name:string; category:string; description?:string; scale?:string; isMain:boolean; seasonality?:string; }
+interface KingdomSchool { id:number; name:string; localName?:string; level:string; type:string; founded?:number; address?:string; imageUrl?:string; website?:string; notes?:string; }
+interface KingdomChurch { id:number; name:string; localName?:string; type:string; denomination?:string; founded?:number; address?:string; imageUrl?:string; website?:string; notes?:string; }
 interface Kingdom {
   id:number; name:string; localName?:string; unitType:string; unitTypeLabel?:string;
   country?:string; region?:string; district?:string; foundedYear?:number;
   description?:string; coverImageUrl?:string; emblemImageUrl?:string; rulerTitle:string;
   rulers:Ruler[]; towns:Town[]; directVillages:Village[]; compounds:Compound[];
   council:CouncilMember[]; cdc:CdcCommittee[]; records:CivicRecord[];
+  languages:KingdomLanguage[]; geopoints:KingdomGeopoint[];
+  economicActivities:KingdomEconomicActivity[]; schools:KingdomSchool[]; churches:KingdomChurch[];
 }
 
 const RECORD_TYPES: Record<string, { label:string; icon:React.ReactNode; color:string }> = {
@@ -142,6 +150,10 @@ export default function KingdomDetail() {
           { label:'Compounds', value:kingdom.compounds.length, icon:<Building2 className="h-3.5 w-3.5"/> },
           { label:'Council Members', value:kingdom.council.filter(c=>c.isCurrent).length, icon:<Users className="h-3.5 w-3.5"/> },
           { label:'Heritage Records', value:kingdom.records.length, icon:<BookOpen className="h-3.5 w-3.5"/> },
+          { label:'Languages', value:(kingdom.languages||[]).length, icon:<Languages className="h-3.5 w-3.5"/> },
+          { label:'Schools', value:(kingdom.schools||[]).length, icon:<GraduationCap className="h-3.5 w-3.5"/> },
+          { label:'Economy', value:(kingdom.economicActivities||[]).length, icon:<Briefcase className="h-3.5 w-3.5"/> },
+          { label:'Churches', value:(kingdom.churches||[]).length, icon:<Church className="h-3.5 w-3.5"/> },
         ].map(s=>(
           <div key={s.label} className="flex items-center gap-1.5 text-amber-800 shrink-0">
             {s.icon}<span className="font-bold">{s.value}</span><span className="text-amber-700">{s.label}</span>
@@ -168,6 +180,11 @@ export default function KingdomDetail() {
               { v:'subscription',  l:'💳 Plan' },
               { v:'accounts',      l:'🏦 Accounts' },
               { v:'claims',        l:'⚖️ Claims' },
+              { v:'languages',     l:'🗣️ Languages' },
+              { v:'geopoints',     l:'🗺️ Geopoints' },
+              { v:'economy',       l:'💼 Economy' },
+              { v:'schools',       l:'🏫 Schools' },
+              { v:'religion',      l:'⛪ Religion' },
             ].map(t=><TabsTrigger key={t.v} value={t.v} className="rounded-lg text-xs">{t.l}</TabsTrigger>)}
           </TabsList>
 
@@ -201,6 +218,21 @@ export default function KingdomDetail() {
               </Button>
               <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('heritage');setDlg('record')}}>
                 <BookOpen className="mr-1.5 h-3.5 w-3.5"/> Add Heritage Record
+              </Button>
+              <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('languages');setDlg('language')}}>
+                <Languages className="mr-1.5 h-3.5 w-3.5"/> Add Language
+              </Button>
+              <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('geopoints');setDlg('geopoint')}}>
+                <Navigation2 className="mr-1.5 h-3.5 w-3.5"/> Add Geopoint
+              </Button>
+              <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('economy');setDlg('economy')}}>
+                <Briefcase className="mr-1.5 h-3.5 w-3.5"/> Add Economic Activity
+              </Button>
+              <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('schools');setDlg('school')}}>
+                <GraduationCap className="mr-1.5 h-3.5 w-3.5"/> Add School
+              </Button>
+              <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('religion');setDlg('church')}}>
+                <Church className="mr-1.5 h-3.5 w-3.5"/> Add Church / Shrine
               </Button>
             </div>
           </TabsContent>
@@ -444,6 +476,179 @@ export default function KingdomDetail() {
             )}
           </TabsContent>
 
+          {/* ── LANGUAGES ── */}
+          <TabsContent value="languages" className="space-y-6">
+            <SectionHeader title="Kingdom Languages" sub="Languages spoken and recognised in this kingdom"
+              btnLabel="Add Language" onAdd={()=>setDlg('language')}/>
+            {(kingdom.languages||[]).length===0 ? <EmptyState icon={<Languages className="h-10 w-10"/>} label="No languages recorded yet" onAdd={()=>setDlg('language')}/> : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {(kingdom.languages||[]).map(lang=>(
+                  <Card key={lang.id} className={`border shadow-sm transition-all hover:shadow-md ${lang.isOfficial?'border-amber-300 bg-amber-50/30':''}`}>
+                    <CardContent className="p-4 flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-50 rounded-xl border border-blue-100 shrink-0">
+                          <Languages className="h-5 w-5 text-blue-600"/>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold">{lang.name}</p>
+                            {lang.localName && <span className="text-sm text-muted-foreground italic">({lang.localName})</span>}
+                            {lang.isOfficial && <Badge className="bg-amber-500 text-white text-[10px]">Official</Badge>}
+                          </div>
+                          {lang.languageCode && <p className="text-xs text-muted-foreground font-mono mt-0.5">ISO: {lang.languageCode}</p>}
+                          {lang.speakerCount && <p className="text-xs text-muted-foreground">{lang.speakerCount.toLocaleString()} estimated speakers</p>}
+                          {lang.notes && <p className="text-sm text-muted-foreground mt-1">{lang.notes}</p>}
+                        </div>
+                      </div>
+                      <button onClick={()=>del(`/genhal/kingdoms/${id}/languages/${lang.id}`, lang.name)} className="text-muted-foreground/30 hover:text-destructive shrink-0 mt-0.5"><Trash2 className="h-3.5 w-3.5"/></button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── GEOPOINTS ── */}
+          <TabsContent value="geopoints" className="space-y-6">
+            <SectionHeader title="Geographic Points of Interest" sub="Landmarks, rivers, sacred sites, boundaries, and more"
+              btnLabel="Add Geopoint" onAdd={()=>setDlg('geopoint')}/>
+            {(kingdom.geopoints||[]).length===0 ? <EmptyState icon={<Navigation2 className="h-10 w-10"/>} label="No geopoints recorded yet" onAdd={()=>setDlg('geopoint')}/> : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {(kingdom.geopoints||[]).map(pt=>(
+                  <Card key={pt.id} className="border shadow-sm group transition-all hover:shadow-md">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-green-50 rounded-xl border border-green-100 shrink-0">
+                            <MapPin className="h-5 w-5 text-green-600"/>
+                          </div>
+                          <div>
+                            <p className="font-semibold">{pt.name}</p>
+                            <Badge variant="outline" className="text-[10px] mt-1 capitalize">{pt.type.replace(/_/g,' ')}</Badge>
+                            {(pt.latitude||pt.longitude) && (
+                              <p className="text-xs text-muted-foreground font-mono mt-1">
+                                📍 {pt.latitude?.toFixed(5)}, {pt.longitude?.toFixed(5)}
+                              </p>
+                            )}
+                            {pt.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{pt.description}</p>}
+                          </div>
+                        </div>
+                        <button onClick={()=>del(`/genhal/kingdoms/${id}/geopoints/${pt.id}`, pt.name)} className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-destructive shrink-0 mt-0.5"><Trash2 className="h-3.5 w-3.5"/></button>
+                      </div>
+                      {pt.imageUrl && <img src={pt.imageUrl} alt={pt.name} className="w-full h-36 object-cover rounded-xl mt-2 border"/>}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── ECONOMY ── */}
+          <TabsContent value="economy" className="space-y-6">
+            <SectionHeader title="Economic Activities" sub="Industries, trade, agriculture, and livelihoods"
+              btnLabel="Add Activity" onAdd={()=>setDlg('economy')}/>
+            {(kingdom.economicActivities||[]).length===0 ? <EmptyState icon={<Briefcase className="h-10 w-10"/>} label="No economic activities recorded yet" onAdd={()=>setDlg('economy')}/> : (
+              <div className="space-y-8">
+                {(kingdom.economicActivities||[]).filter(a=>a.isMain).length>0 && (
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Star className="h-3.5 w-3.5 text-amber-500"/> Primary Activities
+                    </p>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {(kingdom.economicActivities||[]).filter(a=>a.isMain).map(act=>(
+                        <EconomyCard key={act.id} act={act} kingdomId={Number(id)} base={base} onDelete={load}/>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(kingdom.economicActivities||[]).filter(a=>!a.isMain).length>0 && (
+                  <div>
+                    {(kingdom.economicActivities||[]).filter(a=>a.isMain).length>0 && (
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Secondary Activities</p>
+                    )}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {(kingdom.economicActivities||[]).filter(a=>!a.isMain).map(act=>(
+                        <EconomyCard key={act.id} act={act} kingdomId={Number(id)} base={base} onDelete={load}/>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── SCHOOLS ── */}
+          <TabsContent value="schools" className="space-y-6">
+            <SectionHeader title="Schools & Education" sub="Educational institutions within the kingdom"
+              btnLabel="Add School" onAdd={()=>setDlg('school')}/>
+            {(kingdom.schools||[]).length===0 ? <EmptyState icon={<GraduationCap className="h-10 w-10"/>} label="No schools recorded yet" onAdd={()=>setDlg('school')}/> : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {(kingdom.schools||[]).map(school=>(
+                  <Card key={school.id} className="border shadow-sm group transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-indigo-50 rounded-xl border border-indigo-100 shrink-0">
+                            <GraduationCap className="h-5 w-5 text-indigo-600"/>
+                          </div>
+                          <div>
+                            <p className="font-semibold">{school.name}</p>
+                            {school.localName && <p className="text-sm text-muted-foreground italic">{school.localName}</p>}
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] capitalize">{school.level}</Badge>
+                              <Badge variant="outline" className="text-[10px] capitalize">{school.type}</Badge>
+                              {school.founded && <span className="text-xs text-muted-foreground">Est. {school.founded}</span>}
+                            </div>
+                            {school.address && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-0.5"><MapPin className="h-3 w-3 shrink-0"/>{school.address}</p>}
+                            {school.website && <a href={school.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block">{school.website}</a>}
+                            {school.notes && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{school.notes}</p>}
+                          </div>
+                        </div>
+                        <button onClick={()=>del(`/genhal/kingdoms/${id}/schools/${school.id}`, school.name)} className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-destructive shrink-0 mt-0.5"><Trash2 className="h-3.5 w-3.5"/></button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── RELIGION ── */}
+          <TabsContent value="religion" className="space-y-6">
+            <SectionHeader title="Churches & Religious Sites" sub="Houses of worship, shrines, mosques, and spiritual heritage"
+              btnLabel="Add Place of Worship" onAdd={()=>setDlg('church')}/>
+            {(kingdom.churches||[]).length===0 ? <EmptyState icon={<Church className="h-10 w-10"/>} label="No religious sites recorded yet" onAdd={()=>setDlg('church')}/> : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {(kingdom.churches||[]).map(ch=>(
+                  <Card key={ch.id} className="border shadow-sm group transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-purple-50 rounded-xl border border-purple-100 shrink-0">
+                            <Church className="h-5 w-5 text-purple-600"/>
+                          </div>
+                          <div>
+                            <p className="font-semibold">{ch.name}</p>
+                            {ch.localName && <p className="text-sm text-muted-foreground italic">{ch.localName}</p>}
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] capitalize">{ch.type.replace(/_/g,' ')}</Badge>
+                              {ch.denomination && <Badge variant="outline" className="text-[10px]">{ch.denomination}</Badge>}
+                              {ch.founded && <span className="text-xs text-muted-foreground">Est. {ch.founded}</span>}
+                            </div>
+                            {ch.address && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-0.5"><MapPin className="h-3 w-3 shrink-0"/>{ch.address}</p>}
+                            {ch.website && <a href={ch.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block">{ch.website}</a>}
+                            {ch.notes && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{ch.notes}</p>}
+                          </div>
+                        </div>
+                        <button onClick={()=>del(`/genhal/kingdoms/${id}/churches/${ch.id}`, ch.name)} className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-destructive shrink-0 mt-0.5"><Trash2 className="h-3.5 w-3.5"/></button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           {/* ── VAULT ── */}
           <TabsContent value="vault" className="px-6 md:px-10 py-6">
             <VaultTab unitType="kingdom" unitId={kingdom.id} kingdomId={kingdom.id} />
@@ -484,7 +689,12 @@ export default function KingdomDetail() {
       {dlg==='council' && <CouncilDialog  open onClose={()=>setDlg(null)} kingdomId={Number(id)} compounds={kingdom.compounds} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
       {dlg==='cdc'     && <CdcDialog      open onClose={()=>setDlg(null)} kingdomId={Number(id)} towns={kingdom.towns} villages={[...kingdom.directVillages,...kingdom.towns.flatMap(t=>t.villages)]} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
       {dlg==='cdcMember' && selectedCdc && <CdcMemberDialog open onClose={()=>setDlg(null)} committee={selectedCdc} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
-      {dlg==='record'  && <RecordDialog   open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='record'   && <RecordDialog   open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='language' && <LanguageDialog open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='geopoint' && <GeopointDialog open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='economy'  && <EconomyDialog  open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='school'   && <SchoolDialog   open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
+      {dlg==='church'   && <ChurchDialog   open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
     </div>
   );
 }
@@ -925,6 +1135,219 @@ function RecordDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
           <Field label="Period / timing"><Input value={form.period} onChange={e=>set({period:e.target.value})} placeholder="Annually in August · Pre-colonial era" className="rounded-lg"/></Field>
           <Field label="Description"><Textarea value={form.content} onChange={e=>set({content:e.target.value})} rows={4} className="rounded-lg"/></Field>
           <SaveBtn saving={saving} disabled={!form.title} onClick={submit} label="Add Record"/>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EconomyCard({ act, kingdomId, base, onDelete }: { act: KingdomEconomicActivity; kingdomId: number; base: string; onDelete: () => void; }) {
+  const catColor: Record<string,string> = {
+    agriculture:'bg-green-50 text-green-700 border-green-200',
+    trade:'bg-blue-50 text-blue-700 border-blue-200',
+    crafts:'bg-amber-50 text-amber-700 border-amber-200',
+    fishing:'bg-cyan-50 text-cyan-700 border-cyan-200',
+    mining:'bg-stone-50 text-stone-700 border-stone-200',
+    services:'bg-purple-50 text-purple-700 border-purple-200',
+    industry:'bg-orange-50 text-orange-700 border-orange-200',
+  };
+  return (
+    <Card className="border shadow-sm group transition-all hover:shadow-md">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-teal-50 rounded-xl border border-teal-100 shrink-0">
+              <Briefcase className="h-5 w-5 text-teal-600"/>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold">{act.name}</p>
+                {act.isMain && <Badge className="bg-teal-600 text-white text-[10px]">Primary</Badge>}
+              </div>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <Badge variant="outline" className={`text-[10px] capitalize ${catColor[act.category]||''}`}>{act.category}</Badge>
+                {act.scale && <span className="text-xs text-muted-foreground capitalize">{act.scale} scale</span>}
+              </div>
+              {act.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{act.description}</p>}
+              {act.seasonality && <p className="text-xs text-muted-foreground mt-1 italic">⏱ {act.seasonality}</p>}
+            </div>
+          </div>
+          <button
+            onClick={async()=>{if(!confirm(`Delete "${act.name}"?`))return; await fetch(`${base}/genhal/kingdoms/${kingdomId}/economic-activities/${act.id}`,{method:'DELETE'}); onDelete();}}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-destructive shrink-0 mt-0.5"
+          ><Trash2 className="h-3.5 w-3.5"/></button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── New civic dialogs ─────────────────────────────────────────────────────────
+
+function LanguageDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
+  const { toast } = useToast();
+  const { form, set, saving, setSaving } = useFormDialog({ name:'', localName:'', languageCode:'', isOfficial:false, speakerCount:'', notes:'' });
+  const submit = async () => {
+    if (!form.name) return; setSaving(true);
+    try { await fetch(`${base}/genhal/kingdoms/${kingdomId}/languages`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) }); toast({ title:`${form.name} added!` }); onSuccess(); }
+    catch { toast({ variant:'destructive', title:'Failed' }); } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Add Kingdom Language</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <Field label="Language name *"><Input value={form.name} onChange={e=>set({name:e.target.value})} placeholder="e.g. Igbo, Hausa, Yoruba" className="rounded-lg"/></Field>
+          <Field label="Local name"><Input value={form.localName} onChange={e=>set({localName:e.target.value})} className="rounded-lg"/></Field>
+          <Field label="ISO language code"><Input value={form.languageCode} onChange={e=>set({languageCode:e.target.value})} placeholder="e.g. ig, ha, yo" className="rounded-lg font-mono"/></Field>
+          <Field label="Estimated speakers"><Input type="number" value={form.speakerCount} onChange={e=>set({speakerCount:e.target.value})} className="rounded-lg"/></Field>
+          <Field label="Notes"><Input value={form.notes} onChange={e=>set({notes:e.target.value})} placeholder="Usage, dialects, status…" className="rounded-lg"/></Field>
+          <div className="flex items-center gap-3"><Switch checked={form.isOfficial} onCheckedChange={v=>set({isOfficial:v})}/><Label>Official language of this kingdom</Label></div>
+          <SaveBtn saving={saving} disabled={!form.name} onClick={submit} label="Add Language" icon={<Languages className="mr-2 h-4 w-4"/>}/>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GeopointDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
+  const { toast } = useToast();
+  const { form, set, saving, setSaving } = useFormDialog({ name:'', type:'landmark', latitude:'', longitude:'', description:'', imageUrl:'' });
+  const submit = async () => {
+    if (!form.name) return; setSaving(true);
+    try { await fetch(`${base}/genhal/kingdoms/${kingdomId}/geopoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) }); toast({ title:`${form.name} added!` }); onSuccess(); }
+    catch { toast({ variant:'destructive', title:'Failed' }); } finally { setSaving(false); }
+  };
+  const pointTypes = ['landmark','river','mountain','sacred','boundary','market','shrine','palace','forest','lake','waterfall','road','bridge','other'];
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Add Geographic Point</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <Field label="Name *"><Input value={form.name} onChange={e=>set({name:e.target.value})} placeholder="e.g. River Ogun, Olumo Rock" className="rounded-lg"/></Field>
+          <Field label="Type">
+            <select value={form.type} onChange={e=>set({type:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+              {pointTypes.map(t=><option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Latitude"><Input type="number" step="0.00001" value={form.latitude} onChange={e=>set({latitude:e.target.value})} placeholder="6.5244" className="rounded-lg font-mono"/></Field>
+            <Field label="Longitude"><Input type="number" step="0.00001" value={form.longitude} onChange={e=>set({longitude:e.target.value})} placeholder="3.3792" className="rounded-lg font-mono"/></Field>
+          </div>
+          <Field label="Description"><Textarea value={form.description} onChange={e=>set({description:e.target.value})} rows={3} placeholder="Historical or cultural significance…" className="rounded-lg"/></Field>
+          <Field label="Image URL"><Input value={form.imageUrl} onChange={e=>set({imageUrl:e.target.value})} placeholder="https://…" className="rounded-lg"/></Field>
+          <SaveBtn saving={saving} disabled={!form.name} onClick={submit} label="Add Geopoint" icon={<Navigation2 className="mr-2 h-4 w-4"/>}/>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EconomyDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
+  const { toast } = useToast();
+  const { form, set, saving, setSaving } = useFormDialog({ name:'', category:'agriculture', description:'', scale:'local', isMain:false, seasonality:'' });
+  const submit = async () => {
+    if (!form.name) return; setSaving(true);
+    try { await fetch(`${base}/genhal/kingdoms/${kingdomId}/economic-activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) }); toast({ title:`${form.name} added!` }); onSuccess(); }
+    catch { toast({ variant:'destructive', title:'Failed' }); } finally { setSaving(false); }
+  };
+  const categories = ['agriculture','trade','crafts','fishing','mining','services','industry','livestock','forestry','tourism','other'];
+  const scales = ['subsistence','local','regional','national','export'];
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Add Economic Activity</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <Field label="Activity name *"><Input value={form.name} onChange={e=>set({name:e.target.value})} placeholder="e.g. Palm oil production, Cattle trading" className="rounded-lg"/></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Category">
+              <select value={form.category} onChange={e=>set({category:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                {categories.map(c=><option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+              </select>
+            </Field>
+            <Field label="Scale">
+              <select value={form.scale} onChange={e=>set({scale:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                {scales.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Description"><Textarea value={form.description} onChange={e=>set({description:e.target.value})} rows={3} placeholder="Key details, how it works, who participates…" className="rounded-lg"/></Field>
+          <Field label="Seasonality / timing"><Input value={form.seasonality} onChange={e=>set({seasonality:e.target.value})} placeholder="Harvested Oct–Dec · Year-round" className="rounded-lg"/></Field>
+          <div className="flex items-center gap-3"><Switch checked={form.isMain} onCheckedChange={v=>set({isMain:v})}/><Label>Primary / main economic activity</Label></div>
+          <SaveBtn saving={saving} disabled={!form.name} onClick={submit} label="Add Activity" icon={<Briefcase className="mr-2 h-4 w-4"/>}/>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SchoolDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
+  const { toast } = useToast();
+  const { form, set, saving, setSaving } = useFormDialog({ name:'', localName:'', level:'primary', type:'public', founded:'', address:'', website:'', notes:'' });
+  const submit = async () => {
+    if (!form.name) return; setSaving(true);
+    try { await fetch(`${base}/genhal/kingdoms/${kingdomId}/schools`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) }); toast({ title:`${form.name} added!` }); onSuccess(); }
+    catch { toast({ variant:'destructive', title:'Failed' }); } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Add School</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <Field label="School name *"><Input value={form.name} onChange={e=>set({name:e.target.value})} placeholder="e.g. Ugwunshi Community Secondary School" className="rounded-lg"/></Field>
+          <Field label="Local / short name"><Input value={form.localName} onChange={e=>set({localName:e.target.value})} className="rounded-lg"/></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Level">
+              <select value={form.level} onChange={e=>set({level:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                {['nursery','primary','secondary','tertiary','vocational','adult'].map(l=><option key={l} value={l}>{l.charAt(0).toUpperCase()+l.slice(1)}</option>)}
+              </select>
+            </Field>
+            <Field label="Type">
+              <select value={form.type} onChange={e=>set({type:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                {['public','private','mission','community','federal','state'].map(t=><option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Year founded"><Input type="number" value={form.founded} onChange={e=>set({founded:e.target.value})} placeholder="1972" className="rounded-lg"/></Field>
+          <Field label="Address / location"><Input value={form.address} onChange={e=>set({address:e.target.value})} className="rounded-lg"/></Field>
+          <Field label="Website"><Input value={form.website} onChange={e=>set({website:e.target.value})} placeholder="https://…" className="rounded-lg"/></Field>
+          <Field label="Notes"><Textarea value={form.notes} onChange={e=>set({notes:e.target.value})} rows={2} className="rounded-lg"/></Field>
+          <SaveBtn saving={saving} disabled={!form.name} onClick={submit} label="Add School" icon={<GraduationCap className="mr-2 h-4 w-4"/>}/>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChurchDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
+  const { toast } = useToast();
+  const { form, set, saving, setSaving } = useFormDialog({ name:'', localName:'', type:'church', denomination:'', founded:'', address:'', website:'', notes:'' });
+  const submit = async () => {
+    if (!form.name) return; setSaving(true);
+    try { await fetch(`${base}/genhal/kingdoms/${kingdomId}/churches`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) }); toast({ title:`${form.name} added!` }); onSuccess(); }
+    catch { toast({ variant:'destructive', title:'Failed' }); } finally { setSaving(false); }
+  };
+  const churchTypes = ['church','mosque','shrine','temple','cathedral','chapel','synod','parish','mission','traditional_shrine','other'];
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Add Place of Worship / Religious Site</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <Field label="Name *"><Input value={form.name} onChange={e=>set({name:e.target.value})} placeholder="e.g. Ugwunshi Anglican Church, Ogun Shrine" className="rounded-lg"/></Field>
+          <Field label="Local name"><Input value={form.localName} onChange={e=>set({localName:e.target.value})} className="rounded-lg"/></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Type">
+              <select value={form.type} onChange={e=>set({type:e.target.value})} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                {churchTypes.map(t=><option key={t} value={t}>{t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>)}
+              </select>
+            </Field>
+            <Field label="Denomination / tradition"><Input value={form.denomination} onChange={e=>set({denomination:e.target.value})} placeholder="Anglican, Pentecostal, Sunni…" className="rounded-lg"/></Field>
+          </div>
+          <Field label="Year founded"><Input type="number" value={form.founded} onChange={e=>set({founded:e.target.value})} placeholder="1912" className="rounded-lg"/></Field>
+          <Field label="Address / location"><Input value={form.address} onChange={e=>set({address:e.target.value})} className="rounded-lg"/></Field>
+          <Field label="Website"><Input value={form.website} onChange={e=>set({website:e.target.value})} placeholder="https://…" className="rounded-lg"/></Field>
+          <Field label="Notes"><Textarea value={form.notes} onChange={e=>set({notes:e.target.value})} rows={2} className="rounded-lg"/></Field>
+          <SaveBtn saving={saving} disabled={!form.name} onClick={submit} label="Add Place of Worship" icon={<Church className="mr-2 h-4 w-4"/>}/>
         </div>
       </DialogContent>
     </Dialog>

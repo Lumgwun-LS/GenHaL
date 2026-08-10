@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, boolean, timestamp, real } from "drizzle-orm/pg-core";
 import { genhalCommunitiesTable } from "./genhal-communities";
 
+
 export const genhalKingdomsTable = pgTable("genhal_kingdoms", {
   id: serial("id").primaryKey(),
   communityId: integer("community_id").references(() => genhalCommunitiesTable.id, { onDelete: "set null" }),
@@ -42,4 +43,72 @@ export const genhalKingdomRulersTable = pgTable("genhal_kingdom_rulers", {
   successionNotes: text("succession_notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ─── Kingdom civic expansion tables ─────────────────────────────────────────
+
+export const genhalKingdomLanguagesTable = pgTable("genhal_kingdom_languages", {
+  id: serial("id").primaryKey(),
+  kingdomId: integer("kingdom_id").notNull().references(() => genhalKingdomsTable.id, { onDelete: "cascade" }),
+  languageCode: text("language_code"),
+  name: text("name").notNull(),
+  localName: text("local_name"),
+  isOfficial: boolean("is_official").notNull().default(false),
+  speakerCount: integer("speaker_count"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const genhalKingdomGeopointsTable = pgTable("genhal_kingdom_geopoints", {
+  id: serial("id").primaryKey(),
+  kingdomId: integer("kingdom_id").notNull().references(() => genhalKingdomsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("landmark"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const genhalKingdomEconomicActivitiesTable = pgTable("genhal_kingdom_economic_activities", {
+  id: serial("id").primaryKey(),
+  kingdomId: integer("kingdom_id").notNull().references(() => genhalKingdomsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("agriculture"),
+  description: text("description"),
+  scale: text("scale"),
+  isMain: boolean("is_main").notNull().default(false),
+  seasonality: text("seasonality"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const genhalKingdomSchoolsTable = pgTable("genhal_kingdom_schools", {
+  id: serial("id").primaryKey(),
+  kingdomId: integer("kingdom_id").notNull().references(() => genhalKingdomsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  localName: text("local_name"),
+  level: text("level").notNull().default("primary"),
+  type: text("type").notNull().default("public"),
+  founded: integer("founded"),
+  address: text("address"),
+  imageUrl: text("image_url"),
+  website: text("website"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const genhalKingdomChurchesTable = pgTable("genhal_kingdom_churches", {
+  id: serial("id").primaryKey(),
+  kingdomId: integer("kingdom_id").notNull().references(() => genhalKingdomsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  localName: text("local_name"),
+  type: text("type").notNull().default("church"),
+  denomination: text("denomination"),
+  founded: integer("founded"),
+  address: text("address"),
+  imageUrl: text("image_url"),
+  website: text("website"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

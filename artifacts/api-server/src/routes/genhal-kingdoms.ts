@@ -17,6 +17,11 @@ import {
   genhalCdcCommitteesTable,
   genhalCdcMembersTable,
   genhalCivicRecordsTable,
+  genhalKingdomLanguagesTable,
+  genhalKingdomGeopointsTable,
+  genhalKingdomEconomicActivitiesTable,
+  genhalKingdomSchoolsTable,
+  genhalKingdomChurchesTable,
 } from "@workspace/db";
 import { eq, desc, and, asc, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -67,7 +72,7 @@ router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void
     const [kingdom] = await db.select().from(genhalKingdomsTable).where(eq(genhalKingdomsTable.id, id));
     if (!kingdom) return void res.status(404).json({ error: "Not found" });
 
-    const [rulers, towns, villages, compounds, council, cdcCommittees, records] = await Promise.all([
+    const [rulers, towns, villages, compounds, council, cdcCommittees, records, languages, geopoints, economicActivities, schools, churches] = await Promise.all([
       db.select().from(genhalKingdomRulersTable).where(eq(genhalKingdomRulersTable.kingdomId, id)).orderBy(asc(genhalKingdomRulersTable.reignStart)),
       db.select().from(genhalTownsTable).where(eq(genhalTownsTable.kingdomId, id)).orderBy(asc(genhalTownsTable.name)),
       db.select().from(genhalVillagesTable).where(eq(genhalVillagesTable.kingdomId, id)).orderBy(asc(genhalVillagesTable.name)),
@@ -75,6 +80,11 @@ router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void
       db.select().from(genhalCouncilMembersTable).where(eq(genhalCouncilMembersTable.kingdomId, id)).orderBy(asc(genhalCouncilMembersTable.role)),
       db.select().from(genhalCdcCommitteesTable).where(eq(genhalCdcCommitteesTable.kingdomId, id)).orderBy(desc(genhalCdcCommitteesTable.termStart)),
       db.select().from(genhalCivicRecordsTable).where(eq(genhalCivicRecordsTable.kingdomId, id)).orderBy(asc(genhalCivicRecordsTable.sortOrder)),
+      db.select().from(genhalKingdomLanguagesTable).where(eq(genhalKingdomLanguagesTable.kingdomId, id)).orderBy(desc(genhalKingdomLanguagesTable.isOfficial), asc(genhalKingdomLanguagesTable.name)),
+      db.select().from(genhalKingdomGeopointsTable).where(eq(genhalKingdomGeopointsTable.kingdomId, id)).orderBy(asc(genhalKingdomGeopointsTable.name)),
+      db.select().from(genhalKingdomEconomicActivitiesTable).where(eq(genhalKingdomEconomicActivitiesTable.kingdomId, id)).orderBy(desc(genhalKingdomEconomicActivitiesTable.isMain), asc(genhalKingdomEconomicActivitiesTable.name)),
+      db.select().from(genhalKingdomSchoolsTable).where(eq(genhalKingdomSchoolsTable.kingdomId, id)).orderBy(asc(genhalKingdomSchoolsTable.level), asc(genhalKingdomSchoolsTable.name)),
+      db.select().from(genhalKingdomChurchesTable).where(eq(genhalKingdomChurchesTable.kingdomId, id)).orderBy(asc(genhalKingdomChurchesTable.type), asc(genhalKingdomChurchesTable.name)),
     ]);
 
     // Attach chiefs to each compound
@@ -105,7 +115,7 @@ router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void
       ...c, members: allCdcMembers.filter(m => m.committeeId === c.id),
     }));
 
-    res.json({ ...kingdom, rulers, towns: townsWithVillages, directVillages, compounds: compoundsWithChiefs, council, cdc: cdcWithMembers, records });
+    res.json({ ...kingdom, rulers, towns: townsWithVillages, directVillages, compounds: compoundsWithChiefs, council, cdc: cdcWithMembers, records, languages, geopoints, economicActivities, schools, churches });
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
@@ -348,6 +358,144 @@ router.patch("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (re
 router.delete("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCivicRecordsTable).where(eq(genhalCivicRecordsTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
+});
+
+// ─── Kingdom Languages ────────────────────────────────────────────────────────
+
+router.get("/genhal/kingdoms/:id/languages", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(genhalKingdomLanguagesTable).where(eq(genhalKingdomLanguagesTable.kingdomId, Number(req.params.id))).orderBy(desc(genhalKingdomLanguagesTable.isOfficial), asc(genhalKingdomLanguagesTable.name));
+    res.json(rows);
+  } catch { res.status(500).json({ error: "Failed" }); }
+});
+
+router.post("/genhal/kingdoms/:id/languages", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
+  try {
+    const [row] = await db.insert(genhalKingdomLanguagesTable).values({
+      kingdomId, name: b.name, localName: b.localName ?? null,
+      languageCode: b.languageCode ?? null, isOfficial: Boolean(b.isOfficial),
+      speakerCount: b.speakerCount ? Number(b.speakerCount) : null, notes: b.notes ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
+});
+
+router.delete("/genhal/kingdoms/:kingdomId/languages/:id", requireAuth(), async (req, res): Promise<void> => {
+  try { await db.delete(genhalKingdomLanguagesTable).where(eq(genhalKingdomLanguagesTable.id, Number(req.params.id))); res.status(204).send(); }
+  catch { res.status(500).json({ error: "Failed" }); }
+});
+
+// ─── Kingdom Geopoints ────────────────────────────────────────────────────────
+
+router.get("/genhal/kingdoms/:id/geopoints", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(genhalKingdomGeopointsTable).where(eq(genhalKingdomGeopointsTable.kingdomId, Number(req.params.id))).orderBy(asc(genhalKingdomGeopointsTable.name));
+    res.json(rows);
+  } catch { res.status(500).json({ error: "Failed" }); }
+});
+
+router.post("/genhal/kingdoms/:id/geopoints", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
+  try {
+    const [row] = await db.insert(genhalKingdomGeopointsTable).values({
+      kingdomId, name: b.name, type: b.type ?? "landmark",
+      latitude: b.latitude ? parseFloat(b.latitude) : null,
+      longitude: b.longitude ? parseFloat(b.longitude) : null,
+      description: b.description ?? null, imageUrl: b.imageUrl ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
+});
+
+router.delete("/genhal/kingdoms/:kingdomId/geopoints/:id", requireAuth(), async (req, res): Promise<void> => {
+  try { await db.delete(genhalKingdomGeopointsTable).where(eq(genhalKingdomGeopointsTable.id, Number(req.params.id))); res.status(204).send(); }
+  catch { res.status(500).json({ error: "Failed" }); }
+});
+
+// ─── Kingdom Economic Activities ──────────────────────────────────────────────
+
+router.get("/genhal/kingdoms/:id/economic-activities", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(genhalKingdomEconomicActivitiesTable).where(eq(genhalKingdomEconomicActivitiesTable.kingdomId, Number(req.params.id))).orderBy(desc(genhalKingdomEconomicActivitiesTable.isMain), asc(genhalKingdomEconomicActivitiesTable.name));
+    res.json(rows);
+  } catch { res.status(500).json({ error: "Failed" }); }
+});
+
+router.post("/genhal/kingdoms/:id/economic-activities", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
+  try {
+    const [row] = await db.insert(genhalKingdomEconomicActivitiesTable).values({
+      kingdomId, name: b.name, category: b.category ?? "agriculture",
+      description: b.description ?? null, scale: b.scale ?? null,
+      isMain: Boolean(b.isMain), seasonality: b.seasonality ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
+});
+
+router.delete("/genhal/kingdoms/:kingdomId/economic-activities/:id", requireAuth(), async (req, res): Promise<void> => {
+  try { await db.delete(genhalKingdomEconomicActivitiesTable).where(eq(genhalKingdomEconomicActivitiesTable.id, Number(req.params.id))); res.status(204).send(); }
+  catch { res.status(500).json({ error: "Failed" }); }
+});
+
+// ─── Kingdom Schools ──────────────────────────────────────────────────────────
+
+router.get("/genhal/kingdoms/:id/schools", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(genhalKingdomSchoolsTable).where(eq(genhalKingdomSchoolsTable.kingdomId, Number(req.params.id))).orderBy(asc(genhalKingdomSchoolsTable.level), asc(genhalKingdomSchoolsTable.name));
+    res.json(rows);
+  } catch { res.status(500).json({ error: "Failed" }); }
+});
+
+router.post("/genhal/kingdoms/:id/schools", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
+  try {
+    const [row] = await db.insert(genhalKingdomSchoolsTable).values({
+      kingdomId, name: b.name, localName: b.localName ?? null,
+      level: b.level ?? "primary", type: b.type ?? "public",
+      founded: b.founded ? Number(b.founded) : null, address: b.address ?? null,
+      imageUrl: b.imageUrl ?? null, website: b.website ?? null, notes: b.notes ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
+});
+
+router.delete("/genhal/kingdoms/:kingdomId/schools/:id", requireAuth(), async (req, res): Promise<void> => {
+  try { await db.delete(genhalKingdomSchoolsTable).where(eq(genhalKingdomSchoolsTable.id, Number(req.params.id))); res.status(204).send(); }
+  catch { res.status(500).json({ error: "Failed" }); }
+});
+
+// ─── Kingdom Churches / Religious Institutions ────────────────────────────────
+
+router.get("/genhal/kingdoms/:id/churches", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(genhalKingdomChurchesTable).where(eq(genhalKingdomChurchesTable.kingdomId, Number(req.params.id))).orderBy(asc(genhalKingdomChurchesTable.type), asc(genhalKingdomChurchesTable.name));
+    res.json(rows);
+  } catch { res.status(500).json({ error: "Failed" }); }
+});
+
+router.post("/genhal/kingdoms/:id/churches", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
+  try {
+    const [row] = await db.insert(genhalKingdomChurchesTable).values({
+      kingdomId, name: b.name, localName: b.localName ?? null,
+      type: b.type ?? "church", denomination: b.denomination ?? null,
+      founded: b.founded ? Number(b.founded) : null, address: b.address ?? null,
+      imageUrl: b.imageUrl ?? null, website: b.website ?? null, notes: b.notes ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
+});
+
+router.delete("/genhal/kingdoms/:kingdomId/churches/:id", requireAuth(), async (req, res): Promise<void> => {
+  try { await db.delete(genhalKingdomChurchesTable).where(eq(genhalKingdomChurchesTable.id, Number(req.params.id))); res.status(204).send(); }
+  catch { res.status(500).json({ error: "Failed" }); }
 });
 
 export default router;

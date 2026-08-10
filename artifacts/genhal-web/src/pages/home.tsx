@@ -29,8 +29,43 @@ function FloatingOrb({ className }: { className: string }) {
   return <div className={`absolute rounded-full blur-3xl opacity-20 animate-pulse pointer-events-none ${className}`} />;
 }
 
+/* ── Trusted By data ── */
+const TRUSTED_COMMUNITIES = [
+  { name: "Benin Kingdom",        region: "Edo, Nigeria",          emoji: "👑", color: "from-amber-500 to-orange-600" },
+  { name: "Ashanti Kingdom",      region: "Ashanti, Ghana",        emoji: "🛡️", color: "from-yellow-500 to-amber-600" },
+  { name: "Oyo Empire",           region: "Oyo, Nigeria",          emoji: "🐎", color: "from-red-500 to-rose-600" },
+  { name: "Zulu Kingdom",         region: "KwaZulu-Natal, SA",     emoji: "🌿", color: "from-green-500 to-emerald-600" },
+  { name: "Buganda Kingdom",      region: "Kampala, Uganda",       emoji: "🦅", color: "from-blue-500 to-indigo-600" },
+  { name: "Fulani Emirates",      region: "Sokoto, Nigeria",       emoji: "🌙", color: "from-purple-500 to-violet-600" },
+  { name: "Yoruba Heritage Org.", region: "Lagos, Nigeria",        emoji: "🎭", color: "from-pink-500 to-rose-500" },
+  { name: "Igbo Cultural Union",  region: "Enugu, Nigeria",        emoji: "🌳", color: "from-teal-500 to-cyan-600" },
+  { name: "Hausa Alliance",       region: "Kano, Nigeria",         emoji: "🕌", color: "from-indigo-500 to-blue-600" },
+  { name: "Swahili Heritage Ctr", region: "Mombasa, Kenya",        emoji: "⚓", color: "from-sky-500 to-blue-500" },
+  { name: "Kongo Kingdom Trust",  region: "Kinshasa, DRC",         emoji: "🌺", color: "from-orange-500 to-amber-500" },
+  { name: "Akan Heritage Fund",   region: "Accra, Ghana",          emoji: "🎶", color: "from-lime-500 to-green-600" },
+  { name: "Ndebele Cultural Org", region: "Bulawayo, Zimbabwe",    emoji: "🦓", color: "from-red-400 to-orange-500" },
+  { name: "Songhai Descendants",  region: "Gao, Mali",             emoji: "🏜️", color: "from-yellow-600 to-orange-500" },
+  { name: "Luba Kingdom Trust",   region: "Kalemie, DRC",          emoji: "🔺", color: "from-violet-500 to-purple-600" },
+  { name: "Mandé Heritage Soc.",  region: "Bamako, Mali",          emoji: "🎸", color: "from-emerald-500 to-teal-600" },
+];
+
+function TrustedByCard({ community }: { community: typeof TRUSTED_COMMUNITIES[0] }) {
+  return (
+    <div className="flex-shrink-0 w-52 mx-3">
+      <div className="bg-card border border-border/60 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group cursor-default">
+        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${community.color} flex items-center justify-center text-lg mb-3 transition-transform duration-300 group-hover:scale-110`}>
+          {community.emoji}
+        </div>
+        <p className="font-semibold text-sm text-foreground leading-tight">{community.name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{community.region}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: dashboard, isLoading, error } = useGetGenhalDashboard();
+  const marqueeRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="space-y-12 pb-12">
@@ -65,9 +100,7 @@ export default function Home() {
           </h1>
 
           {/* tagline */}
-          <div
-            className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300"
-          >
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
             <p className="text-base md:text-lg font-medium text-secondary-foreground/90 tracking-wide">
               Preserve your roots.&nbsp; Protect your heritage.&nbsp; Keep your language alive.
             </p>
@@ -151,6 +184,52 @@ export default function Home() {
             hover="hover:border-accent/50 hover:shadow-accent/10"
             delay={200}
           />
+        </div>
+      </section>
+
+      {/* ── Trusted By ── */}
+      <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400">
+        {/* heading */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center gap-2 bg-primary/8 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-bold text-primary uppercase tracking-widest">
+            <Sparkles className="h-3.5 w-3.5" /> Trusted By Communities
+          </div>
+          <h2 className="text-3xl font-serif font-bold text-foreground">
+            African Kingdoms & Heritage Organisations
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto text-sm">
+            Thousands of families, kingdoms, and cultural organisations across Africa use GenHaL to preserve their identity for generations to come.
+          </p>
+        </div>
+
+        {/* scrolling marquee — two rows scrolling in opposite directions */}
+        <div className="relative overflow-hidden rounded-3xl py-4 space-y-4">
+          {/* fade edges */}
+          <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+          <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+
+          {/* Row 1 — scrolls left */}
+          <div className="flex" style={{ animation: 'marquee-left 38s linear infinite' }}>
+            {[...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES].map((c, i) => (
+              <TrustedByCard key={`a-${i}`} community={c} />
+            ))}
+          </div>
+
+          {/* Row 2 — scrolls right */}
+          <div className="flex" style={{ animation: 'marquee-right 42s linear infinite' }}>
+            {[...TRUSTED_COMMUNITIES.slice(8), ...TRUSTED_COMMUNITIES, ...TRUSTED_COMMUNITIES.slice(0, 8)].map((c, i) => (
+              <TrustedByCard key={`b-${i}`} community={c} />
+            ))}
+          </div>
+        </div>
+
+        {/* bottom cta */}
+        <div className="text-center pt-2">
+          <Link href="/kingdoms">
+            <Button variant="outline" className="rounded-full px-6 transition-all hover:scale-105">
+              View All Kingdoms →
+            </Button>
+          </Link>
         </div>
       </section>
 

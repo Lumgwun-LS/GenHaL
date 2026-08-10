@@ -140,6 +140,16 @@
   --sidebar-ring: 15 70% 50%;
 }
 
+/* ── Trusted-By marquee animations ── */
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes marquee-right {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+
 @layer base {
   * {
     @apply border-border;
