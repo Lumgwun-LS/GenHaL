@@ -23,6 +23,10 @@ import {
   genhalFamilyMembersTable,
 } from "@workspace/db";
 import { isR2Configured, generateR2Key, createUploadUrl, deleteObject } from "../lib/genhal-r2";
+import {
+  sendClaimFiledEmails,
+  sendClaimStatusEmails,
+} from "../lib/genhal-emails";
 
 const router = Router();
 
@@ -64,6 +68,32 @@ router.post("/genhal/claims", async (req, res): Promise<void> => {
   }).returning();
 
   res.status(201).json(claim);
+
+  // Resolve current owner and unit name for email alert (best-effort, after response)
+  (async () => {
+    try {
+      let ownerClerkUserId: string | null = null;
+      let unitName = `${unitType} #${unitId}`;
+      if (unitType === "kingdom") {
+        const [k] = await db.select({ clerkUserId: genhalKingdomsTable.clerkUserId, name: genhalKingdomsTable.name })
+          .from(genhalKingdomsTable).where(eq(genhalKingdomsTable.id, Number(unitId))).limit(1);
+        ownerClerkUserId = k?.clerkUserId ?? null;
+        unitName = k?.name ?? unitName;
+      } else if (unitType === "family") {
+        const [f] = await db.select({ clerkUserId: genhalFamilyAccountsTable.clerkUserId, name: genhalFamilyAccountsTable.name })
+          .from(genhalFamilyAccountsTable).where(eq(genhalFamilyAccountsTable.id, Number(unitId))).limit(1);
+        ownerClerkUserId = f?.clerkUserId ?? null;
+        unitName = f?.name ?? unitName;
+      }
+      if (ownerClerkUserId) {
+        await sendClaimFiledEmails({
+          unitType, unitId: Number(unitId), unitName,
+          ownerClerkUserId, claimantName, claimantEmail,
+          position, claimId: claim.id,
+        });
+      }
+    } catch { /* already best-effort */ }
+  })();
 });
 
 // ── GET /genhal/claims/mine ───────────────────────────────────────────────────
@@ -285,6 +315,39 @@ router.patch("/genhal/claims/:id/status", async (req, res): Promise<void> => {
   }).where(eq(genhalOwnershipClaimsTable.id, claimId)).returning();
 
   res.json(updated);
+
+  // Send status-change emails after the response is delivered (best-effort)
+  (async () => {
+    try {
+      let unitName = `${claim.unitType} #${claim.unitId}`;
+      let formerOwnerClerkUserId: string | undefined;
+      if (claim.unitType === "kingdom") {
+        const [k] = await db.select({ clerkUserId: genhalKingdomsTable.clerkUserId, name: genhalKingdomsTable.name })
+          .from(genhalKingdomsTable).where(eq(genhalKingdomsTable.id, claim.unitId)).limit(1);
+        unitName = k?.name ?? unitName;
+        // On approval, ownership already transferred — former owner was k.clerkUserId before update
+        formerOwnerClerkUserId = status === "approved" ? k?.clerkUserId : undefined;
+      } else if (claim.unitType === "family") {
+        const [f] = await db.select({ clerkUserId: genhalFamilyAccountsTable.clerkUserId, name: genhalFamilyAccountsTable.name })
+          .from(genhalFamilyAccountsTable).where(eq(genhalFamilyAccountsTable.id, claim.unitId)).limit(1);
+        unitName = f?.name ?? unitName;
+        formerOwnerClerkUserId = status === "approved" ? f?.clerkUserId : undefined;
+      }
+      await sendClaimStatusEmails({
+        status,
+        claimantClerkUserId: claim.claimantClerkUserId,
+        claimantEmail: claim.claimantEmail,
+        claimantName: claim.claimantName,
+        unitType: claim.unitType,
+        unitId: claim.unitId,
+        unitName,
+        position: claim.position,
+        adminNotes: adminNotes ?? undefined,
+        claimId: claim.id,
+        formerOwnerClerkUserId,
+      });
+    } catch { /* best-effort */ }
+  })();
 });
 
 export default router;

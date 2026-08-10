@@ -2,6 +2,7 @@
  * GenHaL — Kingdom & Family membership + RBAC
  */
 import { Router } from "express";
+import { sendFamilyWelcomeEmail } from "../lib/genhal-emails";
 import { requireAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
@@ -162,6 +163,12 @@ router.post("/genhal/families", requireAuth(), async (req, res) => {
       createdByClerkUserId: userId,
     });
     res.status(201).json(family);
+    // Best-effort welcome email — must not block the response
+    sendFamilyWelcomeEmail({
+      creatorClerkUserId: userId,
+      familyName: family.name,
+      familyId: family.id,
+    }).catch(() => {});
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 

@@ -3,6 +3,7 @@
  * Kingdom → (Rulers, Council of Chiefs, CDC, Compounds, Towns, Villages, Records)
  */
 import { Router } from "express";
+import { sendKingdomWelcomeEmail } from "../lib/genhal-emails";
 import { requireAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
@@ -49,6 +50,13 @@ router.post("/genhal/kingdoms", requireAuth(), async (req, res) => {
       emblemImageUrl: b.emblemImageUrl ?? null, rulerTitle: b.rulerTitle ?? "King",
     }).returning();
     res.status(201).json(row);
+    // Best-effort welcome email — must not block the response
+    sendKingdomWelcomeEmail({
+      creatorClerkUserId: userId!,
+      kingdomName: row.name,
+      kingdomId: row.id,
+      rulerTitle: row.rulerTitle ?? "King",
+    }).catch(() => {});
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 

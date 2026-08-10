@@ -19,6 +19,11 @@ import {
   genhalSuccessionClaimsTable,
 } from "@workspace/db";
 import { isR2Configured, generateR2Key, createUploadUrl } from "../lib/genhal-r2";
+import {
+  sendSuccessionClaimFiledEmails,
+  sendSuccessionApprovedEmails,
+  sendSuccessionRejectedEmail,
+} from "../lib/genhal-emails";
 
 const router = Router();
 
@@ -125,6 +130,17 @@ router.post("/genhal/families/:id/succession", async (req, res): Promise<void> =
   }).returning();
 
   res.status(201).json(claim);
+
+  // Best-effort alert to family head + admins (after response)
+  sendSuccessionClaimFiledEmails({
+    familyId,
+    familyName: family.name,
+    familyHeadClerkUserId: family.clerkUserId,
+    claimerName,
+    claimerEmail,
+    relationshipToOwner,
+    claimId: claim.id,
+  }).catch(() => {});
 });
 
 // ── POST /genhal/families/:id/succession/upload-id ────────────────────────────
@@ -255,6 +271,24 @@ router.patch("/genhal/families/:id/succession/:claimId", async (req, res): Promi
   }).where(eq(genhalSuccessionClaimsTable.id, claimId)).returning();
 
   res.json(updated);
+
+  // Best-effort email after response
+  if (status === "approved") {
+    sendSuccessionApprovedEmails({
+      familyId,
+      familyName: family?.name ?? `Family #${familyId}`,
+      claimerName: claim.claimerName,
+      claimerEmail: claim.claimerEmail,
+      adminNotes: adminNotes ?? undefined,
+      claimId,
+    }).catch(() => {});
+  } else if (status === "rejected") {
+    sendSuccessionRejectedEmail({
+      familyName: family?.name ?? `Family #${familyId}`,
+      claimerEmail: claim.claimerEmail,
+      adminNotes: adminNotes ?? undefined,
+    }).catch(() => {});
+  }
 });
 
 export default router;
