@@ -1,4 +1,5 @@
 - [GenHaL Product Vision & Strategic Moat](genhal-product-vision.md) — global relationship graph as moat; community tenancy is foundational; person registry is graph substrate; migration paths are differentiator; network effects compound.
+- [GenHaL Language Corpus & ML Pipeline](genhal-corpus-pipeline.md) — genhal_language_datasets + genhal_training_runs (migration 0123); Vertex AI auth via GCS_SERVICE_ACCOUNT_KEY JWT; queues locally if GOOGLE_CLOUD_PROJECT unset.
 - [GenHaL Heritage Collector & AI Gateway](genhal-heritage-collector.md) — genhal_language_recordings table; 6 recording types; MediaRecorder browser API; presigned upload; /gateway/* key-auth proxy for Spring Boot.
 - [Support Ticket System](support-ticket-system.md) — vendor-shareable /help/:vendorId form, /ticket/:token tracking, /support dashboard; quota by plan (not RESOURCE_KEYS), upload URL follows media-library pattern.
 - [Auth scoping audit](auth-scoping-audit.md) — 12 route files had full-table-scan + in-memory filter (no auth); fixed with resolveAuthedVendor + DB-level WHERE; public routes and canonical new-route pattern documented.

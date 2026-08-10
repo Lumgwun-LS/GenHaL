@@ -17,6 +17,7 @@ import LanguageCenter from '@/pages/language/index';
 import Dictionary from '@/pages/language/dictionary';
 import AiStudio from '@/pages/ai/index';
 import HeritageCollector from '@/pages/collect/index';
+import LanguageCorpus from '@/pages/corpus/index';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ function Router() {
           <Route path="/ai" component={AiStudio} />
           
           <Route path="/collect" component={HeritageCollector} />
+          <Route path="/corpus" component={LanguageCorpus} />
           
           <Route component={NotFound} />
         </Switch>

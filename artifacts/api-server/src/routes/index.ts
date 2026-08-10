@@ -83,6 +83,7 @@ import internalGrantTrialRouter from "./internal-grant-trial";
 import tasksRouter from "./tasks";
 import blogRouter from "./blog";
 import genhalRouter from "./genhal";
+import genhalCorpusRouter from "./genhal-corpus";
 import aiGatewayRouter from "./ai-gateway";
 import publicBlogRouter from "./public-blog";
 import supportPublicRouter from "./support-public";
@@ -256,6 +257,7 @@ router.use(tasksRouter);
   router.use(blogRouter);
 router.use(supportRouter);
 router.use(genhalRouter);
+router.use(genhalCorpusRouter);
 
 // AI Gateway — key-based auth (X-Gateway-Key), callable by Spring Boot + Python workers
 router.use(aiGatewayRouter);
