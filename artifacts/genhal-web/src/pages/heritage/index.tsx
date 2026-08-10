@@ -100,7 +100,7 @@ export default function HeritageHub() {
               >
                 <Link
                   href={`/heritage/${community.id}`}
-                  className="block h-full"
+                  className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   <div className="group flex h-full overflow-hidden rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
                     <div className="w-28 shrink-0 bg-muted sm:w-36">

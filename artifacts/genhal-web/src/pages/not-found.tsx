@@ -1,7 +1,7 @@
 import { Link } from 'wouter';
 import { Compass } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 
 export default function NotFound() {
@@ -11,8 +11,8 @@ export default function NotFound() {
       title="404 — page not found"
       description="This page isn't part of the archive. Head back to the dashboard to keep exploring."
       action={
-        <Link href="/">
-          <Button>Back to dashboard</Button>
+        <Link href="/" className={buttonVariants()}>
+          Back to dashboard
         </Link>
       }
     />

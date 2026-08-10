@@ -27,11 +27,15 @@ interface NavGroup {
   items: NavItem[];
 }
 
-/** One accent per nav group, drawn from the heritage palette. */
+/**
+ * One accent per nav group, drawn from the heritage palette but lifted for the
+ * near-black sidebar — the mid-tone versions used on light surfaces only reach
+ * ~3.8:1 here, below the 4.5:1 needed for the small-caps group labels.
+ */
 const PALETTE = [
-  { dot: '#E2673A', bg: 'rgba(226,103,58,0.15)', label: '#E2673Acc' }, // terracotta
-  { dot: '#68A06B', bg: 'rgba(104,160,107,0.15)', label: '#68A06Bcc' }, // forest
-  { dot: '#E3B341', bg: 'rgba(227,179,65,0.15)', label: '#E3B341cc' }, // gold
+  { dot: '#F2906A', bg: 'rgba(242,144,106,0.16)' }, // terracotta
+  { dot: '#93C795', bg: 'rgba(147,199,149,0.16)' }, // forest
+  { dot: '#EFC65E', bg: 'rgba(239,198,94,0.16)' }, // gold
 ] as const;
 
 const NAV_GROUPS: NavGroup[] = [
@@ -152,7 +156,7 @@ export function Layout({ children }: { children: ReactNode }) {
       })).filter((group) => group.items.length > 0)
     : NAV_GROUPS;
 
-  const sidebarPanel = (
+  const renderPanel = (collapsed: boolean) => (
     <div
       className="flex h-full flex-col overflow-hidden"
       style={{
@@ -185,7 +189,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="block truncate font-serif text-lg font-bold leading-tight text-white">
                 GenHaL
               </span>
-              <span className="block truncate text-[9px] font-bold uppercase tracking-[0.18em] text-white/35">
+              <span className="block truncate text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">
                 Heritage Archive
               </span>
             </span>
@@ -195,7 +199,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {!collapsed && (
           <button
             onClick={() => setCollapsed(true)}
-            className="ml-auto hidden rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 md:flex"
+            className="ml-auto hidden rounded-lg p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white/80 md:flex"
             title="Collapse sidebar"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -203,7 +207,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
         <button
           onClick={() => setMobileOpen(false)}
-          className="ml-auto rounded-lg p-1.5 text-white/40 transition-colors hover:text-white md:hidden"
+          className="ml-auto rounded-lg p-1.5 text-white/60 transition-colors hover:text-white md:hidden"
           aria-label="Close menu"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -213,7 +217,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {collapsed && (
         <button
           onClick={() => setCollapsed(false)}
-          className="mx-auto mt-3 flex rounded-xl p-2 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/80"
+          className="mx-auto mt-3 flex rounded-xl p-2 text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/80"
           title="Expand sidebar"
         >
           <ChevronRight className="h-4 w-4" />
@@ -231,18 +235,18 @@ export function Layout({ children }: { children: ReactNode }) {
                 border: '1px solid rgba(255,255,255,0.1)',
               }}
             >
-              <Search className="h-3.5 w-3.5 shrink-0 text-white/40" />
+              <Search className="h-3.5 w-3.5 shrink-0 text-white/60" />
               <input
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Escape' && setSearchOpen(false)}
                 placeholder="Search menu…"
-                className="flex-1 bg-transparent text-xs text-white placeholder-white/30 outline-none"
+                className="flex-1 bg-transparent text-xs text-white placeholder-white/55 outline-none"
               />
               <button
                 onClick={() => setSearchOpen(false)}
-                className="text-white/30 transition-colors hover:text-white/70"
+                className="text-white/55 transition-colors hover:text-white/70"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
@@ -252,7 +256,7 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={() => setSearchOpen(true)}
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs transition-colors hover:bg-white/[0.05]"
               style={{
-                color: 'rgba(255,255,255,0.35)',
+                color: 'rgba(255,255,255,0.62)',
                 border: '1px solid rgba(255,255,255,0.06)',
               }}
             >
@@ -281,7 +285,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   />
                   <span
                     className="truncate text-[10px] font-bold uppercase tracking-[0.14em]"
-                    style={{ color: pal.label }}
+                    style={{ color: pal.dot }}
                   >
                     {group.group}
                   </span>
@@ -331,7 +335,7 @@ export function Layout({ children }: { children: ReactNode }) {
                             style={
                               current
                                 ? { background: pal.bg, color: pal.dot }
-                                : { color: 'rgba(255,255,255,0.45)' }
+                                : { color: 'rgba(255,255,255,0.68)' }
                             }
                           >
                             {item.icon}
@@ -342,7 +346,7 @@ export function Layout({ children }: { children: ReactNode }) {
                                 'flex-1 truncate text-[13px] transition-colors',
                                 current
                                   ? 'font-semibold text-white'
-                                  : 'font-medium text-white/60 group-hover:text-white/90',
+                                  : 'font-medium text-white/75 group-hover:text-white',
                               )}
                             >
                               {item.label}
@@ -359,42 +363,48 @@ export function Layout({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      {/* Account footer */}
+      {/* Account status — this app has no sign-in flow wired up, so this is
+          deliberately a status block rather than a button that does nothing. */}
       <div
         className="shrink-0 p-2"
         style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
       >
-        <button
+        <div
           className={cn(
-            'flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 transition-colors hover:bg-white/[0.06]',
+            'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5',
             collapsed && 'justify-center px-2',
           )}
           style={{ background: 'rgba(255,255,255,0.04)' }}
-          title={collapsed ? 'Sign in' : undefined}
+          title={collapsed ? 'Browsing as guest' : undefined}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/60">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
             <UserCircle2 className="h-4 w-4" />
           </span>
           {!collapsed && (
-            <span className="min-w-0 flex-1 text-left">
+            <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold leading-tight text-white">
-                Sign in
+                Browsing as guest
               </span>
-              <span className="block truncate text-[10px] font-medium leading-tight text-white/40">
-                Save your work
+              <span className="block truncate text-[10px] font-medium leading-tight text-white/60">
+                Contributions are public
               </span>
             </span>
           )}
-        </button>
+        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar */}
+    /*
+     * h-dvh (not h-screen) so mobile browser chrome retracting doesn't leave a
+     * gap; overflow-hidden on the shell plus overflow-y-auto on <main> keeps
+     * the sidebar and topbar pinned while only the content column scrolls.
+     */
+    <div className="flex h-dvh overflow-hidden bg-background">
+      {/* Desktop sidebar — sticky is belt-and-braces behind the fixed shell */}
       <aside
-        className="hidden shrink-0 flex-col md:flex"
+        className="sticky top-0 hidden h-dvh shrink-0 flex-col md:flex"
         style={{
           width: collapsed ? '64px' : '260px',
           minWidth: collapsed ? '64px' : '260px',
@@ -402,13 +412,13 @@ export function Layout({ children }: { children: ReactNode }) {
             'width 0.25s cubic-bezier(0.4,0,0.2,1), min-width 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
-        {sidebarPanel}
+        {renderPanel(collapsed)}
       </aside>
 
       {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="h-full w-[260px] shrink-0">{sidebarPanel}</div>
+          <div className="h-full w-[260px] shrink-0">{renderPanel(false)}</div>
           <div
             className="flex-1 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
@@ -445,17 +455,6 @@ export function Layout({ children }: { children: ReactNode }) {
               ) : (
                 <Moon className="h-5 w-5" />
               )}
-            </button>
-
-            <div className="mx-2 hidden h-6 w-px bg-border sm:block" />
-
-            <button className="hidden items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted sm:flex">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <UserCircle2 className="h-4 w-4" />
-              </span>
-              <span className="text-sm font-medium text-foreground">
-                Sign in
-              </span>
             </button>
           </div>
         </header>

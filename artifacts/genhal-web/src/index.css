@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Spline+Sans+Mono:wght@300..700&display=swap');
+/* Montserrat matches the Awajimaa School dashboard. Fraunces is kept only for
+ * the GenHaL wordmark and generated story prose; mono uses the system stack. */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300..800;1,300..800&family=Fraunces:opsz,wght@9..144,500..800&display=swap');
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
@@ -60,41 +62,43 @@
   --background: 35 25% 96%; /* Light sand canvas */
   --foreground: 20 30% 15%; /* Dark wood/brown */
 
-  --border: 30 18% 88%;
-  --input: 30 18% 88%;
-  --ring: 15 80% 45%;
+  /* --border is for decorative dividers; --input carries form-control edges
+   * and is deliberately darker so fields read as interactive. */
+  --border: 30 16% 84%;
+  --input: 30 14% 53%;
+  --ring: 15 80% 41%;
 
   --card: 0 0% 100%;
   --card-foreground: 20 30% 15%;
-  --card-border: 30 18% 88%;
+  --card-border: 30 16% 84%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 20 30% 15%;
-  --popover-border: 30 18% 88%;
+  --popover-border: 30 16% 84%;
 
-  --primary: 15 80% 45%; /* Terracotta */
+  --primary: 15 80% 41%; /* Terracotta */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 140 25% 30%; /* Forest Green */
+  --secondary: 140 25% 28%; /* Forest Green */
   --secondary-foreground: 0 0% 100%;
 
   --muted: 35 20% 94%;
-  --muted-foreground: 20 12% 45%;
+  --muted-foreground: 20 14% 38%;
 
   --accent: 40 90% 45%; /* Vibrant Gold */
   --accent-foreground: 20 30% 15%;
 
-  --destructive: 0 70% 50%;
+  --destructive: 0 70% 45%;
   --destructive-foreground: 0 0% 100%;
 
   /* Component borders consumed by button/badge variants */
-  --primary-border: hsl(15 80% 38%);
-  --secondary-border: hsl(140 25% 24%);
-  --muted-border: hsl(30 18% 86%);
-  --accent-border: hsl(40 90% 38%);
-  --destructive-border: hsl(0 70% 42%);
-  --button-outline: hsl(30 18% 84%);
-  --badge-outline: hsl(30 18% 84%);
+  --primary-border: hsl(15 80% 34%);
+  --secondary-border: hsl(140 25% 22%);
+  --muted-border: hsl(30 16% 82%);
+  --accent-border: hsl(40 90% 36%);
+  --destructive-border: hsl(0 70% 38%);
+  --button-outline: hsl(30 14% 53%);
+  --badge-outline: hsl(30 14% 53%);
 
   /* Dark sidebar shell — same brown/terracotta family as the palette */
   --sidebar-gradient: linear-gradient(
@@ -103,11 +107,11 @@
     #241609 60%,
     #2b1a0a 100%
   );
-  --sidebar-border-color: rgba(255, 255, 255, 0.06);
+  --sidebar-border-color: rgba(255, 255, 255, 0.08);
 
-  --app-font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-  --app-font-serif: 'Fraunces', serif;
-  --app-font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+  --app-font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --app-font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --app-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
 
   --radius: 0.75rem;
 }
@@ -116,40 +120,46 @@
   --background: 20 22% 9%; /* Deep dark brown */
   --foreground: 35 30% 90%; /* Light sand */
 
-  --border: 20 16% 22%;
-  --input: 20 16% 22%;
-  --ring: 15 70% 50%;
+  --border: 20 14% 27%;
+  --input: 20 12% 48%;
+  --ring: 18 85% 62%;
 
   --card: 20 20% 13%;
   --card-foreground: 35 30% 90%;
-  --card-border: 20 16% 22%;
+  --card-border: 20 14% 27%;
 
   --popover: 20 20% 13%;
   --popover-foreground: 35 30% 90%;
-  --popover-border: 20 16% 22%;
+  --popover-border: 20 14% 27%;
 
-  --primary: 15 70% 50%; /* Terracotta */
-  --primary-foreground: 0 0% 100%;
+  /*
+   * On a dark canvas each brand colour has to work as BOTH a fill (with its
+   * foreground on top) and as text on a card. A mid-tone can't do both — it
+   * leaves too little headroom either way. So the brand colours invert here:
+   * light tint + near-black foreground, which is how --accent already behaved.
+   */
+  --primary: 18 85% 62%; /* Terracotta, lifted */
+  --primary-foreground: 20 45% 10%;
 
-  --secondary: 140 30% 40%; /* Forest Green */
-  --secondary-foreground: 0 0% 100%;
+  --secondary: 145 40% 60%; /* Forest green, lifted */
+  --secondary-foreground: 145 50% 8%;
 
   --muted: 20 16% 18%;
-  --muted-foreground: 35 15% 62%;
+  --muted-foreground: 35 15% 66%;
 
-  --accent: 40 80% 50%; /* Gold */
+  --accent: 40 80% 58%; /* Gold */
   --accent-foreground: 20 30% 10%;
 
-  --destructive: 0 60% 50%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 75% 65%;
+  --destructive-foreground: 0 60% 10%;
 
-  --primary-border: hsl(15 70% 42%);
-  --secondary-border: hsl(140 30% 32%);
-  --muted-border: hsl(20 16% 24%);
-  --accent-border: hsl(40 80% 42%);
-  --destructive-border: hsl(0 60% 42%);
-  --button-outline: hsl(20 16% 26%);
-  --badge-outline: hsl(20 16% 26%);
+  --primary-border: hsl(18 85% 70%);
+  --secondary-border: hsl(145 40% 68%);
+  --muted-border: hsl(20 16% 30%);
+  --accent-border: hsl(40 80% 66%);
+  --destructive-border: hsl(0 75% 72%);
+  --button-outline: hsl(20 12% 48%);
+  --badge-outline: hsl(20 12% 48%);
 
   --sidebar-gradient: linear-gradient(
     170deg,

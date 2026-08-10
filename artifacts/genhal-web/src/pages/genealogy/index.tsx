@@ -92,7 +92,10 @@ export default function GenealogyList() {
               delay={stagger(i)}
               className="h-full"
             >
-              <Link href={`/genealogy/${tree.id}`} className="block h-full">
+              <Link
+                href={`/genealogy/${tree.id}`}
+                className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 <div className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
                   {tree.coverImageUrl ? (
                     <div className="h-28 w-full overflow-hidden bg-muted">

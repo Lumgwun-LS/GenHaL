@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { StatCard } from '@/components/stat-card';
 import { EmptyState } from '@/components/empty-state';
 import { Reveal, stagger } from '@/components/reveal';
@@ -77,22 +78,22 @@ export default function Home() {
             </div>
 
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Link href="/genealogy">
-                <Button
-                  className="bg-white text-primary"
-                  style={{ borderColor: 'transparent' }}
-                >
-                  Trace your lineage
-                </Button>
+              <Link
+                href="/genealogy"
+                className={cn(buttonVariants(), 'bg-white text-primary')}
+                style={{ borderColor: 'transparent' }}
+              >
+                Trace your lineage
               </Link>
-              <Link href="/language">
-                <Button
-                  variant="outline"
-                  className="bg-white/10 text-white backdrop-blur-sm"
-                  style={{ borderColor: 'rgba(255,255,255,0.35)' }}
-                >
-                  Explore languages
-                </Button>
+              <Link
+                href="/language"
+                className={cn(
+                  buttonVariants({ variant: 'outline' }),
+                  'bg-white/10 text-white backdrop-blur-sm',
+                )}
+                style={{ borderColor: 'rgba(255,255,255,0.45)' }}
+              >
+                Explore languages
               </Link>
             </div>
           </div>
@@ -164,7 +165,10 @@ export default function Home() {
               delay={stagger(i)}
               className="h-full"
             >
-              <Link href={pillar.href} className="block h-full">
+              <Link
+                href={pillar.href}
+                className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 <div className="group h-full rounded-xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover">
                   <div
                     className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl ${pillar.chip}`}
@@ -240,8 +244,11 @@ export default function Home() {
             title="No recent activity"
             description="Nothing has been contributed yet. Share a story to get the archive moving."
             action={
-              <Link href="/heritage">
-                <Button variant="outline">Share a story</Button>
+              <Link
+                href="/heritage"
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                Share a story
               </Link>
             }
           />
