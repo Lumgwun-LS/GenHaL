@@ -9,10 +9,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getApiBaseUrl } from '@/lib/api';
+import LocationSelector, { type LocationValue } from '@/components/location-selector';
 
 interface Kingdom {
   id: number; name: string; localName?: string; unitType: string; unitTypeLabel?: string;
@@ -44,8 +44,10 @@ export default function KingdomsList() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '', localName: '', unitType: 'kingdom', unitTypeLabel: '',
-    rulerTitle: 'King', country: '', region: '', district: '',
-    foundedYear: '', description: '',
+    rulerTitle: 'King', foundedYear: '', description: '',
+  });
+  const [location, setLocation] = useState<LocationValue>({
+    country: '', countryCode: '', region: '', regionCode: '', district: '',
   });
 
   const load = async () => {
@@ -58,7 +60,6 @@ export default function KingdomsList() {
   };
   useEffect(() => { load(); }, []);
 
-  // auto-fill ruler title when unit type changes
   const handleUnitTypeChange = (v: string) => {
     setForm(f => ({ ...f, unitType: v, rulerTitle: RULER_TITLES[v] ?? f.rulerTitle }));
   };
@@ -69,12 +70,13 @@ export default function KingdomsList() {
     try {
       const res = await fetch(`${base}/genhal/kingdoms`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, country: location.country, region: location.region, district: location.district }),
       });
       if (!res.ok) throw new Error('Failed');
       toast({ title: `${form.name} created!` });
       setCreating(false);
-      setForm({ name:'',localName:'',unitType:'kingdom',unitTypeLabel:'',rulerTitle:'King',country:'',region:'',district:'',foundedYear:'',description:'' });
+      setForm({ name:'',localName:'',unitType:'kingdom',unitTypeLabel:'',rulerTitle:'King',foundedYear:'',description:'' });
+      setLocation({ country:'', countryCode:'', region:'', regionCode:'', district:'' });
       load();
     } catch { toast({ variant: 'destructive', title: 'Failed to create' }); }
     finally { setSaving(false); }
@@ -219,17 +221,8 @@ export default function KingdomsList() {
                 <Input type="number" value={form.foundedYear} onChange={e => setForm(f => ({ ...f, foundedYear: e.target.value }))}
                   placeholder="1440" className="rounded-lg" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Country</Label>
-                <Input value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
-                  placeholder="Nigeria" className="rounded-lg" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>State / Region</Label>
-                <Input value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))}
-                  placeholder="Edo State" className="rounded-lg" />
-              </div>
             </div>
+            <LocationSelector value={location} onChange={setLocation} />
             <div className="space-y-1.5">
               <Label>Description</Label>
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
