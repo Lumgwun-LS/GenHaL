@@ -18,6 +18,8 @@ import Dictionary from '@/pages/language/dictionary';
 import AiStudio from '@/pages/ai/index';
 import HeritageCollector from '@/pages/collect/index';
 import LanguageCorpus from '@/pages/corpus/index';
+import TownsList from '@/pages/towns/index';
+import TownDetail from '@/pages/towns/detail';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +50,8 @@ function Router() {
           
           <Route path="/collect" component={HeritageCollector} />
           <Route path="/corpus" component={LanguageCorpus} />
+          <Route path="/towns" component={TownsList} />
+          <Route path="/towns/:id" component={TownDetail} />
           
           <Route component={NotFound} />
         </Switch>

@@ -114,3 +114,4 @@ export * from "./genhal-ai-generations";
 export * from "./genhal-language-recordings";
 export * from "./genhal-language-datasets";
 export * from "./genhal-training-runs";
+export * from "./genhal-towns";
