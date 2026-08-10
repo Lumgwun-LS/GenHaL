@@ -126,3 +126,4 @@ export * from "./genhal-claims";
 export * from "./genhal-succession";
 export * from "./genhal-wills";
 export * from "./genhal-life-checks";
+export * from "./genhal-language-orgs";

@@ -19,6 +19,12 @@ export const genhalLanguageDatasetsTable = pgTable("genhal_language_datasets", {
   approvedForTraining: boolean("approved_for_training").notNull().default(false),
   processingNotes: text("processing_notes"),
   metadata: jsonb("metadata"),
+  // Language Organisation approval workflow
+  /** not_required | pending | approved | rejected */
+  orgApprovalStatus:          text("org_approval_status").notNull().default("not_required"),
+  orgReviewedByClerkUserId:   text("org_reviewed_by_clerk_user_id"),
+  orgReviewedAt:              timestamp("org_reviewed_at"),
+  orgRejectionReason:         text("org_rejection_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

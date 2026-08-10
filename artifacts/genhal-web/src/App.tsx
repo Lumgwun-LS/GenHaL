@@ -23,6 +23,9 @@ import KingdomDetail from '@/pages/kingdoms/detail';
 import FamiliesList from '@/pages/families/index';
 import FamilyDetail from '@/pages/families/detail';
 import VerifyAlive from '@/pages/verify';
+import LanguageOrgs from '@/pages/language-orgs/index';
+import RegisterOrg from '@/pages/language-orgs/register';
+import OrgDetail from '@/pages/language-orgs/detail';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +61,9 @@ function Router() {
           <Route path="/families" component={FamiliesList} />
           <Route path="/families/:id" component={FamilyDetail} />
           <Route path="/verify" component={VerifyAlive} />
+          <Route path="/language-orgs/register" component={RegisterOrg} />
+          <Route path="/language-orgs/:id" component={OrgDetail} />
+          <Route path="/language-orgs" component={LanguageOrgs} />
 
           <Route component={NotFound} />
         </Switch>

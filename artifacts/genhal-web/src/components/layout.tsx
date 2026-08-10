@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Network, BookOpen, Globe2, Sparkles, LayoutDashboard, Menu, X, UserCircle, Mic, Database, Building2, Home } from 'lucide-react';
+import { Network, BookOpen, Globe2, Sparkles, LayoutDashboard, Menu, X, UserCircle, Mic, Database, Building2, Home, Users } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { name: 'Kingdoms', href: '/kingdoms', icon: Building2 },
     { name: 'Families', href: '/families', icon: Home },
     { name: 'Corpus & AI', href: '/corpus', icon: Database },
+    { name: 'Lang. Orgs', href: '/language-orgs', icon: Users },
   ];
 
   return (
