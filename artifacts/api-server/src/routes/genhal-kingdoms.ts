@@ -4,7 +4,7 @@
  */
 import { Router } from "express";
 import { sendKingdomWelcomeEmail } from "../lib/genhal-emails";
-import { requireAuth } from "@clerk/express";
+import { requireAuth, getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
   genhalKingdomsTable,
@@ -25,17 +25,17 @@ const router = Router();
 
 // ─── Kingdoms CRUD ────────────────────────────────────────────────────────────
 
-router.get("/genhal/kingdoms", requireAuth(), async (_req, res) => {
+router.get("/genhal/kingdoms", requireAuth(), async (_req, res): Promise<void> => {
   try {
     const rows = await db.select().from(genhalKingdomsTable).orderBy(asc(genhalKingdomsTable.name));
     res.json(rows);
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
-router.post("/genhal/kingdoms", requireAuth(), async (req, res) => {
-  const userId = req.auth?.userId;
+router.post("/genhal/kingdoms", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const b = req.body;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [row] = await db.insert(genhalKingdomsTable).values({
       clerkUserId: userId!, name: b.name, localName: b.localName ?? null,
@@ -61,11 +61,11 @@ router.post("/genhal/kingdoms", requireAuth(), async (req, res) => {
 });
 
 // Full kingdom detail — all sub-entities in one call
-router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
+router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   try {
     const [kingdom] = await db.select().from(genhalKingdomsTable).where(eq(genhalKingdomsTable.id, id));
-    if (!kingdom) return res.status(404).json({ error: "Not found" });
+    if (!kingdom) return void res.status(404).json({ error: "Not found" });
 
     const [rulers, towns, villages, compounds, council, cdcCommittees, records] = await Promise.all([
       db.select().from(genhalKingdomRulersTable).where(eq(genhalKingdomRulersTable.kingdomId, id)).orderBy(asc(genhalKingdomRulersTable.reignStart)),
@@ -109,7 +109,7 @@ router.get("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id); const b = req.body;
   try {
     const fields = ["name","localName","unitType","unitTypeLabel","languageCode","communityId","country","region","district","latitude","longitude","foundedYear","description","coverImageUrl","emblemImageUrl","rulerTitle"];
@@ -120,7 +120,7 @@ router.patch("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:id", requireAuth(), async (req, res): Promise<void> => {
   try {
     await db.delete(genhalKingdomsTable).where(eq(genhalKingdomsTable.id, Number(req.params.id)));
     res.status(204).send();
@@ -129,9 +129,9 @@ router.delete("/genhal/kingdoms/:id", requireAuth(), async (req, res) => {
 
 // ─── Rulers ───────────────────────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/rulers", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:id/rulers", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id); const b = req.body;
-  if (!b.name || !b.title) return res.status(400).json({ error: "name and title required" });
+  if (!b.name || !b.title) return void res.status(400).json({ error: "name and title required" });
   try {
     if (b.isCurrent) await db.update(genhalKingdomRulersTable).set({ isCurrent: false }).where(and(eq(genhalKingdomRulersTable.kingdomId, kingdomId), eq(genhalKingdomRulersTable.isCurrent, true)));
     const [row] = await db.insert(genhalKingdomRulersTable).values({
@@ -145,7 +145,7 @@ router.post("/genhal/kingdoms/:id/rulers", requireAuth(), async (req, res) => {
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/kingdoms/:kingdomId/rulers/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/kingdoms/:kingdomId/rulers/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id); const b = req.body;
   try {
     if (b.isCurrent) await db.update(genhalKingdomRulersTable).set({ isCurrent: false }).where(and(eq(genhalKingdomRulersTable.kingdomId, Number(req.params.kingdomId)), eq(genhalKingdomRulersTable.isCurrent, true)));
@@ -156,32 +156,32 @@ router.patch("/genhal/kingdoms/:kingdomId/rulers/:id", requireAuth(), async (req
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/rulers/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/rulers/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalKingdomRulersTable).where(eq(genhalKingdomRulersTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── Towns ────────────────────────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/towns", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.id); const b = req.body; const userId = req.auth?.userId;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+router.post("/genhal/kingdoms/:id/towns", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body; const userId = getAuth(req).userId!;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [row] = await db.insert(genhalTownsTable).values({ kingdomId, clerkUserId: userId!, name: b.name, localName: b.localName ?? null, description: b.description ?? null }).returning();
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/towns/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/towns/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalTownsTable).where(eq(genhalTownsTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── Villages ─────────────────────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/villages", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.id); const b = req.body; const userId = req.auth?.userId;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+router.post("/genhal/kingdoms/:id/villages", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const b = req.body; const userId = getAuth(req).userId!;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [row] = await db.insert(genhalVillagesTable).values({
       kingdomId, clerkUserId: userId!, name: b.name, localName: b.localName ?? null,
@@ -191,30 +191,30 @@ router.post("/genhal/kingdoms/:id/villages", requireAuth(), async (req, res) => 
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/villages/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/villages/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalVillagesTable).where(eq(genhalVillagesTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── Compounds + Chiefs ───────────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/compounds", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:id/compounds", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id); const b = req.body;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [row] = await db.insert(genhalCompoundsTable).values({ kingdomId, name: b.name, localName: b.localName ?? null, description: b.description ?? null, chiefTitle: b.chiefTitle ?? "Chief" }).returning();
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/compounds/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/compounds/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCompoundsTable).where(eq(genhalCompoundsTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.post("/genhal/kingdoms/:kingdomId/compounds/:compoundId/chiefs", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:kingdomId/compounds/:compoundId/chiefs", requireAuth(), async (req, res): Promise<void> => {
   const compoundId = Number(req.params.compoundId); const b = req.body;
-  if (!b.name || !b.title) return res.status(400).json({ error: "name and title required" });
+  if (!b.name || !b.title) return void res.status(400).json({ error: "name and title required" });
   try {
     if (b.isCurrent) await db.update(genhalCompoundChiefsTable).set({ isCurrent: false }).where(and(eq(genhalCompoundChiefsTable.compoundId, compoundId), eq(genhalCompoundChiefsTable.isCurrent, true)));
     const [row] = await db.insert(genhalCompoundChiefsTable).values({
@@ -226,16 +226,16 @@ router.post("/genhal/kingdoms/:kingdomId/compounds/:compoundId/chiefs", requireA
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kId/compounds/:cId/chiefs/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kId/compounds/:cId/chiefs/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCompoundChiefsTable).where(eq(genhalCompoundChiefsTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── Council of Chiefs ────────────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/council", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:id/council", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id); const b = req.body;
-  if (!b.name || !b.title) return res.status(400).json({ error: "name and title required" });
+  if (!b.name || !b.title) return void res.status(400).json({ error: "name and title required" });
   try {
     if (b.isCurrent && b.role === "Chairman") {
       await db.update(genhalCouncilMembersTable).set({ isCurrent: false })
@@ -251,7 +251,7 @@ router.post("/genhal/kingdoms/:id/council", requireAuth(), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/kingdoms/:kingdomId/council/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/kingdoms/:kingdomId/council/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id); const b = req.body;
   try {
     const updates: Record<string, any> = { updatedAt: new Date() };
@@ -261,16 +261,16 @@ router.patch("/genhal/kingdoms/:kingdomId/council/:id", requireAuth(), async (re
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/council/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/council/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCouncilMembersTable).where(eq(genhalCouncilMembersTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── CDC Committees + Members ─────────────────────────────────────────────────
 
-router.post("/genhal/kingdoms/:id/cdc", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:id/cdc", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id); const b = req.body;
-  if (!b.unitType || !b.unitId) return res.status(400).json({ error: "unitType and unitId required" });
+  if (!b.unitType || !b.unitId) return void res.status(400).json({ error: "unitType and unitId required" });
   try {
     if (b.isCurrent) {
       await db.update(genhalCdcCommitteesTable).set({ isCurrent: false })
@@ -286,9 +286,9 @@ router.post("/genhal/kingdoms/:id/cdc", requireAuth(), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.post("/genhal/kingdoms/:kingdomId/cdc/:committeeId/members", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:kingdomId/cdc/:committeeId/members", requireAuth(), async (req, res): Promise<void> => {
   const committeeId = Number(req.params.committeeId); const b = req.body;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [row] = await db.insert(genhalCdcMembersTable).values({
       committeeId, name: b.name, localName: b.localName ?? null, role: b.role ?? "Member",
@@ -298,19 +298,19 @@ router.post("/genhal/kingdoms/:kingdomId/cdc/:committeeId/members", requireAuth(
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kId/cdc/:committeeId", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kId/cdc/:committeeId", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCdcCommitteesTable).where(eq(genhalCdcCommitteesTable.id, Number(req.params.committeeId))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kId/cdc/:cId/members/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kId/cdc/:cId/members/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCdcMembersTable).where(eq(genhalCdcMembersTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 // ─── Civic Records ────────────────────────────────────────────────────────────
 
-router.get("/genhal/kingdoms/:id/records", requireAuth(), async (req, res) => {
+router.get("/genhal/kingdoms/:id/records", requireAuth(), async (req, res): Promise<void> => {
   const { type, unitType } = req.query;
   try {
     const conds: any[] = [eq(genhalCivicRecordsTable.kingdomId, Number(req.params.id))];
@@ -321,9 +321,9 @@ router.get("/genhal/kingdoms/:id/records", requireAuth(), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.post("/genhal/kingdoms/:id/records", requireAuth(), async (req, res) => {
+router.post("/genhal/kingdoms/:id/records", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id); const b = req.body;
-  if (!b.type || !b.title) return res.status(400).json({ error: "type and title required" });
+  if (!b.type || !b.title) return void res.status(400).json({ error: "type and title required" });
   try {
     const [row] = await db.insert(genhalCivicRecordsTable).values({
       kingdomId, unitType: b.unitType ?? "kingdom", unitId: b.unitId ? Number(b.unitId) : null,
@@ -335,7 +335,7 @@ router.post("/genhal/kingdoms/:id/records", requireAuth(), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id); const b = req.body;
   try {
     const updates: Record<string, any> = { updatedAt: new Date() };
@@ -345,7 +345,7 @@ router.patch("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (re
   } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/kingdoms/:kingdomId/records/:id", requireAuth(), async (req, res): Promise<void> => {
   try { await db.delete(genhalCivicRecordsTable).where(eq(genhalCivicRecordsTable.id, Number(req.params.id))); res.status(204).send(); }
   catch (err) { res.status(500).json({ error: "Failed" }); }
 });

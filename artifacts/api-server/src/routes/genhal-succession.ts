@@ -235,6 +235,9 @@ router.patch("/genhal/families/:id/succession/:claimId", async (req, res): Promi
     )).limit(1);
   if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
 
+  // Load family record for email notifications
+  const family = await getFamily(familyId);
+
   if (status === "approved") {
     // Transfer family account ownership to claimer
     await db.update(genhalFamilyAccountsTable)

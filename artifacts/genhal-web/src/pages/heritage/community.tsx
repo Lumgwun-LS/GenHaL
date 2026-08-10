@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'wouter';
 import { useGetGenhalCommunity, useListGenhalCommunityPosts, useCreateGenhalHeritagePost } from '@workspace/api-client-react';
-import { ArrowLeft, Plus, MapPin, Users, Loader2, Image as ImageIcon, Music, Type, Badge } from 'lucide-react';
+import { ArrowLeft, Plus, MapPin, Users, Loader2, Image as ImageIcon, Music, Type } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
@@ -203,7 +204,7 @@ function CreatePostForm({ communityId, onSuccess }: { communityId: number, onSuc
       tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : []
     };
     
-    createPost.mutate({ data: payload }, {
+    createPost.mutate({ id: communityId, data: { title: payload.title, body: payload.body, type: payload.type, mediaUrl: payload.mediaUrl || undefined, audioUrl: payload.audioUrl || undefined, tags: payload.tags } }, {
       onSuccess: () => {
         toast({ title: "Post published successfully" });
         queryClient.invalidateQueries({ queryKey: getListGenhalCommunityPostsQueryKey(communityId) });

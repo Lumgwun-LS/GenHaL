@@ -112,7 +112,7 @@ router.get("/genhal/vault/public/:unitType/:unitId", async (req, res): Promise<v
 // For non-encrypted private docs, returns a short-lived signed URL redirect.
 
 router.get("/genhal/vault/:docId/download", requireAuth(), async (req, res): Promise<void> => {
-  const userId = req.auth!.userId;
+  const userId = getAuth(req).userId!;
   const docId  = Number(req.params.docId);
 
   try {
@@ -170,7 +170,7 @@ router.get("/genhal/vault/:docId/download", requireAuth(), async (req, res): Pro
 // Downloads the raw file from R2, encrypts with AES-256-GCM, re-uploads.
 
 router.post("/genhal/vault/:docId/encrypt", requireAuth(), async (req, res): Promise<void> => {
-  const userId = req.auth!.userId;
+  const userId = getAuth(req).userId!;
   const docId  = Number(req.params.docId);
 
   try {

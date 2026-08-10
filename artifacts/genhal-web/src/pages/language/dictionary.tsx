@@ -159,7 +159,7 @@ function AddEntryForm({ languageCode, onSuccess }: { languageCode: string, onSuc
     e.preventDefault();
     if (!formData.word || !formData.translation) return;
     
-    createEntry.mutate({ data: formData }, {
+    createEntry.mutate({ code: languageCode, data: { word: formData.word, translation: formData.translation, pronunciation: formData.pronunciation || undefined, partOfSpeech: formData.partOfSpeech || undefined, dialect: formData.dialect || undefined, example: formData.example || undefined, exampleTranslation: formData.exampleTranslation || undefined, audioUrl: formData.audioUrl || undefined } }, {
       onSuccess: () => {
         toast({ title: "Word added to dictionary" });
         queryClient.invalidateQueries({ queryKey: getListGenhalLanguageEntriesQueryKey(languageCode) });

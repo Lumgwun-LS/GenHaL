@@ -57,7 +57,7 @@ const containerVariants = {
 
 const cardVariants = {
   hidden:  { opacity: 0, y: 30, scale: 0.95 },
-  visible: { opacity: 1, y: 0,  scale: 1, transition: { type: "spring", damping: 18, stiffness: 200 } },
+  visible: { opacity: 1, y: 0,  scale: 1, transition: { type: "spring" as const, damping: 18, stiffness: 200 } },
 };
 
 function FileCard({ doc, onClick }: { doc: PublicDoc; onClick: () => void }) {

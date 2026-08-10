@@ -3,16 +3,15 @@
  * Manages bulk uploads, dataset curation, and Vertex AI training jobs.
  */
 import { Router } from "express";
-import { requireAuth } from "@clerk/express";
+import { requireAuth, getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { genhalLanguageDatasetsTable, genhalTrainingRunsTable } from "@workspace/db";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { generateR2Key, createUploadUrl, publicUrl as r2PublicUrl } from "../lib/genhal-r2";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import crypto from "node:crypto";
 
 const router = Router();
-const storage = new ObjectStorageService();
 
 // ─── Vertex AI helpers ─────────────────────────────────────────────────────────
 
@@ -134,15 +133,16 @@ function vertexStateToStatus(state: string): string {
 
 // ─── Presigned upload URL ──────────────────────────────────────────────────────
 
-router.post("/genhal/corpus/upload-url", requireAuth(), async (req, res) => {
+router.post("/genhal/corpus/upload-url", requireAuth(), async (req, res): Promise<void> => {
   const { languageCode, type, fileName, mimeType } = req.body;
-  if (!languageCode || !type || !fileName) return res.status(400).json({ error: "languageCode, type, fileName required" });
+  if (!languageCode || !type || !fileName) return void res.status(400).json({ error: "languageCode, type, fileName required" });
 
   const ext  = fileName.split(".").pop() ?? "bin";
-  const key  = `genhal/corpus/${languageCode}/${type}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const key  = generateR2Key(`genhal/corpus/${languageCode}/${type}`, `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
   try {
-    const { uploadUrl, publicUrl } = await storage.getUploadUrl(key, mimeType ?? "application/octet-stream");
-    res.json({ uploadUrl, fileUrl: publicUrl, key });
+    const uploadUrl = await createUploadUrl(key, mimeType ?? "application/octet-stream", 900);
+    const fileUrl   = r2PublicUrl(key);
+    res.json({ uploadUrl, fileUrl, key });
   } catch (err) {
     logger.error(err, "corpus/upload-url error");
     res.status(500).json({ error: "Failed to create upload URL" });
@@ -151,7 +151,7 @@ router.post("/genhal/corpus/upload-url", requireAuth(), async (req, res) => {
 
 // ─── Dataset CRUD ──────────────────────────────────────────────────────────────
 
-router.get("/genhal/corpus/datasets", requireAuth(), async (req, res) => {
+router.get("/genhal/corpus/datasets", requireAuth(), async (req, res): Promise<void> => {
   const { languageCode, type, status, approved } = req.query as Record<string, string>;
   try {
     const conditions = [];
@@ -175,11 +175,11 @@ router.get("/genhal/corpus/datasets", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/corpus/datasets", requireAuth(), async (req, res) => {
-  const userId = req.auth?.userId;
+router.post("/genhal/corpus/datasets", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const body = req.body;
   if (!body.languageCode || !body.type || !body.title || !body.fileUrl || !body.fileName)
-    return res.status(400).json({ error: "languageCode, type, title, fileUrl, fileName required" });
+    return void res.status(400).json({ error: "languageCode, type, title, fileUrl, fileName required" });
 
   try {
     const [row] = await db.insert(genhalLanguageDatasetsTable).values({
@@ -206,7 +206,7 @@ router.post("/genhal/corpus/datasets", requireAuth(), async (req, res) => {
   }
 });
 
-router.patch("/genhal/corpus/datasets/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/corpus/datasets/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { status, approvedForTraining, title, description, processingNotes } = req.body;
   try {
@@ -228,7 +228,7 @@ router.patch("/genhal/corpus/datasets/:id", requireAuth(), async (req, res) => {
   }
 });
 
-router.delete("/genhal/corpus/datasets/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/corpus/datasets/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   try {
     await db.delete(genhalLanguageDatasetsTable).where(eq(genhalLanguageDatasetsTable.id, id));
@@ -241,7 +241,7 @@ router.delete("/genhal/corpus/datasets/:id", requireAuth(), async (req, res) => 
 
 // ─── Training runs ────────────────────────────────────────────────────────────
 
-router.get("/genhal/corpus/training", requireAuth(), async (req, res) => {
+router.get("/genhal/corpus/training", requireAuth(), async (req, res): Promise<void> => {
   const { languageCode, status } = req.query as Record<string, string>;
   try {
     const conditions = [];
@@ -258,12 +258,12 @@ router.get("/genhal/corpus/training", requireAuth(), async (req, res) => {
   }
 });
 
-router.get("/genhal/corpus/training/:id", requireAuth(), async (req, res) => {
+router.get("/genhal/corpus/training/:id", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   try {
     const [run] = await db.select().from(genhalTrainingRunsTable)
       .where(eq(genhalTrainingRunsTable.id, id));
-    if (!run) return res.status(404).json({ error: "Not found" });
+    if (!run) return void res.status(404).json({ error: "Not found" });
 
     // Poll live status from Vertex AI if running
     if (run.platformJobId && ["queued", "running"].includes(run.status)) {
@@ -277,7 +277,7 @@ router.get("/genhal/corpus/training/:id", requireAuth(), async (req, res) => {
           if (newStatus === "completed") updates.completedAt = new Date();
           if (newStatus === "running" && !run.startedAt) updates.startedAt = new Date();
           await db.update(genhalTrainingRunsTable).set(updates).where(eq(genhalTrainingRunsTable.id, id));
-          return res.json({ ...run, ...updates });
+          return void res.json({ ...run, ...updates });
         }
       }
     }
@@ -288,12 +288,12 @@ router.get("/genhal/corpus/training/:id", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/corpus/training", requireAuth(), async (req, res) => {
-  const userId = req.auth?.userId;
+router.post("/genhal/corpus/training", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const { name, languageCode, modelType, datasetIds, platformType, config } = req.body;
 
   if (!languageCode || !modelType || !datasetIds?.length || !name)
-    return res.status(400).json({ error: "name, languageCode, modelType, datasetIds required" });
+    return void res.status(400).json({ error: "name, languageCode, modelType, datasetIds required" });
 
   const project = process.env.GOOGLE_CLOUD_PROJECT;
   const region  = process.env.VERTEX_AI_REGION ?? "us-central1";
@@ -308,7 +308,7 @@ router.post("/genhal/corpus/training", requireAuth(), async (req, res) => {
       ));
 
     if (!datasets.length)
-      return res.status(400).json({ error: "No approved datasets found for the given IDs" });
+      return void res.status(400).json({ error: "No approved datasets found for the given IDs" });
 
     // Build manifest
     const manifest = {
@@ -374,14 +374,14 @@ router.post("/genhal/corpus/training", requireAuth(), async (req, res) => {
             startedAt: new Date(),
             updatedAt: new Date(),
           }).where(eq(genhalTrainingRunsTable.id, run.id));
-          return res.status(201).json({ ...run, platformJobId: job.jobId, status: "running" });
+          return void res.status(201).json({ ...run, platformJobId: job.jobId, status: "running" });
         } else {
           await db.update(genhalTrainingRunsTable).set({
             status: "failed",
             errorMessage: "Failed to submit Vertex AI job. Check GOOGLE_CLOUD_PROJECT and GCS_SERVICE_ACCOUNT_KEY.",
             updatedAt: new Date(),
           }).where(eq(genhalTrainingRunsTable.id, run.id));
-          return res.status(201).json({ ...run, status: "failed", errorMessage: "Vertex AI submission failed" });
+          return void res.status(201).json({ ...run, status: "failed", errorMessage: "Vertex AI submission failed" });
         }
       }
     }
@@ -404,12 +404,12 @@ router.post("/genhal/corpus/training", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/corpus/training/:id/cancel", requireAuth(), async (req, res) => {
+router.post("/genhal/corpus/training/:id/cancel", requireAuth(), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   try {
     const [run] = await db.select().from(genhalTrainingRunsTable)
       .where(eq(genhalTrainingRunsTable.id, id));
-    if (!run) return res.status(404).json({ error: "Not found" });
+    if (!run) return void res.status(404).json({ error: "Not found" });
 
     if (run.platformJobId) {
       const token = await getGCPAccessToken();
@@ -433,7 +433,7 @@ router.post("/genhal/corpus/training/:id/cancel", requireAuth(), async (req, res
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
-router.get("/genhal/corpus/stats", requireAuth(), async (_req, res) => {
+router.get("/genhal/corpus/stats", requireAuth(), async (_req, res): Promise<void> => {
   try {
     const [totalMaterials] = await db.select({ c: sql<number>`count(*)::int` }).from(genhalLanguageDatasetsTable);
     const [approved]       = await db.select({ c: sql<number>`count(*)::int` }).from(genhalLanguageDatasetsTable).where(eq(genhalLanguageDatasetsTable.approvedForTraining, true));

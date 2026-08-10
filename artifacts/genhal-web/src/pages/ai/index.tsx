@@ -120,7 +120,7 @@ function StoryGenerator() {
     if (!topic) return;
     setResult('');
     
-    generateStory.mutate({ data: { topic, tone } }, {
+    generateStory.mutate({ data: { storyType: tone, customPrompt: topic } }, {
       onSuccess: (data) => {
         setResult(data.result);
         queryClient.invalidateQueries({ queryKey: getListGenhalAiGenerationsQueryKey() });
@@ -199,7 +199,7 @@ function Translator() {
     if (!text) return;
     setResult('');
     
-    translate.mutate({ data: { text, sourceLang, targetLang } }, {
+    translate.mutate({ data: { text, sourceLanguage: sourceLang, targetLanguage: targetLang } }, {
       onSuccess: (data) => {
         setResult(data.result);
         queryClient.invalidateQueries({ queryKey: getListGenhalAiGenerationsQueryKey() });

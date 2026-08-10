@@ -3,7 +3,7 @@
  * Backed by Cloudflare R2 (presigned upload → client uploads directly)
  */
 import { Router } from "express";
-import { requireAuth } from "@clerk/express";
+import { requireAuth, getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
   genhalVaultDocumentsTable,
@@ -61,26 +61,26 @@ async function getSubscription(unitType: string, unitId: number) {
 }
 
 // ── Request upload URL (client uploads directly to R2) ────────────────────────
-router.post("/genhal/vault/upload-url", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.post("/genhal/vault/upload-url", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const { unitType, unitId, fileName, mimeType, fileType = "document" } = req.body;
   if (!unitType || !unitId || !fileName || !mimeType) {
-    return res.status(400).json({ error: "unitType, unitId, fileName, mimeType required" });
+    return void res.status(400).json({ error: "unitType, unitId, fileName, mimeType required" });
   }
   if (!isR2Configured()) {
-    return res.status(503).json({ error: "Storage not configured. R2 credentials missing." });
+    return void res.status(503).json({ error: "Storage not configured. R2 credentials missing." });
   }
   // Check membership
   let userRole: string | null = null;
   if (unitType === "kingdom") userRole = await getKingdomRole(Number(unitId), userId);
   else userRole = await getFamilyRole(Number(unitId), userId);
   if (!userRole || KINGDOM_ROLE_RANK[userRole] < 2) {
-    return res.status(403).json({ error: "Members only" });
+    return void res.status(403).json({ error: "Members only" });
   }
   // Check storage quota
   const sub = await getSubscription(unitType, Number(unitId));
   if (sub && sub.storageLimitBytes > 0 && sub.storageUsedBytes >= sub.storageLimitBytes) {
-    return res.status(402).json({ error: "Storage quota exceeded. Please upgrade your plan." });
+    return void res.status(402).json({ error: "Storage quota exceeded. Please upgrade your plan." });
   }
   try {
     const folder = unitType === "kingdom" ? `kingdoms/${unitId}` : `families/${unitId}`;
@@ -91,22 +91,22 @@ router.post("/genhal/vault/upload-url", requireAuth(), async (req, res) => {
 });
 
 // ── Create document record (after upload) ────────────────────────────────────
-router.post("/genhal/vault/documents", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.post("/genhal/vault/documents", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const b = req.body;
   const { unitType, unitId } = b;
-  if (!unitType || !unitId || !b.title) return res.status(400).json({ error: "unitType, unitId, title required" });
+  if (!unitType || !unitId || !b.title) return void res.status(400).json({ error: "unitType, unitId, title required" });
 
   const uid = Number(unitId);
   let userRole: string | null = null;
   if (unitType === "kingdom") userRole = await getKingdomRole(uid, userId);
   else userRole = await getFamilyRole(uid, userId);
-  if (!userRole || KINGDOM_ROLE_RANK[userRole] < 2) return res.status(403).json({ error: "Members only" });
+  if (!userRole || KINGDOM_ROLE_RANK[userRole] < 2) return void res.status(403).json({ error: "Members only" });
 
   // Check vault document quota
   const sub = await getSubscription(unitType, uid);
   if (sub && sub.maxVaultDocuments > 0 && sub.vaultDocumentCount >= sub.maxVaultDocuments) {
-    return res.status(402).json({ error: "Vault document limit reached. Please upgrade your plan." });
+    return void res.status(402).json({ error: "Vault document limit reached. Please upgrade your plan." });
   }
 
   try {
@@ -147,10 +147,10 @@ router.post("/genhal/vault/documents", requireAuth(), async (req, res) => {
 });
 
 // ── List vault documents ──────────────────────────────────────────────────────
-router.get("/genhal/vault/documents", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.get("/genhal/vault/documents", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const { unitType, unitId, fileType, category, archived } = req.query;
-  if (!unitType || !unitId) return res.status(400).json({ error: "unitType and unitId required" });
+  if (!unitType || !unitId) return void res.status(400).json({ error: "unitType and unitId required" });
 
   const uid = Number(unitId);
   let userRole: string | null = null;
@@ -184,11 +184,11 @@ router.get("/genhal/vault/documents", requireAuth(), async (req, res) => {
 });
 
 // ── Get single document + presigned download URL ──────────────────────────────
-router.get("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.get("/genhal/vault/documents/:id", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   try {
     const [doc] = await db.select().from(genhalVaultDocumentsTable).where(eq(genhalVaultDocumentsTable.id, Number(req.params.id)));
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (!doc) return void res.status(404).json({ error: "Not found" });
 
     const uid = doc.unitId;
     let userRole: string | null = null;
@@ -197,7 +197,7 @@ router.get("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
 
     const rankFn = doc.unitType === "family" ? (r: string) => FAMILY_ROLE_RANK[r] ?? 0 : (r: string) => KINGDOM_ROLE_RANK[r] ?? 0;
     const canView = doc.uploadedByClerkUserId === userId || canAccessDoc(doc, userRole ?? "", userId, rankFn);
-    if (!canView) return res.status(403).json({ error: "Access denied" });
+    if (!canView) return void res.status(403).json({ error: "Access denied" });
 
     // Generate fresh presigned URL if R2 key exists
     let downloadUrl = doc.fileUrl;
@@ -213,12 +213,12 @@ router.get("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
 });
 
 // ── Update document metadata ──────────────────────────────────────────────────
-router.patch("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.patch("/genhal/vault/documents/:id", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const b = req.body;
   try {
     const [doc] = await db.select().from(genhalVaultDocumentsTable).where(eq(genhalVaultDocumentsTable.id, Number(req.params.id)));
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (!doc) return void res.status(404).json({ error: "Not found" });
 
     // Only uploader or admins can edit
     let userRole: string | null = null;
@@ -226,7 +226,7 @@ router.patch("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
     else userRole = await getFamilyRole(doc.unitId, userId);
     const rankFn = doc.unitType === "family" ? (r: string) => FAMILY_ROLE_RANK[r] ?? 0 : (r: string) => KINGDOM_ROLE_RANK[r] ?? 0;
     if (doc.uploadedByClerkUserId !== userId && rankFn(userRole ?? "") < 7) {
-      return res.status(403).json({ error: "Only admins or the uploader can edit" });
+      return void res.status(403).json({ error: "Only admins or the uploader can edit" });
     }
 
     const updates: Record<string, any> = { updatedAt: new Date() };
@@ -238,18 +238,18 @@ router.patch("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
 });
 
 // ── Delete document ────────────────────────────────────────────────────────────
-router.delete("/genhal/vault/documents/:id", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.delete("/genhal/vault/documents/:id", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   try {
     const [doc] = await db.select().from(genhalVaultDocumentsTable).where(eq(genhalVaultDocumentsTable.id, Number(req.params.id)));
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (!doc) return void res.status(404).json({ error: "Not found" });
 
     let userRole: string | null = null;
     if (doc.unitType === "kingdom") userRole = await getKingdomRole(doc.unitId, userId);
     else userRole = await getFamilyRole(doc.unitId, userId);
     const rankFn = doc.unitType === "family" ? (r: string) => FAMILY_ROLE_RANK[r] ?? 0 : (r: string) => KINGDOM_ROLE_RANK[r] ?? 0;
     if (doc.uploadedByClerkUserId !== userId && rankFn(userRole ?? "") < 7) {
-      return res.status(403).json({ error: "Access denied" });
+      return void res.status(403).json({ error: "Access denied" });
     }
 
     // Delete from R2 first
@@ -276,7 +276,7 @@ router.delete("/genhal/vault/documents/:id", requireAuth(), async (req, res) => 
 });
 
 // ── Confirm upload complete (client calls after PUT to R2) ────────────────────
-router.post("/genhal/vault/documents/:id/confirm-upload", requireAuth(), async (req, res) => {
+router.post("/genhal/vault/documents/:id/confirm-upload", requireAuth(), async (req, res): Promise<void> => {
   const { fileSizeBytes } = req.body;
   try {
     const updates: Record<string, any> = { uploadStatus: "complete", updatedAt: new Date() };
@@ -287,13 +287,13 @@ router.post("/genhal/vault/documents/:id/confirm-upload", requireAuth(), async (
 });
 
 // ── Grant individual access ───────────────────────────────────────────────────
-router.post("/genhal/vault/documents/:id/grants", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.post("/genhal/vault/documents/:id/grants", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const { granteeClerkUserId, expiresAt } = req.body;
-  if (!granteeClerkUserId) return res.status(400).json({ error: "granteeClerkUserId required" });
+  if (!granteeClerkUserId) return void res.status(400).json({ error: "granteeClerkUserId required" });
   try {
     const [doc] = await db.select().from(genhalVaultDocumentsTable).where(eq(genhalVaultDocumentsTable.id, Number(req.params.id)));
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (!doc) return void res.status(404).json({ error: "Not found" });
     const [grant] = await db.insert(genhalVaultAccessGrantsTable).values({
       documentId: doc.id, granteeClerkUserId,
       grantedByClerkUserId: userId,

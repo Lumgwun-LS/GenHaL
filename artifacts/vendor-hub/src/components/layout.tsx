@@ -48,6 +48,7 @@ import {
   TicketCheck,
   Palette,
   Zap,
+  TreePine,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { ThemePicker } from "@/components/ui/ThemePicker";
@@ -222,6 +223,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Awajimaa",
+    defaultOpen: false,
+    items: [
+      { href: "https://genhal.awajimaa.com", label: "GenHaL — Heritage & Language", icon: TreePine },
+    ],
+  },
+  {
     label: "Account",
     defaultOpen: true,
     items: [
@@ -247,6 +255,23 @@ function NavLink({
 }) {
   const isActive = location === item.href || location.startsWith(item.href + "/");
   const handleClick = () => onClick(item.label);
+
+  /* ── External links — open in new tab regardless of sidebar variant ── */
+  if (item.href.startsWith("http")) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleClick}
+        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      >
+        <item.icon className="w-4 h-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+        <ExternalLink className="w-3 h-3 ml-auto shrink-0 opacity-40" />
+      </a>
+    );
+  }
 
   /* ── ELECTRIC (Unyeada) ── Bold neon borders, glow, sharp precision */
   if (variant === "electric") {

@@ -26,7 +26,7 @@ function requireGatewayKey(req: Request, res: Response, next: () => void) {
     return next();
   }
   if (key !== expected) {
-    return res.status(401).json({ error: "Invalid gateway key" });
+    return void res.status(401).json({ error: "Invalid gateway key" });
   }
   next();
 }
@@ -45,7 +45,7 @@ router.get("/gateway/health", (_req, res) => {
 
 // ── LLM — chat completion ─────────────────────────────────────────────────────
 
-router.post("/gateway/llm", async (req, res) => {
+router.post("/gateway/llm", async (req, res): Promise<void> => {
   try {
     const {
       messages,
@@ -64,7 +64,7 @@ router.post("/gateway/llm", async (req, res) => {
     };
 
     if (!messages && !system) {
-      return res.status(400).json({ error: "messages or system is required" });
+      return void res.status(400).json({ error: "messages or system is required" });
     }
 
     const fullMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
@@ -89,7 +89,7 @@ router.post("/gateway/llm", async (req, res) => {
         if (delta) res.write(`data: ${JSON.stringify({ delta })}\n\n`);
       }
       res.write("data: [DONE]\n\n");
-      return res.end();
+      return void res.end();
     }
 
     const completion = await openai.chat.completions.create({
@@ -112,7 +112,7 @@ router.post("/gateway/llm", async (req, res) => {
 
 // ── ASR — speech-to-text (Whisper) ───────────────────────────────────────────
 
-router.post("/gateway/asr", async (req, res) => {
+router.post("/gateway/asr", async (req, res): Promise<void> => {
   try {
     const {
       audioBase64,
@@ -127,7 +127,7 @@ router.post("/gateway/asr", async (req, res) => {
     };
 
     if (!audioBase64) {
-      return res.status(400).json({ error: "audioBase64 is required" });
+      return void res.status(400).json({ error: "audioBase64 is required" });
     }
 
     const audioBuffer = Buffer.from(audioBase64, "base64");
@@ -152,7 +152,7 @@ router.post("/gateway/asr", async (req, res) => {
 
 // ── TTS — text-to-speech (OpenAI TTS) ────────────────────────────────────────
 
-router.post("/gateway/tts", async (req, res) => {
+router.post("/gateway/tts", async (req, res): Promise<void> => {
   try {
     const {
       text,
@@ -169,7 +169,7 @@ router.post("/gateway/tts", async (req, res) => {
     };
 
     if (!text) {
-      return res.status(400).json({ error: "text is required" });
+      return void res.status(400).json({ error: "text is required" });
     }
 
     const response = await openai.audio.speech.create({
@@ -192,7 +192,7 @@ router.post("/gateway/tts", async (req, res) => {
 
 // ── Embeddings ────────────────────────────────────────────────────────────────
 
-router.post("/gateway/embed", async (req, res) => {
+router.post("/gateway/embed", async (req, res): Promise<void> => {
   try {
     const {
       input,
@@ -205,7 +205,7 @@ router.post("/gateway/embed", async (req, res) => {
     };
 
     if (!input) {
-      return res.status(400).json({ error: "input is required" });
+      return void res.status(400).json({ error: "input is required" });
     }
 
     const response = await openai.embeddings.create({
@@ -227,7 +227,7 @@ router.post("/gateway/embed", async (req, res) => {
 
 // ── Image generation ──────────────────────────────────────────────────────────
 
-router.post("/gateway/image", async (req, res) => {
+router.post("/gateway/image", async (req, res): Promise<void> => {
   try {
     const {
       prompt,
@@ -246,7 +246,7 @@ router.post("/gateway/image", async (req, res) => {
     };
 
     if (!prompt) {
-      return res.status(400).json({ error: "prompt is required" });
+      return void res.status(400).json({ error: "prompt is required" });
     }
 
     const response = await openai.images.generate({
@@ -259,7 +259,7 @@ router.post("/gateway/image", async (req, res) => {
     });
 
     res.json({
-      images: response.data.map(img => ({
+      images: (response.data ?? []).map(img => ({
         url: img.url,
         revisedPrompt: img.revised_prompt,
       })),
@@ -273,7 +273,7 @@ router.post("/gateway/image", async (req, res) => {
 // ── Language-specific ASR (heritage audio transcription) ─────────────────────
 // Transcribes a language recording and returns transcript + detected words.
 
-router.post("/gateway/heritage-asr", async (req, res) => {
+router.post("/gateway/heritage-asr", async (req, res): Promise<void> => {
   try {
     const {
       audioBase64,
@@ -286,7 +286,7 @@ router.post("/gateway/heritage-asr", async (req, res) => {
     };
 
     if (!audioBase64) {
-      return res.status(400).json({ error: "audioBase64 is required" });
+      return void res.status(400).json({ error: "audioBase64 is required" });
     }
 
     const audioBuffer = Buffer.from(audioBase64, "base64");

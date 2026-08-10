@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { sendFamilyWelcomeEmail } from "../lib/genhal-emails";
-import { requireAuth } from "@clerk/express";
+import { requireAuth, getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
   genhalKingdomMembersTable,
@@ -33,9 +33,9 @@ async function requireKingdomRole(kingdomId: number, userId: string, minRank: nu
 
 // ── Kingdom members ───────────────────────────────────────────────────────────
 
-router.get("/genhal/kingdoms/:id/members", requireAuth(), async (req, res) => {
+router.get("/genhal/kingdoms/:id/members", requireAuth(), async (req, res): Promise<void> => {
   const kingdomId = Number(req.params.id);
-  const userId = req.auth!.userId;
+  const userId = getAuth(req).userId!;
   const role = await requireKingdomRole(kingdomId, userId, 1, res);
   if (role === false) return;
   try {
@@ -47,20 +47,20 @@ router.get("/genhal/kingdoms/:id/members", requireAuth(), async (req, res) => {
 });
 
 // Self-join: any logged-in user can join as viewer/member
-router.post("/genhal/kingdoms/:id/members/join", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.id); const userId = req.auth!.userId;
+router.post("/genhal/kingdoms/:id/members/join", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const userId = getAuth(req).userId!;
   const { role = "member" } = req.body;
   // Only allow self-assignment to low roles
   const allowedSelfRoles = ["member", "viewer", "guest"];
-  if (!allowedSelfRoles.includes(role)) return res.status(403).json({ error: "Cannot self-assign that role" });
+  if (!allowedSelfRoles.includes(role)) return void res.status(403).json({ error: "Cannot self-assign that role" });
   try {
     const [existing] = await db.select().from(genhalKingdomMembersTable)
       .where(and(eq(genhalKingdomMembersTable.kingdomId, kingdomId), eq(genhalKingdomMembersTable.clerkUserId, userId)));
-    if (existing) return res.status(409).json({ error: "Already a member", member: existing });
+    if (existing) return void res.status(409).json({ error: "Already a member", member: existing });
     // Check member quota
     const [sub] = await db.select().from(genhalSubscriptionsTable).where(and(eq(genhalSubscriptionsTable.unitType, "kingdom"), eq(genhalSubscriptionsTable.unitId, kingdomId)));
     if (sub && sub.maxMembers > 0 && sub.memberCount >= sub.maxMembers) {
-      return res.status(402).json({ error: "Member limit reached. The kingdom admin must upgrade the plan." });
+      return void res.status(402).json({ error: "Member limit reached. The kingdom admin must upgrade the plan." });
     }
     const [m] = await db.insert(genhalKingdomMembersTable).values({
       kingdomId, clerkUserId: userId, role, status: "pending",
@@ -71,16 +71,16 @@ router.post("/genhal/kingdoms/:id/members/join", requireAuth(), async (req, res)
 });
 
 // Admin invite / add member
-router.post("/genhal/kingdoms/:id/members", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.id); const userId = req.auth!.userId;
+router.post("/genhal/kingdoms/:id/members", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.id); const userId = getAuth(req).userId!;
   const b = req.body;
-  if (!b.clerkUserId) return res.status(400).json({ error: "clerkUserId required" });
+  if (!b.clerkUserId) return void res.status(400).json({ error: "clerkUserId required" });
   const callerRole = await requireKingdomRole(kingdomId, userId, 7, res); // council_chief+
   if (callerRole === false) return;
   try {
     const [sub] = await db.select().from(genhalSubscriptionsTable).where(and(eq(genhalSubscriptionsTable.unitType, "kingdom"), eq(genhalSubscriptionsTable.unitId, kingdomId)));
     if (sub && sub.maxMembers > 0 && sub.memberCount >= sub.maxMembers) {
-      return res.status(402).json({ error: "Member limit reached. Upgrade the plan first." });
+      return void res.status(402).json({ error: "Member limit reached. Upgrade the plan first." });
     }
     const [m] = await db.insert(genhalKingdomMembersTable).values({
       kingdomId, clerkUserId: b.clerkUserId, role: b.role ?? "member",
@@ -94,8 +94,8 @@ router.post("/genhal/kingdoms/:id/members", requireAuth(), async (req, res) => {
 });
 
 // Update member role/status/title
-router.patch("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.kingdomId); const userId = req.auth!.userId;
+router.patch("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.kingdomId); const userId = getAuth(req).userId!;
   const callerRole = await requireKingdomRole(kingdomId, userId, 7, res);
   if (callerRole === false) return;
   const b = req.body;
@@ -107,8 +107,8 @@ router.patch("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), asy
   } catch { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), async (req, res) => {
-  const kingdomId = Number(req.params.kingdomId); const userId = req.auth!.userId;
+router.delete("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
+  const kingdomId = Number(req.params.kingdomId); const userId = getAuth(req).userId!;
   const callerRole = await requireKingdomRole(kingdomId, userId, 7, res);
   if (callerRole === false) return;
   try {
@@ -121,8 +121,8 @@ router.delete("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), as
 
 // ── Family accounts ───────────────────────────────────────────────────────────
 
-router.get("/genhal/families", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.get("/genhal/families", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   const { kingdomId } = req.query;
   try {
     // Return families user is head of, or all in a kingdom if admin
@@ -139,9 +139,9 @@ router.get("/genhal/families", requireAuth(), async (req, res) => {
   } catch { res.status(500).json({ error: "Failed" }); }
 });
 
-router.post("/genhal/families", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId; const b = req.body;
-  if (!b.name) return res.status(400).json({ error: "name required" });
+router.post("/genhal/families", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!; const b = req.body;
+  if (!b.name) return void res.status(400).json({ error: "name required" });
   try {
     const [family] = await db.insert(genhalFamilyAccountsTable).values({
       clerkUserId: userId, name: b.name, localName: b.localName ?? null,
@@ -172,22 +172,22 @@ router.post("/genhal/families", requireAuth(), async (req, res) => {
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
-router.get("/genhal/families/:id", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId;
+router.get("/genhal/families/:id", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!;
   try {
     const [family] = await db.select().from(genhalFamilyAccountsTable).where(eq(genhalFamilyAccountsTable.id, Number(req.params.id)));
-    if (!family) return res.status(404).json({ error: "Not found" });
+    if (!family) return void res.status(404).json({ error: "Not found" });
     const members = await db.select().from(genhalFamilyMembersTable).where(eq(genhalFamilyMembersTable.familyId, family.id)).orderBy(asc(genhalFamilyMembersTable.joinedAt));
     const [sub] = await db.select().from(genhalSubscriptionsTable).where(and(eq(genhalSubscriptionsTable.unitType, "family"), eq(genhalSubscriptionsTable.unitId, family.id)));
     res.json({ ...family, members, subscription: sub ?? null });
   } catch { res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/families/:id", requireAuth(), async (req, res) => {
-  const userId = req.auth!.userId; const b = req.body;
+router.patch("/genhal/families/:id", requireAuth(), async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId!; const b = req.body;
   try {
     const [fam] = await db.select().from(genhalFamilyAccountsTable).where(eq(genhalFamilyAccountsTable.id, Number(req.params.id)));
-    if (!fam || fam.clerkUserId !== userId) return res.status(403).json({ error: "Access denied" });
+    if (!fam || fam.clerkUserId !== userId) return void res.status(403).json({ error: "Access denied" });
     const updates: Record<string, any> = { updatedAt: new Date() };
     for (const f of ["name","localName","description","country","region","district","coverImageUrl","emblemImageUrl","attributes","isPublic"]) if (b[f] !== undefined) updates[f] = b[f];
     const [updated] = await db.update(genhalFamilyAccountsTable).set(updates).where(eq(genhalFamilyAccountsTable.id, fam.id)).returning();
@@ -196,12 +196,12 @@ router.patch("/genhal/families/:id", requireAuth(), async (req, res) => {
 });
 
 // Family members
-router.post("/genhal/families/:id/members", requireAuth(), async (req, res) => {
-  const familyId = Number(req.params.id); const userId = req.auth!.userId; const b = req.body;
-  if (!b.clerkUserId) return res.status(400).json({ error: "clerkUserId required" });
+router.post("/genhal/families/:id/members", requireAuth(), async (req, res): Promise<void> => {
+  const familyId = Number(req.params.id); const userId = getAuth(req).userId!; const b = req.body;
+  if (!b.clerkUserId) return void res.status(400).json({ error: "clerkUserId required" });
   const [caller] = await db.select().from(genhalFamilyMembersTable)
     .where(and(eq(genhalFamilyMembersTable.familyId, familyId), eq(genhalFamilyMembersTable.clerkUserId, userId)));
-  if (!caller || !["head","co_head"].includes(caller.role)) return res.status(403).json({ error: "Only head or co-head can add members" });
+  if (!caller || !["head","co_head"].includes(caller.role)) return void res.status(403).json({ error: "Only head or co-head can add members" });
   try {
     const [m] = await db.insert(genhalFamilyMembersTable).values({
       familyId, clerkUserId: b.clerkUserId, role: b.role ?? "member",
@@ -213,11 +213,11 @@ router.post("/genhal/families/:id/members", requireAuth(), async (req, res) => {
   } catch (err) { logger.error(err); res.status(500).json({ error: "Failed" }); }
 });
 
-router.patch("/genhal/families/:familyId/members/:memberId", requireAuth(), async (req, res) => {
-  const familyId = Number(req.params.familyId); const userId = req.auth!.userId; const b = req.body;
+router.patch("/genhal/families/:familyId/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
+  const familyId = Number(req.params.familyId); const userId = getAuth(req).userId!; const b = req.body;
   const [caller] = await db.select().from(genhalFamilyMembersTable)
     .where(and(eq(genhalFamilyMembersTable.familyId, familyId), eq(genhalFamilyMembersTable.clerkUserId, userId)));
-  if (!caller || !["head","co_head"].includes(caller.role)) return res.status(403).json({ error: "Access denied" });
+  if (!caller || !["head","co_head"].includes(caller.role)) return void res.status(403).json({ error: "Access denied" });
   try {
     const updates: Record<string, any> = { updatedAt: new Date() };
     for (const f of ["role","relationship","customTitle","status","attributes"]) if (b[f] !== undefined) updates[f] = b[f];
@@ -226,11 +226,11 @@ router.patch("/genhal/families/:familyId/members/:memberId", requireAuth(), asyn
   } catch { res.status(500).json({ error: "Failed" }); }
 });
 
-router.delete("/genhal/families/:familyId/members/:memberId", requireAuth(), async (req, res) => {
-  const familyId = Number(req.params.familyId); const userId = req.auth!.userId;
+router.delete("/genhal/families/:familyId/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
+  const familyId = Number(req.params.familyId); const userId = getAuth(req).userId!;
   const [caller] = await db.select().from(genhalFamilyMembersTable)
     .where(and(eq(genhalFamilyMembersTable.familyId, familyId), eq(genhalFamilyMembersTable.clerkUserId, userId)));
-  if (!caller || !["head","co_head"].includes(caller.role)) return res.status(403).json({ error: "Access denied" });
+  if (!caller || !["head","co_head"].includes(caller.role)) return void res.status(403).json({ error: "Access denied" });
   try {
     await db.delete(genhalFamilyMembersTable).where(eq(genhalFamilyMembersTable.id, Number(req.params.memberId)));
     res.status(204).send();
