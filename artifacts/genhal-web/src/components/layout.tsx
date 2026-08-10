@@ -22,8 +22,8 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
-        <Link href="/" className="font-serif font-bold text-2xl text-primary flex items-center gap-2">
-          GenHaL
+        <Link href="/" className="flex items-center">
+          <img src="/genhal/genhal-logo.png" alt="GenHaL" className="h-10 w-auto object-contain" />
         </Link>
         <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-muted-foreground">
           {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -36,16 +36,14 @@ export function Layout({ children }: { children: ReactNode }) {
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full">
-          <div className="p-6 hidden md:block">
-            <Link href="/" className="font-serif font-bold text-3xl text-primary flex items-center gap-2">
-              GenHaL
+          <div className="p-4 hidden md:block">
+            <Link href="/" className="flex items-center justify-center">
+              <img
+                src="/genhal/genhal-logo.png"
+                alt="GenHaL — Genealogy · Heritage · Language"
+                className="w-48 h-auto object-contain drop-shadow-md transition-transform hover:scale-105 duration-300"
+              />
             </Link>
-            <p className="text-xs text-muted-foreground mt-1 font-medium tracking-widest uppercase">
-              Genealogy • Heritage • Language
-            </p>
-            <p className="text-[10px] text-muted-foreground/70 mt-2 leading-relaxed italic">
-              Preserve your roots. Protect your heritage.<br />Keep your language alive.
-            </p>
           </div>
 
           <nav className="flex-1 px-4 space-y-2 overflow-y-auto mt-6 md:mt-0">
