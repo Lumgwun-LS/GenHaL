@@ -1,4 +1,5 @@
 - [GenHaL Family Wills system](genhal-family-wills.md) — AES-256-GCM encrypted wills; passphrase verified via scrypt, never stored; access model, API, and frontend pattern documented.
+- [GenHaL Proof-of-Life system](genhal-proof-of-life.md) — 90-day token reminders to family head; 4 missed = NOK email; verify page at /verify; scheduler in genhal-life-check-scheduler.ts.
 - [GenHaL Web auth pattern](genhal-web-auth-pattern.md) — no @clerk/clerk-react in genhal-web; userId from API response; author name from form input, not Clerk profile.
 - [GenHaL Product Vision & Strategic Moat](genhal-product-vision.md) — global relationship graph as moat; community tenancy is foundational; person registry is graph substrate; migration paths are differentiator; network effects compound.
 - [GenHaL Kingdom Civic Layer](genhal-kingdom-civic.md) — 5 new tables (languages/geopoints/economic_activities/schools/churches) with full CRUD in genhal-kingdoms.ts; fetched in the main kingdom GET via Promise.all; migration 0126.

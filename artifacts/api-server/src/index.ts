@@ -28,6 +28,7 @@ import { startMobileAppBuildScheduler } from "./lib/mobile-app-build-scheduler";
 import { startCartReminderScheduler } from "./lib/cart-reminder-scheduler";
 import { startProductInterestScheduler } from "./lib/product-interest-scheduler";
 import { startTaskScheduler } from "./lib/task-scheduler";
+import { startGenhalLifeCheckScheduler } from "./lib/genhal-life-check-scheduler";
 import { initTrustedVendorsCache } from "./lib/trusted-vendors-cache";
 
 const rawPort = process.env["PORT"];
@@ -79,5 +80,6 @@ app.listen(port, (err) => {
   startCartReminderScheduler();
   startProductInterestScheduler();
   startTaskScheduler();
+  startGenhalLifeCheckScheduler();
   void initTrustedVendorsCache();
 });

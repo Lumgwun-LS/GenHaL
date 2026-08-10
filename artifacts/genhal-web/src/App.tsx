@@ -22,6 +22,7 @@ import KingdomsList from '@/pages/kingdoms/index';
 import KingdomDetail from '@/pages/kingdoms/detail';
 import FamiliesList from '@/pages/families/index';
 import FamilyDetail from '@/pages/families/detail';
+import VerifyAlive from '@/pages/verify';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,7 +57,8 @@ function Router() {
           <Route path="/kingdoms/:id" component={KingdomDetail} />
           <Route path="/families" component={FamiliesList} />
           <Route path="/families/:id" component={FamilyDetail} />
-          
+          <Route path="/verify" component={VerifyAlive} />
+
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>

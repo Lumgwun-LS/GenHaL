@@ -125,3 +125,4 @@ export * from "./genhal-secret-accounts";
 export * from "./genhal-claims";
 export * from "./genhal-succession";
 export * from "./genhal-wills";
+export * from "./genhal-life-checks";

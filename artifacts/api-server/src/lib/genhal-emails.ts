@@ -447,3 +447,106 @@ export async function sendSuccessionRejectedEmail(opts: {
     )
   );
 }
+
+// ─── 8. Proof-of-life reminder ────────────────────────────────────────────────
+
+const VERIFY_URL = (token: string) =>
+  `${GENHAL_URL}/verify?token=${encodeURIComponent(token)}`;
+
+export async function sendLifeCheckReminderEmail(opts: {
+  familyId: number;
+  familyName: string;
+  clerkUserId: string;
+  token: string;
+  sequence: number;
+}) {
+  const { familyId, familyName, clerkUserId, token, sequence } = opts;
+  const to = await clerkEmail(clerkUserId);
+  if (!to) return;
+
+  const dashUrl = `${GENHAL_URL}/families/${familyId}`;
+  const verifyUrl = VERIFY_URL(token);
+  const ordinal = ["", "first", "second", "third", "fourth"][sequence] ?? `#${sequence}`;
+
+  await trySend(
+    to,
+    `${BRAND} — Quarterly check-in: please confirm you're reachable`,
+    wrap(
+      `<h2 style="color:#44403c;margin:0 0 12px">Quarterly Family Record Check-In</h2>
+       <p style="color:#57534e;line-height:1.7">
+         Hello! This is your ${ordinal} quarterly reminder from <strong>${BRAND}</strong> for
+         the family account <strong>${esc(familyName)}</strong>.
+       </p>
+       <p style="color:#57534e;line-height:1.7">
+         To confirm that your family records are still active and under your care,
+         please click the button below or enter your personal verification code on the ${BRAND} website.
+       </p>
+       <div style="text-align:center;margin:20px 0">
+         <span style="font-size:28px;font-weight:700;letter-spacing:0.15em;color:#b45309;background:#fef3c7;border:2px solid #fcd34d;border-radius:10px;padding:10px 24px;display:inline-block">${esc(token)}</span>
+       </div>
+       <p style="color:#78716c;font-size:13px;text-align:center">
+         This code expires in 90 days. You can also use it at
+         <a href="${GENHAL_URL}/verify" style="color:${ACCENT}">${GENHAL_URL}/verify</a>
+       </p>
+       <hr style="border:none;border-top:1px solid #f0ede8;margin:20px 0"/>
+       <p style="color:#57534e;line-height:1.7">
+         While you're here, we recommend also reviewing and updating your
+         <a href="${dashUrl}#wills" style="color:${ACCENT}">will documents</a> and
+         <a href="${dashUrl}" style="color:${ACCENT}">family profile</a>
+         to make sure everything is current.
+       </p>
+       ${sequence > 1 ? `<p style="color:#b91c1c;font-size:13px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px">
+         ⚠️ We have not heard back from you in the last ${sequence - 1} quarter${sequence > 2 ? 's' : ''}. After four unanswered check-ins we will contact your designated Next of Kin.
+       </p>` : ""}`,
+      verifyUrl,
+      "✅ Confirm I'm Here"
+    )
+  );
+}
+
+// ─── 9. Next-of-Kin alert after 4 missed checks ───────────────────────────────
+
+export async function sendNextOfKinAlertEmail(opts: {
+  familyId: number;
+  familyName: string;
+  nokName: string | null;
+  nokEmail: string;
+}) {
+  const { familyId, familyName, nokName, nokEmail } = opts;
+  const dashUrl = `${GENHAL_URL}/families/${familyId}`;
+
+  await trySend(
+    nokEmail,
+    `${BRAND} — We have been unable to reach the head of "${familyName}"`,
+    wrap(
+      `<h2 style="color:#92400e;margin:0 0 12px">Family Record — Welfare Check Notice</h2>
+       <p style="color:#57534e;line-height:1.7">
+         Dear ${nokName ? esc(nokName) : "Next of Kin"},
+       </p>
+       <p style="color:#57534e;line-height:1.7">
+         We are writing to you as the designated Next of Kin for the
+         <strong>${esc(familyName)}</strong> family account on <strong>${BRAND}</strong>.
+       </p>
+       <p style="color:#57534e;line-height:1.7">
+         Over the past twelve months we have sent four quarterly check-in reminders
+         to the account holder and have not received any response. As part of our
+         commitment to keeping family records accurate and secure, we are reaching out
+         to confirm that the account holder can still be reached.
+       </p>
+       <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px 20px;margin:16px 0">
+         <p style="color:#92400e;margin:0;font-weight:600">What you can do</p>
+         <ul style="color:#57534e;margin:8px 0 0;padding-left:20px;line-height:1.8">
+           <li>If the account holder is well, please ask them to log in and confirm their presence at the link below.</li>
+           <li>If the account holder has passed away, you may file a succession claim so the family records can be properly maintained.</li>
+           <li>If you need assistance, please contact the ${BRAND} support team.</li>
+         </ul>
+       </div>
+       <p style="color:#57534e;line-height:1.7">
+         We take the privacy and integrity of family heritage records seriously and will not
+         take any action on the account without proper verification.
+       </p>`,
+      dashUrl,
+      "View Family Account"
+    )
+  );
+}
