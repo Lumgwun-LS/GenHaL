@@ -40,8 +40,11 @@ export function Layout({ children }: { children: ReactNode }) {
             <Link href="/" className="font-serif font-bold text-3xl text-primary flex items-center gap-2">
               GenHaL
             </Link>
-            <p className="text-xs text-muted-foreground mt-1 font-medium tracking-wide uppercase">
-              Preserving African Heritage
+            <p className="text-xs text-muted-foreground mt-1 font-medium tracking-widest uppercase">
+              Genealogy • Heritage • Language
+            </p>
+            <p className="text-[10px] text-muted-foreground/70 mt-2 leading-relaxed italic">
+              Preserve your roots. Protect your heritage.<br />Keep your language alive.
             </p>
           </div>
 
