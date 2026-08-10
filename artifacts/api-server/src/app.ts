@@ -95,6 +95,9 @@ const FIRST_PARTY_ORIGINS = [
   "https://app.awajimaaapp.io",
   "https://store.awajimaaapp.io",
   "https://awajimaa-omni-business-suite.replit.app",
+  // GenHaL custom domain
+  "https://genhal.awajimaa.com",
+  "https://www.genhal.awajimaa.com",
 ];
 
 const ALLOWED_ORIGINS = Array.from(new Set([...FIRST_PARTY_ORIGINS, ...ALLOWED_ORIGINS_ENV]));
