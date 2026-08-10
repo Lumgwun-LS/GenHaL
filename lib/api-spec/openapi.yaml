@@ -56,6 +56,16 @@ tags:
     description: Awajimaa App Store — admin review & moderation
   - name: ads
     description: Ads Suite — contacts, campaigns, creatives, analytics, email campaigns
+  - name: genhal-dashboard
+    description: GenHaL — platform dashboard
+  - name: genhal-genealogy
+    description: GenHaL — family trees and ancestors
+  - name: genhal-heritage
+    description: GenHaL — communities, culture, oral history
+  - name: genhal-language
+    description: GenHaL — African language dictionaries
+  - name: genhal-ai
+    description: GenHaL AI — story generation, translation, image captioning
 
 paths:
   /healthz:
@@ -4677,6 +4687,530 @@ paths:
               schema:
                 $ref: "#/components/schemas/ContentLibraryItem"
 
+
+  /genhal/dashboard:
+    get:
+      operationId: getGenhalDashboard
+      tags: [genhal-dashboard]
+      summary: GenHaL platform overview — totals across all pillars
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalDashboard"
+
+  # ─── GENHAL GENEALOGY ─────────────────────────────────────────────────────
+  /genhal/trees:
+    get:
+      operationId: listGenhalTrees
+      tags: [genhal-genealogy]
+      summary: List family trees for the signed-in user
+      responses:
+        "200":
+          description: List of family trees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalTree"
+    post:
+      operationId: createGenhalTree
+      tags: [genhal-genealogy]
+      summary: Create a new family tree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalTreeInput"
+      responses:
+        "201":
+          description: Created tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalTree"
+
+  /genhal/trees/{id}:
+    get:
+      operationId: getGenhalTree
+      tags: [genhal-genealogy]
+      summary: Get a family tree with all members
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tree detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalTreeDetail"
+    patch:
+      operationId: updateGenhalTree
+      tags: [genhal-genealogy]
+      summary: Update a family tree
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalTreeUpdate"
+      responses:
+        "200":
+          description: Updated tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalTree"
+    delete:
+      operationId: deleteGenhalTree
+      tags: [genhal-genealogy]
+      summary: Delete a family tree
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /genhal/trees/{id}/members:
+    get:
+      operationId: listGenhalTreeMembers
+      tags: [genhal-genealogy]
+      summary: List members of a family tree
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tree members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalTreeMember"
+    post:
+      operationId: addGenhalTreeMember
+      tags: [genhal-genealogy]
+      summary: Add a member to a family tree
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalTreeMemberInput"
+      responses:
+        "201":
+          description: Added member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalTreeMember"
+
+  /genhal/trees/{id}/members/{memberId}:
+    patch:
+      operationId: updateGenhalTreeMember
+      tags: [genhal-genealogy]
+      summary: Update a tree member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalTreeMemberUpdate"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalTreeMember"
+    delete:
+      operationId: deleteGenhalTreeMember
+      tags: [genhal-genealogy]
+      summary: Remove a member from a tree
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  # ─── GENHAL HERITAGE ──────────────────────────────────────────────────────
+  /genhal/heritage/feed:
+    get:
+      operationId: listGenhalHeritageFeed
+      tags: [genhal-heritage]
+      summary: Recent heritage posts across all communities
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Heritage feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalHeritagePost"
+
+  /genhal/communities:
+    get:
+      operationId: listGenhalCommunities
+      tags: [genhal-heritage]
+      summary: List heritage communities
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Communities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalCommunity"
+    post:
+      operationId: createGenhalCommunity
+      tags: [genhal-heritage]
+      summary: Create a heritage community
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalCommunityInput"
+      responses:
+        "201":
+          description: Created community
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalCommunity"
+
+  /genhal/communities/{id}:
+    get:
+      operationId: getGenhalCommunity
+      tags: [genhal-heritage]
+      summary: Get a heritage community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Community
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalCommunity"
+    patch:
+      operationId: updateGenhalCommunity
+      tags: [genhal-heritage]
+      summary: Update a heritage community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalCommunityUpdate"
+      responses:
+        "200":
+          description: Updated community
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalCommunity"
+
+  /genhal/communities/{id}/posts:
+    get:
+      operationId: listGenhalCommunityPosts
+      tags: [genhal-heritage]
+      summary: List heritage posts in a community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Heritage posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalHeritagePost"
+    post:
+      operationId: createGenhalHeritagePost
+      tags: [genhal-heritage]
+      summary: Add a heritage post to a community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalHeritagePostInput"
+      responses:
+        "201":
+          description: Created post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalHeritagePost"
+
+  # ─── GENHAL LANGUAGE ──────────────────────────────────────────────────────
+  /genhal/languages:
+    get:
+      operationId: listGenhalLanguages
+      tags: [genhal-language]
+      summary: List supported African languages
+      responses:
+        "200":
+          description: Languages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalLanguage"
+
+  /genhal/languages/{code}/entries:
+    get:
+      operationId: listGenhalLanguageEntries
+      tags: [genhal-language]
+      summary: List dictionary entries for a language
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dictionary entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalLanguageEntry"
+    post:
+      operationId: createGenhalLanguageEntry
+      tags: [genhal-language]
+      summary: Add a word/phrase to a language dictionary
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalLanguageEntryInput"
+      responses:
+        "201":
+          description: Created entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalLanguageEntry"
+
+  /genhal/languages/{code}/entries/{entryId}:
+    patch:
+      operationId: updateGenhalLanguageEntry
+      tags: [genhal-language]
+      summary: Update a dictionary entry
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalLanguageEntryUpdate"
+      responses:
+        "200":
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalLanguageEntry"
+    delete:
+      operationId: deleteGenhalLanguageEntry
+      tags: [genhal-language]
+      summary: Delete a dictionary entry
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── GENHAL AI ────────────────────────────────────────────────────────────
+  /genhal/ai/generate-story:
+    post:
+      operationId: generateGenhalStory
+      tags: [genhal-ai]
+      summary: Generate a family or heritage story from structured data using AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalAiStoryInput"
+      responses:
+        "200":
+          description: Generated story
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalAiGeneration"
+
+  /genhal/ai/translate:
+    post:
+      operationId: translateGenhal
+      tags: [genhal-ai]
+      summary: Translate text between African languages or to/from English
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalAiTranslateInput"
+      responses:
+        "200":
+          description: Translation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalAiGeneration"
+
+  /genhal/ai/caption-image:
+    post:
+      operationId: captionGenhalImage
+      tags: [genhal-ai]
+      summary: Generate an AI caption for a heritage image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenhalAiCaptionInput"
+      responses:
+        "200":
+          description: Caption result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenhalAiGeneration"
+
+  /genhal/ai/generations:
+    get:
+      operationId: listGenhalAiGenerations
+      tags: [genhal-ai]
+      summary: List AI generation history for the signed-in user
+      responses:
+        "200":
+          description: AI generations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenhalAiGeneration"
+
+
 components:
   securitySchemes:
     externalBearerAuth:
@@ -8921,3 +9455,468 @@ components:
         imageUrl:
           type: string
           nullable: true
+
+  # ─── GENHAL DASHBOARD ─────────────────────────────────────────────────────
+    # ── GENHAL SCHEMAS ────────────────────────────────────────────────────────
+
+    GenhalDashboard:
+      type: object
+      required: [totalTrees, totalMembers, totalCommunities, totalHeritagePosts, totalLanguages, totalEntries, totalAiGenerations, recentActivity]
+      properties:
+        totalTrees:
+          type: integer
+        totalMembers:
+          type: integer
+        totalCommunities:
+          type: integer
+        totalHeritagePosts:
+          type: integer
+        totalLanguages:
+          type: integer
+        totalEntries:
+          type: integer
+        totalAiGenerations:
+          type: integer
+        recentActivity:
+          type: array
+          items:
+            type: object
+            required: [type, description, createdAt]
+            properties:
+              type:
+                type: string
+              description:
+                type: string
+              createdAt:
+                type: string
+
+    GenhalTree:
+      type: object
+      required: [id, name, clerkUserId, memberCount, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        originCountry:
+          type: ["string", "null"]
+        originEthnicGroup:
+          type: ["string", "null"]
+        coverImageUrl:
+          type: ["string", "null"]
+        memberCount:
+          type: integer
+        clerkUserId:
+          type: string
+        createdAt:
+          type: string
+
+    GenhalTreeInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        originCountry:
+          type: string
+        originEthnicGroup:
+          type: string
+        coverImageUrl:
+          type: string
+
+    GenhalTreeUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        originCountry:
+          type: string
+        originEthnicGroup:
+          type: string
+        coverImageUrl:
+          type: string
+
+    GenhalTreeDetail:
+      type: object
+      required: [id, name, clerkUserId, memberCount, members, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        originCountry:
+          type: ["string", "null"]
+        originEthnicGroup:
+          type: ["string", "null"]
+        coverImageUrl:
+          type: ["string", "null"]
+        memberCount:
+          type: integer
+        clerkUserId:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenhalTreeMember"
+        createdAt:
+          type: string
+
+    GenhalTreeMember:
+      type: object
+      required: [id, treeId, firstName, gender, createdAt]
+      properties:
+        id:
+          type: integer
+        treeId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: ["string", "null"]
+        gender:
+          type: string
+        birthDate:
+          type: ["string", "null"]
+        deathDate:
+          type: ["string", "null"]
+        birthPlace:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        parentId:
+          type: ["integer", "null"]
+        spouseId:
+          type: ["integer", "null"]
+        relationship:
+          type: ["string", "null"]
+        isLiving:
+          type: boolean
+        createdAt:
+          type: string
+
+    GenhalTreeMemberInput:
+      type: object
+      required: [firstName, gender]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        birthDate:
+          type: string
+        deathDate:
+          type: string
+        birthPlace:
+          type: string
+        bio:
+          type: string
+        photoUrl:
+          type: string
+        parentId:
+          type: integer
+        spouseId:
+          type: integer
+        relationship:
+          type: string
+        isLiving:
+          type: boolean
+
+    GenhalTreeMemberUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        birthDate:
+          type: string
+        deathDate:
+          type: string
+        birthPlace:
+          type: string
+        bio:
+          type: string
+        photoUrl:
+          type: string
+        parentId:
+          type: integer
+        spouseId:
+          type: integer
+        relationship:
+          type: string
+        isLiving:
+          type: boolean
+
+    GenhalCommunity:
+      type: object
+      required: [id, name, country, ethnicGroup, postCount, memberCount, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        country:
+          type: string
+        ethnicGroup:
+          type: string
+        description:
+          type: ["string", "null"]
+        coverImageUrl:
+          type: ["string", "null"]
+        postCount:
+          type: integer
+        memberCount:
+          type: integer
+        clerkUserId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    GenhalCommunityInput:
+      type: object
+      required: [name, country, ethnicGroup]
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        ethnicGroup:
+          type: string
+        description:
+          type: string
+        coverImageUrl:
+          type: string
+
+    GenhalCommunityUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        ethnicGroup:
+          type: string
+        description:
+          type: string
+        coverImageUrl:
+          type: string
+
+    GenhalHeritagePost:
+      type: object
+      required: [id, communityId, title, type, clerkUserId, createdAt]
+      properties:
+        id:
+          type: integer
+        communityId:
+          type: integer
+        communityName:
+          type: ["string", "null"]
+        title:
+          type: string
+        body:
+          type: ["string", "null"]
+        type:
+          type: string
+        mediaUrl:
+          type: ["string", "null"]
+        audioUrl:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        clerkUserId:
+          type: string
+        authorName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    GenhalHeritagePostInput:
+      type: object
+      required: [title, type]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        type:
+          type: string
+        mediaUrl:
+          type: string
+        audioUrl:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    GenhalLanguage:
+      type: object
+      required: [code, name, nativeName, country, entryCount]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        nativeName:
+          type: string
+        country:
+          type: string
+        region:
+          type: ["string", "null"]
+        speakerCount:
+          type: ["string", "null"]
+        entryCount:
+          type: integer
+        flagEmoji:
+          type: ["string", "null"]
+
+    GenhalLanguageEntry:
+      type: object
+      required: [id, languageCode, word, translation, createdAt]
+      properties:
+        id:
+          type: integer
+        languageCode:
+          type: string
+        word:
+          type: string
+        translation:
+          type: string
+        pronunciation:
+          type: ["string", "null"]
+        partOfSpeech:
+          type: ["string", "null"]
+        example:
+          type: ["string", "null"]
+        exampleTranslation:
+          type: ["string", "null"]
+        audioUrl:
+          type: ["string", "null"]
+        dialect:
+          type: ["string", "null"]
+        clerkUserId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    GenhalLanguageEntryInput:
+      type: object
+      required: [word, translation]
+      properties:
+        word:
+          type: string
+        translation:
+          type: string
+        pronunciation:
+          type: string
+        partOfSpeech:
+          type: string
+        example:
+          type: string
+        exampleTranslation:
+          type: string
+        audioUrl:
+          type: string
+        dialect:
+          type: string
+
+    GenhalLanguageEntryUpdate:
+      type: object
+      properties:
+        word:
+          type: string
+        translation:
+          type: string
+        pronunciation:
+          type: string
+        partOfSpeech:
+          type: string
+        example:
+          type: string
+        exampleTranslation:
+          type: string
+        audioUrl:
+          type: string
+        dialect:
+          type: string
+
+    GenhalAiGeneration:
+      type: object
+      required: [id, type, result, clerkUserId, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        prompt:
+          type: ["string", "null"]
+        result:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        clerkUserId:
+          type: string
+        createdAt:
+          type: string
+
+    GenhalAiStoryInput:
+      type: object
+      required: [storyType]
+      properties:
+        storyType:
+          type: string
+        treeId:
+          type: integer
+        memberId:
+          type: integer
+        communityId:
+          type: integer
+        customPrompt:
+          type: string
+        language:
+          type: string
+
+    GenhalAiTranslateInput:
+      type: object
+      required: [text, targetLanguage]
+      properties:
+        text:
+          type: string
+        sourceLanguage:
+          type: string
+        targetLanguage:
+          type: string
+        context:
+          type: string
+
+    GenhalAiCaptionInput:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl:
+          type: string
+        communityId:
+          type: integer
+        context:
+          type: string
+        language:
+          type: string
+

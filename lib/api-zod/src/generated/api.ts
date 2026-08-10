@@ -67,7 +67,10 @@ export const ListVendorsResponseItem = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
 
@@ -127,7 +130,10 @@ export const CreateVendorResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 
@@ -184,7 +190,10 @@ export const OnboardVendorResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 
@@ -250,7 +259,10 @@ export const GetVendorResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 
@@ -2827,8 +2839,7 @@ export const UpdateLeadBody = zod.object({
   "status": zod.string().optional(),
   "notes": zod.string().optional(),
   "score": zod.number().optional(),
-  "channel": zod.string().optional(),
-  "dateOfBirth": zod.string().nullable().optional()
+  "channel": zod.string().optional()
 })
 
 export const UpdateLeadResponse = zod.object({
@@ -2845,7 +2856,6 @@ export const UpdateLeadResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
-  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -3956,7 +3966,10 @@ export const GetExternalProfileResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 }),
   "features": zod.array(zod.string()),
   "isAdmin": zod.boolean()
@@ -4025,7 +4038,10 @@ export const UpdateExternalProfileResponse = zod.object({
   "paystackSubscriptionCode": zod.string().nullish(),
   "paystackEmailToken": zod.string().nullish(),
   "dateOfBirth": zod.string().nullish(),
-  "voiceCallOptOut": zod.boolean().optional()
+  "voiceCallOptOut": zod.boolean().optional(),
+  "socialAppendWebsite": zod.boolean().optional(),
+  "socialAppendAppLink": zod.boolean().optional(),
+  "socialAppendBlogLink": zod.boolean().optional()
 })
 
 
@@ -5897,5 +5913,639 @@ export const SaveContentLibraryItemResponse = zod.object({
   "imageUrl": zod.string().nullish(),
   "createdAt": zod.string()
 })
+
+
+/**
+ * @summary GenHaL platform overview — totals across all pillars
+ */
+export const GetGenhalDashboardResponse = zod.object({
+  "totalTrees": zod.number(),
+  "totalMembers": zod.number(),
+  "totalCommunities": zod.number(),
+  "totalHeritagePosts": zod.number(),
+  "totalLanguages": zod.number(),
+  "totalEntries": zod.number(),
+  "totalAiGenerations": zod.number(),
+  "recentActivity": zod.array(zod.object({
+  "type": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary List family trees for the signed-in user
+ */
+export const ListGenhalTreesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "originCountry": zod.string().nullish(),
+  "originEthnicGroup": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListGenhalTreesResponse = zod.array(ListGenhalTreesResponseItem)
+
+
+/**
+ * @summary Create a new family tree
+ */
+export const CreateGenhalTreeBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "originCountry": zod.string().optional(),
+  "originEthnicGroup": zod.string().optional(),
+  "coverImageUrl": zod.string().optional()
+})
+
+export const CreateGenhalTreeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "originCountry": zod.string().nullish(),
+  "originEthnicGroup": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Get a family tree with all members
+ */
+export const GetGenhalTreeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetGenhalTreeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "originCountry": zod.string().nullish(),
+  "originEthnicGroup": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string(),
+  "members": zod.array(zod.object({
+  "id": zod.number(),
+  "treeId": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string().nullish(),
+  "gender": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "deathDate": zod.string().nullish(),
+  "birthPlace": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
+  "spouseId": zod.number().nullish(),
+  "relationship": zod.string().nullish(),
+  "isLiving": zod.boolean().optional(),
+  "createdAt": zod.string()
+})),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a family tree
+ */
+export const UpdateGenhalTreeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateGenhalTreeBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "originCountry": zod.string().optional(),
+  "originEthnicGroup": zod.string().optional(),
+  "coverImageUrl": zod.string().optional()
+})
+
+export const UpdateGenhalTreeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "originCountry": zod.string().nullish(),
+  "originEthnicGroup": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a family tree
+ */
+export const DeleteGenhalTreeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteGenhalTreeResponse = zod.void()
+
+
+/**
+ * @summary List members of a family tree
+ */
+export const ListGenhalTreeMembersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListGenhalTreeMembersResponseItem = zod.object({
+  "id": zod.number(),
+  "treeId": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string().nullish(),
+  "gender": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "deathDate": zod.string().nullish(),
+  "birthPlace": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
+  "spouseId": zod.number().nullish(),
+  "relationship": zod.string().nullish(),
+  "isLiving": zod.boolean().optional(),
+  "createdAt": zod.string()
+})
+export const ListGenhalTreeMembersResponse = zod.array(ListGenhalTreeMembersResponseItem)
+
+
+/**
+ * @summary Add a member to a family tree
+ */
+export const AddGenhalTreeMemberParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddGenhalTreeMemberBody = zod.object({
+  "firstName": zod.string(),
+  "lastName": zod.string().optional(),
+  "gender": zod.string(),
+  "birthDate": zod.string().optional(),
+  "deathDate": zod.string().optional(),
+  "birthPlace": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "photoUrl": zod.string().optional(),
+  "parentId": zod.number().optional(),
+  "spouseId": zod.number().optional(),
+  "relationship": zod.string().optional(),
+  "isLiving": zod.boolean().optional()
+})
+
+export const AddGenhalTreeMemberResponse = zod.object({
+  "id": zod.number(),
+  "treeId": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string().nullish(),
+  "gender": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "deathDate": zod.string().nullish(),
+  "birthPlace": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
+  "spouseId": zod.number().nullish(),
+  "relationship": zod.string().nullish(),
+  "isLiving": zod.boolean().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a tree member
+ */
+export const UpdateGenhalTreeMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "memberId": zod.coerce.number()
+})
+
+export const UpdateGenhalTreeMemberBody = zod.object({
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "birthDate": zod.string().optional(),
+  "deathDate": zod.string().optional(),
+  "birthPlace": zod.string().optional(),
+  "bio": zod.string().optional(),
+  "photoUrl": zod.string().optional(),
+  "parentId": zod.number().optional(),
+  "spouseId": zod.number().optional(),
+  "relationship": zod.string().optional(),
+  "isLiving": zod.boolean().optional()
+})
+
+export const UpdateGenhalTreeMemberResponse = zod.object({
+  "id": zod.number(),
+  "treeId": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string().nullish(),
+  "gender": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "deathDate": zod.string().nullish(),
+  "birthPlace": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "parentId": zod.number().nullish(),
+  "spouseId": zod.number().nullish(),
+  "relationship": zod.string().nullish(),
+  "isLiving": zod.boolean().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Remove a member from a tree
+ */
+export const DeleteGenhalTreeMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "memberId": zod.coerce.number()
+})
+
+export const DeleteGenhalTreeMemberResponse = zod.void()
+
+
+/**
+ * @summary Recent heritage posts across all communities
+ */
+export const ListGenhalHeritageFeedQueryParams = zod.object({
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListGenhalHeritageFeedResponseItem = zod.object({
+  "id": zod.number(),
+  "communityId": zod.number(),
+  "communityName": zod.string().nullish(),
+  "title": zod.string(),
+  "body": zod.string().nullish(),
+  "type": zod.string(),
+  "mediaUrl": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "clerkUserId": zod.string(),
+  "authorName": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListGenhalHeritageFeedResponse = zod.array(ListGenhalHeritageFeedResponseItem)
+
+
+/**
+ * @summary List heritage communities
+ */
+export const ListGenhalCommunitiesQueryParams = zod.object({
+  "country": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional()
+})
+
+export const ListGenhalCommunitiesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "country": zod.string(),
+  "ethnicGroup": zod.string(),
+  "description": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "postCount": zod.number(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListGenhalCommunitiesResponse = zod.array(ListGenhalCommunitiesResponseItem)
+
+
+/**
+ * @summary Create a heritage community
+ */
+export const CreateGenhalCommunityBody = zod.object({
+  "name": zod.string(),
+  "country": zod.string(),
+  "ethnicGroup": zod.string(),
+  "description": zod.string().optional(),
+  "coverImageUrl": zod.string().optional()
+})
+
+export const CreateGenhalCommunityResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "country": zod.string(),
+  "ethnicGroup": zod.string(),
+  "description": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "postCount": zod.number(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Get a heritage community
+ */
+export const GetGenhalCommunityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetGenhalCommunityResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "country": zod.string(),
+  "ethnicGroup": zod.string(),
+  "description": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "postCount": zod.number(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a heritage community
+ */
+export const UpdateGenhalCommunityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateGenhalCommunityBody = zod.object({
+  "name": zod.string().optional(),
+  "country": zod.string().optional(),
+  "ethnicGroup": zod.string().optional(),
+  "description": zod.string().optional(),
+  "coverImageUrl": zod.string().optional()
+})
+
+export const UpdateGenhalCommunityResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "country": zod.string(),
+  "ethnicGroup": zod.string(),
+  "description": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "postCount": zod.number(),
+  "memberCount": zod.number(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List heritage posts in a community
+ */
+export const ListGenhalCommunityPostsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListGenhalCommunityPostsResponseItem = zod.object({
+  "id": zod.number(),
+  "communityId": zod.number(),
+  "communityName": zod.string().nullish(),
+  "title": zod.string(),
+  "body": zod.string().nullish(),
+  "type": zod.string(),
+  "mediaUrl": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "clerkUserId": zod.string(),
+  "authorName": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListGenhalCommunityPostsResponse = zod.array(ListGenhalCommunityPostsResponseItem)
+
+
+/**
+ * @summary Add a heritage post to a community
+ */
+export const CreateGenhalHeritagePostParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateGenhalHeritagePostBody = zod.object({
+  "title": zod.string(),
+  "body": zod.string().optional(),
+  "type": zod.string(),
+  "mediaUrl": zod.string().optional(),
+  "audioUrl": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional()
+})
+
+export const CreateGenhalHeritagePostResponse = zod.object({
+  "id": zod.number(),
+  "communityId": zod.number(),
+  "communityName": zod.string().nullish(),
+  "title": zod.string(),
+  "body": zod.string().nullish(),
+  "type": zod.string(),
+  "mediaUrl": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "clerkUserId": zod.string(),
+  "authorName": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List supported African languages
+ */
+export const ListGenhalLanguagesResponseItem = zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "nativeName": zod.string(),
+  "country": zod.string(),
+  "region": zod.string().nullish(),
+  "speakerCount": zod.string().nullish(),
+  "entryCount": zod.number(),
+  "flagEmoji": zod.string().nullish()
+})
+export const ListGenhalLanguagesResponse = zod.array(ListGenhalLanguagesResponseItem)
+
+
+/**
+ * @summary List dictionary entries for a language
+ */
+export const ListGenhalLanguageEntriesParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const ListGenhalLanguageEntriesResponseItem = zod.object({
+  "id": zod.number(),
+  "languageCode": zod.string(),
+  "word": zod.string(),
+  "translation": zod.string(),
+  "pronunciation": zod.string().nullish(),
+  "partOfSpeech": zod.string().nullish(),
+  "example": zod.string().nullish(),
+  "exampleTranslation": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "dialect": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListGenhalLanguageEntriesResponse = zod.array(ListGenhalLanguageEntriesResponseItem)
+
+
+/**
+ * @summary Add a word/phrase to a language dictionary
+ */
+export const CreateGenhalLanguageEntryParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const CreateGenhalLanguageEntryBody = zod.object({
+  "word": zod.string(),
+  "translation": zod.string(),
+  "pronunciation": zod.string().optional(),
+  "partOfSpeech": zod.string().optional(),
+  "example": zod.string().optional(),
+  "exampleTranslation": zod.string().optional(),
+  "audioUrl": zod.string().optional(),
+  "dialect": zod.string().optional()
+})
+
+export const CreateGenhalLanguageEntryResponse = zod.object({
+  "id": zod.number(),
+  "languageCode": zod.string(),
+  "word": zod.string(),
+  "translation": zod.string(),
+  "pronunciation": zod.string().nullish(),
+  "partOfSpeech": zod.string().nullish(),
+  "example": zod.string().nullish(),
+  "exampleTranslation": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "dialect": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a dictionary entry
+ */
+export const UpdateGenhalLanguageEntryParams = zod.object({
+  "code": zod.coerce.string(),
+  "entryId": zod.coerce.number()
+})
+
+export const UpdateGenhalLanguageEntryBody = zod.object({
+  "word": zod.string().optional(),
+  "translation": zod.string().optional(),
+  "pronunciation": zod.string().optional(),
+  "partOfSpeech": zod.string().optional(),
+  "example": zod.string().optional(),
+  "exampleTranslation": zod.string().optional(),
+  "audioUrl": zod.string().optional(),
+  "dialect": zod.string().optional()
+})
+
+export const UpdateGenhalLanguageEntryResponse = zod.object({
+  "id": zod.number(),
+  "languageCode": zod.string(),
+  "word": zod.string(),
+  "translation": zod.string(),
+  "pronunciation": zod.string().nullish(),
+  "partOfSpeech": zod.string().nullish(),
+  "example": zod.string().nullish(),
+  "exampleTranslation": zod.string().nullish(),
+  "audioUrl": zod.string().nullish(),
+  "dialect": zod.string().nullish(),
+  "clerkUserId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a dictionary entry
+ */
+export const DeleteGenhalLanguageEntryParams = zod.object({
+  "code": zod.coerce.string(),
+  "entryId": zod.coerce.number()
+})
+
+export const DeleteGenhalLanguageEntryResponse = zod.void()
+
+
+/**
+ * @summary Generate a family or heritage story from structured data using AI
+ */
+export const GenerateGenhalStoryBody = zod.object({
+  "storyType": zod.string(),
+  "treeId": zod.number().optional(),
+  "memberId": zod.number().optional(),
+  "communityId": zod.number().optional(),
+  "customPrompt": zod.string().optional(),
+  "language": zod.string().optional()
+})
+
+export const GenerateGenhalStoryResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string().nullish(),
+  "result": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()).nullish(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Translate text between African languages or to/from English
+ */
+export const TranslateGenhalBody = zod.object({
+  "text": zod.string(),
+  "sourceLanguage": zod.string().optional(),
+  "targetLanguage": zod.string(),
+  "context": zod.string().optional()
+})
+
+export const TranslateGenhalResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string().nullish(),
+  "result": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()).nullish(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Generate an AI caption for a heritage image
+ */
+export const CaptionGenhalImageBody = zod.object({
+  "imageUrl": zod.string(),
+  "communityId": zod.number().optional(),
+  "context": zod.string().optional(),
+  "language": zod.string().optional()
+})
+
+export const CaptionGenhalImageResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string().nullish(),
+  "result": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()).nullish(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List AI generation history for the signed-in user
+ */
+export const ListGenhalAiGenerationsResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "prompt": zod.string().nullish(),
+  "result": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()).nullish(),
+  "clerkUserId": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListGenhalAiGenerationsResponse = zod.array(ListGenhalAiGenerationsResponseItem)
 
 

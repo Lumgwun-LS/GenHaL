@@ -82,6 +82,7 @@ import internalMobileAppRouter from "./internal-mobile-app";
 import internalGrantTrialRouter from "./internal-grant-trial";
 import tasksRouter from "./tasks";
 import blogRouter from "./blog";
+import genhalRouter from "./genhal";
 import publicBlogRouter from "./public-blog";
 import supportPublicRouter from "./support-public";
 import supportRouter from "./support";
@@ -253,5 +254,6 @@ router.use(mobileAppsRouter);
 router.use(tasksRouter);
   router.use(blogRouter);
 router.use(supportRouter);
+router.use(genhalRouter);
 
 export default router;

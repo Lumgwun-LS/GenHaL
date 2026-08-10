@@ -66,4 +66,7 @@ export interface Vendor {
   /** @nullable */
   dateOfBirth?: string | null;
   voiceCallOptOut?: boolean;
+  socialAppendWebsite?: boolean;
+  socialAppendAppLink?: boolean;
+  socialAppendBlogLink?: boolean;
 }
