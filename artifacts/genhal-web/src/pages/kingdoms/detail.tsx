@@ -10,6 +10,8 @@ import VaultTab from '@/pages/vault/index';
 import MembersTab from '@/pages/members/index';
 import SubscriptionTab from '@/pages/subscription/index';
 import SecretAccountsTab from '@/pages/accounts/index';
+import ClaimsTab from '@/pages/claims/index';
+import PublicGallery from '@/pages/vault/public-gallery';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -161,9 +163,11 @@ export default function KingdomDetail() {
               { v:'heritage',      l:'Heritage' },
               { v:'resources',     l:'Resources' },
               { v:'vault',         l:'📂 Vault' },
+              { v:'public',        l:'🌍 Public Archive' },
               { v:'members',       l:'👥 Members' },
               { v:'subscription',  l:'💳 Plan' },
               { v:'accounts',      l:'🏦 Accounts' },
+              { v:'claims',        l:'⚖️ Claims' },
             ].map(t=><TabsTrigger key={t.v} value={t.v} className="rounded-lg text-xs">{t.l}</TabsTrigger>)}
           </TabsList>
 
@@ -458,6 +462,16 @@ export default function KingdomDetail() {
           {/* ── ACCOUNTS ── */}
           <TabsContent value="accounts" className="px-6 md:px-10 py-6">
             <SecretAccountsTab unitType="kingdom" unitId={kingdom.id} unitName={kingdom.name} />
+          </TabsContent>
+
+          {/* ── PUBLIC ARCHIVE ── */}
+          <TabsContent value="public" className="px-6 md:px-10 py-6">
+            <PublicGallery unitType="kingdom" unitId={kingdom.id} unitName={kingdom.name} />
+          </TabsContent>
+
+          {/* ── CLAIMS ── */}
+          <TabsContent value="claims" className="px-6 md:px-10 py-6">
+            <ClaimsTab unitType="kingdom" unitId={kingdom.id} unitName={kingdom.name} />
           </TabsContent>
         </Tabs>
       </div>

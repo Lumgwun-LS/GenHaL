@@ -21,6 +21,7 @@ import LanguageCorpus from '@/pages/corpus/index';
 import KingdomsList from '@/pages/kingdoms/index';
 import KingdomDetail from '@/pages/kingdoms/detail';
 import FamiliesList from '@/pages/families/index';
+import FamilyDetail from '@/pages/families/detail';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +55,7 @@ function Router() {
           <Route path="/kingdoms" component={KingdomsList} />
           <Route path="/kingdoms/:id" component={KingdomDetail} />
           <Route path="/families" component={FamiliesList} />
+          <Route path="/families/:id" component={FamilyDetail} />
           
           <Route component={NotFound} />
         </Switch>

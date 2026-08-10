@@ -45,6 +45,14 @@ export const genhalFamilyAccountsTable = pgTable("genhal_family_accounts", {
   emblemImageUrl: text("emblem_image_url"),
   attributes: jsonb("attributes"),
   isPublic: boolean("is_public").notNull().default(false),
+
+  // Next of kin / succession
+  nextOfKinName:         text("next_of_kin_name"),
+  nextOfKinEmail:        text("next_of_kin_email"),
+  nextOfKinPhone:        text("next_of_kin_phone"),
+  nextOfKinRelationship: text("next_of_kin_relationship"),
+  nextOfKinNotes:        text("next_of_kin_notes"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

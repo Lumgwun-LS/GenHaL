@@ -10,7 +10,8 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
+import { Readable } from "stream";
 
 const R2_ACCOUNT_ID  = process.env.R2_ACCOUNT_ID  ?? "";
 const R2_ACCESS_KEY  = process.env.R2_ACCESS_KEY_ID ?? process.env.S3_ACCESS_KEY_ID ?? "";
@@ -84,4 +85,87 @@ export async function headObject(r2Key: string) {
   } catch {
     return { exists: false, size: 0, contentType: "" };
   }
+}
+
+// ── File-level AES-256-GCM encryption ────────────────────────────────────────
+// Derives a 32-byte key from SESSION_SECRET so no extra env var is needed.
+// Suitable for documents, images, and small-to-medium video files (< 200 MB).
+
+function genhalEncKey(): Buffer {
+  const secret = process.env.SESSION_SECRET ?? "";
+  if (!secret) throw new Error("SESSION_SECRET is not set — cannot encrypt vault files");
+  return createHash("sha256").update(`genhal-vault-enc:${secret}`).digest();
+}
+
+/** Download an R2 object and return its full content as a Buffer. */
+export async function getObjectBuffer(r2Key: string): Promise<Buffer> {
+  const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: r2Key });
+  const res = await client().send(cmd);
+  if (!res.Body) throw new Error("Empty response from R2");
+  const stream = res.Body as Readable;
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
+
+/** Upload a Buffer to R2 as a new (or replacement) object. */
+export async function putObjectBuffer(
+  r2Key: string,
+  data: Buffer,
+  contentType: string,
+): Promise<void> {
+  await client().send(new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: r2Key,
+    Body: data,
+    ContentType: contentType,
+  }));
+}
+
+/**
+ * Encrypt a Buffer with AES-256-GCM.
+ * Returns { encrypted, ivHex } — store ivHex alongside the document record.
+ */
+export function encryptBuffer(plain: Buffer): { encrypted: Buffer; ivHex: string } {
+  const key = genhalEncKey();
+  const iv  = randomBytes(12);                                    // 96-bit IV for GCM
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const enc  = Buffer.concat([cipher.update(plain), cipher.final()]);
+  const tag  = cipher.getAuthTag();                               // 16-byte auth tag
+  // Layout: [12-byte IV][16-byte tag][ciphertext]
+  return { encrypted: Buffer.concat([iv, tag, enc]), ivHex: iv.toString("hex") };
+}
+
+/**
+ * Decrypt a Buffer previously encrypted by encryptBuffer().
+ * Throws if the data is tampered with (auth tag mismatch).
+ */
+export function decryptBuffer(data: Buffer): Buffer {
+  const key     = genhalEncKey();
+  const iv      = data.subarray(0, 12);
+  const tag     = data.subarray(12, 28);
+  const cipher  = data.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(cipher), decipher.final()]);
+}
+
+/**
+ * Encrypt an R2 object in-place (download → encrypt → re-upload).
+ * Returns the ivHex to store on the document record.
+ * Max recommended size: 200 MB (streams held in memory).
+ */
+export async function encryptR2Object(r2Key: string, contentType: string): Promise<string> {
+  const raw = await getObjectBuffer(r2Key);
+  const { encrypted, ivHex } = encryptBuffer(raw);
+  await putObjectBuffer(r2Key, encrypted, contentType);
+  return ivHex;
+}
+
+/**
+ * Download and decrypt an R2 object, returning the plaintext Buffer.
+ */
+export async function decryptR2Object(r2Key: string): Promise<Buffer> {
+  const enc = await getObjectBuffer(r2Key);
+  return decryptBuffer(enc);
 }

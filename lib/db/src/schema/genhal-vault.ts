@@ -35,6 +35,10 @@ export const genhalVaultDocumentsTable = pgTable("genhal_vault_documents", {
   isPasswordProtected: boolean("is_password_protected").notNull().default(false),
   passwordHash: text("password_hash"),          // bcrypt for extra protection
 
+  // Encryption (AES-256-GCM, for highly-sensitive docs only)
+  isEncrypted:   boolean("is_encrypted").notNull().default(false),
+  encryptionIv:  text("encryption_iv"),            // hex-encoded IV; null when not encrypted
+
   // Status
   uploadStatus: text("upload_status").notNull().default("pending"), // pending|complete|failed
   isArchived: boolean("is_archived").notNull().default(false),
