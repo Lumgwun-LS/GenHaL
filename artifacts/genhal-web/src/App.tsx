@@ -67,11 +67,21 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+// When served at genhal.awajimaa.com the app lives at the domain root,
+// so the Wouter base must be "" rather than "/genhal" or every route 404s.
+const _onCustomDomain =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "genhal.awajimaa.com" ||
+    window.location.hostname === "www.genhal.awajimaa.com");
+
+const _builtBase = import.meta.env.BASE_URL.replace(/\/$/, ""); // "/genhal"
+
 function App() {
+  const basePath = _onCustomDomain ? "" : _builtBase;
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <WouterRouter base={basePath}>
           <Router />
         </WouterRouter>
         <Toaster />
