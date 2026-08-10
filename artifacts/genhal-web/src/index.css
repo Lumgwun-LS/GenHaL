@@ -49,24 +49,28 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-card-hover:
+    0 4px 12px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
 }
 
-/* LIGHT MODE - Heritage Tech Vibe */
+/* LIGHT MODE — Heritage palette on a calm, product-grade canvas */
 :root {
-  --background: 35 50% 98%; /* Light sand */
+  --background: 35 25% 96%; /* Light sand canvas */
   --foreground: 20 30% 15%; /* Dark wood/brown */
-  
-  --border: 30 20% 85%;
-  --input: 30 20% 85%;
+
+  --border: 30 18% 88%;
+  --input: 30 18% 88%;
   --ring: 15 80% 45%;
 
-  --card: 35 60% 99%;
+  --card: 0 0% 100%;
   --card-foreground: 20 30% 15%;
-  --card-border: 30 20% 85%;
+  --card-border: 30 18% 88%;
 
-  --popover: 35 60% 99%;
+  --popover: 0 0% 100%;
   --popover-foreground: 20 30% 15%;
-  --popover-border: 30 20% 85%;
+  --popover-border: 30 18% 88%;
 
   --primary: 15 80% 45%; /* Terracotta */
   --primary-foreground: 0 0% 100%;
@@ -74,8 +78,8 @@
   --secondary: 140 25% 30%; /* Forest Green */
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 35 20% 90%;
-  --muted-foreground: 20 15% 45%;
+  --muted: 35 20% 94%;
+  --muted-foreground: 20 12% 45%;
 
   --accent: 40 90% 45%; /* Vibrant Gold */
   --accent-foreground: 20 30% 15%;
@@ -83,37 +87,46 @@
   --destructive: 0 70% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --sidebar: 35 50% 98%;
-  --sidebar-foreground: 20 30% 15%;
-  --sidebar-border: 30 20% 85%;
-  --sidebar-primary: 15 80% 45%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 35 20% 90%;
-  --sidebar-accent-foreground: 20 30% 15%;
-  --sidebar-ring: 15 80% 45%;
+  /* Component borders consumed by button/badge variants */
+  --primary-border: hsl(15 80% 38%);
+  --secondary-border: hsl(140 25% 24%);
+  --muted-border: hsl(30 18% 86%);
+  --accent-border: hsl(40 90% 38%);
+  --destructive-border: hsl(0 70% 42%);
+  --button-outline: hsl(30 18% 84%);
+  --badge-outline: hsl(30 18% 84%);
 
-  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
+  /* Dark sidebar shell — same brown/terracotta family as the palette */
+  --sidebar-gradient: linear-gradient(
+    170deg,
+    #1a1108 0%,
+    #241609 60%,
+    #2b1a0a 100%
+  );
+  --sidebar-border-color: rgba(255, 255, 255, 0.06);
+
+  --app-font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --app-font-serif: 'Fraunces', serif;
-  --app-font-mono: 'Spline Sans Mono', monospace;
-  
-  --radius: 0.75rem; 
+  --app-font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+
+  --radius: 0.75rem;
 }
 
 .dark {
-  --background: 20 30% 10%; /* Deep dark brown/black */
+  --background: 20 22% 9%; /* Deep dark brown */
   --foreground: 35 30% 90%; /* Light sand */
 
-  --border: 20 20% 25%;
-  --input: 20 20% 25%;
+  --border: 20 16% 22%;
+  --input: 20 16% 22%;
   --ring: 15 70% 50%;
 
-  --card: 20 25% 15%;
+  --card: 20 20% 13%;
   --card-foreground: 35 30% 90%;
-  --card-border: 20 20% 25%;
+  --card-border: 20 16% 22%;
 
-  --popover: 20 25% 15%;
+  --popover: 20 20% 13%;
   --popover-foreground: 35 30% 90%;
-  --popover-border: 20 20% 25%;
+  --popover-border: 20 16% 22%;
 
   --primary: 15 70% 50%; /* Terracotta */
   --primary-foreground: 0 0% 100%;
@@ -121,8 +134,8 @@
   --secondary: 140 30% 40%; /* Forest Green */
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 20 20% 20%;
-  --muted-foreground: 35 20% 60%;
+  --muted: 20 16% 18%;
+  --muted-foreground: 35 15% 62%;
 
   --accent: 40 80% 50%; /* Gold */
   --accent-foreground: 20 30% 10%;
@@ -130,14 +143,21 @@
   --destructive: 0 60% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --sidebar: 20 30% 10%;
-  --sidebar-foreground: 35 30% 90%;
-  --sidebar-border: 20 20% 25%;
-  --sidebar-primary: 15 70% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 20 20% 20%;
-  --sidebar-accent-foreground: 35 30% 90%;
-  --sidebar-ring: 15 70% 50%;
+  --primary-border: hsl(15 70% 42%);
+  --secondary-border: hsl(140 30% 32%);
+  --muted-border: hsl(20 16% 24%);
+  --accent-border: hsl(40 80% 42%);
+  --destructive-border: hsl(0 60% 42%);
+  --button-outline: hsl(20 16% 26%);
+  --badge-outline: hsl(20 16% 26%);
+
+  --sidebar-gradient: linear-gradient(
+    170deg,
+    #14100a 0%,
+    #1c140b 60%,
+    #22180c 100%
+  );
+  --sidebar-border-color: rgba(255, 255, 255, 0.05);
 }
 
 @layer base {
@@ -147,10 +167,176 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-serif tracking-tight;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-sans font-bold tracking-tight;
+  }
+}
+
+/* ── Entrance animations ──────────────────────────────────────────────────
+ * Ported from the Awajimaa School dashboard (globals.css) so both apps move
+ * the same way. Same keyframes and bounce easing, shorter durations — this is
+ * an app, not a landing page, so motion stays out of the way.
+ */
+
+@keyframes awaFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes awaFadeInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes awaFadeInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes awaZoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes awaBounceInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.01);
+  }
+  80% {
+    transform: translateY(2px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer utilities {
+  .awa-fade-in-up {
+    animation: awaFadeInUp 0.35s ease both;
+  }
+
+  .awa-fade-in-left {
+    animation: awaFadeInLeft 0.35s ease both;
+  }
+
+  .awa-fade-in-right {
+    animation: awaFadeInRight 0.35s ease both;
+  }
+
+  .awa-zoom-in {
+    animation: awaZoomIn 0.4s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  }
+
+  .awa-bounce-in-up {
+    animation: awaBounceInUp 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  }
+
+  /*
+   * Reduced motion: land every element in its final state immediately rather
+   * than leaving it stuck at the animation's opacity-0 start frame.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .awa-fade-in-up,
+    .awa-fade-in-left,
+    .awa-fade-in-right,
+    .awa-zoom-in,
+    .awa-bounce-in-up {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+}
+
+@layer utilities {
+  /*
+   * Replit's design-system ships `hover-elevate` / `active-elevate-2` as a
+   * plugin that isn't part of this workspace, so every Button and Badge lost
+   * its hover and press feedback. Re-implement them as a tint overlay that
+   * reads from the current foreground, so it darkens in light mode and
+   * lightens in dark mode without touching component colours.
+   */
+  .hover-elevate,
+  .active-elevate-2 {
+    position: relative;
+  }
+
+  .hover-elevate::after,
+  .active-elevate-2::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+  }
+
+  .hover-elevate:hover::after {
+    background-color: hsl(var(--foreground) / 0.06);
+  }
+
+  .active-elevate-2:active::after {
+    background-color: hsl(var(--foreground) / 0.12);
+  }
+
+  /* Thin scrollbar used by the sidebar and scrollable panels */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 99px;
   }
 }

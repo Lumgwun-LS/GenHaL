@@ -1,109 +1,155 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { useListGenhalTrees, useCreateGenhalTree } from '@workspace/api-client-react';
-import { Network, Plus, MapPin, Users, Loader2 } from 'lucide-react';
+import {
+  useListGenhalTrees,
+  useCreateGenhalTree,
+} from '@workspace/api-client-react';
+import {
+  Network,
+  Plus,
+  MapPin,
+  Users,
+  Loader2,
+  ChevronRight,
+} from 'lucide-react';
 import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalTreesQueryKey } from '@workspace/api-client-react';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { Reveal, stagger } from '@/components/reveal';
 
 export default function GenealogyList() {
   const { data: trees, isLoading } = useListGenhalTrees();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-serif font-bold text-foreground">Family Trees</h1>
-          <p className="text-muted-foreground mt-2 text-lg">Document your lineage and preserve your family history.</p>
-        </div>
-        
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="bg-primary hover:bg-primary/90 rounded-full shadow-md">
-              <Plus className="mr-2 h-5 w-5" />
-              Create Tree
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">Start a New Family Tree</DialogTitle>
-              <DialogDescription>
-                Begin documenting your ancestry. You can add members and rich details later.
-              </DialogDescription>
-            </DialogHeader>
-            <CreateTreeForm onSuccess={() => setIsCreateOpen(false)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Family Trees"
+        description="Document your lineage and preserve your family history."
+        actions={
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Create tree
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle>Start a new family tree</DialogTitle>
+                <DialogDescription>
+                  Begin documenting your ancestry. You can add members and
+                  richer details later.
+                </DialogDescription>
+              </DialogHeader>
+              <CreateTreeForm onSuccess={() => setIsCreateOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       {isLoading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <Card key={i} className="animate-pulse border-none shadow-sm h-64 bg-muted/50"></Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-56 rounded-xl" />
           ))}
         </div>
       ) : trees?.length === 0 ? (
-        <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border shadow-sm">
-          <div className="mx-auto w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-            <Network className="h-10 w-10 text-primary" />
-          </div>
-          <h3 className="text-2xl font-serif font-bold text-foreground">No trees yet</h3>
-          <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-            Your family's story is waiting to be told. Create your first family tree to begin tracing your roots.
-          </p>
-          <Button onClick={() => setIsCreateOpen(true)} className="mt-6 rounded-full bg-primary" size="lg">
-            Create Your First Tree
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Network className="h-5 w-5" />}
+          title="No trees yet"
+          description="Your family's story is waiting to be told. Create your first family tree to begin tracing your roots."
+          action={
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Create your first tree
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {trees?.map((tree) => (
-            <Link key={tree.id} href={`/genealogy/${tree.id}`}>
-              <Card className="h-full border-none shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group bg-card overflow-hidden flex flex-col">
-                <div className="h-32 bg-secondary/10 relative overflow-hidden group-hover:bg-secondary/20 transition-colors">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {trees?.map((tree, i) => (
+            <Reveal
+              key={tree.id}
+              animation="fade-up"
+              delay={stagger(i)}
+              className="h-full"
+            >
+              <Link href={`/genealogy/${tree.id}`} className="block h-full">
+                <div className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
                   {tree.coverImageUrl ? (
-                    <img src={tree.coverImageUrl} alt={tree.name} className="w-full h-full object-cover opacity-80 mix-blend-multiply" />
+                    <div className="h-28 w-full overflow-hidden bg-muted">
+                      <img
+                        src={tree.coverImageUrl}
+                        alt={tree.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
                   ) : (
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-overlay grayscale"></div>
+                    <div className="h-1 w-full bg-linear-to-r from-primary to-accent opacity-70" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                  <h3 className="absolute bottom-4 left-4 right-4 text-2xl font-serif font-bold text-white truncate">
-                    {tree.name}
-                  </h3>
-                </div>
-                <CardContent className="p-5 flex-1 space-y-4">
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {tree.description || "No description provided."}
-                  </p>
-                  
-                  <div className="flex flex-col gap-2 text-sm text-foreground/80 font-medium">
-                    {tree.originCountry && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        {tree.originEthnicGroup ? `${tree.originEthnicGroup}, ` : ''}{tree.originCountry}
+
+                  <div className="flex flex-1 flex-col gap-3 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Network className="h-5 w-5" />
                       </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-accent" />
-                      {tree.memberCount} members
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-semibold text-foreground">
+                          {tree.name}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                          {tree.description || 'No description provided.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto flex flex-wrap gap-2 text-xs font-medium">
+                      {tree.originCountry && (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {tree.originEthnicGroup
+                            ? `${tree.originEthnicGroup}, `
+                            : ''}
+                          {tree.originCountry}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        {tree.memberCount} members
+                      </span>
                     </div>
                   </div>
-                </CardContent>
-                <CardFooter className="px-5 py-4 border-t bg-muted/20 text-xs text-muted-foreground flex justify-between items-center">
-                  <span>Created {format(new Date(tree.createdAt), 'MMM yyyy')}</span>
-                  <span className="text-primary font-medium group-hover:underline">View Tree →</span>
-                </CardFooter>
-              </Card>
-            </Link>
+
+                  <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground">
+                    <span>
+                      Created {format(new Date(tree.createdAt), 'MMM yyyy')}
+                    </span>
+                    <span className="inline-flex items-center gap-1 font-medium text-primary">
+                      View tree
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            </Reveal>
           ))}
         </div>
       )}
@@ -115,83 +161,95 @@ function CreateTreeForm({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createTree = useCreateGenhalTree();
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     originCountry: '',
-    originEthnicGroup: ''
+    originEthnicGroup: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-    
-    createTree.mutate({ data: formData }, {
-      onSuccess: () => {
-        toast({
-          title: "Tree created",
-          description: "Your family tree has been created successfully.",
-        });
-        queryClient.invalidateQueries({ queryKey: getListGenhalTreesQueryKey() });
-        onSuccess();
+
+    createTree.mutate(
+      { data: formData },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Tree created',
+            description: 'Your family tree has been created successfully.',
+          });
+          queryClient.invalidateQueries({
+            queryKey: getListGenhalTreesQueryKey(),
+          });
+          onSuccess();
+        },
+        onError: () => {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description:
+              'Failed to create tree. Please make sure you are signed in.',
+          });
+        },
       },
-      onError: (err) => {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to create tree. Please make sure you are signed in.",
-        });
-      }
-    });
+    );
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
       <div className="space-y-2">
-        <Label htmlFor="name">Tree Name (e.g., The Okonkwo Family)</Label>
-        <Input 
-          id="name" 
+        <Label htmlFor="name">Tree name</Label>
+        <Input
+          id="name"
           value={formData.name}
-          onChange={(e) => setFormData({...formData, name: e.target.value})}
-          placeholder="Enter family name"
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="e.g. The Okonkwo Family"
           required
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description">Short Description (Optional)</Label>
-        <Textarea 
-          id="description" 
+        <Label htmlFor="description">Short description (optional)</Label>
+        <Textarea
+          id="description"
           value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
-          placeholder="A brief history or intro..."
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
+          placeholder="A brief history or intro…"
           rows={3}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="country">Origin Country</Label>
-          <Input 
-            id="country" 
+          <Label htmlFor="country">Origin country</Label>
+          <Input
+            id="country"
             value={formData.originCountry}
-            onChange={(e) => setFormData({...formData, originCountry: e.target.value})}
-            placeholder="e.g., Nigeria"
+            onChange={(e) =>
+              setFormData({ ...formData, originCountry: e.target.value })
+            }
+            placeholder="e.g. Nigeria"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="ethnicGroup">Ethnic Group</Label>
-          <Input 
-            id="ethnicGroup" 
+          <Label htmlFor="ethnicGroup">Ethnic group</Label>
+          <Input
+            id="ethnicGroup"
             value={formData.originEthnicGroup}
-            onChange={(e) => setFormData({...formData, originEthnicGroup: e.target.value})}
-            placeholder="e.g., Obolo, Igbo"
+            onChange={(e) =>
+              setFormData({ ...formData, originEthnicGroup: e.target.value })
+            }
+            placeholder="e.g. Obolo, Igbo"
           />
         </div>
       </div>
-      <div className="pt-4 flex justify-end">
-        <Button type="submit" disabled={createTree.isPending || !formData.name} className="bg-primary rounded-full px-8">
-          {createTree.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-          Create Tree
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="submit" disabled={createTree.isPending || !formData.name}>
+          {createTree.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Create tree
         </Button>
       </div>
     </form>
