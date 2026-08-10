@@ -1,26 +1,39 @@
 ---
-name: App Store custom-domain routing
-description: SPA built with non-root base path breaks when served at custom domain root — router base and API origin both need runtime hostname detection.
+name: App Store & GenHaL custom-domain routing
+description: How awajimaaappstore.com and genhal.awajimaa.com are routed in the monorepo deployment — host-router.mjs, standalone builds, and Wouter base detection.
 ---
 
-# App Store custom-domain routing
+## Rule
+In a Replit monorepo deployment, ALL custom domains map to the root `/` path. The vendor-hub's `host-router.mjs` runs at `/` and routes traffic to the correct static-file directory based on the `Host` header. GenHaL lives at `/genhal/` in dev but needs a standalone build (BASE_PATH=/) served at the domain root.
 
-## The rule
-When a Vite SPA is built with `base="/app-store/"` but served at a custom domain root (`awajimaaappstore.com/`), two things must detect the hostname at runtime:
+## host-router.mjs (artifacts/vendor-hub/host-router.mjs)
+Three static roots:
+- `awajimaaappstore.com` / `www.awajimaaappstore.com` → `artifacts/app-store/dist/standalone`
+- `genhal.awajimaa.com` / `www.genhal.awajimaa.com` → `artifacts/genhal-web/dist/standalone`
+- everything else → `artifacts/vendor-hub/dist/public` (Awa Biz Suite)
 
-1. **Router base** (`App.tsx`) — Wouter's `<Router base={basePath}>` must use `""` not `"/app-store"` on the custom domain, or every route matches nothing and the 404 component always renders.
-2. **API origin** (`lib/api.ts`) — relative `/api/store/…` calls land on the static-only custom-domain host, which serves `index.html` back. Must use the absolute origin `https://account.awajimaaai.com` on the custom domain.
+## Standalone builds
+Each domain-served SPA must have a `build:standalone` npm script that builds with `BASE_PATH=/` (no sub-path) into `dist/standalone/`:
+- App Store: `PORT=3000 BASE_PATH=/ vite build --outDir dist/standalone --emptyOutDir`
+- GenHaL:    `PORT=3000 BASE_PATH=/ vite build --outDir dist/standalone --emptyOutDir`
 
-## Why
-The Replit monorepo deployment routes `awajimaaappstore.com/*` to the app-store static artifact. That artifact has no `/api/` handler — all unmatched paths fall through to the SPA rewrite and return `index.html`. The primary domain `awajimaaai.com` routes normally to the API server.
-
-## How to apply
-Pattern used in `artifacts/app-store/src/App.tsx` and `artifacts/app-store/src/lib/api.ts`:
-```ts
-const _onCustomDomain =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'awajimaaappstore.com' ||
-    window.location.hostname === 'www.awajimaaappstore.com');
+## Production build command (vendor-hub artifact.toml)
 ```
-- In `App.tsx`: `const basePath = _onCustomDomain ? "" : _builtBase;`
-- In `api.ts`: use `https://account.awajimaaai.com` as origin when `_onCustomDomain` is true.
+build = ["sh", "-c", "pnpm --filter @workspace/vendor-hub run build && pnpm --filter @workspace/app-store run build:standalone && pnpm --filter @workspace/genhal-web run build:standalone"]
+```
+Any new domain-served SPA must be added to this chain.
+
+## In-app hostname detection
+Each SPA detects its custom domain at runtime and adjusts:
+- Wouter `base` → `""` (not the `/app-store/` or `/genhal/` sub-path)
+- API origin → same-origin `/api/...` still works because Replit's path routing intercepts `/api/*` before the host-router sees it
+
+GenHaL pattern (App.tsx):
+```ts
+const _onCustomDomain = window.location.hostname === 'genhal.awajimaa.com' || ...;
+const basePath = _onCustomDomain ? '' : _builtBase; // _builtBase = import.meta.env.BASE_URL
+```
+
+App Store pattern (App.tsx + lib/api.ts): same structure, plus API_ORIGIN switches to `https://api.awajimaaai.com` when on the custom domain.
+
+**Why:** Replit's custom-domain system attaches a domain to the entire deployment, not to a specific path. The host-router is the only place path→domain mapping can be done for static SPAs. Without the standalone build (BASE_PATH=/), asset links in index.html reference /genhal/assets/... which 404 when served at the domain root.

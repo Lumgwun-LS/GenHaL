@@ -14,7 +14,7 @@ localPort = 22220
 run = "pnpm --filter @workspace/vendor-hub run dev"
 
 [services.production]
-build = [ "sh", "-c", "pnpm --filter @workspace/vendor-hub run build && pnpm --filter @workspace/app-store run build:standalone" ]
+build = [ "sh", "-c", "pnpm --filter @workspace/vendor-hub run build && pnpm --filter @workspace/app-store run build:standalone && pnpm --filter @workspace/genhal-web run build:standalone" ]
 run = [ "node", "artifacts/vendor-hub/host-router.mjs" ]
 
 [services.env]
