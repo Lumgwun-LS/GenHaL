@@ -4,8 +4,11 @@ import {
   Crown, MapPin, Calendar, Plus, Trash2, Users, Building2, BookOpen,
   Flame, Sprout, TrendingUp, ChevronLeft, Loader2, X, Globe2, Star,
   Landmark, ShieldCheck, ChevronDown, ChevronUp, Vote, UserCheck,
-  Mountain, Home, ArrowRight,
+  Mountain, Home, ArrowRight, FileText, CreditCard,
 } from 'lucide-react';
+import VaultTab from '@/pages/vault/index';
+import MembersTab from '@/pages/members/index';
+import SubscriptionTab from '@/pages/subscription/index';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -148,14 +151,17 @@ export default function KingdomDetail() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="rounded-xl bg-muted/60 p-1 mb-8 flex flex-wrap h-auto gap-1">
             {[
-              { v:'overview',     l:'Overview' },
-              { v:'rulers',       l:`${kingdom.rulerTitle} Lineage` },
-              { v:'settlements',  l:`Towns & Villages` },
-              { v:'compounds',    l:'Compounds & Families' },
-              { v:'council',      l:'Council of Chiefs' },
-              { v:'cdc',          l:'CDC' },
-              { v:'heritage',     l:'Heritage' },
-              { v:'resources',    l:'Resources' },
+              { v:'overview',      l:'Overview' },
+              { v:'rulers',        l:`${kingdom.rulerTitle} Lineage` },
+              { v:'settlements',   l:'Towns & Villages' },
+              { v:'compounds',     l:'Compounds & Families' },
+              { v:'council',       l:'Council of Chiefs' },
+              { v:'cdc',           l:'CDC' },
+              { v:'heritage',      l:'Heritage' },
+              { v:'resources',     l:'Resources' },
+              { v:'vault',         l:'📂 Vault' },
+              { v:'members',       l:'👥 Members' },
+              { v:'subscription',  l:'💳 Plan' },
             ].map(t=><TabsTrigger key={t.v} value={t.v} className="rounded-lg text-xs">{t.l}</TabsTrigger>)}
           </TabsList>
 
@@ -431,10 +437,24 @@ export default function KingdomDetail() {
               </div>
             )}
           </TabsContent>
+
+          {/* ── VAULT ── */}
+          <TabsContent value="vault" className="px-6 md:px-10 py-6">
+            <VaultTab unitType="kingdom" unitId={kingdom.id} kingdomId={kingdom.id} />
+          </TabsContent>
+
+          {/* ── MEMBERS ── */}
+          <TabsContent value="members" className="px-6 md:px-10 py-6">
+            <MembersTab unitType="kingdom" unitId={kingdom.id} rulerTitle={kingdom.rulerTitle} />
+          </TabsContent>
+
+          {/* ── SUBSCRIPTION ── */}
+          <TabsContent value="subscription" className="px-6 md:px-10 py-6">
+            <SubscriptionTab unitType="kingdom" unitId={kingdom.id} />
+          </TabsContent>
         </Tabs>
       </div>
 
-      {/* ── Dialogs ── */}
       {dlg==='ruler'   && <RulerDialog    open onClose={()=>setDlg(null)} kingdomId={Number(id)} rulerTitle={kingdom.rulerTitle} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
       {dlg==='town'    && <TownDialog     open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} onSuccess={()=>{setDlg(null);load()}}/>}
       {dlg==='village' && <VillageDialog  open onClose={()=>setDlg(null)} kingdomId={Number(id)} base={base} towns={kingdom.towns} defaultTownId={selectedCompound?.id} onSuccess={()=>{setDlg(null);load()}}/>}
