@@ -40,4 +40,36 @@ export const genhalFamilyWillsTable = pgTable("genhal_family_wills", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   revokedAt: timestamp("revoked_at"),
+
+  // ── Recovery / executor system ────────────────────────────────────────────
+  /** 'passphrase' (legacy) | 'split-key' (new — has executor recovery codes) */
+  contentKeyScheme:    text("content_key_scheme").notNull().default("passphrase"),
+  /** JSON: [{name, email}] — named executors, each emailed a recovery code */
+  executors:           text("executors").notNull().default("[]"),
+  /**
+   * Owner key envelope (JSON: {encrypted, iv, salt, authTag}).
+   * The random 32-byte content key, wrapped with the owner's passphrase via PBKDF2.
+   * Only present when contentKeyScheme === 'split-key'.
+   */
+  ownerKeyEnvelope:    text("owner_key_envelope"),
+  /**
+   * Recovery key envelope (JSON: {encrypted, iv, salt, authTag}).
+   * The content key wrapped with the one-time recovery code via PBKDF2.
+   * Allows named executors to decrypt the will without the owner's passphrase.
+   */
+  recoveryKeyEnvelope: text("recovery_key_envelope"),
+  /**
+   * Platform escrow key envelope (JSON: {encrypted, iv, authTag}).
+   * The content key wrapped with WILL_PLATFORM_MASTER_KEY (env var, never in DB).
+   * Admin-only last resort — requires death cert verification before unlocking.
+   */
+  platformKeyEnvelope: text("platform_key_envelope"),
+
+  // Admin escrow unlock workflow
+  deathCertUrl:           text("death_cert_url"),
+  deathCertSubmittedAt:   timestamp("death_cert_submitted_at"),
+  deathCertSubmittedBy:   text("death_cert_submitted_by"),   // clerk user id
+  adminEscrowGrantedAt:   timestamp("admin_escrow_granted_at"),
+  adminEscrowGrantedBy:   text("admin_escrow_granted_by"),   // admin clerk user id
+  adminEscrowForClerk:    text("admin_escrow_for_clerk"),    // who may use the escrow path
 });
