@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/genhal/"
+title = "GenHaL — Genealogy · Heritage · Language"
+description = "GenHaL is a Pan-African AI platform for preserving and exploring family genealogy, cultural heritage, and indigenous languages. It lets users build interactive family trees, document community history with photos and oral recordings, maintain living dictionaries for African languages (including Obolo), and uses AI to generate heritage stories, translate languages, and caption cultural media."
+version = "1.0.0"
+id = "artifacts/genhal-web"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/genhal/" ]
+localPort = 21353
+
+[services.development]
+run = "pnpm --filter @workspace/genhal-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/genhal-web", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/genhal-web/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21353"
+BASE_PATH = "/genhal/"

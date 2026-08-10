@@ -69,6 +69,9 @@ export interface Vendor {
   /** @nullable */
   dateOfBirth?: string | null;
   voiceCallOptOut?: boolean;
+  socialAppendWebsite?: boolean;
+  socialAppendAppLink?: boolean;
+  socialAppendBlogLink?: boolean;
 }
 
 export interface VendorOnboardingInput {
@@ -113,6 +116,9 @@ export interface VendorUpdate {
   announcementEmailOptOut?: boolean;
   /** Minutes before scheduledAt that the pre-publish reminder fires. Supported values: 15, 30, 60, 240, 1440. */
   postReminderLeadMinutes?: number;
+  socialAppendWebsite?: boolean;
+  socialAppendAppLink?: boolean;
+  socialAppendBlogLink?: boolean;
 }
 
 export interface DeletionEligibility {
@@ -1496,8 +1502,6 @@ export interface Lead {
   visitorToken?: string | null;
   pageViews: number;
   /** @nullable */
-  dateOfBirth?: string | null;
-  /** @nullable */
   firstSeenAt?: string | null;
   /** @nullable */
   lastSeenAt?: string | null;
@@ -1531,7 +1535,6 @@ export interface LeadUpdate {
   notes?: string;
   score?: number;
   channel?: string;
-  dateOfBirth?: string | null;
 }
 
 export type PersonActivityData = { [key: string]: unknown };
@@ -2139,16 +2142,6 @@ export interface AdCampaign {
   platformAdId?: string | null;
   /** @nullable */
   lastPublishError?: string | null;
-  /** @nullable */
-  productId?: number | null;
-  /** @nullable */
-  destinationUrl?: string | null;
-  /** @nullable */
-  utmSource?: string | null;
-  /** @nullable */
-  utmMedium?: string | null;
-  /** @nullable */
-  utmCampaign?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2168,11 +2161,6 @@ export interface AdCampaignInput {
   body?: string;
   cta?: string;
   imageUrl?: string;
-  productId?: number;
-  destinationUrl?: string;
-  utmSource?: string;
-  utmMedium?: string;
-  utmCampaign?: string;
 }
 
 export type AdCampaignUpdateAudienceJson = { [key: string]: unknown };
@@ -2187,11 +2175,6 @@ export interface AdCampaignUpdate {
   startDate?: string;
   endDate?: string;
   audienceJson?: AdCampaignUpdateAudienceJson;
-  productId?: number | null;
-  destinationUrl?: string | null;
-  utmSource?: string | null;
-  utmMedium?: string | null;
-  utmCampaign?: string | null;
 }
 
 export interface AdCreative {
@@ -2666,6 +2649,284 @@ export interface ContentLibraryItemInput {
   imageUrl?: string | null;
 }
 
+export type GenhalDashboardRecentActivityItem = {
+  type: string;
+  description: string;
+  createdAt: string;
+};
+
+export interface GenhalDashboard {
+  totalTrees: number;
+  totalMembers: number;
+  totalCommunities: number;
+  totalHeritagePosts: number;
+  totalLanguages: number;
+  totalEntries: number;
+  totalAiGenerations: number;
+  recentActivity: GenhalDashboardRecentActivityItem[];
+}
+
+export interface GenhalTree {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  originCountry?: string | null;
+  /** @nullable */
+  originEthnicGroup?: string | null;
+  /** @nullable */
+  coverImageUrl?: string | null;
+  memberCount: number;
+  clerkUserId: string;
+  createdAt: string;
+}
+
+export interface GenhalTreeInput {
+  name: string;
+  description?: string;
+  originCountry?: string;
+  originEthnicGroup?: string;
+  coverImageUrl?: string;
+}
+
+export interface GenhalTreeUpdate {
+  name?: string;
+  description?: string;
+  originCountry?: string;
+  originEthnicGroup?: string;
+  coverImageUrl?: string;
+}
+
+export interface GenhalTreeMember {
+  id: number;
+  treeId: number;
+  firstName: string;
+  /** @nullable */
+  lastName?: string | null;
+  gender: string;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  deathDate?: string | null;
+  /** @nullable */
+  birthPlace?: string | null;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  photoUrl?: string | null;
+  /** @nullable */
+  parentId?: number | null;
+  /** @nullable */
+  spouseId?: number | null;
+  /** @nullable */
+  relationship?: string | null;
+  isLiving?: boolean;
+  createdAt: string;
+}
+
+export interface GenhalTreeDetail {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  originCountry?: string | null;
+  /** @nullable */
+  originEthnicGroup?: string | null;
+  /** @nullable */
+  coverImageUrl?: string | null;
+  memberCount: number;
+  clerkUserId: string;
+  members: GenhalTreeMember[];
+  createdAt: string;
+}
+
+export interface GenhalTreeMemberInput {
+  firstName: string;
+  lastName?: string;
+  gender: string;
+  birthDate?: string;
+  deathDate?: string;
+  birthPlace?: string;
+  bio?: string;
+  photoUrl?: string;
+  parentId?: number;
+  spouseId?: number;
+  relationship?: string;
+  isLiving?: boolean;
+}
+
+export interface GenhalTreeMemberUpdate {
+  firstName?: string;
+  lastName?: string;
+  gender?: string;
+  birthDate?: string;
+  deathDate?: string;
+  birthPlace?: string;
+  bio?: string;
+  photoUrl?: string;
+  parentId?: number;
+  spouseId?: number;
+  relationship?: string;
+  isLiving?: boolean;
+}
+
+export interface GenhalCommunity {
+  id: number;
+  name: string;
+  country: string;
+  ethnicGroup: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  coverImageUrl?: string | null;
+  postCount: number;
+  memberCount: number;
+  /** @nullable */
+  clerkUserId?: string | null;
+  createdAt: string;
+}
+
+export interface GenhalCommunityInput {
+  name: string;
+  country: string;
+  ethnicGroup: string;
+  description?: string;
+  coverImageUrl?: string;
+}
+
+export interface GenhalCommunityUpdate {
+  name?: string;
+  country?: string;
+  ethnicGroup?: string;
+  description?: string;
+  coverImageUrl?: string;
+}
+
+export interface GenhalHeritagePost {
+  id: number;
+  communityId: number;
+  /** @nullable */
+  communityName?: string | null;
+  title: string;
+  /** @nullable */
+  body?: string | null;
+  type: string;
+  /** @nullable */
+  mediaUrl?: string | null;
+  /** @nullable */
+  audioUrl?: string | null;
+  tags?: string[];
+  clerkUserId: string;
+  /** @nullable */
+  authorName?: string | null;
+  createdAt: string;
+}
+
+export interface GenhalHeritagePostInput {
+  title: string;
+  body?: string;
+  type: string;
+  mediaUrl?: string;
+  audioUrl?: string;
+  tags?: string[];
+}
+
+export interface GenhalLanguage {
+  code: string;
+  name: string;
+  nativeName: string;
+  country: string;
+  /** @nullable */
+  region?: string | null;
+  /** @nullable */
+  speakerCount?: string | null;
+  entryCount: number;
+  /** @nullable */
+  flagEmoji?: string | null;
+}
+
+export interface GenhalLanguageEntry {
+  id: number;
+  languageCode: string;
+  word: string;
+  translation: string;
+  /** @nullable */
+  pronunciation?: string | null;
+  /** @nullable */
+  partOfSpeech?: string | null;
+  /** @nullable */
+  example?: string | null;
+  /** @nullable */
+  exampleTranslation?: string | null;
+  /** @nullable */
+  audioUrl?: string | null;
+  /** @nullable */
+  dialect?: string | null;
+  /** @nullable */
+  clerkUserId?: string | null;
+  createdAt: string;
+}
+
+export interface GenhalLanguageEntryInput {
+  word: string;
+  translation: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  example?: string;
+  exampleTranslation?: string;
+  audioUrl?: string;
+  dialect?: string;
+}
+
+export interface GenhalLanguageEntryUpdate {
+  word?: string;
+  translation?: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  example?: string;
+  exampleTranslation?: string;
+  audioUrl?: string;
+  dialect?: string;
+}
+
+export type GenhalAiGenerationMetadata = { [key: string]: unknown } | null;
+
+export interface GenhalAiGeneration {
+  id: number;
+  type: string;
+  /** @nullable */
+  prompt?: string | null;
+  result: string;
+  metadata?: GenhalAiGenerationMetadata;
+  clerkUserId: string;
+  createdAt: string;
+}
+
+export interface GenhalAiStoryInput {
+  storyType: string;
+  treeId?: number;
+  memberId?: number;
+  communityId?: number;
+  customPrompt?: string;
+  language?: string;
+}
+
+export interface GenhalAiTranslateInput {
+  text: string;
+  sourceLanguage?: string;
+  targetLanguage: string;
+  context?: string;
+}
+
+export interface GenhalAiCaptionInput {
+  imageUrl: string;
+  communityId?: number;
+  context?: string;
+  language?: string;
+}
+
 export type ListVendorsParams = {
 search?: string;
 industry?: string;
@@ -2948,5 +3209,14 @@ export type DeleteVendorAdAccount200 = {
 
 export type ListContentLibraryParams = {
 vendorId: number;
+};
+
+export type ListGenhalHeritageFeedParams = {
+limit?: number;
+};
+
+export type ListGenhalCommunitiesParams = {
+country?: string;
+search?: string;
 };
 

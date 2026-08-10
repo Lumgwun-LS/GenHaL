@@ -102,3 +102,12 @@ export * from "./vendor-tasks";
 export * from "./blog-posts";
 export * from "./blog-comments";
 export * from "./blog-commenter-bans";
+
+// GenHaL — Genealogy · Heritage · Language
+export * from "./genhal-trees";
+export * from "./genhal-tree-members";
+export * from "./genhal-communities";
+export * from "./genhal-heritage-posts";
+export * from "./genhal-languages";
+export * from "./genhal-language-entries";
+export * from "./genhal-ai-generations";

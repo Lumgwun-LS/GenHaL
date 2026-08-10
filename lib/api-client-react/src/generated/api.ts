@@ -114,6 +114,27 @@ import type {
   FinanceOverviewAnalytics,
   GenerateAiContentInput,
   GenerateAiContentResult,
+  GenhalAiCaptionInput,
+  GenhalAiGeneration,
+  GenhalAiStoryInput,
+  GenhalAiTranslateInput,
+  GenhalCommunity,
+  GenhalCommunityInput,
+  GenhalCommunityUpdate,
+  GenhalDashboard,
+  GenhalHeritagePost,
+  GenhalHeritagePostInput,
+  GenhalLanguage,
+  GenhalLanguageEntry,
+  GenhalLanguageEntryInput,
+  GenhalLanguageEntryUpdate,
+  GenhalTree,
+  GenhalTreeDetail,
+  GenhalTreeInput,
+  GenhalTreeMember,
+  GenhalTreeMemberInput,
+  GenhalTreeMemberUpdate,
+  GenhalTreeUpdate,
   GetAdminDemographicsAnalyticsParams,
   GetAdminFinanceRollupAnalyticsParams,
   GetAdminMessageHistoryParams,
@@ -151,6 +172,8 @@ import type {
   ListContentLibraryParams,
   ListEmailCampaignsParams,
   ListExpensesParams,
+  ListGenhalCommunitiesParams,
+  ListGenhalHeritageFeedParams,
   ListInventoryTransactionsParams,
   ListInvestmentsParams,
   ListLeadsParams,
@@ -16630,4 +16653,1930 @@ export const useSaveContentLibraryItem = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSaveContentLibraryItemMutationOptions(options));
     }
+
+export const getGetGenhalDashboardUrl = () => {
+
+
+
+
+  return `/api/genhal/dashboard`
+}
+
+/**
+ * @summary GenHaL platform overview — totals across all pillars
+ */
+export const getGenhalDashboard = async ( options?: RequestInit): Promise<GenhalDashboard> => {
+
+  return customFetch<GenhalDashboard>(getGetGenhalDashboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGenhalDashboardQueryKey = () => {
+    return [
+    `/api/genhal/dashboard`
+    ] as const;
+    }
+
+
+export const getGetGenhalDashboardQueryOptions = <TData = Awaited<ReturnType<typeof getGenhalDashboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGenhalDashboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGenhalDashboard>>> = ({ signal }) => getGenhalDashboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGenhalDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGenhalDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof getGenhalDashboard>>>
+export type GetGenhalDashboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary GenHaL platform overview — totals across all pillars
+ */
+
+export function useGetGenhalDashboard<TData = Awaited<ReturnType<typeof getGenhalDashboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGenhalDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGenhalTreesUrl = () => {
+
+
+
+
+  return `/api/genhal/trees`
+}
+
+/**
+ * @summary List family trees for the signed-in user
+ */
+export const listGenhalTrees = async ( options?: RequestInit): Promise<GenhalTree[]> => {
+
+  return customFetch<GenhalTree[]>(getListGenhalTreesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalTreesQueryKey = () => {
+    return [
+    `/api/genhal/trees`
+    ] as const;
+    }
+
+
+export const getListGenhalTreesQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalTrees>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalTrees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalTreesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalTrees>>> = ({ signal }) => listGenhalTrees({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalTrees>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalTreesQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalTrees>>>
+export type ListGenhalTreesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List family trees for the signed-in user
+ */
+
+export function useListGenhalTrees<TData = Awaited<ReturnType<typeof listGenhalTrees>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalTrees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalTreesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGenhalTreeUrl = () => {
+
+
+
+
+  return `/api/genhal/trees`
+}
+
+/**
+ * @summary Create a new family tree
+ */
+export const createGenhalTree = async (genhalTreeInput: GenhalTreeInput, options?: RequestInit): Promise<GenhalTree> => {
+
+  return customFetch<GenhalTree>(getCreateGenhalTreeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalTreeInput)
+  }
+);}
+
+
+
+
+export const getCreateGenhalTreeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalTree>>, TError,{data: BodyType<GenhalTreeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGenhalTree>>, TError,{data: BodyType<GenhalTreeInput>}, TContext> => {
+
+const mutationKey = ['createGenhalTree'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGenhalTree>>, {data: BodyType<GenhalTreeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGenhalTree(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGenhalTreeMutationResult = NonNullable<Awaited<ReturnType<typeof createGenhalTree>>>
+    export type CreateGenhalTreeMutationBody = BodyType<GenhalTreeInput>
+    export type CreateGenhalTreeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a new family tree
+ */
+export const useCreateGenhalTree = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalTree>>, TError,{data: BodyType<GenhalTreeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGenhalTree>>,
+        TError,
+        {data: BodyType<GenhalTreeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGenhalTreeMutationOptions(options));
+    }
+
+export const getGetGenhalTreeUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}`
+}
+
+/**
+ * @summary Get a family tree with all members
+ */
+export const getGenhalTree = async (id: number, options?: RequestInit): Promise<GenhalTreeDetail> => {
+
+  return customFetch<GenhalTreeDetail>(getGetGenhalTreeUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGenhalTreeQueryKey = (id: number,) => {
+    return [
+    `/api/genhal/trees/${id}`
+    ] as const;
+    }
+
+
+export const getGetGenhalTreeQueryOptions = <TData = Awaited<ReturnType<typeof getGenhalTree>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalTree>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGenhalTreeQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGenhalTree>>> = ({ signal }) => getGenhalTree(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGenhalTree>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGenhalTreeQueryResult = NonNullable<Awaited<ReturnType<typeof getGenhalTree>>>
+export type GetGenhalTreeQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a family tree with all members
+ */
+
+export function useGetGenhalTree<TData = Awaited<ReturnType<typeof getGenhalTree>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalTree>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGenhalTreeQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateGenhalTreeUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}`
+}
+
+/**
+ * @summary Update a family tree
+ */
+export const updateGenhalTree = async (id: number,
+    genhalTreeUpdate: GenhalTreeUpdate, options?: RequestInit): Promise<GenhalTree> => {
+
+  return customFetch<GenhalTree>(getUpdateGenhalTreeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalTreeUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateGenhalTreeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTree>>, TError,{id: number;data: BodyType<GenhalTreeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTree>>, TError,{id: number;data: BodyType<GenhalTreeUpdate>}, TContext> => {
+
+const mutationKey = ['updateGenhalTree'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGenhalTree>>, {id: number;data: BodyType<GenhalTreeUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateGenhalTree(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGenhalTreeMutationResult = NonNullable<Awaited<ReturnType<typeof updateGenhalTree>>>
+    export type UpdateGenhalTreeMutationBody = BodyType<GenhalTreeUpdate>
+    export type UpdateGenhalTreeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a family tree
+ */
+export const useUpdateGenhalTree = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTree>>, TError,{id: number;data: BodyType<GenhalTreeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGenhalTree>>,
+        TError,
+        {id: number;data: BodyType<GenhalTreeUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateGenhalTreeMutationOptions(options));
+    }
+
+export const getDeleteGenhalTreeUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}`
+}
+
+/**
+ * @summary Delete a family tree
+ */
+export const deleteGenhalTree = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteGenhalTreeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGenhalTreeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTree>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTree>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteGenhalTree'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGenhalTree>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteGenhalTree(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGenhalTreeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGenhalTree>>>
+
+    export type DeleteGenhalTreeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a family tree
+ */
+export const useDeleteGenhalTree = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTree>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGenhalTree>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGenhalTreeMutationOptions(options));
+    }
+
+export const getListGenhalTreeMembersUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}/members`
+}
+
+/**
+ * @summary List members of a family tree
+ */
+export const listGenhalTreeMembers = async (id: number, options?: RequestInit): Promise<GenhalTreeMember[]> => {
+
+  return customFetch<GenhalTreeMember[]>(getListGenhalTreeMembersUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalTreeMembersQueryKey = (id: number,) => {
+    return [
+    `/api/genhal/trees/${id}/members`
+    ] as const;
+    }
+
+
+export const getListGenhalTreeMembersQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalTreeMembers>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalTreeMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalTreeMembersQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalTreeMembers>>> = ({ signal }) => listGenhalTreeMembers(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalTreeMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalTreeMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalTreeMembers>>>
+export type ListGenhalTreeMembersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List members of a family tree
+ */
+
+export function useListGenhalTreeMembers<TData = Awaited<ReturnType<typeof listGenhalTreeMembers>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalTreeMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalTreeMembersQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAddGenhalTreeMemberUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}/members`
+}
+
+/**
+ * @summary Add a member to a family tree
+ */
+export const addGenhalTreeMember = async (id: number,
+    genhalTreeMemberInput: GenhalTreeMemberInput, options?: RequestInit): Promise<GenhalTreeMember> => {
+
+  return customFetch<GenhalTreeMember>(getAddGenhalTreeMemberUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalTreeMemberInput)
+  }
+);}
+
+
+
+
+export const getAddGenhalTreeMemberMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addGenhalTreeMember>>, TError,{id: number;data: BodyType<GenhalTreeMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addGenhalTreeMember>>, TError,{id: number;data: BodyType<GenhalTreeMemberInput>}, TContext> => {
+
+const mutationKey = ['addGenhalTreeMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addGenhalTreeMember>>, {id: number;data: BodyType<GenhalTreeMemberInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addGenhalTreeMember(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddGenhalTreeMemberMutationResult = NonNullable<Awaited<ReturnType<typeof addGenhalTreeMember>>>
+    export type AddGenhalTreeMemberMutationBody = BodyType<GenhalTreeMemberInput>
+    export type AddGenhalTreeMemberMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a member to a family tree
+ */
+export const useAddGenhalTreeMember = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addGenhalTreeMember>>, TError,{id: number;data: BodyType<GenhalTreeMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addGenhalTreeMember>>,
+        TError,
+        {id: number;data: BodyType<GenhalTreeMemberInput>},
+        TContext
+      > => {
+      return useMutation(getAddGenhalTreeMemberMutationOptions(options));
+    }
+
+export const getUpdateGenhalTreeMemberUrl = (id: number,
+    memberId: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}/members/${memberId}`
+}
+
+/**
+ * @summary Update a tree member
+ */
+export const updateGenhalTreeMember = async (id: number,
+    memberId: number,
+    genhalTreeMemberUpdate: GenhalTreeMemberUpdate, options?: RequestInit): Promise<GenhalTreeMember> => {
+
+  return customFetch<GenhalTreeMember>(getUpdateGenhalTreeMemberUrl(id,memberId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalTreeMemberUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateGenhalTreeMemberMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTreeMember>>, TError,{id: number;memberId: number;data: BodyType<GenhalTreeMemberUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTreeMember>>, TError,{id: number;memberId: number;data: BodyType<GenhalTreeMemberUpdate>}, TContext> => {
+
+const mutationKey = ['updateGenhalTreeMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGenhalTreeMember>>, {id: number;memberId: number;data: BodyType<GenhalTreeMemberUpdate>}> = (props) => {
+          const {id,memberId,data} = props ?? {};
+
+          return  updateGenhalTreeMember(id,memberId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGenhalTreeMemberMutationResult = NonNullable<Awaited<ReturnType<typeof updateGenhalTreeMember>>>
+    export type UpdateGenhalTreeMemberMutationBody = BodyType<GenhalTreeMemberUpdate>
+    export type UpdateGenhalTreeMemberMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a tree member
+ */
+export const useUpdateGenhalTreeMember = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalTreeMember>>, TError,{id: number;memberId: number;data: BodyType<GenhalTreeMemberUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGenhalTreeMember>>,
+        TError,
+        {id: number;memberId: number;data: BodyType<GenhalTreeMemberUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateGenhalTreeMemberMutationOptions(options));
+    }
+
+export const getDeleteGenhalTreeMemberUrl = (id: number,
+    memberId: number,) => {
+
+
+
+
+  return `/api/genhal/trees/${id}/members/${memberId}`
+}
+
+/**
+ * @summary Remove a member from a tree
+ */
+export const deleteGenhalTreeMember = async (id: number,
+    memberId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteGenhalTreeMemberUrl(id,memberId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGenhalTreeMemberMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTreeMember>>, TError,{id: number;memberId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTreeMember>>, TError,{id: number;memberId: number}, TContext> => {
+
+const mutationKey = ['deleteGenhalTreeMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGenhalTreeMember>>, {id: number;memberId: number}> = (props) => {
+          const {id,memberId} = props ?? {};
+
+          return  deleteGenhalTreeMember(id,memberId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGenhalTreeMemberMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGenhalTreeMember>>>
+
+    export type DeleteGenhalTreeMemberMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a member from a tree
+ */
+export const useDeleteGenhalTreeMember = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalTreeMember>>, TError,{id: number;memberId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGenhalTreeMember>>,
+        TError,
+        {id: number;memberId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGenhalTreeMemberMutationOptions(options));
+    }
+
+export const getListGenhalHeritageFeedUrl = (params?: ListGenhalHeritageFeedParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/genhal/heritage/feed?${stringifiedParams}` : `/api/genhal/heritage/feed`
+}
+
+/**
+ * @summary Recent heritage posts across all communities
+ */
+export const listGenhalHeritageFeed = async (params?: ListGenhalHeritageFeedParams, options?: RequestInit): Promise<GenhalHeritagePost[]> => {
+
+  return customFetch<GenhalHeritagePost[]>(getListGenhalHeritageFeedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalHeritageFeedQueryKey = (params?: ListGenhalHeritageFeedParams,) => {
+    return [
+    `/api/genhal/heritage/feed`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGenhalHeritageFeedQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalHeritageFeed>>, TError = ErrorType<unknown>>(params?: ListGenhalHeritageFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalHeritageFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalHeritageFeedQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalHeritageFeed>>> = ({ signal }) => listGenhalHeritageFeed(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalHeritageFeed>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalHeritageFeedQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalHeritageFeed>>>
+export type ListGenhalHeritageFeedQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Recent heritage posts across all communities
+ */
+
+export function useListGenhalHeritageFeed<TData = Awaited<ReturnType<typeof listGenhalHeritageFeed>>, TError = ErrorType<unknown>>(
+ params?: ListGenhalHeritageFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalHeritageFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalHeritageFeedQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGenhalCommunitiesUrl = (params?: ListGenhalCommunitiesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/genhal/communities?${stringifiedParams}` : `/api/genhal/communities`
+}
+
+/**
+ * @summary List heritage communities
+ */
+export const listGenhalCommunities = async (params?: ListGenhalCommunitiesParams, options?: RequestInit): Promise<GenhalCommunity[]> => {
+
+  return customFetch<GenhalCommunity[]>(getListGenhalCommunitiesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalCommunitiesQueryKey = (params?: ListGenhalCommunitiesParams,) => {
+    return [
+    `/api/genhal/communities`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGenhalCommunitiesQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalCommunities>>, TError = ErrorType<unknown>>(params?: ListGenhalCommunitiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalCommunitiesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalCommunities>>> = ({ signal }) => listGenhalCommunities(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunities>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalCommunitiesQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalCommunities>>>
+export type ListGenhalCommunitiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List heritage communities
+ */
+
+export function useListGenhalCommunities<TData = Awaited<ReturnType<typeof listGenhalCommunities>>, TError = ErrorType<unknown>>(
+ params?: ListGenhalCommunitiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalCommunitiesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGenhalCommunityUrl = () => {
+
+
+
+
+  return `/api/genhal/communities`
+}
+
+/**
+ * @summary Create a heritage community
+ */
+export const createGenhalCommunity = async (genhalCommunityInput: GenhalCommunityInput, options?: RequestInit): Promise<GenhalCommunity> => {
+
+  return customFetch<GenhalCommunity>(getCreateGenhalCommunityUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalCommunityInput)
+  }
+);}
+
+
+
+
+export const getCreateGenhalCommunityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalCommunity>>, TError,{data: BodyType<GenhalCommunityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGenhalCommunity>>, TError,{data: BodyType<GenhalCommunityInput>}, TContext> => {
+
+const mutationKey = ['createGenhalCommunity'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGenhalCommunity>>, {data: BodyType<GenhalCommunityInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGenhalCommunity(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGenhalCommunityMutationResult = NonNullable<Awaited<ReturnType<typeof createGenhalCommunity>>>
+    export type CreateGenhalCommunityMutationBody = BodyType<GenhalCommunityInput>
+    export type CreateGenhalCommunityMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a heritage community
+ */
+export const useCreateGenhalCommunity = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalCommunity>>, TError,{data: BodyType<GenhalCommunityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGenhalCommunity>>,
+        TError,
+        {data: BodyType<GenhalCommunityInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGenhalCommunityMutationOptions(options));
+    }
+
+export const getGetGenhalCommunityUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/communities/${id}`
+}
+
+/**
+ * @summary Get a heritage community
+ */
+export const getGenhalCommunity = async (id: number, options?: RequestInit): Promise<GenhalCommunity> => {
+
+  return customFetch<GenhalCommunity>(getGetGenhalCommunityUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGenhalCommunityQueryKey = (id: number,) => {
+    return [
+    `/api/genhal/communities/${id}`
+    ] as const;
+    }
+
+
+export const getGetGenhalCommunityQueryOptions = <TData = Awaited<ReturnType<typeof getGenhalCommunity>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalCommunity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGenhalCommunityQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGenhalCommunity>>> = ({ signal }) => getGenhalCommunity(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGenhalCommunity>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGenhalCommunityQueryResult = NonNullable<Awaited<ReturnType<typeof getGenhalCommunity>>>
+export type GetGenhalCommunityQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a heritage community
+ */
+
+export function useGetGenhalCommunity<TData = Awaited<ReturnType<typeof getGenhalCommunity>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGenhalCommunity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGenhalCommunityQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateGenhalCommunityUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/communities/${id}`
+}
+
+/**
+ * @summary Update a heritage community
+ */
+export const updateGenhalCommunity = async (id: number,
+    genhalCommunityUpdate: GenhalCommunityUpdate, options?: RequestInit): Promise<GenhalCommunity> => {
+
+  return customFetch<GenhalCommunity>(getUpdateGenhalCommunityUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalCommunityUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateGenhalCommunityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalCommunity>>, TError,{id: number;data: BodyType<GenhalCommunityUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGenhalCommunity>>, TError,{id: number;data: BodyType<GenhalCommunityUpdate>}, TContext> => {
+
+const mutationKey = ['updateGenhalCommunity'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGenhalCommunity>>, {id: number;data: BodyType<GenhalCommunityUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateGenhalCommunity(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGenhalCommunityMutationResult = NonNullable<Awaited<ReturnType<typeof updateGenhalCommunity>>>
+    export type UpdateGenhalCommunityMutationBody = BodyType<GenhalCommunityUpdate>
+    export type UpdateGenhalCommunityMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a heritage community
+ */
+export const useUpdateGenhalCommunity = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalCommunity>>, TError,{id: number;data: BodyType<GenhalCommunityUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGenhalCommunity>>,
+        TError,
+        {id: number;data: BodyType<GenhalCommunityUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateGenhalCommunityMutationOptions(options));
+    }
+
+export const getListGenhalCommunityPostsUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/communities/${id}/posts`
+}
+
+/**
+ * @summary List heritage posts in a community
+ */
+export const listGenhalCommunityPosts = async (id: number, options?: RequestInit): Promise<GenhalHeritagePost[]> => {
+
+  return customFetch<GenhalHeritagePost[]>(getListGenhalCommunityPostsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalCommunityPostsQueryKey = (id: number,) => {
+    return [
+    `/api/genhal/communities/${id}/posts`
+    ] as const;
+    }
+
+
+export const getListGenhalCommunityPostsQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalCommunityPosts>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunityPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalCommunityPostsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalCommunityPosts>>> = ({ signal }) => listGenhalCommunityPosts(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunityPosts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalCommunityPostsQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalCommunityPosts>>>
+export type ListGenhalCommunityPostsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List heritage posts in a community
+ */
+
+export function useListGenhalCommunityPosts<TData = Awaited<ReturnType<typeof listGenhalCommunityPosts>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalCommunityPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalCommunityPostsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGenhalHeritagePostUrl = (id: number,) => {
+
+
+
+
+  return `/api/genhal/communities/${id}/posts`
+}
+
+/**
+ * @summary Add a heritage post to a community
+ */
+export const createGenhalHeritagePost = async (id: number,
+    genhalHeritagePostInput: GenhalHeritagePostInput, options?: RequestInit): Promise<GenhalHeritagePost> => {
+
+  return customFetch<GenhalHeritagePost>(getCreateGenhalHeritagePostUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalHeritagePostInput)
+  }
+);}
+
+
+
+
+export const getCreateGenhalHeritagePostMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalHeritagePost>>, TError,{id: number;data: BodyType<GenhalHeritagePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGenhalHeritagePost>>, TError,{id: number;data: BodyType<GenhalHeritagePostInput>}, TContext> => {
+
+const mutationKey = ['createGenhalHeritagePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGenhalHeritagePost>>, {id: number;data: BodyType<GenhalHeritagePostInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createGenhalHeritagePost(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGenhalHeritagePostMutationResult = NonNullable<Awaited<ReturnType<typeof createGenhalHeritagePost>>>
+    export type CreateGenhalHeritagePostMutationBody = BodyType<GenhalHeritagePostInput>
+    export type CreateGenhalHeritagePostMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a heritage post to a community
+ */
+export const useCreateGenhalHeritagePost = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalHeritagePost>>, TError,{id: number;data: BodyType<GenhalHeritagePostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGenhalHeritagePost>>,
+        TError,
+        {id: number;data: BodyType<GenhalHeritagePostInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGenhalHeritagePostMutationOptions(options));
+    }
+
+export const getListGenhalLanguagesUrl = () => {
+
+
+
+
+  return `/api/genhal/languages`
+}
+
+/**
+ * @summary List supported African languages
+ */
+export const listGenhalLanguages = async ( options?: RequestInit): Promise<GenhalLanguage[]> => {
+
+  return customFetch<GenhalLanguage[]>(getListGenhalLanguagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalLanguagesQueryKey = () => {
+    return [
+    `/api/genhal/languages`
+    ] as const;
+    }
+
+
+export const getListGenhalLanguagesQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalLanguages>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalLanguagesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalLanguages>>> = ({ signal }) => listGenhalLanguages({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalLanguagesQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalLanguages>>>
+export type ListGenhalLanguagesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List supported African languages
+ */
+
+export function useListGenhalLanguages<TData = Awaited<ReturnType<typeof listGenhalLanguages>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalLanguagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGenhalLanguageEntriesUrl = (code: string,) => {
+
+
+
+
+  return `/api/genhal/languages/${code}/entries`
+}
+
+/**
+ * @summary List dictionary entries for a language
+ */
+export const listGenhalLanguageEntries = async (code: string, options?: RequestInit): Promise<GenhalLanguageEntry[]> => {
+
+  return customFetch<GenhalLanguageEntry[]>(getListGenhalLanguageEntriesUrl(code),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalLanguageEntriesQueryKey = (code: string,) => {
+    return [
+    `/api/genhal/languages/${code}/entries`
+    ] as const;
+    }
+
+
+export const getListGenhalLanguageEntriesQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalLanguageEntries>>, TError = ErrorType<unknown>>(code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalLanguageEntriesQueryKey(code);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalLanguageEntries>>> = ({ signal }) => listGenhalLanguageEntries(code, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: code !== null && code !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageEntries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalLanguageEntriesQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalLanguageEntries>>>
+export type ListGenhalLanguageEntriesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List dictionary entries for a language
+ */
+
+export function useListGenhalLanguageEntries<TData = Awaited<ReturnType<typeof listGenhalLanguageEntries>>, TError = ErrorType<unknown>>(
+ code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalLanguageEntriesQueryOptions(code,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGenhalLanguageEntryUrl = (code: string,) => {
+
+
+
+
+  return `/api/genhal/languages/${code}/entries`
+}
+
+/**
+ * @summary Add a word/phrase to a language dictionary
+ */
+export const createGenhalLanguageEntry = async (code: string,
+    genhalLanguageEntryInput: GenhalLanguageEntryInput, options?: RequestInit): Promise<GenhalLanguageEntry> => {
+
+  return customFetch<GenhalLanguageEntry>(getCreateGenhalLanguageEntryUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalLanguageEntryInput)
+  }
+);}
+
+
+
+
+export const getCreateGenhalLanguageEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalLanguageEntry>>, TError,{code: string;data: BodyType<GenhalLanguageEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGenhalLanguageEntry>>, TError,{code: string;data: BodyType<GenhalLanguageEntryInput>}, TContext> => {
+
+const mutationKey = ['createGenhalLanguageEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGenhalLanguageEntry>>, {code: string;data: BodyType<GenhalLanguageEntryInput>}> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  createGenhalLanguageEntry(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGenhalLanguageEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createGenhalLanguageEntry>>>
+    export type CreateGenhalLanguageEntryMutationBody = BodyType<GenhalLanguageEntryInput>
+    export type CreateGenhalLanguageEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a word/phrase to a language dictionary
+ */
+export const useCreateGenhalLanguageEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGenhalLanguageEntry>>, TError,{code: string;data: BodyType<GenhalLanguageEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGenhalLanguageEntry>>,
+        TError,
+        {code: string;data: BodyType<GenhalLanguageEntryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGenhalLanguageEntryMutationOptions(options));
+    }
+
+export const getUpdateGenhalLanguageEntryUrl = (code: string,
+    entryId: number,) => {
+
+
+
+
+  return `/api/genhal/languages/${code}/entries/${entryId}`
+}
+
+/**
+ * @summary Update a dictionary entry
+ */
+export const updateGenhalLanguageEntry = async (code: string,
+    entryId: number,
+    genhalLanguageEntryUpdate: GenhalLanguageEntryUpdate, options?: RequestInit): Promise<GenhalLanguageEntry> => {
+
+  return customFetch<GenhalLanguageEntry>(getUpdateGenhalLanguageEntryUrl(code,entryId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalLanguageEntryUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateGenhalLanguageEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalLanguageEntry>>, TError,{code: string;entryId: number;data: BodyType<GenhalLanguageEntryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGenhalLanguageEntry>>, TError,{code: string;entryId: number;data: BodyType<GenhalLanguageEntryUpdate>}, TContext> => {
+
+const mutationKey = ['updateGenhalLanguageEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGenhalLanguageEntry>>, {code: string;entryId: number;data: BodyType<GenhalLanguageEntryUpdate>}> = (props) => {
+          const {code,entryId,data} = props ?? {};
+
+          return  updateGenhalLanguageEntry(code,entryId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGenhalLanguageEntryMutationResult = NonNullable<Awaited<ReturnType<typeof updateGenhalLanguageEntry>>>
+    export type UpdateGenhalLanguageEntryMutationBody = BodyType<GenhalLanguageEntryUpdate>
+    export type UpdateGenhalLanguageEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a dictionary entry
+ */
+export const useUpdateGenhalLanguageEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGenhalLanguageEntry>>, TError,{code: string;entryId: number;data: BodyType<GenhalLanguageEntryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGenhalLanguageEntry>>,
+        TError,
+        {code: string;entryId: number;data: BodyType<GenhalLanguageEntryUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateGenhalLanguageEntryMutationOptions(options));
+    }
+
+export const getDeleteGenhalLanguageEntryUrl = (code: string,
+    entryId: number,) => {
+
+
+
+
+  return `/api/genhal/languages/${code}/entries/${entryId}`
+}
+
+/**
+ * @summary Delete a dictionary entry
+ */
+export const deleteGenhalLanguageEntry = async (code: string,
+    entryId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteGenhalLanguageEntryUrl(code,entryId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGenhalLanguageEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>, TError,{code: string;entryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>, TError,{code: string;entryId: number}, TContext> => {
+
+const mutationKey = ['deleteGenhalLanguageEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>, {code: string;entryId: number}> = (props) => {
+          const {code,entryId} = props ?? {};
+
+          return  deleteGenhalLanguageEntry(code,entryId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGenhalLanguageEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>>
+
+    export type DeleteGenhalLanguageEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a dictionary entry
+ */
+export const useDeleteGenhalLanguageEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>, TError,{code: string;entryId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGenhalLanguageEntry>>,
+        TError,
+        {code: string;entryId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGenhalLanguageEntryMutationOptions(options));
+    }
+
+export const getGenerateGenhalStoryUrl = () => {
+
+
+
+
+  return `/api/genhal/ai/generate-story`
+}
+
+/**
+ * @summary Generate a family or heritage story from structured data using AI
+ */
+export const generateGenhalStory = async (genhalAiStoryInput: GenhalAiStoryInput, options?: RequestInit): Promise<GenhalAiGeneration> => {
+
+  return customFetch<GenhalAiGeneration>(getGenerateGenhalStoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalAiStoryInput)
+  }
+);}
+
+
+
+
+export const getGenerateGenhalStoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateGenhalStory>>, TError,{data: BodyType<GenhalAiStoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateGenhalStory>>, TError,{data: BodyType<GenhalAiStoryInput>}, TContext> => {
+
+const mutationKey = ['generateGenhalStory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateGenhalStory>>, {data: BodyType<GenhalAiStoryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateGenhalStory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateGenhalStoryMutationResult = NonNullable<Awaited<ReturnType<typeof generateGenhalStory>>>
+    export type GenerateGenhalStoryMutationBody = BodyType<GenhalAiStoryInput>
+    export type GenerateGenhalStoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate a family or heritage story from structured data using AI
+ */
+export const useGenerateGenhalStory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateGenhalStory>>, TError,{data: BodyType<GenhalAiStoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateGenhalStory>>,
+        TError,
+        {data: BodyType<GenhalAiStoryInput>},
+        TContext
+      > => {
+      return useMutation(getGenerateGenhalStoryMutationOptions(options));
+    }
+
+export const getTranslateGenhalUrl = () => {
+
+
+
+
+  return `/api/genhal/ai/translate`
+}
+
+/**
+ * @summary Translate text between African languages or to/from English
+ */
+export const translateGenhal = async (genhalAiTranslateInput: GenhalAiTranslateInput, options?: RequestInit): Promise<GenhalAiGeneration> => {
+
+  return customFetch<GenhalAiGeneration>(getTranslateGenhalUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalAiTranslateInput)
+  }
+);}
+
+
+
+
+export const getTranslateGenhalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateGenhal>>, TError,{data: BodyType<GenhalAiTranslateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof translateGenhal>>, TError,{data: BodyType<GenhalAiTranslateInput>}, TContext> => {
+
+const mutationKey = ['translateGenhal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof translateGenhal>>, {data: BodyType<GenhalAiTranslateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  translateGenhal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TranslateGenhalMutationResult = NonNullable<Awaited<ReturnType<typeof translateGenhal>>>
+    export type TranslateGenhalMutationBody = BodyType<GenhalAiTranslateInput>
+    export type TranslateGenhalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Translate text between African languages or to/from English
+ */
+export const useTranslateGenhal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof translateGenhal>>, TError,{data: BodyType<GenhalAiTranslateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof translateGenhal>>,
+        TError,
+        {data: BodyType<GenhalAiTranslateInput>},
+        TContext
+      > => {
+      return useMutation(getTranslateGenhalMutationOptions(options));
+    }
+
+export const getCaptionGenhalImageUrl = () => {
+
+
+
+
+  return `/api/genhal/ai/caption-image`
+}
+
+/**
+ * @summary Generate an AI caption for a heritage image
+ */
+export const captionGenhalImage = async (genhalAiCaptionInput: GenhalAiCaptionInput, options?: RequestInit): Promise<GenhalAiGeneration> => {
+
+  return customFetch<GenhalAiGeneration>(getCaptionGenhalImageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(genhalAiCaptionInput)
+  }
+);}
+
+
+
+
+export const getCaptionGenhalImageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof captionGenhalImage>>, TError,{data: BodyType<GenhalAiCaptionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof captionGenhalImage>>, TError,{data: BodyType<GenhalAiCaptionInput>}, TContext> => {
+
+const mutationKey = ['captionGenhalImage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof captionGenhalImage>>, {data: BodyType<GenhalAiCaptionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  captionGenhalImage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CaptionGenhalImageMutationResult = NonNullable<Awaited<ReturnType<typeof captionGenhalImage>>>
+    export type CaptionGenhalImageMutationBody = BodyType<GenhalAiCaptionInput>
+    export type CaptionGenhalImageMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate an AI caption for a heritage image
+ */
+export const useCaptionGenhalImage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof captionGenhalImage>>, TError,{data: BodyType<GenhalAiCaptionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof captionGenhalImage>>,
+        TError,
+        {data: BodyType<GenhalAiCaptionInput>},
+        TContext
+      > => {
+      return useMutation(getCaptionGenhalImageMutationOptions(options));
+    }
+
+export const getListGenhalAiGenerationsUrl = () => {
+
+
+
+
+  return `/api/genhal/ai/generations`
+}
+
+/**
+ * @summary List AI generation history for the signed-in user
+ */
+export const listGenhalAiGenerations = async ( options?: RequestInit): Promise<GenhalAiGeneration[]> => {
+
+  return customFetch<GenhalAiGeneration[]>(getListGenhalAiGenerationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalAiGenerationsQueryKey = () => {
+    return [
+    `/api/genhal/ai/generations`
+    ] as const;
+    }
+
+
+export const getListGenhalAiGenerationsQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalAiGenerations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalAiGenerations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalAiGenerationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalAiGenerations>>> = ({ signal }) => listGenhalAiGenerations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalAiGenerations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalAiGenerationsQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalAiGenerations>>>
+export type ListGenhalAiGenerationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List AI generation history for the signed-in user
+ */
+
+export function useListGenhalAiGenerations<TData = Awaited<ReturnType<typeof listGenhalAiGenerations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalAiGenerations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalAiGenerationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
