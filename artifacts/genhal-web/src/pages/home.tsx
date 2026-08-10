@@ -1,6 +1,6 @@
-import { useGetGenhalDashboard, useListGenhalLanguageOrgs } from '@workspace/api-client-react';
+import { useGetGenhalDashboard, useListGenhalLanguageOrgs, useListGenhalPublicFamilies } from '@workspace/api-client-react';
 import { Link } from 'wouter';
-import { Network, BookOpen, Globe2, Sparkles, Users, Layers, MessageSquare, Mic2, Film, Music4, PenLine, Building2, Brain } from 'lucide-react';
+import { Network, BookOpen, Globe2, Sparkles, Users, Layers, MessageSquare, Mic2, Film, Music4, PenLine, Building2, Brain, Home as HomeIcon, Lock, ScrollText, ShieldCheck, Vault, ArrowRight, KeyRound, HeartHandshake } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,6 +63,54 @@ function TrustedByCard({ community }: { community: typeof TRUSTED_COMMUNITIES[0]
   );
 }
 
+interface PublicFamily {
+  id: number; name: string; localName?: string | null;
+  country?: string | null; region?: string | null;
+  coverImageUrl?: string | null; memberCount?: number;
+}
+
+function FamilyCard({ family }: { family: PublicFamily }) {
+  const initials = family.name.split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const hue = (family.id * 83) % 360;
+  return (
+    <div className="flex-shrink-0 w-52 mx-3">
+      <div className="bg-card border border-border/60 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group cursor-default">
+        <div className="flex items-center gap-3 mb-2">
+          {family.coverImageUrl ? (
+            <img src={family.coverImageUrl} alt={family.name}
+              className="w-10 h-10 rounded-xl object-cover shrink-0 transition-transform duration-300 group-hover:scale-110" />
+          ) : (
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0 transition-transform duration-300 group-hover:scale-110"
+              style={{ background: `hsl(${hue},50%,45%)` }}
+            >
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground leading-tight truncate">{family.name}</p>
+            {family.localName && (
+              <p className="text-xs text-muted-foreground italic truncate">{family.localName}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {family.country && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+              🌍 {family.country}
+            </span>
+          )}
+          {(family.memberCount ?? 0) > 0 && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+              👥 {family.memberCount} member{(family.memberCount ?? 0) !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface LangOrg {
   id: number; name: string; slug: string;
   description?: string | null; logoUrl?: string | null;
@@ -118,6 +166,8 @@ export default function Home() {
   const { data: dashboard, isLoading, error } = useGetGenhalDashboard();
   const { data: orgsData } = useListGenhalLanguageOrgs();
   const liveOrgs = orgsData?.orgs ?? [];
+  const { data: familiesData } = useListGenhalPublicFamilies();
+  const liveFamilies = familiesData?.families ?? [];
   const marqueeRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -237,6 +287,112 @@ export default function Home() {
             hover="hover:border-accent/50 hover:shadow-accent/10"
             delay={200}
           />
+        </div>
+      </section>
+
+      {/* ── Family Wealth & Secrets ── */}
+      <section className="relative overflow-hidden rounded-3xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+        {/* dark patterned background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-stone-900 via-amber-950/80 to-stone-950 rounded-3xl" />
+        <div className="absolute inset-0 opacity-5 bg-[url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center rounded-3xl" />
+        {/* subtle gold shimmer */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 p-8 md:p-12 space-y-10">
+          {/* heading block */}
+          <div className="max-w-2xl space-y-4">
+            <div className="inline-flex items-center gap-2 bg-amber-400/15 border border-amber-400/30 rounded-full px-4 py-1.5 text-xs font-bold text-amber-300 uppercase tracking-widest">
+              <Lock className="h-3.5 w-3.5" /> Private · Encrypted · Yours
+            </div>
+            <h2 className="text-3xl md:text-5xl font-serif font-bold text-white leading-tight">
+              Create, protect &amp; pass on<br />
+              <span className="text-amber-300">your family's wealth</span><br />
+              and secrets.
+            </h2>
+            <p className="text-stone-300 text-base md:text-lg max-w-xl leading-relaxed">
+              Every family has things worth keeping — land deeds, heirlooms, stories, and wishes that must
+              survive beyond a lifetime. GenHaL gives your family a private, encrypted space to hold it all,
+              and a clear plan for who inherits what.
+            </p>
+          </div>
+
+          {/* Feature cards */}
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              {
+                icon: Vault,
+                href: "/families",
+                accent: "from-amber-500 to-yellow-600",
+                border: "border-amber-500/25 hover:border-amber-400/60",
+                glow: "hover:shadow-amber-900/50",
+                title: "Family Vault",
+                description:
+                  "A secure, private archive for documents, photos, voice notes, and heirlooms. Only family members you invite can see what's inside.",
+              },
+              {
+                icon: ScrollText,
+                href: "/families",
+                accent: "from-orange-500 to-amber-600",
+                border: "border-orange-500/25 hover:border-orange-400/60",
+                glow: "hover:shadow-orange-900/50",
+                title: "Family Wills",
+                description:
+                  "Write, encrypt, and lock your will — sealed with a passphrase only you know. Released automatically to your next of kin when the time comes.",
+              },
+              {
+                icon: HeartHandshake,
+                href: "/families",
+                accent: "from-rose-500 to-orange-500",
+                border: "border-rose-500/25 hover:border-rose-400/60",
+                glow: "hover:shadow-rose-900/50",
+                title: "Succession Planning",
+                description:
+                  "Designate next-of-kin, assign roles, and set conditions for transfers of wealth, land, and responsibility — all kept private until you're ready.",
+              },
+            ].map(({ icon: Icon, href, accent, border, glow, title, description }) => (
+              <Link key={title} href={href}>
+                <div
+                  className={`group h-full rounded-2xl border bg-white/5 backdrop-blur-sm p-6 flex flex-col gap-4
+                               hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer ${border} ${glow}`}
+                >
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center shrink-0
+                                   transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-lg`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <h3 className="font-semibold text-white text-base">{title}</h3>
+                    <p className="text-sm text-stone-400 leading-relaxed">{description}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold text-amber-400 group-hover:gap-2 transition-all duration-200">
+                    Get started <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Trust badges row */}
+          <div className="flex flex-wrap gap-4 items-center pt-2">
+            {[
+              { icon: ShieldCheck, label: "AES-256 encryption" },
+              { icon: KeyRound,    label: "Passphrase-only access" },
+              { icon: Lock,        label: "Zero-knowledge storage" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-2 text-xs text-stone-400">
+                <Icon className="w-4 h-4 text-amber-500/70" />
+                {label}
+              </div>
+            ))}
+            <div className="ml-auto">
+              <Link href="/sign-up">
+                <button className="px-6 py-2.5 rounded-full bg-amber-400 text-stone-900 text-sm font-bold
+                                   hover:bg-amber-300 hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg shadow-amber-900/40">
+                  Secure your family's legacy →
+                </button>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -377,6 +533,56 @@ export default function Home() {
               </Button>
             </Link>
           </div>
+        </div>
+
+        {/* ── Families (live from DB — public opt-in) ── */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4 px-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Families — On GenHaL
+            </p>
+            <Link href="/families">
+              <Button variant="ghost" size="sm" className="text-xs rounded-full h-7 px-3">
+                View all →
+              </Button>
+            </Link>
+          </div>
+
+          {liveFamilies.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6 flex flex-col items-center gap-3 text-center">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <HomeIcon className="w-5 h-5 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-foreground">No public families yet</p>
+                <p className="text-xs text-muted-foreground max-w-sm">
+                  Families can opt in to appear here when they create their family account on GenHaL.
+                </p>
+              </div>
+              <Link href="/sign-up">
+                <Button size="sm" variant="outline" className="rounded-full px-5 mt-1 text-xs">
+                  Create your family account →
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="relative overflow-hidden rounded-3xl py-2">
+              <div className="absolute inset-y-0 left-0 w-24 z-10 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+              <div className="absolute inset-y-0 right-0 w-24 z-10 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+              <div
+                className="flex"
+                style={{
+                  animation: liveFamilies.length >= 4
+                    ? 'marquee-left 34s linear infinite'
+                    : undefined,
+                }}
+              >
+                {(liveFamilies.length >= 4 ? [...liveFamilies, ...liveFamilies] : liveFamilies).map((f, i) => (
+                  <FamilyCard key={`fam-${i}`} family={f} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Language Organisations (live from DB) ── */}

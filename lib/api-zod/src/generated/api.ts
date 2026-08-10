@@ -6561,6 +6561,22 @@ export const ListGenhalAiGenerationsResponse = zod.array(ListGenhalAiGenerations
 
 
 /**
+ * @summary List families that have opted into public visibility
+ */
+export const ListGenhalPublicFamiliesResponse = zod.object({
+  "families": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "localName": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "region": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number().optional()
+}))
+})
+
+
+/**
  * @summary List approved language organisations
  */
 export const ListGenhalLanguageOrgsResponse = zod.object({

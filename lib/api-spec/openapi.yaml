@@ -5210,6 +5210,26 @@ paths:
                 items:
                   $ref: "#/components/schemas/GenhalAiGeneration"
 
+  /genhal/public/families:
+    get:
+      operationId: listGenhalPublicFamilies
+      tags: [genhal-families]
+      summary: List families that have opted into public visibility
+      security: []
+      responses:
+        "200":
+          description: Public families
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [families]
+                properties:
+                  families:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GenhalPublicFamily"
+
   /genhal/language-orgs:
     get:
       operationId: listGenhalLanguageOrgs
@@ -9888,6 +9908,25 @@ components:
           type: string
         dialect:
           type: string
+
+    GenhalPublicFamily:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        localName:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        coverImageUrl:
+          type: ["string", "null"]
+        memberCount:
+          type: integer
 
     GenhalLanguageOrg:
       type: object

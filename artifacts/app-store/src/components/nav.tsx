@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, UserButton } from "@clerk/react";
 import { apiFetch } from "../lib/api";
+import { useAppThemeStore } from "../store/themeStore";
+import { ThemePicker } from "./ThemePicker";
 
 const PLATFORMS = [
   {
@@ -487,6 +489,8 @@ export default function Nav() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const { config } = useAppThemeStore();
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -517,6 +521,7 @@ export default function Nav() {
 
   return (
     <>
+      <ThemePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
       <motion.nav
         animate={{
           backgroundColor: scrolled ? "rgba(6,8,17,0.88)" : "#070a12",
@@ -701,6 +706,34 @@ export default function Nav() {
                   height: 22,
                   background: "rgba(255,255,255,0.1)",
                   margin: "0 8px",
+                }}
+              />
+
+              {/* Theme picker button */}
+              <motion.button
+                onClick={() => setPickerOpen(true)}
+                whileHover={{ scale: 1.12, y: -1 }}
+                whileTap={{ scale: 0.92 }}
+                title="Change theme"
+                transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  background: `${config.accent}18`,
+                  border: `1px solid ${config.accent}35`,
+                  cursor: "pointer", display: "flex", alignItems: "center",
+                  justifyContent: "center", fontSize: 16, flexShrink: 0,
+                  transition: "background 0.3s ease, border-color 0.3s ease",
+                } as React.CSSProperties}
+              >
+                🎨
+              </motion.button>
+
+              <div
+                style={{
+                  width: 1,
+                  height: 22,
+                  background: "rgba(255,255,255,0.1)",
+                  margin: "0 4px 0 8px",
                 }}
               />
 

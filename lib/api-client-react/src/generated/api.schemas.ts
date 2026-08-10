@@ -2900,6 +2900,20 @@ export interface GenhalLanguageEntryUpdate {
   dialect?: string;
 }
 
+export interface GenhalPublicFamily {
+  id: number;
+  name: string;
+  /** @nullable */
+  localName?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  region?: string | null;
+  /** @nullable */
+  coverImageUrl?: string | null;
+  memberCount?: number;
+}
+
 export interface GenhalLanguageOrg {
   id: number;
   name: string;
@@ -3246,6 +3260,10 @@ limit?: number;
 export type ListGenhalCommunitiesParams = {
 country?: string;
 search?: string;
+};
+
+export type ListGenhalPublicFamilies200 = {
+  families: GenhalPublicFamily[];
 };
 
 export type ListGenhalLanguageOrgs200 = {

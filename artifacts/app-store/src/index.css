@@ -269,3 +269,44 @@ select.input { cursor: pointer; }
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
 }
+
+/* ══ App Store entry animations ═══════════════════════════════════════════ */
+
+@keyframes awaBounceInLeft {
+  0%   { opacity:0; transform:translateX(-70px) scale(0.95) }
+  55%  { opacity:1; transform:translateX(10px) scale(1.01) }
+  75%  { transform:translateX(-5px) scale(0.99) }
+  90%  { transform:translateX(3px) }
+  100% { opacity:1; transform:translateX(0) scale(1) }
+}
+@keyframes awaBounceIn {
+  0%   { opacity:0; transform:scale(0.65) }
+  45%  { opacity:1; transform:scale(1.06) }
+  65%  { transform:scale(0.95) }
+  80%  { transform:scale(1.03) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaZoomIn {
+  0%   { opacity:0; transform:scale(0.45) }
+  55%  { opacity:1; transform:scale(1.05) }
+  75%  { transform:scale(0.97) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaFlipInX {
+  0%   { opacity:0; transform:perspective(600px) rotateX(-90deg) scale(0.9) }
+  40%  { opacity:0.6; transform:perspective(600px) rotateX(18deg) }
+  70%  { transform:perspective(600px) rotateX(-8deg) }
+  100% { opacity:1; transform:perspective(600px) rotateX(0deg) scale(1) }
+}
+
+/* ── Theme flash overlay ───────────────────────────────────────────────── */
+@keyframes appStoreThemeFlash {
+  0%   { opacity: 0; transform: scale(0.3); }
+  20%  { opacity: 0.9; transform: scale(1.0); }
+  100% { opacity: 0; transform: scale(2.5); }
+}
+
+/* ── Smooth CSS var transitions ────────────────────────────────────────── */
+body {
+  transition: background-color 0.45s ease;
+}

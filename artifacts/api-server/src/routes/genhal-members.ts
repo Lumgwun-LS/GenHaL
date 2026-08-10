@@ -119,6 +119,35 @@ router.delete("/genhal/kingdoms/:kingdomId/members/:memberId", requireAuth(), as
   } catch { res.status(500).json({ error: "Failed" }); }
 });
 
+// ── Public: list families that opted in to public visibility ─────────────────
+
+router.get("/genhal/public/families", async (_req, res): Promise<void> => {
+  try {
+    const { sql } = await import("drizzle-orm");
+    const families = await db
+      .select({
+        id: genhalFamilyAccountsTable.id,
+        name: genhalFamilyAccountsTable.name,
+        localName: genhalFamilyAccountsTable.localName,
+        country: genhalFamilyAccountsTable.country,
+        region: genhalFamilyAccountsTable.region,
+        coverImageUrl: genhalFamilyAccountsTable.coverImageUrl,
+        memberCount: sql<number>`(
+          SELECT COUNT(*) FROM genhal_family_members
+          WHERE family_id = ${genhalFamilyAccountsTable.id} AND status = 'active'
+        )`,
+      })
+      .from(genhalFamilyAccountsTable)
+      .where(eq(genhalFamilyAccountsTable.isPublic, true))
+      .orderBy(asc(genhalFamilyAccountsTable.name))
+      .limit(60);
+    res.json({ families });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
 // ── Family accounts ───────────────────────────────────────────────────────────
 
 router.get("/genhal/families", requireAuth(), async (req, res): Promise<void> => {

@@ -164,3 +164,72 @@
     @apply font-serif tracking-tight;
   }
 }
+
+/* ══ GenHaL dashboard entry animations ═══════════════════════════════════ */
+
+@keyframes awaBounceInLeft {
+  0%   { opacity:0; transform:translateX(-70px) scale(0.95) }
+  55%  { opacity:1; transform:translateX(10px) scale(1.01) }
+  75%  { transform:translateX(-5px) scale(0.99) }
+  90%  { transform:translateX(3px) }
+  100% { opacity:1; transform:translateX(0) scale(1) }
+}
+@keyframes awaBounceIn {
+  0%   { opacity:0; transform:scale(0.65) }
+  45%  { opacity:1; transform:scale(1.06) }
+  65%  { transform:scale(0.95) }
+  80%  { transform:scale(1.03) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaZoomIn {
+  0%   { opacity:0; transform:scale(0.45) }
+  55%  { opacity:1; transform:scale(1.05) }
+  75%  { transform:scale(0.97) }
+  100% { opacity:1; transform:scale(1) }
+}
+@keyframes awaFlipInX {
+  0%   { opacity:0; transform:perspective(600px) rotateX(-90deg) scale(0.9) }
+  40%  { opacity:0.6; transform:perspective(600px) rotateX(18deg) }
+  70%  { transform:perspective(600px) rotateX(-8deg) }
+  100% { opacity:1; transform:perspective(600px) rotateX(0deg) scale(1) }
+}
+@keyframes awaFadeInUp {
+  0%   { opacity:0; transform:translateY(28px) }
+  100% { opacity:1; transform:translateY(0) }
+}
+
+/* ── Theme flash overlay ───────────────────────────────────────────────── */
+@keyframes genhalThemeFlash {
+  0%   { opacity: 0; transform: scale(0.4); }
+  25%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+
+/* ── Ember sidebar (Nnenna) ────────────────────────────────────────────── */
+@keyframes emberPulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+.sidebar-ember-edge {
+  position: absolute;
+  right: -1px; top: 0; bottom: 0;
+  width: 1px;
+  animation: emberPulse 2.4s ease-in-out infinite;
+}
+
+/* ── Grove sidebar (Kpokpo) ─────────────────────────────────────────────── */
+.sidebar-grove {
+  background: rgba(1,20,8,0.74) !important;
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+}
+
+/* ── Per-variant nav link hover animations ─────────────────────────────── */
+[data-theme="nnenna"] aside a:hover,
+[data-theme="nnenna"] aside button.nav-item:hover  { transform: translateX(3px); }
+[data-theme="savanna"] aside a:hover,
+[data-theme="savanna"] aside button.nav-item:hover { transform: translateY(-1px); }
+[data-theme="kpokpo"] aside a:hover,
+[data-theme="kpokpo"] aside button.nav-item:hover  { transform: scale(1.02); }
+[data-theme="oba"] aside a:hover,
+[data-theme="oba"] aside button.nav-item:hover     { letter-spacing: 0.14em; }
