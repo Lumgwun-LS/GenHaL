@@ -114,4 +114,7 @@ export * from "./genhal-ai-generations";
 export * from "./genhal-language-recordings";
 export * from "./genhal-language-datasets";
 export * from "./genhal-training-runs";
-export * from "./genhal-towns";
+export * from "./genhal-kingdoms";
+export * from "./genhal-settlements";
+export * from "./genhal-compounds";
+export * from "./genhal-civic";

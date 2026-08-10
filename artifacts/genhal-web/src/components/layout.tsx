@@ -16,7 +16,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { name: 'Language', href: '/language', icon: Globe2 },
     { name: 'AI Studio', href: '/ai', icon: Sparkles },
     { name: 'Collect', href: '/collect', icon: Mic },
-    { name: 'Towns', href: '/towns', icon: Building2 },
+    { name: 'Kingdoms', href: '/kingdoms', icon: Building2 },
     { name: 'Corpus & AI', href: '/corpus', icon: Database },
   ];
 
