@@ -127,7 +127,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}

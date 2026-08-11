@@ -27,7 +27,7 @@ export function Scene1Markets() {
         transition={{ duration: 6, ease: "easeOut" }}
       >
         <video
-          src={`${import.meta.env.BASE_URL}videos/market.mp4`}
+          src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/market.mp4`}
           className="w-full h-full object-cover"
           autoPlay
           muted

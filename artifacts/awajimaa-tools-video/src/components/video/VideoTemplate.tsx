@@ -132,7 +132,7 @@ export default function VideoTemplate({
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover opacity-20"
-          src={`${import.meta.env.BASE_URL}videos/bg.mp4`}
+          src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg.mp4`}
         />
 
         {/* Global Grain/Noise overlay */}
@@ -202,7 +202,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/tools-bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}
