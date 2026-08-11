@@ -151,12 +151,17 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   metroProcess = spawn(
     'pnpm',
-    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost'],
+    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost', '--max-workers', '2'],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
       cwd: projectRoot,
-      env,
+      env: {
+        ...env,
+        // Cap Metro's Node heap to avoid OOM during Hermes minification.
+        // Without this, Metro grabs all available RAM and gets killed mid-bundle.
+        NODE_OPTIONS: '--max-old-space-size=4096',
+      },
     },
   );
 
