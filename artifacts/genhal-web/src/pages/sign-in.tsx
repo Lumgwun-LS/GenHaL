@@ -1,5 +1,9 @@
 import { SignIn } from "@clerk/react";
 
+// Strip trailing slash so we can safely append paths.
+// e.g. "/genhal/" → "/genhal", "/" → ""
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function SignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -7,7 +11,7 @@ export default function SignInPage() {
         {/* Branding */}
         <div className="text-center space-y-2">
           <img
-            src="/genhal/genhal-logo.png"
+            src={`${base}/genhal-logo.png`}
             alt="GenHaL"
             className="h-20 w-auto mx-auto object-contain drop-shadow-md"
           />
@@ -20,9 +24,9 @@ export default function SignInPage() {
 
         <SignIn
           routing="path"
-          path="/sign-in"
-          signUpUrl="/sign-up"
-          forceRedirectUrl="/"
+          path={`${base}/sign-in`}
+          signUpUrl={`${base}/sign-up`}
+          forceRedirectUrl={base || "/"}
           appearance={{
             variables: {
               colorPrimary: "hsl(var(--primary))",
