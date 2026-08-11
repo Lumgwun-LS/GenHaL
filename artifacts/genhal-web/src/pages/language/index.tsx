@@ -7,10 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 
 export default function LanguageCenter() {
-  const { data: languages, isLoading } = useListGenhalLanguages();
+  const {
+    data: languages,
+    isLoading,
+    error,
+    refetch,
+  } = useListGenhalLanguages();
   const [search, setSearch] = useState('');
 
   const filteredLanguages = languages?.filter(
@@ -53,7 +59,9 @@ export default function LanguageCenter() {
               <Skeleton key={i} className="h-40 rounded-xl" />
             ))}
           </div>
-        ) : filteredLanguages?.length === 0 ? (
+        ) : error ? (
+          <ErrorState subject="languages" onRetry={() => refetch()} />
+        ) : !filteredLanguages?.length ? (
           <EmptyState
             icon={<Globe2 className="h-5 w-5" />}
             title="No languages found"

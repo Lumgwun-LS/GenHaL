@@ -38,6 +38,7 @@ import {
 } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 import { cn } from '@/lib/utils';
 
@@ -51,8 +52,12 @@ export default function CommunityDetail() {
   const params = useParams();
   const communityId = Number(params.id);
 
-  const { data: community, isLoading: communityLoading } =
-    useGetGenhalCommunity(communityId);
+  const {
+    data: community,
+    isLoading: communityLoading,
+    error: communityError,
+    refetch: refetchCommunity,
+  } = useGetGenhalCommunity(communityId);
   const { data: posts, isLoading: postsLoading } =
     useListGenhalCommunityPosts(communityId);
 
@@ -63,6 +68,12 @@ export default function CommunityDetail() {
       <div className="flex justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-secondary" />
       </div>
+    );
+  }
+
+  if (communityError) {
+    return (
+      <ErrorState subject="this community" onRetry={() => refetchCommunity()} />
     );
   }
 
@@ -181,7 +192,7 @@ export default function CommunityDetail() {
           Stories &amp; archives
         </h3>
 
-        {posts?.length === 0 ? (
+        {!posts?.length ? (
           <EmptyState
             icon={<Type className="h-5 w-5" />}
             title="No posts yet"

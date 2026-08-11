@@ -33,10 +33,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalCommunitiesQueryKey } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 
 export default function HeritageHub() {
-  const { data: communities, isLoading } = useListGenhalCommunities();
+  const {
+    data: communities,
+    isLoading,
+    error,
+    refetch,
+  } = useListGenhalCommunities();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (
@@ -77,7 +83,9 @@ export default function HeritageHub() {
               <Skeleton key={i} className="h-40 rounded-xl" />
             ))}
           </div>
-        ) : communities?.length === 0 ? (
+        ) : error ? (
+          <ErrorState subject="communities" onRetry={() => refetch()} />
+        ) : !communities?.length ? (
           <EmptyState
             icon={<BookOpen className="h-5 w-5" />}
             title="No communities yet"

@@ -19,6 +19,10 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// Where dev-mode /api/* requests are forwarded. Defaults to a local
+// api-server; override to point at a deployed one.
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
+
 const basePath = process.env.BASE_PATH;
 
 if (!basePath) {
@@ -71,6 +75,17 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: true,
+    },
+    // The API client issues same-origin requests to /api/*, which the dev
+    // server would otherwise answer with the SPA fallback (404 for XHR).
+    // Point API_PROXY_TARGET at a local api-server (http://localhost:3000)
+    // or at a deployed one; without it there is no backend in dev at all.
+    proxy: {
+      '/api': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   preview: {
