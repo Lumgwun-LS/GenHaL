@@ -1,107 +1,160 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { useListGenhalCommunities, useCreateGenhalCommunity } from '@workspace/api-client-react';
-import { BookOpen, MapPin, Users, Plus, MessageSquare, Loader2, Image as ImageIcon } from 'lucide-react';
+import {
+  useListGenhalCommunities,
+  useCreateGenhalCommunity,
+} from '@workspace/api-client-react';
+import {
+  BookOpen,
+  MapPin,
+  Users,
+  Plus,
+  MessageSquare,
+  Loader2,
+  Image as ImageIcon,
+  ChevronRight,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalCommunitiesQueryKey } from '@workspace/api-client-react';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { Reveal, stagger } from '@/components/reveal';
 
 export default function HeritageHub() {
   const { data: communities, isLoading } = useListGenhalCommunities();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <div className="relative rounded-3xl bg-secondary/10 p-8 md:p-12 overflow-hidden border border-secondary/20">
-        <div className="absolute right-0 top-0 w-1/3 h-full bg-secondary/20 blur-3xl rounded-full translate-x-1/2 -translate-y-1/4"></div>
-        <div className="relative z-10 max-w-2xl space-y-4">
-          <Badge className="bg-secondary text-secondary-foreground hover:bg-secondary">Heritage Hub</Badge>
-          <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground">Community & Culture</h1>
-          <p className="text-muted-foreground text-lg font-medium leading-relaxed">
-            Discover and document the rich traditions, stories, and histories of Pan-African communities. Join a community to preserve oral histories and cultural knowledge.
-          </p>
-          <div className="pt-4">
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button size="lg" className="bg-secondary hover:bg-secondary/90 text-white rounded-full">
-                  <Plus className="mr-2 h-5 w-5" />
-                  Start a Community
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle className="font-serif text-2xl text-secondary">Create a Heritage Community</DialogTitle>
-                </DialogHeader>
-                <CreateCommunityForm onSuccess={() => setIsCreateOpen(false)} />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Heritage Hub"
+        description="Discover and document the traditions, stories, and histories of pan-African communities."
+        actions={
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Start a community
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle>Create a heritage community</DialogTitle>
+                <DialogDescription>
+                  Give the community a home so members can contribute oral
+                  histories and cultural knowledge.
+                </DialogDescription>
+              </DialogHeader>
+              <CreateCommunityForm onSuccess={() => setIsCreateOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
-      <div className="space-y-6">
-        <h2 className="text-2xl font-serif font-bold text-foreground flex items-center gap-2">
-          <Users className="text-secondary" /> Featured Communities
-        </h2>
-        
+      <section className="space-y-3">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+          Communities
+        </h3>
+
         {isLoading ? (
-          <div className="grid md:grid-cols-2 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="animate-pulse border-none shadow-sm h-48 bg-muted/50"></Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-40 rounded-xl" />
             ))}
           </div>
         ) : communities?.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-2xl border">
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium text-foreground">No communities found</p>
-            <p className="text-muted-foreground">Be the first to start a heritage community.</p>
-          </div>
+          <EmptyState
+            icon={<BookOpen className="h-5 w-5" />}
+            title="No communities yet"
+            description="Be the first to start a heritage community and invite others to contribute."
+            action={
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Start a community
+              </Button>
+            }
+          />
         ) : (
-          <div className="grid md:grid-cols-2 gap-6">
-            {communities?.map((community) => (
-              <Link key={community.id} href={`/heritage/${community.id}`}>
-                <Card className="h-full border-none shadow-sm hover:shadow-xl transition-shadow cursor-pointer group bg-card flex flex-row overflow-hidden">
-                  <div className="w-1/3 bg-muted relative">
-                    {community.coverImageUrl ? (
-                      <img src={community.coverImageUrl} alt={community.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-secondary/10 flex items-center justify-center">
-                        <ImageIcon className="h-8 w-8 text-secondary/40" />
+          <div className="grid gap-4 md:grid-cols-2">
+            {communities?.map((community, i) => (
+              <Reveal
+                key={community.id}
+                animation="fade-up"
+                delay={stagger(i)}
+                className="h-full"
+              >
+                <Link
+                  href={`/heritage/${community.id}`}
+                  className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <div className="group flex h-full overflow-hidden rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
+                    <div className="w-28 shrink-0 bg-muted sm:w-36">
+                      {community.coverImageUrl ? (
+                        <img
+                          src={community.coverImageUrl}
+                          alt={community.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-secondary/10 text-secondary">
+                          <ImageIcon className="h-6 w-6" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex-1 space-y-2 p-5">
+                        <p className="truncate text-base font-semibold text-foreground">
+                          {community.name}
+                        </p>
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary/10 px-2 py-1 text-xs font-semibold text-secondary">
+                          <MapPin className="h-3 w-3" />
+                          {community.ethnicGroup
+                            ? `${community.ethnicGroup}, `
+                            : ''}
+                          {community.country}
+                        </span>
+                        <p className="line-clamp-2 text-sm text-muted-foreground">
+                          {community.description}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <div className="w-2/3 flex flex-col">
-                    <CardContent className="p-5 flex-1">
-                      <h3 className="text-xl font-serif font-bold text-foreground group-hover:text-secondary transition-colors">
-                        {community.name}
-                      </h3>
-                      <div className="flex items-center gap-2 text-xs font-semibold text-secondary mt-2 mb-3 bg-secondary/10 inline-flex px-2 py-1 rounded-md">
-                        <MapPin className="h-3 w-3" />
-                        {community.ethnicGroup ? `${community.ethnicGroup}, ` : ''}{community.country}
+
+                      <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5" />
+                            {community.memberCount || 1} members
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            {community.postCount || 0} stories
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {community.description}
-                      </p>
-                    </CardContent>
-                    <CardFooter className="px-5 py-3 border-t bg-muted/20 text-xs text-muted-foreground flex gap-4">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {community.memberCount || 1} Members</span>
-                      <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" /> {community.postCount || 0} Stories</span>
-                    </CardFooter>
+                    </div>
                   </div>
-                </Card>
-              </Link>
+                </Link>
+              </Reveal>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -110,90 +163,105 @@ function CreateCommunityForm({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createCommunity = useCreateGenhalCommunity();
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     country: '',
     ethnicGroup: '',
-    coverImageUrl: ''
+    coverImageUrl: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-    
-    createCommunity.mutate({ data: formData }, {
-      onSuccess: () => {
-        toast({ title: "Community created successfully" });
-        queryClient.invalidateQueries({ queryKey: getListGenhalCommunitiesQueryKey() });
-        onSuccess();
+
+    createCommunity.mutate(
+      { data: formData },
+      {
+        onSuccess: () => {
+          toast({ title: 'Community created successfully' });
+          queryClient.invalidateQueries({
+            queryKey: getListGenhalCommunitiesQueryKey(),
+          });
+          onSuccess();
+        },
+        onError: () => {
+          toast({ variant: 'destructive', title: 'Error creating community' });
+        },
       },
-      onError: () => {
-        toast({ variant: "destructive", title: "Error creating community" });
-      }
-    });
+    );
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
       <div className="space-y-2">
-        <Label htmlFor="name">Community Name</Label>
-        <Input 
-          id="name" 
+        <Label htmlFor="name">Community name</Label>
+        <Input
+          id="name"
           value={formData.name}
-          onChange={(e) => setFormData({...formData, name: e.target.value})}
-          placeholder="e.g., Obolo Heritage Group"
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="e.g. Obolo Heritage Group"
           required
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="ethnicGroup">Ethnic Group</Label>
-          <Input 
-            id="ethnicGroup" 
+          <Label htmlFor="ethnicGroup">Ethnic group</Label>
+          <Input
+            id="ethnicGroup"
             value={formData.ethnicGroup}
-            onChange={(e) => setFormData({...formData, ethnicGroup: e.target.value})}
-            placeholder="e.g., Obolo"
+            onChange={(e) =>
+              setFormData({ ...formData, ethnicGroup: e.target.value })
+            }
+            placeholder="e.g. Obolo"
             required
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="country">Country</Label>
-          <Input 
-            id="country" 
+          <Input
+            id="country"
             value={formData.country}
-            onChange={(e) => setFormData({...formData, country: e.target.value})}
-            placeholder="e.g., Nigeria"
+            onChange={(e) =>
+              setFormData({ ...formData, country: e.target.value })
+            }
+            placeholder="e.g. Nigeria"
             required
           />
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description">About This Community</Label>
-        <Textarea 
-          id="description" 
+        <Label htmlFor="description">About this community</Label>
+        <Textarea
+          id="description"
           value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
           placeholder="What is the focus of this heritage group?"
           rows={4}
           required
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="coverImage">Cover Image URL (Optional)</Label>
-        <Input 
-          id="coverImage" 
+        <Label htmlFor="coverImage">Cover image URL (optional)</Label>
+        <Input
+          id="coverImage"
           type="url"
           value={formData.coverImageUrl}
-          onChange={(e) => setFormData({...formData, coverImageUrl: e.target.value})}
-          placeholder="https://..."
+          onChange={(e) =>
+            setFormData({ ...formData, coverImageUrl: e.target.value })
+          }
+          placeholder="https://…"
         />
       </div>
-      <div className="pt-4 flex justify-end">
-        <Button type="submit" disabled={createCommunity.isPending} className="bg-secondary hover:bg-secondary/90 rounded-full px-8">
-          {createCommunity.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-          Create Community
+      <div className="flex justify-end pt-2">
+        <Button type="submit" disabled={createCommunity.isPending}>
+          {createCommunity.isPending && (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          )}
+          Create community
         </Button>
       </div>
     </form>

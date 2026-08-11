@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Spline+Sans+Mono:wght@300..700&display=swap');
+/* Montserrat matches the Awajimaa School dashboard. Fraunces is kept only for
+ * the GenHaL wordmark and generated story prose; mono uses the system stack. */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300..800;1,300..800&family=Fraunces:opsz,wght@9..144,500..800&display=swap');
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
@@ -49,105 +51,123 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-card-hover:
+    0 4px 12px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
 }
 
-/* LIGHT MODE - Heritage Tech Vibe */
+/* LIGHT MODE — Heritage palette on a calm, product-grade canvas */
 :root {
-  --background: 35 50% 98%; /* Light sand */
+  --background: 35 25% 96%; /* Light sand canvas */
   --foreground: 20 30% 15%; /* Dark wood/brown */
-  
-  --border: 30 20% 85%;
-  --input: 30 20% 85%;
-  --ring: 15 80% 45%;
 
-  --card: 35 60% 99%;
+  /* --border is for decorative dividers; --input carries form-control edges
+   * and is deliberately darker so fields read as interactive. */
+  --border: 30 16% 84%;
+  --input: 30 14% 53%;
+  --ring: 15 80% 41%;
+
+  --card: 0 0% 100%;
   --card-foreground: 20 30% 15%;
-  --card-border: 30 20% 85%;
+  --card-border: 30 16% 84%;
 
-  --popover: 35 60% 99%;
+  --popover: 0 0% 100%;
   --popover-foreground: 20 30% 15%;
-  --popover-border: 30 20% 85%;
+  --popover-border: 30 16% 84%;
 
-  --primary: 15 80% 45%; /* Terracotta */
+  --primary: 15 80% 41%; /* Terracotta */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 140 25% 30%; /* Forest Green */
+  --secondary: 140 25% 28%; /* Forest Green */
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 35 20% 90%;
-  --muted-foreground: 20 15% 45%;
+  --muted: 35 20% 94%;
+  --muted-foreground: 20 14% 38%;
 
   --accent: 40 90% 45%; /* Vibrant Gold */
   --accent-foreground: 20 30% 15%;
 
-  --destructive: 0 70% 50%;
+  --destructive: 0 70% 45%;
   --destructive-foreground: 0 0% 100%;
 
-  --sidebar: 35 50% 98%;
-  --sidebar-foreground: 20 30% 15%;
-  --sidebar-border: 30 20% 85%;
-  --sidebar-primary: 15 80% 45%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 35 20% 90%;
-  --sidebar-accent-foreground: 20 30% 15%;
-  --sidebar-ring: 15 80% 45%;
+  /* Component borders consumed by button/badge variants */
+  --primary-border: hsl(15 80% 34%);
+  --secondary-border: hsl(140 25% 22%);
+  --muted-border: hsl(30 16% 82%);
+  --accent-border: hsl(40 90% 36%);
+  --destructive-border: hsl(0 70% 38%);
+  --button-outline: hsl(30 14% 53%);
+  --badge-outline: hsl(30 14% 53%);
 
-  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
-  --app-font-serif: 'Fraunces', serif;
-  --app-font-mono: 'Spline Sans Mono', monospace;
-  
-  --radius: 0.75rem; 
+  /* Dark sidebar shell — same brown/terracotta family as the palette */
+  --sidebar-gradient: linear-gradient(
+    170deg,
+    #1a1108 0%,
+    #241609 60%,
+    #2b1a0a 100%
+  );
+  --sidebar-border-color: rgba(255, 255, 255, 0.08);
+
+  --app-font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --app-font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --app-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  --radius: 0.75rem;
 }
 
 .dark {
-  --background: 20 30% 10%; /* Deep dark brown/black */
+  --background: 20 22% 9%; /* Deep dark brown */
   --foreground: 35 30% 90%; /* Light sand */
 
-  --border: 20 20% 25%;
-  --input: 20 20% 25%;
-  --ring: 15 70% 50%;
+  --border: 20 14% 27%;
+  --input: 20 12% 48%;
+  --ring: 18 85% 62%;
 
-  --card: 20 25% 15%;
+  --card: 20 20% 13%;
   --card-foreground: 35 30% 90%;
-  --card-border: 20 20% 25%;
+  --card-border: 20 14% 27%;
 
-  --popover: 20 25% 15%;
+  --popover: 20 20% 13%;
   --popover-foreground: 35 30% 90%;
-  --popover-border: 20 20% 25%;
+  --popover-border: 20 14% 27%;
 
-  --primary: 15 70% 50%; /* Terracotta */
-  --primary-foreground: 0 0% 100%;
+  /*
+   * On a dark canvas each brand colour has to work as BOTH a fill (with its
+   * foreground on top) and as text on a card. A mid-tone can't do both — it
+   * leaves too little headroom either way. So the brand colours invert here:
+   * light tint + near-black foreground, which is how --accent already behaved.
+   */
+  --primary: 18 85% 62%; /* Terracotta, lifted */
+  --primary-foreground: 20 45% 10%;
 
-  --secondary: 140 30% 40%; /* Forest Green */
-  --secondary-foreground: 0 0% 100%;
+  --secondary: 145 40% 60%; /* Forest green, lifted */
+  --secondary-foreground: 145 50% 8%;
 
-  --muted: 20 20% 20%;
-  --muted-foreground: 35 20% 60%;
+  --muted: 20 16% 18%;
+  --muted-foreground: 35 15% 66%;
 
-  --accent: 40 80% 50%; /* Gold */
+  --accent: 40 80% 58%; /* Gold */
   --accent-foreground: 20 30% 10%;
 
-  --destructive: 0 60% 50%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 75% 65%;
+  --destructive-foreground: 0 60% 10%;
 
-  --sidebar: 20 30% 10%;
-  --sidebar-foreground: 35 30% 90%;
-  --sidebar-border: 20 20% 25%;
-  --sidebar-primary: 15 70% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 20 20% 20%;
-  --sidebar-accent-foreground: 35 30% 90%;
-  --sidebar-ring: 15 70% 50%;
-}
+  --primary-border: hsl(18 85% 70%);
+  --secondary-border: hsl(145 40% 68%);
+  --muted-border: hsl(20 16% 30%);
+  --accent-border: hsl(40 80% 66%);
+  --destructive-border: hsl(0 75% 72%);
+  --button-outline: hsl(20 12% 48%);
+  --badge-outline: hsl(20 12% 48%);
 
-/* ── Trusted-By marquee animations ── */
-@keyframes marquee-left {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-@keyframes marquee-right {
-  from { transform: translateX(-50%); }
-  to   { transform: translateX(0); }
+  --sidebar-gradient: linear-gradient(
+    170deg,
+    #14100a 0%,
+    #1c140b 60%,
+    #22180c 100%
+  );
+  --sidebar-border-color: rgba(255, 255, 255, 0.05);
 }
 
 @layer base {
@@ -156,85 +176,177 @@
   }
 
   body {
-    @apply font-sans antialiased text-foreground selection:bg-primary/20 selection:text-primary;
-    background-color: hsl(222 47% 5%);
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary;
   }
 
-  html {
-    background-color: hsl(222 47% 5%);
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-sans font-bold tracking-tight;
   }
-
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-serif tracking-tight;
-  }
 }
 
-/* ══ GenHaL dashboard entry animations ═══════════════════════════════════ */
+/* ── Entrance animations ──────────────────────────────────────────────────
+ * Ported from the Awajimaa School dashboard (globals.css) so both apps move
+ * the same way. Same keyframes and bounce easing, shorter durations — this is
+ * an app, not a landing page, so motion stays out of the way.
+ */
 
-@keyframes awaBounceInLeft {
-  0%   { opacity:0; transform:translateX(-70px) scale(0.95) }
-  55%  { opacity:1; transform:translateX(10px) scale(1.01) }
-  75%  { transform:translateX(-5px) scale(0.99) }
-  90%  { transform:translateX(3px) }
-  100% { opacity:1; transform:translateX(0) scale(1) }
-}
-@keyframes awaBounceIn {
-  0%   { opacity:0; transform:scale(0.65) }
-  45%  { opacity:1; transform:scale(1.06) }
-  65%  { transform:scale(0.95) }
-  80%  { transform:scale(1.03) }
-  100% { opacity:1; transform:scale(1) }
-}
-@keyframes awaZoomIn {
-  0%   { opacity:0; transform:scale(0.45) }
-  55%  { opacity:1; transform:scale(1.05) }
-  75%  { transform:scale(0.97) }
-  100% { opacity:1; transform:scale(1) }
-}
-@keyframes awaFlipInX {
-  0%   { opacity:0; transform:perspective(600px) rotateX(-90deg) scale(0.9) }
-  40%  { opacity:0.6; transform:perspective(600px) rotateX(18deg) }
-  70%  { transform:perspective(600px) rotateX(-8deg) }
-  100% { opacity:1; transform:perspective(600px) rotateX(0deg) scale(1) }
-}
 @keyframes awaFadeInUp {
-  0%   { opacity:0; transform:translateY(28px) }
-  100% { opacity:1; transform:translateY(0) }
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* ── Theme flash overlay ───────────────────────────────────────────────── */
-@keyframes genhalThemeFlash {
-  0%   { opacity: 0; transform: scale(0.4); }
-  25%  { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 0; transform: scale(2.2); }
+@keyframes awaFadeInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-/* ── Ember sidebar (Nnenna) ────────────────────────────────────────────── */
-@keyframes emberPulse {
-  0%, 100% { opacity: 0.4; }
-  50%       { opacity: 1; }
-}
-.sidebar-ember-edge {
-  position: absolute;
-  right: -1px; top: 0; bottom: 0;
-  width: 1px;
-  animation: emberPulse 2.4s ease-in-out infinite;
-}
-
-/* ── Grove sidebar (Kpokpo) ─────────────────────────────────────────────── */
-.sidebar-grove {
-  background: rgba(1,20,8,0.74) !important;
-  backdrop-filter: blur(22px) saturate(1.6);
-  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+@keyframes awaFadeInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-/* ── Per-variant nav link hover animations ─────────────────────────────── */
-[data-theme="unyeada"] aside a:hover,
-[data-theme="unyeada"] aside button.nav-item:hover  { transform: translateX(3px); }
-[data-theme="ekede"] aside a:hover,
-[data-theme="ekede"] aside button.nav-item:hover    { transform: translateY(-1px); }
-[data-theme="okoroete"] aside a:hover,
-[data-theme="okoroete"] aside button.nav-item:hover { transform: scale(1.02); }
-[data-theme="otuo"] aside a:hover,
-[data-theme="otuo"] aside button.nav-item:hover     { letter-spacing: 0.14em; }
+@keyframes awaZoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes awaBounceInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.01);
+  }
+  80% {
+    transform: translateY(2px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer utilities {
+  .awa-fade-in-up {
+    animation: awaFadeInUp 0.35s ease both;
+  }
+
+  .awa-fade-in-left {
+    animation: awaFadeInLeft 0.35s ease both;
+  }
+
+  .awa-fade-in-right {
+    animation: awaFadeInRight 0.35s ease both;
+  }
+
+  .awa-zoom-in {
+    animation: awaZoomIn 0.4s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  }
+
+  .awa-bounce-in-up {
+    animation: awaBounceInUp 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  }
+
+  /*
+   * Reduced motion: land every element in its final state immediately rather
+   * than leaving it stuck at the animation's opacity-0 start frame.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .awa-fade-in-up,
+    .awa-fade-in-left,
+    .awa-fade-in-right,
+    .awa-zoom-in,
+    .awa-bounce-in-up {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+}
+
+@layer utilities {
+  /*
+   * Replit's design-system ships `hover-elevate` / `active-elevate-2` as a
+   * plugin that isn't part of this workspace, so every Button and Badge lost
+   * its hover and press feedback. Re-implement them as a tint overlay that
+   * reads from the current foreground, so it darkens in light mode and
+   * lightens in dark mode without touching component colours.
+   */
+  .hover-elevate,
+  .active-elevate-2 {
+    position: relative;
+  }
+
+  .hover-elevate::after,
+  .active-elevate-2::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+  }
+
+  .hover-elevate:hover::after {
+    background-color: hsl(var(--foreground) / 0.06);
+  }
+
+  .active-elevate-2:active::after {
+    background-color: hsl(var(--foreground) / 0.12);
+  }
+
+  /* Thin scrollbar used by the sidebar and scrollable panels */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 99px;
+  }
+}
