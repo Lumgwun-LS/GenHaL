@@ -75,6 +75,11 @@ export async function runStartupConstraintMigration(): Promise<void> {
   let skipped = 0;
   let failed = 0;
 
+  // 0. Backfill known data issues before constraint enforcement
+  try {
+    await db.execute(sql.raw(`UPDATE "posts" SET "social_account_ids" = '{}' WHERE "social_account_ids" IS NULL`));
+  } catch { /* column may already be NOT NULL — safe to ignore */ }
+
   // 1. Add missing columns first (idempotent via IF NOT EXISTS)
   for (const col of MISSING_COLUMNS) {
     try {
