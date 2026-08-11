@@ -65,7 +65,7 @@ export function Scene1() {
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
         >
           Africa needs <br />
-          <span className="text-gradient-gold">infrastructure.</span>
+          <span className="text-gradient-gold">Digital Infrastructure.</span>
         </motion.h1>
       </div>
 
