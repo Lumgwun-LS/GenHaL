@@ -98,7 +98,7 @@ export default function VideoTemplate({
           }}
           transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video src={`${import.meta.env.BASE_URL}videos/emergency-drone.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+          <video src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/emergency-drone.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-background/60" />
         </motion.div>
 
@@ -111,7 +111,7 @@ export default function VideoTemplate({
           }}
           transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video src={`${import.meta.env.BASE_URL}videos/health-network.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+          <video src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/health-network.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-background/60 mix-blend-multiply" />
         </motion.div>
 
@@ -124,7 +124,7 @@ export default function VideoTemplate({
           }}
           transition={{ opacity: { duration: 2, ease: 'easeInOut' }, scale: { duration: 20, repeat: Infinity, ease: 'easeInOut' } }}
         >
-          <video src={`${import.meta.env.BASE_URL}videos/oil-spill.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+          <video src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/oil-spill.mp4`} className="w-full h-full object-cover" autoPlay muted loop playsInline />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
         </motion.div>
 
@@ -162,7 +162,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}

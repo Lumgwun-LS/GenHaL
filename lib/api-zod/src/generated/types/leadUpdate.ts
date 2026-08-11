@@ -17,4 +17,6 @@ export interface LeadUpdate {
   notes?: string;
   score?: number;
   channel?: string;
+  /** @nullable */
+  dateOfBirth?: string | null;
 }

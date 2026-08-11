@@ -42,13 +42,22 @@ export interface SubscriptionPlanPricing {
 }
 
 export interface SubscriptionPlan {
-  tier: "basic" | "starter" | "pro" | "enterprise";
+  /**
+   * Slug identifying the tier — used everywhere billing/checkout references a plan.
+   * Admin-configurable; treat as immutable once vendors have subscribed to it.
+   */
+  tier: string;
   name: string;
   pricing: SubscriptionPlanPricing;
   description: string;
   features: string[];
   highlight: boolean;
   quotas: SubscriptionPlanQuotas;
+  /**
+   * Per-plan gateway availability. When set, intersected with the global
+   * billing.paymentGateways setting. When absent, all globally-enabled gateways apply.
+   */
+  gateways?: { stripe: boolean; paystack: boolean; paypal: boolean };
 }
 
 /** Which gateway bills which currency for platform subscriptions — fixed, not admin-editable. */
@@ -69,4 +78,23 @@ export async function getSubscriptionPlan(tier: string): Promise<SubscriptionPla
 /** Which gateways admins have enabled for vendors to pay their platform subscription with. */
 export async function getEnabledSubscriptionGateways(): Promise<Record<SubscriptionGateway, boolean>> {
   return (await getSiteContentBlock("billing.paymentGateways")) as Record<SubscriptionGateway, boolean>;
+}
+
+/**
+ * Returns the effective set of gateways available for a specific plan tier.
+ * Intersects the global billing.paymentGateways setting with the plan's own
+ * per-plan gateways (if configured). A gateway disabled globally is never
+ * available even if the plan enables it.
+ */
+export async function getEnabledGatewaysForPlan(tier: string): Promise<Record<SubscriptionGateway, boolean>> {
+  const [globalGateways, plan] = await Promise.all([
+    getEnabledSubscriptionGateways(),
+    getSubscriptionPlan(tier),
+  ]);
+  if (!plan?.gateways) return globalGateways;
+  return {
+    stripe:   globalGateways.stripe   && plan.gateways.stripe,
+    paystack: globalGateways.paystack && plan.gateways.paystack,
+    paypal:   globalGateways.paypal   && plan.gateways.paypal,
+  };
 }

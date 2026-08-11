@@ -1,3 +1,12 @@
+- [GenHaL Family Wills system](genhal-family-wills.md) — AES-256-GCM encrypted wills; passphrase verified via scrypt, never stored; access model, API, and frontend pattern documented.
+- [GenHaL Proof-of-Life system](genhal-proof-of-life.md) — 90-day token reminders to family head; 4 missed = NOK email; verify page at /verify; scheduler in genhal-life-check-scheduler.ts.
+- [GenHaL Web auth pattern](genhal-web-auth-pattern.md) — Clerk v6 shared with vendor-hub/app-store; ProtectedPage HOC uses useAuth(); no SignedIn/SignedOut exports in v6.
+- [Cross-app theme system](cross-app-theme-system.md) — 4-variant animated themes on GenHaL+App Store mirroring Awa Biz Suite; zustand+persist, ThemeApplier CSS vars, radial flash overlay on switch.
+- [GenHaL Product Vision & Strategic Moat](genhal-product-vision.md) — global relationship graph as moat; community tenancy is foundational; person registry is graph substrate; migration paths are differentiator; network effects compound.
+- [GenHaL Kingdom Civic Layer](genhal-kingdom-civic.md) — 5 new tables (languages/geopoints/economic_activities/schools/churches) with full CRUD in genhal-kingdoms.ts; fetched in the main kingdom GET via Promise.all; migration 0126.
+- [GenHaL Towns & Civic Governance](genhal-towns.md) — 5 tables (towns/rulers/compounds/chiefs/records); rulerTitle/chiefTitle configurable per town; migration 0124.
+- [GenHaL Language Corpus & ML Pipeline](genhal-corpus-pipeline.md) — genhal_language_datasets + genhal_training_runs (migration 0123); Vertex AI auth via GCS_SERVICE_ACCOUNT_KEY JWT; queues locally if GOOGLE_CLOUD_PROJECT unset.
+- [GenHaL Heritage Collector & AI Gateway](genhal-heritage-collector.md) — genhal_language_recordings table; 6 recording types; MediaRecorder browser API; presigned upload; /gateway/* key-auth proxy for Spring Boot.
 - [Support Ticket System](support-ticket-system.md) — vendor-shareable /help/:vendorId form, /ticket/:token tracking, /support dashboard; quota by plan (not RESOURCE_KEYS), upload URL follows media-library pattern.
 - [Auth scoping audit](auth-scoping-audit.md) — 12 route files had full-table-scan + in-memory filter (no auth); fixed with resolveAuthedVendor + DB-level WHERE; public routes and canonical new-route pattern documented.
 - [VendorHub AI video generation](vendorhub-ai-video-generation.md) — no text-to-video support in OpenAI/Gemini AI Integrations; videos are built by animating the AI image with ffmpeg (Ken Burns + caption overlay) instead.
@@ -35,6 +44,7 @@
 - [Export-burst alerting pattern](export-burst-alerting.md) — rolling-window count + fire-Slack-alert-once-at-threshold-crossing, plus a HAVING-count endpoint for a persistent UI banner; generalizes to any "same actor doing X too often" alert.
 - [Admin sender attribution pattern](admin-sender-attribution.md) — resolve Clerk display name at write time and persist it on the row (not just admin_user_id), so history stays readable even if the admin's Clerk profile later changes.
 - [Twilio Auth Token rotation detection](twilio-token-rotation-detection.md) — signature-verified webhooks fail closed/silently on secret rotation; detect via rejection-rate burst alert + admin UI banner, not per-request.
+- [Production schema drift — deploy blockers](prod-schema-drift-deploy-blockers.md) — constraint `_key`/`_unique` naming, missing columns, NOT NULL conflicts; how the Replit provision step fails and how to diagnose before publishing.
 
 - [Per-vendor gateway enable flags](vendorhub-gateway-enable-flags.md) — new payment gateways need a vendorsTable.<gateway>Enabled boolean checked in the checkout route, mirroring stripeEnabled/paystackEnabled.
 - [Platform gateway credential health recheck](gateway-health-recheck.md) — periodic re-test of saved gateway keys (not just at save time) with pass/fail transition Slack alerts and admin UI banner.

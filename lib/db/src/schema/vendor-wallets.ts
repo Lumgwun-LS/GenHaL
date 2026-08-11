@@ -7,7 +7,7 @@ import { paymentsTable } from "./payments";
 
 export const vendorWalletsTable = pgTable("vendor_wallets", {
   id:               serial("id").primaryKey(),
-  vendorId:         integer("vendor_id").notNull().unique().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  vendorId:         integer("vendor_id").notNull().unique("vendor_wallets_vendor_id_key").references(() => vendorsTable.id, { onDelete: "cascade" }),
   ngnBalance:       numeric("ngn_balance", { precision: 14, scale: 2 }).notNull().default("0"),
   usdBalance:       numeric("usd_balance", { precision: 14, scale: 2 }).notNull().default("0"),
   pendingNgnPayout: numeric("pending_ngn_payout", { precision: 14, scale: 2 }).notNull().default("0"),

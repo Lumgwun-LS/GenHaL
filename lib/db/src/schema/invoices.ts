@@ -21,7 +21,7 @@ export const invoicesTable = pgTable("invoices", {
   totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("draft"),
   dueDate: date("due_date"),
-  shareToken: text("share_token").notNull().unique(),
+  shareToken: text("share_token").notNull().unique("invoices_share_token_key"),
   notes: text("notes"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

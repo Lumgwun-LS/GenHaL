@@ -179,7 +179,7 @@ router.post("/products/media/upload-url", async (req, res): Promise<void> => {
 
   const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
   const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
-  const publicUrl = await objectStorageService.getPublicObjectURL(objectPath);
+  const publicUrl = `${process.env.R2_PUBLIC_URL ?? ""}/${objectPath}`;
 
   res.json({ uploadUrl, objectPath, publicUrl });
 });
@@ -194,7 +194,6 @@ router.get("/public/products/:vendorId/:productId", async (req, res): Promise<vo
   const [vendor] = await db.select({
     id: vendorsTable.id,
     name: vendorsTable.name,
-    businessType: vendorsTable.businessType,
   }).from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
@@ -212,7 +211,7 @@ router.get("/public/products/:vendorId/:productId", async (req, res): Promise<vo
     .from(vendorWebsitesTable).where(eq(vendorWebsitesTable.vendorId, vendorId));
 
   res.json({
-    vendor: { id: vendor.id, name: vendor.name, businessType: vendor.businessType },
+    vendor: { id: vendor.id, name: vendor.name },
     product: {
       ...product,
       price: parseFloat(product.price),

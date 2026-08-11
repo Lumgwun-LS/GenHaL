@@ -20,4 +20,9 @@ export interface AdCampaignInput {
   body?: string;
   cta?: string;
   imageUrl?: string;
+  productId?: number;
+  destinationUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }

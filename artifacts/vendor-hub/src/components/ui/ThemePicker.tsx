@@ -59,7 +59,7 @@ export function ThemePicker({ open, onClose }: ThemePickerProps) {
                   isActive ? "ring-[2.5px]" : "ring-1 ring-gray-200 dark:ring-gray-700",
                 )}
                 style={isActive ? {
-                  ringColor: cfg.accentColor,
+                  ["--tw-ring-color" as string]: cfg.accentColor,
                   boxShadow: `0 8px 32px ${cfg.accentColor}35`,
                 } : {}}
               >

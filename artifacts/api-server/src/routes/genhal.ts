@@ -10,7 +10,11 @@ import {
   genhalLanguagesTable,
   genhalLanguageEntriesTable,
   genhalAiGenerationsTable,
+  genhalLanguageRecordingsTable,
 } from "@workspace/db";
+import { ObjectStorageService } from "../lib/objectStorage";
+
+const objectStorageService = new ObjectStorageService();
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../lib/logger";
@@ -34,7 +38,7 @@ const router = Router();
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
-router.get("/genhal/dashboard", requireAuth(), async (req, res) => {
+router.get("/genhal/dashboard", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
 
@@ -82,7 +86,7 @@ router.get("/genhal/dashboard", requireAuth(), async (req, res) => {
 
 // ── Trees ────────────────────────────────────────────────────────────────────
 
-router.get("/genhal/trees", requireAuth(), async (req, res) => {
+router.get("/genhal/trees", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const rows = await db
@@ -110,7 +114,7 @@ router.get("/genhal/trees", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/trees", requireAuth(), async (req, res) => {
+router.post("/genhal/trees", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const body = CreateGenhalTreeBody.parse(req.body);
@@ -122,12 +126,12 @@ router.post("/genhal/trees", requireAuth(), async (req, res) => {
   }
 });
 
-router.get("/genhal/trees/:id", requireAuth(), async (req, res) => {
+router.get("/genhal/trees/:id", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const id = Number(req.params.id);
     const [tree] = await db.select().from(genhalTreesTable).where(and(eq(genhalTreesTable.id, id), eq(genhalTreesTable.clerkUserId, userId!)));
-    if (!tree) return res.status(404).json({ error: "Tree not found" });
+    if (!tree) return void res.status(404).json({ error: "Tree not found" });
 
     const members = await db.select().from(genhalTreeMembersTable).where(eq(genhalTreeMembersTable.treeId, id)).orderBy(genhalTreeMembersTable.id);
 
@@ -143,7 +147,7 @@ router.get("/genhal/trees/:id", requireAuth(), async (req, res) => {
   }
 });
 
-router.patch("/genhal/trees/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/trees/:id", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const id = Number(req.params.id);
@@ -152,7 +156,7 @@ router.patch("/genhal/trees/:id", requireAuth(), async (req, res) => {
       .set({ ...body, updatedAt: new Date() })
       .where(and(eq(genhalTreesTable.id, id), eq(genhalTreesTable.clerkUserId, userId!)))
       .returning();
-    if (!tree) return res.status(404).json({ error: "Tree not found" });
+    if (!tree) return void res.status(404).json({ error: "Tree not found" });
     res.json({ ...tree, memberCount: 0, createdAt: new Date(tree.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "updateGenhalTree error");
@@ -160,7 +164,7 @@ router.patch("/genhal/trees/:id", requireAuth(), async (req, res) => {
   }
 });
 
-router.delete("/genhal/trees/:id", requireAuth(), async (req, res) => {
+router.delete("/genhal/trees/:id", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const id = Number(req.params.id);
@@ -174,7 +178,7 @@ router.delete("/genhal/trees/:id", requireAuth(), async (req, res) => {
 
 // ── Tree Members ─────────────────────────────────────────────────────────────
 
-router.get("/genhal/trees/:id/members", requireAuth(), async (req, res) => {
+router.get("/genhal/trees/:id/members", requireAuth(), async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const members = await db.select().from(genhalTreeMembersTable).where(eq(genhalTreeMembersTable.treeId, id)).orderBy(genhalTreeMembersTable.id);
@@ -185,7 +189,7 @@ router.get("/genhal/trees/:id/members", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/trees/:id/members", requireAuth(), async (req, res) => {
+router.post("/genhal/trees/:id/members", requireAuth(), async (req, res): Promise<void> => {
   try {
     const treeId = Number(req.params.id);
     const body = AddGenhalTreeMemberBody.parse(req.body);
@@ -197,12 +201,12 @@ router.post("/genhal/trees/:id/members", requireAuth(), async (req, res) => {
   }
 });
 
-router.patch("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, res) => {
+router.patch("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
   try {
     const memberId = Number(req.params.memberId);
     const body = UpdateGenhalTreeMemberBody.parse(req.body);
     const [member] = await db.update(genhalTreeMembersTable).set(body).where(eq(genhalTreeMembersTable.id, memberId)).returning();
-    if (!member) return res.status(404).json({ error: "Member not found" });
+    if (!member) return void res.status(404).json({ error: "Member not found" });
     res.json({ ...member, createdAt: new Date(member.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "updateGenhalTreeMember error");
@@ -210,7 +214,7 @@ router.patch("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, r
   }
 });
 
-router.delete("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, res) => {
+router.delete("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, res): Promise<void> => {
   try {
     const memberId = Number(req.params.memberId);
     await db.delete(genhalTreeMembersTable).where(eq(genhalTreeMembersTable.id, memberId));
@@ -223,7 +227,7 @@ router.delete("/genhal/trees/:id/members/:memberId", requireAuth(), async (req, 
 
 // ── Heritage ─────────────────────────────────────────────────────────────────
 
-router.get("/genhal/heritage/feed", async (req, res) => {
+router.get("/genhal/heritage/feed", async (req, res): Promise<void> => {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 50);
     const posts = await db
@@ -252,7 +256,7 @@ router.get("/genhal/heritage/feed", async (req, res) => {
   }
 });
 
-router.get("/genhal/communities", async (req, res) => {
+router.get("/genhal/communities", async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select({
@@ -278,7 +282,7 @@ router.get("/genhal/communities", async (req, res) => {
   }
 });
 
-router.post("/genhal/communities", requireAuth(), async (req, res) => {
+router.post("/genhal/communities", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const body = CreateGenhalCommunityBody.parse(req.body);
@@ -290,7 +294,7 @@ router.post("/genhal/communities", requireAuth(), async (req, res) => {
   }
 });
 
-router.get("/genhal/communities/:id", async (req, res) => {
+router.get("/genhal/communities/:id", async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [community] = await db
@@ -310,7 +314,7 @@ router.get("/genhal/communities/:id", async (req, res) => {
       .leftJoin(genhalHeritagePostsTable, eq(genhalHeritagePostsTable.communityId, genhalCommunitiesTable.id))
       .where(eq(genhalCommunitiesTable.id, id))
       .groupBy(genhalCommunitiesTable.id);
-    if (!community) return res.status(404).json({ error: "Community not found" });
+    if (!community) return void res.status(404).json({ error: "Community not found" });
     res.json({ ...community, postCount: Number(community.postCount), memberCount: Number(community.memberCount), createdAt: new Date(community.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "getGenhalCommunity error");
@@ -318,12 +322,12 @@ router.get("/genhal/communities/:id", async (req, res) => {
   }
 });
 
-router.patch("/genhal/communities/:id", requireAuth(), async (req, res) => {
+router.patch("/genhal/communities/:id", requireAuth(), async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const body = UpdateGenhalCommunityBody.parse(req.body);
     const [community] = await db.update(genhalCommunitiesTable).set({ ...body, updatedAt: new Date() }).where(eq(genhalCommunitiesTable.id, id)).returning();
-    if (!community) return res.status(404).json({ error: "Community not found" });
+    if (!community) return void res.status(404).json({ error: "Community not found" });
     res.json({ ...community, postCount: 0, memberCount: 0, createdAt: new Date(community.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "updateGenhalCommunity error");
@@ -331,7 +335,7 @@ router.patch("/genhal/communities/:id", requireAuth(), async (req, res) => {
   }
 });
 
-router.get("/genhal/communities/:id/posts", async (req, res) => {
+router.get("/genhal/communities/:id/posts", async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const posts = await db
@@ -360,7 +364,7 @@ router.get("/genhal/communities/:id/posts", async (req, res) => {
   }
 });
 
-router.post("/genhal/communities/:id/posts", requireAuth(), async (req, res) => {
+router.post("/genhal/communities/:id/posts", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const communityId = Number(req.params.id);
@@ -391,7 +395,7 @@ router.get("/genhal/languages", async (_req, res) => {
   }
 });
 
-router.get("/genhal/languages/:code/entries", async (req, res) => {
+router.get("/genhal/languages/:code/entries", async (req, res): Promise<void> => {
   try {
     const { code } = req.params;
     const entries = await db.select().from(genhalLanguageEntriesTable)
@@ -404,12 +408,12 @@ router.get("/genhal/languages/:code/entries", async (req, res) => {
   }
 });
 
-router.post("/genhal/languages/:code/entries", requireAuth(), async (req, res) => {
+router.post("/genhal/languages/:code/entries", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const { code } = req.params;
     const body = CreateGenhalLanguageEntryBody.parse(req.body);
-    const [entry] = await db.insert(genhalLanguageEntriesTable).values({ ...body, languageCode: code, clerkUserId: userId! }).returning();
+    const [entry] = await db.insert(genhalLanguageEntriesTable).values({ ...body, languageCode: code as string, clerkUserId: userId! }).returning();
     res.status(201).json({ ...entry, createdAt: new Date(entry.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "createGenhalLanguageEntry error");
@@ -417,12 +421,12 @@ router.post("/genhal/languages/:code/entries", requireAuth(), async (req, res) =
   }
 });
 
-router.patch("/genhal/languages/:code/entries/:entryId", requireAuth(), async (req, res) => {
+router.patch("/genhal/languages/:code/entries/:entryId", requireAuth(), async (req, res): Promise<void> => {
   try {
     const entryId = Number(req.params.entryId);
     const body = UpdateGenhalLanguageEntryBody.parse(req.body);
     const [entry] = await db.update(genhalLanguageEntriesTable).set(body).where(eq(genhalLanguageEntriesTable.id, entryId)).returning();
-    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (!entry) return void res.status(404).json({ error: "Entry not found" });
     res.json({ ...entry, createdAt: new Date(entry.createdAt).toISOString() });
   } catch (err) {
     logger.error(err, "updateGenhalLanguageEntry error");
@@ -430,7 +434,7 @@ router.patch("/genhal/languages/:code/entries/:entryId", requireAuth(), async (r
   }
 });
 
-router.delete("/genhal/languages/:code/entries/:entryId", requireAuth(), async (req, res) => {
+router.delete("/genhal/languages/:code/entries/:entryId", requireAuth(), async (req, res): Promise<void> => {
   try {
     const entryId = Number(req.params.entryId);
     await db.delete(genhalLanguageEntriesTable).where(eq(genhalLanguageEntriesTable.id, entryId));
@@ -443,7 +447,7 @@ router.delete("/genhal/languages/:code/entries/:entryId", requireAuth(), async (
 
 // ── AI ───────────────────────────────────────────────────────────────────────
 
-router.post("/genhal/ai/generate-story", requireAuth(), async (req, res) => {
+router.post("/genhal/ai/generate-story", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const body = GenerateGenhalStoryBody.parse(req.body);
@@ -487,7 +491,7 @@ router.post("/genhal/ai/generate-story", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/ai/translate", requireAuth(), async (req, res) => {
+router.post("/genhal/ai/translate", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const body = TranslateGenhalBody.parse(req.body);
@@ -519,7 +523,7 @@ router.post("/genhal/ai/translate", requireAuth(), async (req, res) => {
   }
 });
 
-router.post("/genhal/ai/caption-image", requireAuth(), async (req, res) => {
+router.post("/genhal/ai/caption-image", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const body = CaptionGenhalImageBody.parse(req.body);
@@ -555,7 +559,7 @@ router.post("/genhal/ai/caption-image", requireAuth(), async (req, res) => {
   }
 });
 
-router.get("/genhal/ai/generations", requireAuth(), async (req, res) => {
+router.get("/genhal/ai/generations", requireAuth(), async (req, res): Promise<void> => {
   try {
     const { userId } = getAuth(req);
     const generations = await db.select().from(genhalAiGenerationsTable)
@@ -565,6 +569,192 @@ router.get("/genhal/ai/generations", requireAuth(), async (req, res) => {
     res.json(generations.map(g => ({ ...g, createdAt: new Date(g.createdAt).toISOString() })));
   } catch (err) {
     logger.error(err, "listGenhalAiGenerations error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Heritage Collector — Language Recordings ─────────────────────────────────
+
+// POST /genhal/collect/upload-url — get a presigned PUT URL for audio/video/image
+router.post("/genhal/collect/upload-url", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { mediaType } = req.body as { mediaType?: "audio" | "video" | "image" };
+    if (!["audio", "video", "image"].includes(mediaType ?? "")) {
+      return void res.status(400).json({ error: "mediaType must be 'audio', 'video', or 'image'" });
+    }
+
+    const base = process.env.PUBLIC_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
+    if (!base) return void res.status(500).json({ error: "No public domain configured" });
+
+    const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
+    const objectId = objectPath.replace(/^\/objects\/uploads\//, "");
+    const mediaUrl = `https://${base}/api/media/${objectId}`;
+
+    await objectStorageService
+      .trySetObjectEntityAclPolicy(objectPath, { owner: "system:genhal-recording", visibility: "public" })
+      .catch(() => {/* best-effort */});
+
+    res.json({ uploadUrl, mediaUrl });
+  } catch (err) {
+    logger.error(err, "genhal/collect/upload-url error");
+    res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+// GET /genhal/collect — list user's recordings
+router.get("/genhal/collect", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    const type = req.query.type as string | undefined;
+    const languageCode = req.query.languageCode as string | undefined;
+
+    const conditions = [eq(genhalLanguageRecordingsTable.clerkUserId, userId!)];
+    if (type) conditions.push(eq(genhalLanguageRecordingsTable.type, type));
+    if (languageCode) conditions.push(eq(genhalLanguageRecordingsTable.languageCode, languageCode));
+
+    const rows = await db.select()
+      .from(genhalLanguageRecordingsTable)
+      .where(and(...conditions))
+      .orderBy(desc(genhalLanguageRecordingsTable.createdAt))
+      .limit(100);
+
+    res.json(rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })));
+  } catch (err) {
+    logger.error(err, "listGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /genhal/collect/dataset — aggregate stats for the ML pipeline dashboard
+router.get("/genhal/collect/dataset", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const byType = await db
+      .select({
+        type: genhalLanguageRecordingsTable.type,
+        status: genhalLanguageRecordingsTable.status,
+        cnt: count(),
+      })
+      .from(genhalLanguageRecordingsTable)
+      .groupBy(genhalLanguageRecordingsTable.type, genhalLanguageRecordingsTable.status);
+
+    const byLanguage = await db
+      .select({
+        languageCode: genhalLanguageRecordingsTable.languageCode,
+        cnt: count(),
+      })
+      .from(genhalLanguageRecordingsTable)
+      .groupBy(genhalLanguageRecordingsTable.languageCode)
+      .orderBy(desc(count()))
+      .limit(20);
+
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(genhalLanguageRecordingsTable);
+
+    const [approvedRow] = await db
+      .select({ approved: count() })
+      .from(genhalLanguageRecordingsTable)
+      .where(eq(genhalLanguageRecordingsTable.status, "approved"));
+
+    res.json({
+      total: Number(totalRow?.total ?? 0),
+      approved: Number(approvedRow?.approved ?? 0),
+      byType: byType.map(r => ({ ...r, cnt: Number(r.cnt) })),
+      byLanguage: byLanguage.map(r => ({ ...r, cnt: Number(r.cnt) })),
+    });
+  } catch (err) {
+    logger.error(err, "genhalCollectDataset error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /genhal/collect — submit a new recording
+router.post("/genhal/collect", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    const {
+      type,
+      languageCode,
+      communityId,
+      textContent,
+      audioUrl,
+      videoUrl,
+      photoUrl,
+      transcript,
+      locationLat,
+      locationLng,
+      locationDescription,
+      speakerName,
+      speakerAgeGroup,
+      consentGiven,
+      metadata,
+    } = req.body as Record<string, unknown>;
+
+    if (!type || !languageCode) {
+      return void res.status(400).json({ error: "type and languageCode are required" });
+    }
+
+    const [recording] = await db.insert(genhalLanguageRecordingsTable).values({
+      clerkUserId: userId!,
+      type: type as string,
+      languageCode: languageCode as string,
+      communityId: communityId ? Number(communityId) : undefined,
+      textContent: textContent as string | undefined,
+      audioUrl: audioUrl as string | undefined,
+      videoUrl: videoUrl as string | undefined,
+      photoUrl: photoUrl as string | undefined,
+      transcript: transcript as string | undefined,
+      locationLat: locationLat ? String(locationLat) : undefined,
+      locationLng: locationLng ? String(locationLng) : undefined,
+      locationDescription: locationDescription as string | undefined,
+      speakerName: speakerName as string | undefined,
+      speakerAgeGroup: speakerAgeGroup as string | undefined,
+      consentGiven: consentGiven !== false,
+      metadata: metadata as Record<string, unknown> | undefined,
+    }).returning();
+
+    res.status(201).json({ ...recording, createdAt: new Date(recording.createdAt).toISOString() });
+  } catch (err) {
+    logger.error(err, "submitGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /genhal/collect/:id — update quality score, transcript, or status
+router.patch("/genhal/collect/:id", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    const id = Number(req.params.id);
+    const { qualityScore, transcript, status } = req.body as Record<string, unknown>;
+
+    const [updated] = await db.update(genhalLanguageRecordingsTable)
+      .set({
+        ...(qualityScore !== undefined && { qualityScore: Number(qualityScore) }),
+        ...(transcript !== undefined && { transcript: transcript as string }),
+        ...(status !== undefined && { status: status as string }),
+      })
+      .where(and(eq(genhalLanguageRecordingsTable.id, id), eq(genhalLanguageRecordingsTable.clerkUserId, userId!)))
+      .returning();
+
+    if (!updated) return void res.status(404).json({ error: "Recording not found" });
+    res.json({ ...updated, createdAt: new Date(updated.createdAt).toISOString() });
+  } catch (err) {
+    logger.error(err, "updateGenhalCollect error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /genhal/collect/:id
+router.delete("/genhal/collect/:id", requireAuth(), async (req, res): Promise<void> => {
+  try {
+    const { userId } = getAuth(req);
+    const id = Number(req.params.id);
+    await db.delete(genhalLanguageRecordingsTable)
+      .where(and(eq(genhalLanguageRecordingsTable.id, id), eq(genhalLanguageRecordingsTable.clerkUserId, userId!)));
+    res.status(204).send();
+  } catch (err) {
+    logger.error(err, "deleteGenhalCollect error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

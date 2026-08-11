@@ -216,7 +216,7 @@ router.get("/vendor-customers/profile", async (req, res): Promise<void> => {
 
     // Invoices
     db.select({
-      id: invoicesTable.id, invoiceNumber: invoicesTable.invoiceNumber,
+      id: invoicesTable.id,
       status: invoicesTable.status, currency: invoicesTable.currency,
       totalAmount: invoicesTable.totalAmount, dueDate: invoicesTable.dueDate,
       createdAt: invoicesTable.createdAt,
@@ -230,7 +230,7 @@ router.get("/vendor-customers/profile", async (req, res): Promise<void> => {
 
     // Support tickets
     db.select({
-      id: supportTicketsTable.id, ticketRef: supportTicketsTable.ticketRef,
+      id: supportTicketsTable.id,
       subject: supportTicketsTable.subject, category: supportTicketsTable.category,
       status: supportTicketsTable.status, priority: supportTicketsTable.priority,
       createdAt: supportTicketsTable.createdAt, updatedAt: supportTicketsTable.updatedAt,

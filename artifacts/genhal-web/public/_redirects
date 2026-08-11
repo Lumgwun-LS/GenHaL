@@ -1,0 +1,13 @@
+# GenHaL — Genealogy · Heritage · Language
+# Custom domain: genhal.awajimaa.com
+#
+# Clerk proxy — must go through the API server's clerkProxyMiddleware so that
+# the session cookie is issued for genhal.awajimaa.com, not a replit.dev dev URL.
+/api/__clerk/*  https://api.awajimaaai.com/api/__clerk/:splat  200
+
+# All other API calls — forward to the centralised API server.
+/api/*  https://api.awajimaaai.com/api/:splat  200
+
+# SPA fallback — every path that isn't a static asset returns index.html
+# so Wouter (React Router) handles client-side navigation.
+/*  /index.html  200

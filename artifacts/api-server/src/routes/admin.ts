@@ -112,15 +112,47 @@ function isAdmin(userId: string): boolean {
 
 const router = Router();
 
+// ─── Super-admin helpers ──────────────────────────────────────────────────────
+
+/** Emails listed in SUPER_ADMIN_EMAILS env var (comma-separated, lower-cased). */
+function getSuperAdminEmails(): string[] {
+  return (process.env.SUPER_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Returns true if the authenticated Clerk user is a super admin.
+ * Super admins must also pass the regular admin check (listed in ADMIN_USER_IDS)
+ * AND have their primary email in SUPER_ADMIN_EMAILS.
+ * When SUPER_ADMIN_EMAILS is empty, all admins are treated as super admins.
+ */
+async function checkIsSuperAdmin(userId: string): Promise<boolean> {
+  if (!isAdmin(userId)) return false;
+  const superEmails = getSuperAdminEmails();
+  if (superEmails.length === 0) return true; // no restriction configured — all admins are super
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    const primary = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
+    if (!primary) return false;
+    return superEmails.includes(primary.emailAddress.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 // ─── GET /admin/check ─────────────────────────────────────────────────────────
 
-router.get("/admin/check", (req, res): void => {
+router.get("/admin/check", async (req, res): Promise<void> => {
   const { userId } = getAuth(req);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  res.json({ isAdmin: isAdmin(userId) });
+  const admin = isAdmin(userId);
+  const superAdmin = admin ? await checkIsSuperAdmin(userId) : false;
+  res.json({ isAdmin: admin, isSuperAdmin: superAdmin });
 });
 
 // ─── GET /admin/whoami ─────────────────────────────────────────────────────────

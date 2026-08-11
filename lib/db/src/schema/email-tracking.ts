@@ -14,7 +14,7 @@ import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
 export const emailTrackingEventsTable = pgTable("email_tracking_events", {
   id: serial("id").primaryKey(),
   /** URL-safe random token used in the pixel URL — globally unique */
-  token: text("token").notNull().unique(),
+  token: text("token").notNull().unique("email_tracking_events_token_key"),
   /**
    * Originating email type for grouping/analytics:
    * "campaign" | "support_reply" | "platform_newsletter" | "birthday" |

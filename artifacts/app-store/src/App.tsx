@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { useEffect, useRef, Component, type ReactNode, type ErrorInfo } from "react";
+import { useEffect, useRef, useState, Component, type ReactNode, type ErrorInfo } from "react";
 import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser, SignIn, SignUp } from "@clerk/react";
 import { dark } from "@clerk/themes";
@@ -7,6 +7,7 @@ import { apiFetch } from "./lib/api";
 import Nav from "./components/nav";
 import Footer from "./components/footer";
 import { CrossAppBanner } from "./components/cross-app-banner";
+import { useAppThemeStore } from "./store/themeStore";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -154,6 +155,46 @@ function SignUpPage() {
   );
 }
 
+/** Applies theme CSS vars to document root whenever the theme changes */
+function ThemeApplier() {
+  const { config } = useAppThemeStore();
+  useEffect(() => {
+    const r = document.documentElement.style;
+    r.setProperty("--color-bg", config.bg);
+    r.setProperty("--color-surface", config.surface);
+    r.setProperty("--color-surface-2", config.surface2);
+    r.setProperty("--color-green", config.accent);
+    r.setProperty("--color-green-dark", config.accentDark);
+  }, [config]);
+  return null;
+}
+
+/** Full-screen radial ripple that flashes the new accent colour on theme switch */
+function ThemeFlashOverlay() {
+  const { config, theme } = useAppThemeStore();
+  const [active, setActive] = useState(false);
+  const prevTheme = useRef(theme);
+  const accentRef = useRef(config.accent);
+  useEffect(() => {
+    if (prevTheme.current !== theme) {
+      accentRef.current = config.accent;
+      prevTheme.current = theme;
+      setActive(true);
+      const t = setTimeout(() => setActive(false), 800);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [theme, config.accent]);
+  if (!active) return null;
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9998, pointerEvents: "none",
+      background: `radial-gradient(circle at 50% 0%, ${accentRef.current}30 0%, transparent 60%)`,
+      animation: "appStoreThemeFlash 0.8s ease-out forwards",
+    }} />
+  );
+}
+
 function AppRoutes() {
   const [, setLocation] = useLocation();
   return (
@@ -168,7 +209,9 @@ function AppRoutes() {
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
-      <div style={{ minHeight: "100vh", background: "#060811", color: "#e8eaf0" }}>
+      <div style={{ minHeight: "100vh", background: "var(--color-bg,#060811)", color: "#e8eaf0" }}>
+        <ThemeApplier />
+        <ThemeFlashOverlay />
         <CrossAppBanner />
         <PageViewTracker />
         <UserTracker />

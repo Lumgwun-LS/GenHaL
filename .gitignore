@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Google OAuth credentials — never commit these
+attached_assets/client_secret*.json
+*client_secret*.json

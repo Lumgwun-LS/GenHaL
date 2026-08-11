@@ -15,7 +15,7 @@ import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
  */
 export const platformPaymentCredentialsTable = pgTable("platform_payment_credentials", {
   id: serial("id").primaryKey(),
-  provider: text("provider").notNull().unique(), // "stripe" | "paystack" | "remita" | "flutterwave" | "nomba"
+  provider: text("provider").notNull().unique("platform_payment_credentials_provider_key"), // "stripe" | "paystack" | "remita" | "flutterwave" | "nomba"
   credentialsEncrypted: text("credentials_encrypted").notNull(), // iv:authTag:ciphertext hex of a JSON blob
   testPassed: boolean("test_passed").notNull().default(false),
   // Populated by the periodic recheck job (and manual re-test), separately from

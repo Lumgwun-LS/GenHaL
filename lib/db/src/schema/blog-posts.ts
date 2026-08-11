@@ -4,7 +4,7 @@ export const blogPostsTable = pgTable("blog_posts", {
   id:             serial("id").primaryKey(),
   vendorId:       integer("vendor_id").notNull(),
   title:          text("title").notNull(),
-  slug:           text("slug").notNull().unique(),
+  slug:           text("slug").notNull().unique("blog_posts_slug_key"),
   coverImageUrl:  text("cover_image_url"),
   bodyHtml:       text("body_html").notNull().default(""),
   excerpt:        text("excerpt"),

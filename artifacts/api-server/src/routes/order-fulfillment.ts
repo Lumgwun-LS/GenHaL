@@ -199,7 +199,7 @@ async function sendDeliveryEmail(order: typeof ordersTable.$inferSelect, receipt
   await sendEmail({
     to: order.customerEmail,
     subject: `Order #${order.id}: ${statusLabel} — ${vendorName}`,
-    html: wrapVendorEmail({ vendorName, bodyHtml }),
+    html: wrapVendorEmail({ bodyHtml }),
   });
 }
 

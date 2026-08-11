@@ -2658,6 +2658,7 @@ export const ListLeadsResponseItem = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -2706,6 +2707,7 @@ export const CreateLeadResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -2749,6 +2751,7 @@ export const ScrapeLeadsResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -2808,6 +2811,7 @@ export const GetLeadResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -2839,7 +2843,8 @@ export const UpdateLeadBody = zod.object({
   "status": zod.string().optional(),
   "notes": zod.string().optional(),
   "score": zod.number().optional(),
-  "channel": zod.string().optional()
+  "channel": zod.string().optional(),
+  "dateOfBirth": zod.string().nullish()
 })
 
 export const UpdateLeadResponse = zod.object({
@@ -2856,6 +2861,7 @@ export const UpdateLeadResponse = zod.object({
   "source": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "score": zod.number().nullish(),
+  "dateOfBirth": zod.string().nullish(),
   "utmSource": zod.string().nullish(),
   "utmMedium": zod.string().nullish(),
   "utmCampaign": zod.string().nullish(),
@@ -5320,7 +5326,12 @@ export const CreateAdCampaignBody = zod.object({
   "headline": zod.string().optional(),
   "body": zod.string().optional(),
   "cta": zod.string().optional(),
-  "imageUrl": zod.string().optional()
+  "imageUrl": zod.string().optional(),
+  "productId": zod.number().optional(),
+  "destinationUrl": zod.string().optional(),
+  "utmSource": zod.string().optional(),
+  "utmMedium": zod.string().optional(),
+  "utmCampaign": zod.string().optional()
 })
 
 export const CreateAdCampaignResponse = zod.object({
@@ -6547,5 +6558,41 @@ export const ListGenhalAiGenerationsResponseItem = zod.object({
   "createdAt": zod.string()
 })
 export const ListGenhalAiGenerationsResponse = zod.array(ListGenhalAiGenerationsResponseItem)
+
+
+/**
+ * @summary List families that have opted into public visibility
+ */
+export const ListGenhalPublicFamiliesResponse = zod.object({
+  "families": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "localName": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "region": zod.string().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "memberCount": zod.number().optional()
+}))
+})
+
+
+/**
+ * @summary List approved language organisations
+ */
+export const ListGenhalLanguageOrgsResponse = zod.object({
+  "orgs": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "description": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "foundedYear": zod.number().nullish(),
+  "memberCount": zod.number().optional(),
+  "languageCodes": zod.array(zod.string()).optional(),
+  "createdAt": zod.string()
+}))
+})
 
 

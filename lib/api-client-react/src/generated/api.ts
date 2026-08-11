@@ -174,6 +174,8 @@ import type {
   ListExpensesParams,
   ListGenhalCommunitiesParams,
   ListGenhalHeritageFeedParams,
+  ListGenhalLanguageOrgs200,
+  ListGenhalPublicFamilies200,
   ListInventoryTransactionsParams,
   ListInvestmentsParams,
   ListLeadsParams,
@@ -18568,6 +18570,160 @@ export function useListGenhalAiGenerations<TData = Awaited<ReturnType<typeof lis
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListGenhalAiGenerationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGenhalPublicFamiliesUrl = () => {
+
+
+
+
+  return `/api/genhal/public/families`
+}
+
+/**
+ * @summary List families that have opted into public visibility
+ */
+export const listGenhalPublicFamilies = async ( options?: RequestInit): Promise<ListGenhalPublicFamilies200> => {
+
+  return customFetch<ListGenhalPublicFamilies200>(getListGenhalPublicFamiliesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalPublicFamiliesQueryKey = () => {
+    return [
+    `/api/genhal/public/families`
+    ] as const;
+    }
+
+
+export const getListGenhalPublicFamiliesQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalPublicFamilies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalPublicFamilies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalPublicFamiliesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalPublicFamilies>>> = ({ signal }) => listGenhalPublicFamilies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalPublicFamilies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalPublicFamiliesQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalPublicFamilies>>>
+export type ListGenhalPublicFamiliesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List families that have opted into public visibility
+ */
+
+export function useListGenhalPublicFamilies<TData = Awaited<ReturnType<typeof listGenhalPublicFamilies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalPublicFamilies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalPublicFamiliesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGenhalLanguageOrgsUrl = () => {
+
+
+
+
+  return `/api/genhal/language-orgs`
+}
+
+/**
+ * @summary List approved language organisations
+ */
+export const listGenhalLanguageOrgs = async ( options?: RequestInit): Promise<ListGenhalLanguageOrgs200> => {
+
+  return customFetch<ListGenhalLanguageOrgs200>(getListGenhalLanguageOrgsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGenhalLanguageOrgsQueryKey = () => {
+    return [
+    `/api/genhal/language-orgs`
+    ] as const;
+    }
+
+
+export const getListGenhalLanguageOrgsQueryOptions = <TData = Awaited<ReturnType<typeof listGenhalLanguageOrgs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageOrgs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGenhalLanguageOrgsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGenhalLanguageOrgs>>> = ({ signal }) => listGenhalLanguageOrgs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageOrgs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGenhalLanguageOrgsQueryResult = NonNullable<Awaited<ReturnType<typeof listGenhalLanguageOrgs>>>
+export type ListGenhalLanguageOrgsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List approved language organisations
+ */
+
+export function useListGenhalLanguageOrgs<TData = Awaited<ReturnType<typeof listGenhalLanguageOrgs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGenhalLanguageOrgs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGenhalLanguageOrgsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

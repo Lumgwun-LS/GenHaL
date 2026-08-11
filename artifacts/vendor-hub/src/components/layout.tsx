@@ -48,6 +48,7 @@ import {
   TicketCheck,
   Palette,
   Zap,
+  TreePine,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { ThemePicker } from "@/components/ui/ThemePicker";
@@ -131,7 +132,7 @@ function DashboardFooter() {
   );
 }
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> };
 type NavGroup = { label?: string; items: NavItem[]; defaultOpen?: boolean };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -222,6 +223,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Awajimaa",
+    defaultOpen: false,
+    items: [
+      { href: "https://genhal.awajimaa.com", label: "GenHaL — Heritage & Language", icon: TreePine },
+    ],
+  },
+  {
     label: "Account",
     defaultOpen: true,
     items: [
@@ -247,6 +255,23 @@ function NavLink({
 }) {
   const isActive = location === item.href || location.startsWith(item.href + "/");
   const handleClick = () => onClick(item.label);
+
+  /* ── External links — open in new tab regardless of sidebar variant ── */
+  if (item.href.startsWith("http")) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleClick}
+        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      >
+        <item.icon className="w-4 h-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+        <ExternalLink className="w-3 h-3 ml-auto shrink-0 opacity-40" />
+      </a>
+    );
+  }
 
   /* ── ELECTRIC (Unyeada) ── Bold neon borders, glow, sharp precision */
   if (variant === "electric") {
@@ -593,8 +618,8 @@ function SidebarHeader({
         <Link href="/home" className="flex items-center gap-3 flex-1 min-w-0 group/logo" onClick={onClose}>
           <div className="relative shrink-0">
             <div className="absolute inset-0 rounded-full blur-sm" style={{ background: accentColor, opacity: 0.3 }} />
-            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="relative w-8 h-8 rounded-full object-cover ring-1"
-              style={{ ringColor: accentColor }} />
+            <img src="/awajimaa-logo.jpg" alt="Awajimaa" className="relative w-8 h-8 rounded-full object-cover"
+              style={{ boxShadow: `0 0 0 1.5px ${accentColor}` }} />
           </div>
           <div className="min-w-0">
             <span className="font-bold text-sm tracking-tight block truncate text-white/90 group-hover/logo:text-white transition-colors">

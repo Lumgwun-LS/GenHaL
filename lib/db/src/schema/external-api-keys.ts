@@ -10,7 +10,7 @@ import { z } from "zod/v4";
 export const externalApiKeysTable = pgTable("external_api_keys", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),                        // e.g. "Awajimaa Android Production"
-  keyHash: text("key_hash").notNull().unique(),        // SHA-256 hash of the raw key
+  keyHash: text("key_hash").notNull().unique("external_api_keys_key_hash_key"),        // SHA-256 hash of the raw key
   source: text("source").notNull().default("awajimaa"), // integration source label
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

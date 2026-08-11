@@ -26,7 +26,7 @@ export function Scene4Logistics() {
         transition={{ duration: 5.5, ease: "easeOut" }}
       >
         <video
-          src={`${import.meta.env.BASE_URL}videos/logistics.mp4`}
+          src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/logistics.mp4`}
           className="w-full h-full object-cover"
           autoPlay
           muted

@@ -3,7 +3,7 @@ import { vendorsTable } from "./vendors";
 
 export const vendorStockAlertSettingsTable = pgTable("vendor_stock_alert_settings", {
   id: serial("id").primaryKey(),
-  vendorId: integer("vendor_id").notNull().unique().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  vendorId: integer("vendor_id").notNull().unique("vendor_stock_alert_settings_vendor_id_key").references(() => vendorsTable.id, { onDelete: "cascade" }),
   alert60Enabled: boolean("alert_60_enabled").notNull().default(true),
   alert40Enabled: boolean("alert_40_enabled").notNull().default(true),
   alert20Enabled: boolean("alert_20_enabled").notNull().default(true),

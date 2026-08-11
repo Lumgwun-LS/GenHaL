@@ -80,7 +80,7 @@ export default function VideoTemplate({
           transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
         >
           <video
-            src={`${import.meta.env.BASE_URL}videos/bg_particles.mp4`}
+            src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg_particles.mp4`}
             autoPlay loop muted playsInline
             className="w-full h-full object-cover opacity-40 mix-blend-screen"
           />
@@ -143,7 +143,7 @@ export default function VideoTemplate({
 
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/bg_music.mp3`}
+        src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}

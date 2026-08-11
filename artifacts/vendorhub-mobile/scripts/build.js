@@ -83,10 +83,11 @@ function prepareDirectories(timestamp) {
     fs.rmSync(staticBuild, { recursive: true });
   }
 
+  // Android-only build: iOS Expo Go is not used in the African market (>90% Android).
+  // Building only Android halves memory usage and eliminates the OOM that killed the
+  // iOS Hermes minification step during production builds.
   const dirs = [
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'ios'),
     path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android'),
-    path.join(staticBuild, 'ios'),
     path.join(staticBuild, 'android'),
   ];
 
@@ -151,12 +152,17 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   metroProcess = spawn(
     'pnpm',
-    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost'],
+    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost', '--max-workers', '2'],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
       cwd: projectRoot,
-      env,
+      env: {
+        ...env,
+        // Cap Metro's Node heap to avoid OOM during Hermes minification.
+        // Without this, Metro grabs all available RAM and gets killed mid-bundle.
+        NODE_OPTIONS: '--max-old-space-size=4096',
+      },
     },
   );
 
@@ -288,18 +294,12 @@ async function downloadBundlesAndManifests(timestamp) {
   console.log('This may take several minutes for production builds...');
 
   try {
-    // Bundles are sequential — Metro can't handle both platforms simultaneously
-    // without stalling. Manifests are cheap and run in parallel after.
-    await downloadBundle('ios', timestamp);
+    // Android-only: iOS removed to eliminate OOM during Hermes minification.
     await downloadBundle('android', timestamp);
-
-    const [iosManifest, androidManifest] = await Promise.all([
-      downloadManifest('ios'),
-      downloadManifest('android'),
-    ]);
+    const androidManifest = await downloadManifest('android');
 
     console.log('All downloads completed successfully');
-    return { ios: iosManifest, android: androidManifest };
+    return { android: androidManifest };
   } catch (error) {
     exitWithError(`Download failed: ${error.message}`);
   }
@@ -307,70 +307,39 @@ async function downloadBundlesAndManifests(timestamp) {
 
 function extractAssets(timestamp) {
   const staticBuild = path.join(projectRoot, 'static-build');
-  const bundles = {
-    ios: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'ios',
-        'bundle.js',
-      ),
-      'utf-8',
-    ),
-    android: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'android',
-        'bundle.js',
-      ),
-      'utf-8',
-    ),
-  };
+  const androidBundle = fs.readFileSync(
+    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android', 'bundle.js'),
+    'utf-8',
+  );
 
   const assetsMap = new Map();
   const assetPattern =
     /httpServerLocation:"([^"]+)"[^}]*hash:"([^"]+)"[^}]*name:"([^"]+)"[^}]*type:"([^"]+)"/g;
 
-  const extractFromBundle = (bundle, platform) => {
-    for (const match of bundle.matchAll(assetPattern)) {
-      const originalPath = match[1];
-      const filename = match[3] + '.' + match[4];
+  for (const match of androidBundle.matchAll(assetPattern)) {
+    const originalPath = match[1];
+    const filename = match[3] + '.' + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
-      const unstablePath = tempUrl.searchParams.get('unstable_path');
+    const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+    const unstablePath = tempUrl.searchParams.get('unstable_path');
 
-      if (!unstablePath) {
-        throw new Error(`Asset missing unstable_path: ${originalPath}`);
-      }
-
-      const decodedPath = decodeURIComponent(unstablePath);
-      const key = path.posix.join(decodedPath, filename);
-
-      if (!assetsMap.has(key)) {
-        const asset = {
-          url: path.posix.join('/', decodedPath, filename),
-          originalPath: originalPath,
-          filename: filename,
-          relativePath: decodedPath,
-          hash: match[2],
-          platforms: new Set(),
-        };
-
-        assetsMap.set(key, asset);
-      }
-      assetsMap.get(key).platforms.add(platform);
+    if (!unstablePath) {
+      throw new Error(`Asset missing unstable_path: ${originalPath}`);
     }
-  };
 
-  extractFromBundle(bundles.ios, 'ios');
-  extractFromBundle(bundles.android, 'android');
+    const decodedPath = decodeURIComponent(unstablePath);
+    const key = path.posix.join(decodedPath, filename);
+
+    if (!assetsMap.has(key)) {
+      assetsMap.set(key, {
+        url: path.posix.join('/', decodedPath, filename),
+        originalPath,
+        filename,
+        relativePath: decodedPath,
+        hash: match[2],
+      });
+    }
+  }
 
   return Array.from(assetsMap.values());
 }
@@ -442,83 +411,65 @@ async function downloadAssets(assets, timestamp) {
 }
 
 function updateBundleUrls(timestamp, baseUrl) {
-  const updateForPlatform = (platform) => {
-    const bundlePath = path.join(
-      projectRoot,
-      'static-build',
-      timestamp,
-      '_expo',
-      'static',
-      'js',
-      platform,
-      'bundle.js',
-    );
-    let bundle = fs.readFileSync(bundlePath, 'utf-8');
+  const bundlePath = path.join(
+    projectRoot,
+    'static-build',
+    timestamp,
+    '_expo',
+    'static',
+    'js',
+    'android',
+    'bundle.js',
+  );
+  let bundle = fs.readFileSync(bundlePath, 'utf-8');
 
-    bundle = bundle.replace(
-      /httpServerLocation:"(\/[^"]+)"/g,
-      (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
-        const unstablePath = tempUrl.searchParams.get('unstable_path');
+  bundle = bundle.replace(
+    /httpServerLocation:"(\/[^"]+)"/g,
+    (_match, capturedPath) => {
+      const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+      const unstablePath = tempUrl.searchParams.get('unstable_path');
 
-        if (!unstablePath) {
-          throw new Error(
-            `Asset missing unstable_path in bundle: ${capturedPath}`,
-          );
-        }
+      if (!unstablePath) {
+        throw new Error(
+          `Asset missing unstable_path in bundle: ${capturedPath}`,
+        );
+      }
 
-        const decodedPath = decodeURIComponent(unstablePath);
-        return `httpServerLocation:"${baseUrl}${basePath}/${timestamp}/_expo/static/js/${decodedPath}"`;
-      },
-    );
+      const decodedPath = decodeURIComponent(unstablePath);
+      return `httpServerLocation:"${baseUrl}${basePath}/${timestamp}/_expo/static/js/${decodedPath}"`;
+    },
+  );
 
-    fs.writeFileSync(bundlePath, bundle);
-  };
-
-  updateForPlatform('ios');
-  updateForPlatform('android');
+  fs.writeFileSync(bundlePath, bundle);
   console.log('Updated bundle URLs');
 }
 
 function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
-  const updateForPlatform = (platform, manifest) => {
-    if (!manifest.launchAsset || !manifest.extra) {
-      exitWithError(`Malformed manifest for ${platform}`);
-    }
+  const manifest = manifests.android;
+  if (!manifest.launchAsset || !manifest.extra) {
+    exitWithError('Malformed manifest for android');
+  }
 
-    manifest.launchAsset.url = `${baseUrl}${basePath}/${timestamp}/_expo/static/js/${platform}/bundle.js`;
-    manifest.launchAsset.key = `bundle-${timestamp}`;
-    manifest.createdAt = new Date(
-      Number(timestamp.split('-')[0]),
-    ).toISOString();
-    manifest.extra.expoClient.hostUri =
-      baseUrl.replace('https://', '') + '/' + platform;
-    manifest.extra.expoGo.debuggerHost =
-      baseUrl.replace('https://', '') + '/' + platform;
-    manifest.extra.expoGo.packagerOpts.dev = false;
+  manifest.launchAsset.url = `${baseUrl}${basePath}/${timestamp}/_expo/static/js/android/bundle.js`;
+  manifest.launchAsset.key = `bundle-${timestamp}`;
+  manifest.createdAt = new Date(Number(timestamp.split('-')[0])).toISOString();
+  manifest.extra.expoClient.hostUri = baseUrl.replace('https://', '') + '/android';
+  manifest.extra.expoGo.debuggerHost = baseUrl.replace('https://', '') + '/android';
+  manifest.extra.expoGo.packagerOpts.dev = false;
 
-    if (manifest.assets && manifest.assets.length > 0) {
-      manifest.assets.forEach((asset) => {
-        if (!asset.url) return;
+  if (manifest.assets && manifest.assets.length > 0) {
+    manifest.assets.forEach((asset) => {
+      if (!asset.url || !asset.hash) return;
+      const assetInfo = assetsByHash.get(asset.hash);
+      if (!assetInfo) return;
+      asset.url = `${baseUrl}${basePath}/${timestamp}/_expo/static/js/${assetInfo.relativePath}/${assetInfo.filename}`;
+    });
+  }
 
-        const hash = asset.hash;
-        if (!hash) return;
-
-        const assetInfo = assetsByHash.get(hash);
-        if (!assetInfo) return;
-
-        asset.url = `${baseUrl}${basePath}/${timestamp}/_expo/static/js/${assetInfo.relativePath}/${assetInfo.filename}`;
-      });
-    }
-
-    fs.writeFileSync(
-      path.join(projectRoot, 'static-build', platform, 'manifest.json'),
-      JSON.stringify(manifest, null, 2),
-    );
-  };
-
-  updateForPlatform('ios', manifests.ios);
-  updateForPlatform('android', manifests.android);
+  fs.writeFileSync(
+    path.join(projectRoot, 'static-build', 'android', 'manifest.json'),
+    JSON.stringify(manifest, null, 2),
+  );
   console.log('Manifests updated');
 }
 
@@ -537,7 +488,7 @@ async function main() {
 
   await startMetro(domain, expoPublicReplId);
 
-  const downloadTimeout = 40 * 60 * 1_000; // 40 minutes: two sequential 15-min bundles + buffer
+  const downloadTimeout = 20 * 60 * 1_000; // 20 minutes: one Android bundle (iOS removed) + buffer
   const downloadPromise = downloadBundlesAndManifests(timestamp);
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => {

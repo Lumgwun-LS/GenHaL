@@ -8,7 +8,7 @@ import { vendorsTable } from "./vendors";
  */
 export const platformUsersTable = pgTable("platform_users", {
   id:                   serial("id").primaryKey(),
-  clerkUserId:          text("clerk_user_id").notNull().unique(),
+  clerkUserId:          text("clerk_user_id").notNull().unique("platform_users_clerk_user_id_key"),
   email:                text("email"),
   name:                 text("name"),
   phone:                text("phone"),

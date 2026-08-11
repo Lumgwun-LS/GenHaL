@@ -88,7 +88,7 @@ export default function VideoTemplate({
           transition={{ duration: 15, ease: 'linear' }}
         >
           <video
-            src={`${import.meta.env.BASE_URL}videos/particles.mp4`}
+            src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/particles.mp4`}
             autoPlay
             muted
             loop
@@ -130,7 +130,7 @@ export default function VideoTemplate({
       {/* Background audio — Awajimaa Song */}
       <audio
         ref={audioRef}
-        src={`${import.meta.env.BASE_URL}audio/awajimaa_song.mp3`}
+        src={`https://pub-07bed37fd4bf4c02b66107ecb2a7686d.r2.dev/video-artifacts/bg_music.mp3`}
         preload="auto"
         autoPlay
         muted={muted}

@@ -107,7 +107,7 @@ router.post("/exchange", async (req: Request, res: Response) => {
         res.status(400).json({ error: (err as any).error || "SSO code invalid or expired" });
         return;
       }
-      userInfo = await verifyResp.json();
+      userInfo = (await verifyResp.json()) as typeof userInfo;
     } catch (e: any) {
       console.error("[SSO exchange] Spring Boot verify failed:", e.message);
       res.status(502).json({ error: "Could not reach Awajimaa identity server" });
@@ -150,11 +150,11 @@ router.post("/exchange", async (req: Request, res: Response) => {
         await db.insert(platformUsersTable).values({
           clerkUserId,
           email,
-          displayName: userInfo.name || email.split("@")[0],
-          lastLoginAt: new Date(),
+          name: userInfo.name || email.split("@")[0],
+          lastSeenAt: new Date(),
         }).onConflictDoUpdate({
           target: platformUsersTable.clerkUserId,
-          set: { lastLoginAt: new Date() },
+          set: { lastSeenAt: new Date() },
         });
       } catch {}
     }

@@ -47,6 +47,7 @@ const MIME = {
 };
 
 const APP_STORE_ROOT = resolve(__dirname, '..', 'app-store', 'dist', 'standalone');
+const GENHAL_ROOT    = resolve(__dirname, '..', 'genhal-web', 'dist', 'standalone');
 const BIZ_SUITE_ROOT = resolve(__dirname, 'dist', 'public');
 
 function serveStatic(root, reqUrl, res) {
@@ -88,15 +89,22 @@ function serveStatic(root, reqUrl, res) {
 
 const server = createServer((req, res) => {
   const host = (req.headers.host || '').split(':')[0].toLowerCase();
+
   const isAppStore =
     host === 'awajimaaappstore.com' ||
     host === 'www.awajimaaappstore.com';
 
-  serveStatic(isAppStore ? APP_STORE_ROOT : BIZ_SUITE_ROOT, req.url, res);
+  const isGenHal =
+    host === 'genhal.awajimaa.com' ||
+    host === 'www.genhal.awajimaa.com';
+
+  const root = isAppStore ? APP_STORE_ROOT : isGenHal ? GENHAL_ROOT : BIZ_SUITE_ROOT;
+  serveStatic(root, req.url, res);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Host router listening on :${PORT}`);
   console.log(`  awajimaaappstore.com  → ${APP_STORE_ROOT}`);
+  console.log(`  genhal.awajimaa.com   → ${GENHAL_ROOT}`);
   console.log(`  * (default)           → ${BIZ_SUITE_ROOT}`);
 });
