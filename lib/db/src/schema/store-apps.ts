@@ -5,7 +5,7 @@ export const storeAppsTable = pgTable("store_apps", {
   id: serial("id").primaryKey(),
   developerId: integer("developer_id").notNull().references(() => storeDeveloperAccountsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+  slug: text("slug").notNull().unique("store_apps_slug_key"),
   tagline: text("tagline").notNull(),
   description: text("description").notNull(),
   category: text("category").notNull(),
@@ -49,7 +49,7 @@ export const storeAppsTable = pgTable("store_apps", {
   isPlatformApp: boolean("is_platform_app").notNull().default(false),
   // Canonical public ID — encoded as {base36_timestamp}{owner_fingerprint}{random}
   // Maps to https://awajimaaappstore.com/app/{publicId}
-  publicId: text("public_id").unique(),
+  publicId: text("public_id").unique("store_apps_public_id_key"),
   // Trial upload: set when a developer submits under an admin-granted upload trial.
   // trialSuspendedAt is set by the expiry scheduler when the trial lapses before payment.
   trialUpload:      boolean("trial_upload").notNull().default(false),

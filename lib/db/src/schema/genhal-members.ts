@@ -27,7 +27,7 @@ export const genhalKingdomMembersTable = pgTable("genhal_kingdom_members", {
   attributes: jsonb("attributes"),                       // extra profile data for this membership
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [unique("genhal_kingdom_member_unique").on(t.kingdomId, t.clerkUserId)]);
+}, (t) => [unique("genhal_kingdom_members_kingdom_id_clerk_user_id_key").on(t.kingdomId, t.clerkUserId)]);
 
 // ── Family Accounts ───────────────────────────────────────────────────────────
 export const genhalFamilyAccountsTable = pgTable("genhal_family_accounts", {
@@ -71,4 +71,4 @@ export const genhalFamilyMembersTable = pgTable("genhal_family_members", {
   attributes: jsonb("attributes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [unique("genhal_family_member_unique").on(t.familyId, t.clerkUserId)]);
+}, (t) => [unique("genhal_family_members_family_id_clerk_user_id_key").on(t.familyId, t.clerkUserId)]);

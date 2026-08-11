@@ -13,7 +13,7 @@ export const vendorApiKeysTable = pgTable("vendor_api_keys", {
   id:         serial("id").primaryKey(),
   vendorId:   integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   name:       text("name").notNull(),                            // user-given label, e.g. "Zapier integration"
-  keyHash:    text("key_hash").notNull().unique(),               // SHA-256 of the raw key
+  keyHash:    text("key_hash").notNull().unique("vendor_api_keys_key_hash_key"),               // SHA-256 of the raw key
   prefix:     text("prefix").notNull(),                          // first 12 chars shown in the UI for identification
   scopes:     text("scopes").array().notNull().default(["read"]), // ["read"] | ["read","write"] | specific scopes
   isActive:   boolean("is_active").notNull().default(true),

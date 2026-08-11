@@ -19,7 +19,7 @@ export const genhalLifeChecksTable = pgTable("genhal_life_checks", {
 
   /** Short alphanumeric token — included in the email both as a type-in code
    *  and embedded in a click link.  Globally unique. */
-  token:            text("token").notNull().unique(),
+  token:            text("token").notNull().unique("genhal_life_checks_token_key"),
 
   /** When the reminder email was dispatched. */
   sentAt:           timestamp("sent_at").notNull().defaultNow(),

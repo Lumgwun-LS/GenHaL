@@ -10,7 +10,7 @@ export const supportTicketsTable = pgTable("support_tickets", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   /** Unique token given to the customer so they can view thread progress without auth */
-  ticketToken: text("ticket_token").notNull().unique(),
+  ticketToken: text("ticket_token").notNull().unique("support_tickets_ticket_token_key"),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),

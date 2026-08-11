@@ -10,7 +10,7 @@ import { pgTable, text, serial, timestamp, boolean, date } from "drizzle-orm/pg-
  */
 export const customersTable = pgTable("customers", {
   id:               serial("id").primaryKey(),
-  clerkUserId:      text("clerk_user_id").notNull().unique(),
+  clerkUserId:      text("clerk_user_id").notNull().unique("customers_clerk_user_id_key"),
   email:            text("email").notNull(),
   name:             text("name").notNull(),
   phone:            text("phone"),

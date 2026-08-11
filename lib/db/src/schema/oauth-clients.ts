@@ -11,7 +11,7 @@ export const oauthClientsTable = pgTable("oauth_clients", {
   description:      text("description"),
   websiteUrl:       text("website_url"),
   logoUrl:          text("logo_url"),
-  clientId:         text("client_id").notNull().unique(),         // awa_ci_<hex>
+  clientId:         text("client_id").notNull().unique("oauth_clients_client_id_key"),         // awa_ci_<hex>
   clientSecretHash: text("client_secret_hash").notNull(),        // SHA-256 of raw secret
   redirectUris:     text("redirect_uris").array().notNull(),     // allowed redirect URIs
   scopes:           text("scopes").array().notNull(),             // scopes this client may request

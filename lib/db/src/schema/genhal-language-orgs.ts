@@ -13,7 +13,7 @@ import {
 export const genhalLanguageOrgsTable = pgTable("genhal_language_orgs", {
   id:                     serial("id").primaryKey(),
   name:                   text("name").notNull(),
-  slug:                   text("slug").notNull().unique(),   // URL-safe identifier
+  slug:                   text("slug").notNull().unique("genhal_language_orgs_slug_key"),   // URL-safe identifier
   description:            text("description"),
   logoUrl:                text("logo_url"),
   website:                text("website"),
@@ -53,7 +53,7 @@ export const genhalLanguageOrgMembersTable = pgTable(
     joinedAt:               timestamp("joined_at").defaultNow(),
     createdAt:              timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [unique("genhal_org_member_unique").on(t.orgId, t.clerkUserId)],
+  (t) => [unique("genhal_language_org_members_org_id_clerk_user_id_key").on(t.orgId, t.clerkUserId)],
 );
 
 // ── Languages managed by an organisation ─────────────────────────────────────
@@ -78,5 +78,5 @@ export const genhalLanguageOrgLanguagesTable = pgTable(
     isPrimaryOrg:     boolean("is_primary_org").notNull().default(false),
     createdAt:        timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [unique("genhal_org_lang_unique").on(t.orgId, t.languageCode)],
+  (t) => [unique("genhal_language_org_languages_org_id_language_code_key").on(t.orgId, t.languageCode)],
 );

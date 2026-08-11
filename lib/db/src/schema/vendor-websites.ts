@@ -21,8 +21,8 @@ export type SiteSection = {
 
 export const vendorWebsitesTable = pgTable("vendor_websites", {
   id: serial("id").primaryKey(),
-  vendorId: integer("vendor_id").notNull().unique().references(() => vendorsTable.id, { onDelete: "cascade" }),
-  slug: text("slug").notNull().unique(),
+  vendorId: integer("vendor_id").notNull().unique("vendor_websites_vendor_id_key").references(() => vendorsTable.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique("vendor_websites_slug_key"),
   templateId: text("template_id").notNull().default("modern-shop"),
   themeColor: text("theme_color").notNull().default("#7F50FF"),
   published: boolean("published").notNull().default(false),

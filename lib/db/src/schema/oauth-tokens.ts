@@ -13,7 +13,7 @@ export const oauthTokensTable = pgTable("oauth_tokens", {
   id:         serial("id").primaryKey(),
   vendorId:   integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
   clientId:   text("client_id").notNull(),
-  tokenHash:  text("token_hash").notNull().unique(),
+  tokenHash:  text("token_hash").notNull().unique("oauth_tokens_token_hash_key"),
   tokenType:  text("token_type").notNull().default("access_token"),
   scopes:     text("scopes").array().notNull(),
   expiresAt:  timestamp("expires_at", { withTimezone: true }),

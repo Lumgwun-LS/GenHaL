@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, unique } from "drizzle-orm/pg-core";
 
 export const blogCommentsTable = pgTable("blog_comments", {
   id:             serial("id").primaryKey(),
@@ -16,4 +16,4 @@ export const blogPostLikesTable = pgTable("blog_post_likes", {
   postId:       integer("post_id").notNull(),
   visitorToken: text("visitor_token").notNull(),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [unique("blog_post_likes_post_id_visitor_token_key").on(t.postId, t.visitorToken)]);

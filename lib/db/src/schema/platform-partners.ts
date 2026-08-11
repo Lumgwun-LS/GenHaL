@@ -16,7 +16,7 @@ export const platformPartnersTable = pgTable("platform_partners", {
   id:               serial("id").primaryKey(),
   // Identity
   name:             text("name").notNull(),
-  slug:             text("slug").notNull().unique(),            // URL-safe, used in /docs/:slug
+  slug:             text("slug").notNull().unique("platform_partners_slug_key"),            // URL-safe, used in /docs/:slug
   description:      text("description"),
   logoUrl:          text("logo_url"),
   websiteUrl:       text("website_url"),

@@ -10,7 +10,7 @@ import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
  */
 export const jobRunStatusTable = pgTable("job_run_status", {
   id: serial("id").primaryKey(),
-  jobName: text("job_name").notNull().unique(), // e.g. "subscription-sync"
+  jobName: text("job_name").notNull().unique("job_run_status_job_name_key"), // e.g. "subscription-sync"
   lastRunAt: timestamp("last_run_at", { withTimezone: true }), // set on every tick, pass or fail
   lastSuccessAt: timestamp("last_success_at", { withTimezone: true }), // set only when a tick completes without throwing
   lastCheckedCount: integer("last_checked_count"), // items examined on the last successful run

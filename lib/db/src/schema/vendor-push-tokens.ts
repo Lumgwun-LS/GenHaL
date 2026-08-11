@@ -13,7 +13,7 @@ import { vendorsTable } from "./vendors";
 export const vendorPushTokensTable = pgTable("vendor_push_tokens", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
-  expoPushToken: text("expo_push_token").notNull().unique(),
+  expoPushToken: text("expo_push_token").notNull().unique("vendor_push_tokens_expo_push_token_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

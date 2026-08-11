@@ -2,7 +2,7 @@ import { pgTable, text, serial, timestamp, boolean, jsonb, integer } from "drizz
 
 export const storeDeveloperAccountsTable = pgTable("store_developer_accounts", {
   id: serial("id").primaryKey(),
-  clerkUserId: text("clerk_user_id").notNull().unique(),
+  clerkUserId: text("clerk_user_id").notNull().unique("store_developer_accounts_clerk_user_id_key"),
   displayName: text("display_name").notNull(),
   email: text("email").notNull(),
   bio: text("bio"),

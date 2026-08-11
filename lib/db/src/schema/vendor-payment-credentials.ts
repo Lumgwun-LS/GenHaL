@@ -11,7 +11,7 @@ export const vendorPaymentCredentialsTable = pgTable("vendor_payment_credentials
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id")
     .notNull()
-    .unique()
+    .unique("vendor_payment_credentials_vendor_id_key")
     .references(() => vendorsTable.id, { onDelete: "cascade" }),
   stripeSecretEncrypted: text("stripe_secret_encrypted"),    // iv:authTag:ciphertext hex
   paystackSecretEncrypted: text("paystack_secret_encrypted"),

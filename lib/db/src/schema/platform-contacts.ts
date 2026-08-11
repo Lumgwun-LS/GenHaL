@@ -16,7 +16,7 @@ import { customersTable } from "./customers";
 export const platformContactsTable = pgTable("platform_contacts", {
   id: serial("id").primaryKey(),
   /** Normalised (lowercase, trimmed) email — globally unique across the platform */
-  email: text("email").notNull().unique(),
+  email: text("email").notNull().unique("platform_contacts_email_key"),
   name: text("name"),
   phone: text("phone"),
   /** Linked once the person creates a full Clerk customer account */
