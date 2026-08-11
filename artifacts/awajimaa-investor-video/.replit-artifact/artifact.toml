@@ -1,0 +1,28 @@
+kind = "video"
+previewPath = "/awajimaa-investor-video/"
+title = "Awajimaa — Africa's Digital Infrastructure · Investor Video"
+description = "A cinematic investor pitch video showcasing the entire Awajimaa ecosystem — Awajimaa App (emergency response, tele-health, drones, ambulances), Awa Hub App (marketplace, logistics, insurance), Awa Biz Suite, GenHaL, Awajimaa Schools, and the Awajimaa App Store — as the digital infrastructure powering Africa and the multi-billion dollar opportunity it represents for investors."
+version = "1.0.0"
+id = "artifacts/awajimaa-investor-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/awajimaa-investor-video/" ]
+localPort = 21220
+
+[services.development]
+run = "pnpm --filter @workspace/awajimaa-investor-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/awajimaa-investor-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/awajimaa-investor-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21220"
+BASE_PATH = "/awajimaa-investor-video/"
