@@ -69,7 +69,7 @@ export function Scene6() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.9, duration: 0.8 }}
             >
-              Digital Heritage &amp; Ancestry Network.
+              Heritage, Language AI &amp; Family Continuity Platform.
             </motion.p>
 
             <motion.p
@@ -78,7 +78,7 @@ export function Scene6() {
               animate={{ opacity: 1 }}
               transition={{ delay: 1.1, duration: 0.8 }}
             >
-              Preserving indigenous languages through AI. Securing kingdom civic registries, family genealogy, and generational wealth across Africa.
+              Preserving indigenous languages through AI. Securing kingdom civic registries, family genealogy, and generational wealth — ensuring every African family's story lives on.
             </motion.p>
 
             <motion.div
@@ -121,11 +121,11 @@ export function Scene6() {
             </motion.h2>
 
             <motion.p
-              className="text-3xl text-emerald-300 font-light max-w-2xl mb-6"
+              className="text-3xl text-emerald-300 font-light max-w-2xl mb-4"
               animate={{ opacity: phase === 1 ? 1 : 0 }}
               transition={{ delay: 0.6, duration: 0.8 }}
             >
-              Education Management Platform.
+              Your entire school, just one click away.
             </motion.p>
 
             <motion.p
@@ -133,7 +133,7 @@ export function Scene6() {
               animate={{ opacity: phase === 1 ? 1 : 0 }}
               transition={{ delay: 0.8, duration: 0.8 }}
             >
-              AI-powered learning tools for African schools, colleges &amp; universities. Connecting parents, teachers, and students at scale — with real-time performance tracking.
+              Govern every school in your state from this education command center. AI-powered tools for schools, colleges &amp; universities — connecting parents, teachers, and students at scale.
             </motion.p>
 
             <div className="flex flex-wrap gap-4 justify-center mb-10">
@@ -155,7 +155,7 @@ export function Scene6() {
               transition={{ delay: 1.6, duration: 0.8 }}
             >
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-400 font-mono text-sm tracking-wider">schools.awajimaa.com</span>
+              <span className="text-emerald-400 font-mono text-sm tracking-wider">awajimaaschools.com</span>
             </motion.div>
           </motion.div>
 
