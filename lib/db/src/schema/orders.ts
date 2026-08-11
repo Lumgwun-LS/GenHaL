@@ -48,7 +48,7 @@ export const ordersTable = pgTable("orders", {
   /** Vendor's note explaining a refund (displayed to customer) */
   refundNote: text("refund_note"),
   /** Unique token emailed to customer so they can confirm receipt without an account */
-  receiptToken: text("receipt_token").unique("orders_receipt_token_key"),
+  receiptToken: text("receipt_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
