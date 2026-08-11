@@ -35,25 +35,35 @@ export function Scene3() {
             <h2 className="text-5xl md:text-7xl font-display font-bold text-white mb-6">
               AWAJIMAA <br/><span className="text-gradient">APP</span>
             </h2>
-            <p className="text-2xl text-gray-300 font-light max-w-xl leading-relaxed mb-12">
+            <p className="text-2xl text-gray-300 font-light max-w-xl leading-relaxed mb-10">
               Emergency Response & Tele-Health. The critical 911 infrastructure Africa never had.
             </p>
           </motion.div>
 
-          <div className="flex flex-col gap-4">
-            {['Drones & Ambulances', 'Tele-Health Anywhere', 'Disaster Coordination'].map((item, i) => (
+          <div className="flex flex-col gap-4 mb-10">
+            {['Drones & Ambulances', 'Tele-Health Anywhere', 'Disaster Coordination', 'Oil Spill Response'].map((item, i) => (
               <motion.div
                 key={item}
                 className="flex items-center gap-4"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 1.2 + i * 0.2, duration: 0.8 }}
+                transition={{ delay: 1.2 + i * 0.18, duration: 0.8 }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-accent" />
                 <span className="text-xl text-white font-medium">{item}</span>
               </motion.div>
             ))}
           </div>
+
+          <motion.div
+            className="flex items-center gap-3 px-5 py-3 rounded-full border border-primary/40 bg-primary/10 w-fit"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 2.4, duration: 0.8 }}
+          >
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-primary font-mono text-sm tracking-wider">awajimaaapps.com</span>
+          </motion.div>
         </div>
       </div>
     </motion.div>

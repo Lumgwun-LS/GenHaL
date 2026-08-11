@@ -32,23 +32,25 @@ export function Scene5() {
             <div className="w-16 h-1 bg-blue-500 rounded-full" />
             <h3 className="text-blue-400 tracking-[0.2em] uppercase font-bold text-sm">Platform 03</h3>
           </div>
-          
+
           <h2 className="text-6xl md:text-[5vw] font-display font-bold text-white mb-8 leading-tight">
             AWA BIZ SUITE
           </h2>
-          
-          <h3 className="text-3xl text-gray-300 font-light mb-16 border-l-4 border-blue-500 pl-6">
+
+          <h3 className="text-3xl text-gray-300 font-light mb-14 border-l-4 border-blue-500 pl-6">
             The African Business OS.
             <br />
             <span className="text-blue-400 font-medium">Powering millions of SMEs.</span>
           </h3>
 
-          <div className="grid grid-cols-2 gap-x-12 gap-y-8">
+          <div className="grid grid-cols-2 gap-x-12 gap-y-8 mb-12">
             {[
               "Complete CRM & Inventory",
               "Omnichannel Payments",
               "Instant Mobile App Builder",
-              "AI-driven Voice Campaigns"
+              "AI-driven Voice Campaigns",
+              "Social Media Management",
+              "Finance & Analytics Suite"
             ].map((item, i) => (
               <motion.div
                 key={i}
@@ -64,6 +66,16 @@ export function Scene5() {
               </motion.div>
             ))}
           </div>
+
+          <motion.div
+            className="flex items-center gap-3 px-5 py-3 rounded-full border border-blue-500/40 bg-blue-500/10 w-fit"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 2.4, duration: 0.8 }}
+          >
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <span className="text-blue-400 font-mono text-sm tracking-wider">awajimaaai.com</span>
+          </motion.div>
         </motion.div>
       </div>
     </motion.div>
