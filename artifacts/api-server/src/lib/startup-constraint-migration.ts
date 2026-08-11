@@ -62,11 +62,30 @@ const MULTI_COLUMN_CONSTRAINTS: ConstraintDef[] = [
 
 const ALL_CONSTRAINTS = [...SINGLE_COLUMN_CONSTRAINTS, ...MULTI_COLUMN_CONSTRAINTS];
 
+/** Columns that exist in production but were missing from the Drizzle schema */
+const MISSING_COLUMNS = [
+  { table: "social_accounts", column: "refresh_token_expires_at", ddl: `ALTER TABLE "social_accounts" ADD COLUMN IF NOT EXISTS "refresh_token_expires_at" TIMESTAMPTZ` },
+  { table: "leads",           column: "linkedin_url",             ddl: `ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "linkedin_url" TEXT` },
+  { table: "leads",           column: "website_url",              ddl: `ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "website_url" TEXT` },
+  { table: "leads",           column: "product_id",               ddl: `ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "product_id" INTEGER` },
+];
+
 export async function runStartupConstraintMigration(): Promise<void> {
   let added = 0;
   let skipped = 0;
   let failed = 0;
 
+  // 1. Add missing columns first (idempotent via IF NOT EXISTS)
+  for (const col of MISSING_COLUMNS) {
+    try {
+      await db.execute(sql.raw(col.ddl));
+      // IF NOT EXISTS means this is always safe — no skipped/added distinction needed
+    } catch (err) {
+      logger.warn({ err, table: col.table, column: col.column }, "startup-constraint-migration: column add failed (non-fatal)");
+    }
+  }
+
+  // 2. Add missing unique constraints
   for (const def of ALL_CONSTRAINTS) {
     try {
       // Check if the constraint already exists

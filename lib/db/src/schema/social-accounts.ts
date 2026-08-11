@@ -32,6 +32,7 @@ export const socialAccountsTable = pgTable("social_accounts", {
   // account can't be silently renewed and must be reconnected via OAuth once
   // its token expires (e.g. manually registered accounts).
   refreshTokenEncrypted: text("refresh_token_encrypted"),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
   // Health-check bookkeeping for OAuth-connected accounts (currently just
   // Meta/Facebook+Instagram — see social-account-health.ts). `status` flips
   // to "needs_reconnect" on a validated -> invalid transition so publish

@@ -61,6 +61,11 @@ export const leadsTable = pgTable("leads", {
   // Birthday for automated birthday calls and wishes
   dateOfBirth: date("date_of_birth"),
 
+  // Legacy fields kept for schema parity with production (not actively used)
+  linkedinUrl: text("linkedin_url"),
+  websiteUrl:  text("website_url"),
+  productId:   integer("product_id"),
+
   // Product interest (shop CRM capture)
   interestedProductIds: text("interested_product_ids"),   // JSON array of product IDs
   productReminderSentAt: timestamp("product_reminder_sent_at", { withTimezone: true }),
