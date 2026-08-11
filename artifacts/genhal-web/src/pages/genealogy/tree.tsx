@@ -33,13 +33,19 @@ import {
 } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { cn } from '@/lib/utils';
 
 export default function TreeDetail() {
   const params = useParams();
   const treeId = Number(params.id);
 
-  const { data: tree, isLoading: treeLoading } = useGetGenhalTree(treeId);
+  const {
+    data: tree,
+    isLoading: treeLoading,
+    error: treeError,
+    refetch: refetchTree,
+  } = useGetGenhalTree(treeId);
   const { data: members, isLoading: membersLoading } =
     useListGenhalTreeMembers(treeId);
 
@@ -53,6 +59,12 @@ export default function TreeDetail() {
       <div className="flex justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
+    );
+  }
+
+  if (treeError) {
+    return (
+      <ErrorState subject="this family tree" onRetry={() => refetchTree()} />
     );
   }
 

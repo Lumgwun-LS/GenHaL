@@ -32,10 +32,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalTreesQueryKey } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 
 export default function GenealogyList() {
-  const { data: trees, isLoading } = useListGenhalTrees();
+  const { data: trees, isLoading, error, refetch } = useListGenhalTrees();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (
@@ -71,7 +72,9 @@ export default function GenealogyList() {
             <Skeleton key={i} className="h-56 rounded-xl" />
           ))}
         </div>
-      ) : trees?.length === 0 ? (
+      ) : error ? (
+        <ErrorState subject="family trees" onRetry={() => refetch()} />
+      ) : !trees?.length ? (
         <EmptyState
           icon={<Network className="h-5 w-5" />}
           title="No trees yet"

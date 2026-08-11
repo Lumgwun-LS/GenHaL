@@ -35,11 +35,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalAiGenerationsQueryKey } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 
 export default function AiStudio() {
-  const { data: history, isLoading: historyLoading } =
-    useListGenhalAiGenerations();
+  const {
+    data: history,
+    isLoading: historyLoading,
+    error: historyError,
+  } = useListGenhalAiGenerations();
 
   return (
     <div className="space-y-6">
@@ -111,7 +115,11 @@ export default function AiStudio() {
                 Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-20 rounded-lg" />
                 ))
-              ) : history?.length === 0 ? (
+              ) : historyError ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Couldn't load history.
+                </p>
+              ) : !history?.length ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   No generations yet.
                 </p>

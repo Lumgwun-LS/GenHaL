@@ -56,7 +56,7 @@ export default function Home() {
           className="relative overflow-hidden rounded-xl px-5 py-5 md:px-6 md:py-6"
           style={{
             background:
-              'linear-gradient(135deg, #A8360F 0%, #C2521A 55%, #D99321 100%)',
+              'linear-gradient(135deg, #8F2A08 0%, #A8360F 45%, #96560F 100%)',
           }}
         >
           <div className="pointer-events-none absolute -top-6 right-16 hidden h-24 w-24 rounded-full bg-white/5 sm:block" />
@@ -64,14 +64,14 @@ export default function Home() {
 
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0 max-w-xl">
-              <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/90 backdrop-blur-sm">
+              <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
                 <Sparkles className="h-3 w-3" />
                 Preserving African Heritage
               </p>
               <h2 className="text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">
                 Know your roots. Tell your story.
               </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-white/75">
+              <p className="mt-1.5 text-sm leading-relaxed text-white/90">
                 Trace genealogy, protect community heritage, and keep indigenous
                 languages like Obolo alive — all in one archive.
               </p>
@@ -80,7 +80,7 @@ export default function Home() {
             <div className="flex shrink-0 flex-wrap gap-2">
               <Link
                 href="/genealogy"
-                className={cn(buttonVariants(), 'bg-white text-primary')}
+                className={cn(buttonVariants(), 'bg-white text-[#8F2A08]')}
                 style={{ borderColor: 'transparent' }}
               >
                 Trace your lineage

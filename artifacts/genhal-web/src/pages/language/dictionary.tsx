@@ -34,6 +34,7 @@ import {
 } from '@workspace/api-client-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
 
 export default function Dictionary() {
@@ -44,8 +45,12 @@ export default function Dictionary() {
     useListGenhalLanguages();
   const language = languages?.find((l) => l.code === code);
 
-  const { data: entries, isLoading: entriesLoading } =
-    useListGenhalLanguageEntries(code);
+  const {
+    data: entries,
+    isLoading: entriesLoading,
+    error: entriesError,
+    refetch: refetchEntries,
+  } = useListGenhalLanguageEntries(code);
   const [search, setSearch] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
 
@@ -118,7 +123,12 @@ export default function Dictionary() {
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
-      ) : filteredEntries?.length === 0 ? (
+      ) : entriesError ? (
+        <ErrorState
+          subject="dictionary entries"
+          onRetry={() => refetchEntries()}
+        />
+      ) : !filteredEntries?.length ? (
         <EmptyState
           icon={<BookOpen className="h-5 w-5" />}
           title="No entries found"
