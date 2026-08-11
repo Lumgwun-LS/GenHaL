@@ -11,7 +11,7 @@ export const postsTable = pgTable("posts", {
   // Aligned by index with `platforms`: which connected social_accounts row to publish
   // each platform entry to. Null/missing entries fall back to "the one active account
   // for that platform" at publish time, and publish fails explicitly if that's ambiguous.
-  socialAccountIds: integer("social_account_ids").array().notNull().default([]),
+  socialAccountIds: integer("social_account_ids").array().default([]),
   status: text("status").notNull().default("draft"),
   // Set true when the scheduled-post auto-publisher (post-scheduler.ts) reverts
   // this post to "approved" because every platform failed — lets the Social Hub

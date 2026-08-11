@@ -44,6 +44,7 @@
 - [Export-burst alerting pattern](export-burst-alerting.md) — rolling-window count + fire-Slack-alert-once-at-threshold-crossing, plus a HAVING-count endpoint for a persistent UI banner; generalizes to any "same actor doing X too often" alert.
 - [Admin sender attribution pattern](admin-sender-attribution.md) — resolve Clerk display name at write time and persist it on the row (not just admin_user_id), so history stays readable even if the admin's Clerk profile later changes.
 - [Twilio Auth Token rotation detection](twilio-token-rotation-detection.md) — signature-verified webhooks fail closed/silently on secret rotation; detect via rejection-rate burst alert + admin UI banner, not per-request.
+- [Production schema drift — deploy blockers](prod-schema-drift-deploy-blockers.md) — constraint `_key`/`_unique` naming, missing columns, NOT NULL conflicts; how the Replit provision step fails and how to diagnose before publishing.
 
 - [Per-vendor gateway enable flags](vendorhub-gateway-enable-flags.md) — new payment gateways need a vendorsTable.<gateway>Enabled boolean checked in the checkout route, mirroring stripeEnabled/paystackEnabled.
 - [Platform gateway credential health recheck](gateway-health-recheck.md) — periodic re-test of saved gateway keys (not just at save time) with pass/fail transition Slack alerts and admin UI banner.
