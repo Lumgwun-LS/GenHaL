@@ -31,7 +31,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalCommunitiesQueryKey } from '@workspace/api-client-react';
-import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
@@ -47,30 +46,47 @@ export default function HeritageHub() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Heritage Hub"
-        description="Discover and document the traditions, stories, and histories of pan-African communities."
-        actions={
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4" />
-                Start a community
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
-              <DialogHeader>
-                <DialogTitle>Create a heritage community</DialogTitle>
-                <DialogDescription>
-                  Give the community a home so members can contribute oral
-                  histories and cultural knowledge.
-                </DialogDescription>
-              </DialogHeader>
-              <CreateCommunityForm onSuccess={() => setIsCreateOpen(false)} />
-            </DialogContent>
-          </Dialog>
-        }
-      />
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
+        <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
+        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <BookOpen className="h-4 w-4" />
+          Cultural Heritage
+        </div>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Heritage Hub</h1>
+        <p className="text-white/80 text-base md:text-lg max-w-xl mb-5">
+          Discover and document the traditions, stories, and histories of pan-African communities.
+        </p>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg">
+              <Plus className="h-4 w-4 mr-2" />
+              Start a community
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Create a heritage community</DialogTitle>
+              <DialogDescription>
+                Give the community a home so members can contribute oral
+                histories and cultural knowledge.
+              </DialogDescription>
+            </DialogHeader>
+            <CreateCommunityForm onSuccess={() => setIsCreateOpen(false)} />
+          </DialogContent>
+        </Dialog>
+        <div className="flex flex-wrap gap-2 mt-4">
+          {[
+            { icon: <MessageSquare className="h-3.5 w-3.5" />, text: 'Oral histories' },
+            { icon: <Users className="h-3.5 w-3.5" />, text: 'Community voices' },
+            { icon: <MapPin className="h-3.5 w-3.5" />, text: 'Cultural roots' },
+          ].map((p, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs bg-amber-50/10 border border-amber-300/30 text-amber-200 px-3 py-1.5 rounded-full font-medium">
+              {p.icon}&nbsp;{p.text}
+            </div>
+          ))}
+        </div>
+      </div>
 
       <section className="space-y-3">
         <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">

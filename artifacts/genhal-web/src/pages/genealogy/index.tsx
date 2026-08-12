@@ -30,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListGenhalTreesQueryKey } from '@workspace/api-client-react';
-import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Reveal, stagger } from '@/components/reveal';
@@ -41,30 +40,47 @@ export default function GenealogyList() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Family Trees"
-        description="Document your lineage and preserve your family history."
-        actions={
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4" />
-                Create tree
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
-              <DialogHeader>
-                <DialogTitle>Start a new family tree</DialogTitle>
-                <DialogDescription>
-                  Begin documenting your ancestry. You can add members and
-                  richer details later.
-                </DialogDescription>
-              </DialogHeader>
-              <CreateTreeForm onSuccess={() => setIsCreateOpen(false)} />
-            </DialogContent>
-          </Dialog>
-        }
-      />
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
+        <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
+        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <Network className="h-4 w-4" />
+          Ancestry Archive
+        </div>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Family Trees</h1>
+        <p className="text-white/80 text-base md:text-lg max-w-xl mb-5">
+          Document your lineage, connect generations, and preserve your family history for centuries to come.
+        </p>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg">
+              <Plus className="h-4 w-4 mr-2" />
+              Create tree
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Start a new family tree</DialogTitle>
+              <DialogDescription>
+                Begin documenting your ancestry. You can add members and
+                richer details later.
+              </DialogDescription>
+            </DialogHeader>
+            <CreateTreeForm onSuccess={() => setIsCreateOpen(false)} />
+          </DialogContent>
+        </Dialog>
+        <div className="flex flex-wrap gap-2 mt-4">
+          {[
+            { icon: <Users className="h-3.5 w-3.5" />, text: 'Track all generations' },
+            { icon: <MapPin className="h-3.5 w-3.5" />, text: 'Map family origins' },
+            { icon: <Network className="h-3.5 w-3.5" />, text: 'Connect relatives' },
+          ].map((p, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs bg-amber-50/10 border border-amber-300/30 text-amber-200 px-3 py-1.5 rounded-full font-medium">
+              {p.icon}&nbsp;{p.text}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

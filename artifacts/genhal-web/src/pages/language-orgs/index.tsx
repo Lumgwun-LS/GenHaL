@@ -57,21 +57,32 @@ export default function LanguageOrgsPage() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-bold">Language Organisations</h1>
-          <p className="text-muted-foreground mt-1">
-            Official custodians of African languages — reviewing corpus data before it trains AI models.
-          </p>
+    <div className="space-y-6">
+      {/* Hero card */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
+        <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
+        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <Globe2 className="h-4 w-4" />
+          Language Governance
         </div>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Language Organisations</h1>
+        <p className="text-white/80 text-base md:text-lg max-w-xl mb-5">
+          Official custodians of African languages — reviewing corpus data before it trains AI models.
+        </p>
         <Button
-          className="rounded-xl bg-amber-700 hover:bg-amber-800 text-white shrink-0"
+          className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg"
           onClick={() => navigate("/language-orgs/register")}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Register Your Organisation
         </Button>
+        <div className="flex flex-wrap gap-2 mt-4">
+          {['Approved reviewers', 'AI training oversight', 'Community governance'].map((t) => (
+            <div key={t} className="flex items-center gap-1.5 text-xs bg-amber-50/10 border border-amber-300/30 text-amber-200 px-3 py-1.5 rounded-full font-medium">
+              {t}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Search */}

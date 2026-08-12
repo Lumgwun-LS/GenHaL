@@ -147,20 +147,24 @@ export default function LanguageCorpus() {
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
-      {/* header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-serif font-bold">Language Corpus</h1>
-          <p className="text-muted-foreground mt-2 text-lg max-w-xl">
-            Upload language materials, curate your training dataset, and launch AI model training on Google Vertex AI.
-          </p>
+      {/* Hero card */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
+        <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
+        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <Brain className="h-4 w-4" />
+          AI Training Data
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Button variant="outline" size="sm" className="rounded-full" onClick={load}>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Language Corpus</h1>
+        <p className="text-white/80 text-base md:text-lg max-w-xl mb-5">
+          Upload language materials, curate your training dataset, and launch AI model training on Google Vertex AI.
+        </p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="rounded-full border-white/30 text-white hover:bg-white/10 hover:text-white" onClick={load}>
             <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
           </Button>
-          <Button size="sm" className="rounded-full bg-primary" onClick={() => setTab('upload')}>
-            <Upload className="mr-1.5 h-4 w-4" /> Upload
+          <Button size="sm" className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold" onClick={() => setTab('upload')}>
+            <Upload className="mr-1.5 h-4 w-4" /> Upload Material
           </Button>
         </div>
       </div>
