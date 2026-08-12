@@ -22,7 +22,10 @@ pnpm --filter @workspace/db run push                 # Push DB schema changes (d
 `genhal-web` is a **static artifact** — Replit serves its pre-built `dist/public` directly without re-running Vite. Any source changes to `artifacts/genhal-web/src/**` are invisible in production until you rebuild:
 
 ```bash
-pnpm build:genhal   # rebuilds artifacts/genhal-web/dist/public
+pnpm build:genhal   # rebuilds artifacts/genhal-web/dist/public (BASE_PATH=/ for genhal.awajimaa.com)
+# IMPORTANT: Always run pnpm build:genhal before publishing genhal-web changes.
+# The artifact uses serve="static" (no Replit-triggered build), so the workspace
+# dist/public/ at publish time IS what gets served on genhal.awajimaa.com.
 ```
 
 Run this once, then publish. The `PORT` and `BASE_PATH` env vars are baked into the build script — no flags needed.

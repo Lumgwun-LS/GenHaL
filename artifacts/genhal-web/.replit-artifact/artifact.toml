@@ -15,7 +15,6 @@ localPort = 21353
 run = "pnpm --filter @workspace/genhal-web run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/genhal-web", "run", "build" ]
 serve = "static"
 publicDir = "artifacts/genhal-web/dist/public"
 
