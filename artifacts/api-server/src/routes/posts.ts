@@ -648,7 +648,7 @@ export async function executeClaimedPublish(
   const outcomes: PublishOutcome[] = [];
   for (let i = 0; i < claimed.platforms.length; i++) {
     const platformLabel = claimed.platforms[i];
-    const explicitAccountId = claimed.socialAccountIds[i] ?? null;
+    const explicitAccountId = claimed.socialAccountIds?.[i] ?? null;
     const { account, error } = resolveTargetAccount(platformLabel, explicitAccountId, vendorAccounts);
     if (error) {
       outcomes.push({ platform: platformLabel, socialAccountId: account?.id ?? null, status: "failed", externalPostId: null, externalUrl: null, errorMessage: error });
