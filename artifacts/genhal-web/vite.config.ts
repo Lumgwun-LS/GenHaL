@@ -56,10 +56,17 @@ export default defineConfig({
     // concurrent workflows and has a tight OS-thread limit (~25 total).
     // esbuild's default parallel dep-optimisation spawns dozens of goroutines
     // and crashes with EAGAIN / "failed to create new OS thread".
-    // noDiscovery + empty include shuts that scan down entirely.
-    // Vite still handles CJS→ESM on first request (just no startup pre-bundle).
+    // noDiscovery stops the full scan; include lists only the CJS packages
+    // that need ESM conversion — a tiny targeted job that stays within limits.
     noDiscovery: true,
-    include: [],
+    include: [
+      // zustand imports use-sync-external-store/shim which is CJS-only;
+      // without pre-bundling the browser can't find the named ESM exports.
+      'use-sync-external-store/shim',
+      'zustand',
+    ],
+    // country-state-city is 7.7 MB and lazy-loaded; skip it entirely.
+    exclude: ['country-state-city'],
   },
   resolve: {
     alias: {
