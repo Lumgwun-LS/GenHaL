@@ -1,0 +1,28 @@
+kind = "video"
+previewPath = "/genhal-explainer-video/"
+title = "GenHaL — Preserve Your Roots · Explainer Video"
+description = "A ~90-second animated explainer video for the GenHaL platform covering genealogy, heritage preservation, indigenous language AI, family wills, and kingdom governance. Warm terracotta earth tones matching the GenHaL brand. Includes the tab-capture Download Video pipeline."
+version = "1.0.0"
+id = "artifacts/genhal-explainer-video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/genhal-explainer-video/" ]
+localPort = 26220
+
+[services.development]
+run = "pnpm --filter @workspace/genhal-explainer-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/genhal-explainer-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/genhal-explainer-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26220"
+BASE_PATH = "/genhal-explainer-video/"
