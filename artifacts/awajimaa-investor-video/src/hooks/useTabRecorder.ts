@@ -1,16 +1,13 @@
 /**
  * useTabRecorder — captures this browser tab via getDisplayMedia and encodes
  * the result to a downloadable WebM file using MediaRecorder.
- *
- * The caller is responsible for:
- *   1. Calling startCapture() — opens the browser "Share Tab" dialog.
- *   2. Calling stopCapture()  — stops recording and triggers the download.
  */
 
 import { useCallback, useRef, useState } from 'react';
 
 export type RecorderStatus =
   | 'idle'
+  | 'unsupported'  // browser doesn't support tab capture
   | 'requesting'   // waiting for user to approve tab share
   | 'recording'    // MediaRecorder is running
   | 'processing'   // building the blob
@@ -20,51 +17,62 @@ export type RecorderStatus =
 export interface UseTabRecorderReturn {
   status: RecorderStatus;
   error: string | null;
-  startCapture: () => Promise<boolean>; // returns true if stream acquired
+  isSupported: boolean;
+  startCapture: () => Promise<boolean>;
   stopCapture: () => void;
   reset: () => void;
 }
 
+function detectSupport(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices &&
+    typeof (navigator.mediaDevices as unknown as Record<string, unknown>).getDisplayMedia === 'function'
+  );
+}
+
 export function useTabRecorder(filename = 'awajimaa-investor-video.webm'): UseTabRecorderReturn {
-  const [status, setStatus] = useState<RecorderStatus>('idle');
+  const supported = detectSupport();
+  const [status, setStatus] = useState<RecorderStatus>(supported ? 'idle' : 'unsupported');
   const [error, setError] = useState<string | null>(null);
 
-  const streamRef    = useRef<MediaStream | null>(null);
-  const recorderRef  = useRef<MediaRecorder | null>(null);
-  const chunksRef    = useRef<BlobPart[]>([]);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef   = useRef<BlobPart[]>([]);
 
   const reset = useCallback(() => {
-    // Tear down any live stream/recorder
     recorderRef.current?.stop();
     recorderRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     chunksRef.current = [];
-    setStatus('idle');
+    setStatus(supported ? 'idle' : 'unsupported');
     setError(null);
-  }, []);
+  }, [supported]);
 
   const startCapture = useCallback(async (): Promise<boolean> => {
+    if (!supported) {
+      setStatus('unsupported');
+      return false;
+    }
+
     reset();
     setStatus('requesting');
 
     try {
-      // preferCurrentTab is a Chrome-only hint that pre-selects this tab,
-      // reducing the clicks the user needs. Ignored by other browsers.
-      const constraints: MediaStreamConstraints & { preferCurrentTab?: boolean } = {
-        video: { frameRate: 30 } as MediaTrackConstraints,
-        audio: true,
-        preferCurrentTab: true,
-      };
-
       const stream = await (navigator.mediaDevices as MediaDevices & {
-        getDisplayMedia: (c: MediaStreamConstraints & { preferCurrentTab?: boolean }) => Promise<MediaStream>;
-      }).getDisplayMedia(constraints);
+        getDisplayMedia: (c: object) => Promise<MediaStream>;
+      }).getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: true,
+        preferCurrentTab: true,      // Chrome pre-selects this tab
+        selfBrowserSurface: 'include',
+        surfaceSwitching: 'exclude', // hides non-tab options in Chrome 112+
+      });
 
       streamRef.current = stream;
       chunksRef.current = [];
 
-      // Detect supported codec — prefer VP9 for quality, fall back to default
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
         ? 'video/webm;codecs=vp9'
         : MediaRecorder.isTypeSupported('video/webm')
@@ -88,24 +96,20 @@ export function useTabRecorder(filename = 'awajimaa-investor-video.webm'): UseTa
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         setStatus('done');
-
-        // Stop all tracks so the "recording" indicator disappears from the tab
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       };
 
-      // If the user ends the share from the browser toolbar
       stream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (recorder.state !== 'inactive') recorder.stop();
       });
 
-      recorder.start(1000); // collect chunks every 1 s
+      recorder.start(1000);
       setStatus('recording');
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // NotAllowedError = user dismissed the dialog — treat as idle, not error
-      if (msg.includes('NotAllowed') || msg.includes('Permission denied')) {
+      if (msg.includes('NotAllowed') || msg.includes('Permission denied') || msg.includes('cancelled')) {
         setStatus('idle');
       } else {
         setError(msg);
@@ -113,7 +117,7 @@ export function useTabRecorder(filename = 'awajimaa-investor-video.webm'): UseTa
       }
       return false;
     }
-  }, [reset, filename]);
+  }, [reset, supported]);
 
   const stopCapture = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
@@ -121,5 +125,5 @@ export function useTabRecorder(filename = 'awajimaa-investor-video.webm'): UseTa
     }
   }, []);
 
-  return { status, error, startCapture, stopCapture, reset };
+  return { status, error, isSupported: supported, startCapture, stopCapture, reset };
 }
