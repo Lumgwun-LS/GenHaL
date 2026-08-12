@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ThemePicker } from '@/components/ui/ThemePicker';
 import { useThemeStore } from '@/store/themeStore';
+import { useUser } from '@clerk/react';
 
 interface NavItem {
   label: string;
@@ -219,6 +220,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const { isDark, toggle } = useDarkMode();
   const { config: themeConfig } = useThemeStore();
+  const { user } = useUser();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -456,8 +458,7 @@ export function Layout({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      {/* Account status — this app has no sign-in flow wired up, so this is
-          deliberately a status block rather than a button that does nothing. */}
+      {/* Auth card */}
       <div
         className="shrink-0 p-2"
         style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
@@ -468,23 +469,60 @@ export function Layout({ children }: { children: ReactNode }) {
             collapsed && 'justify-center px-2',
           )}
           style={{ background: 'rgba(255,255,255,0.04)' }}
-          title={collapsed ? 'Browsing as guest' : undefined}
+          title={collapsed ? (user?.fullName ?? 'Signed in') : undefined}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70">
-            <UserCircle2 className="h-4 w-4" />
-          </span>
+          {/* Avatar — photo or initials */}
+          {user?.imageUrl ? (
+            <img
+              src={user.imageUrl}
+              alt={user.fullName ?? 'User'}
+              className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/20"
+            />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold ring-1 ring-amber-400/30">
+              {user?.firstName?.[0] ?? user?.username?.[0] ?? <UserCircle2 className="h-4 w-4" />}
+            </span>
+          )}
           {!collapsed && (
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold leading-tight text-white">
-                Browsing as guest
+                {user?.fullName ?? user?.username ?? 'Signed in'}
               </span>
               <span className="block truncate text-[10px] font-medium leading-tight text-white/60">
-                Contributions are public
+                {user?.primaryEmailAddress?.emailAddress ?? 'GenHaL member'}
               </span>
             </span>
           )}
         </div>
       </div>
+
+      {/* Ecosystem links */}
+      {!collapsed && (
+        <div
+          className="shrink-0 px-3 pb-3"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          <p className="mb-2 mt-3 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white/35">
+            Also on Awajimaa
+          </p>
+          <div className="flex flex-col gap-0.5">
+            <a
+              href="/vendor-hub"
+              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12px] font-medium text-white/65 transition-colors hover:bg-white/[0.05] hover:text-white/90"
+            >
+              <span className="text-base leading-none">🛍️</span>
+              Awa Biz Suite
+            </a>
+            <a
+              href="/app-store"
+              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12px] font-medium text-white/65 transition-colors hover:bg-white/[0.05] hover:text-white/90"
+            >
+              <span className="text-base leading-none">📱</span>
+              App Store
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 
