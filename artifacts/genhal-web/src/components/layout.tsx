@@ -620,11 +620,11 @@ export function Layout({ children }: { children: ReactNode }) {
         <main
           className="flex-1 overflow-y-auto p-4 md:p-6"
           style={{
-            /* Subtle accent tint at the top of the content area so each
-             * theme visually "bleeds" from the sidebar into the canvas.
-             * The 08 / 06 hex suffix is ~3-4 % opacity — barely perceptible
-             * but enough for the eye to detect a colour shift on switch. */
-            background: `linear-gradient(180deg, ${themeConfig.accentColor}08 0px, transparent 200px)`,
+            /* Theme tint: accent colour bleeds from the sidebar into the
+             * content area. 28 hex ≈ 16 % opacity at the very top, fading
+             * to ~6 % at 140 px and fully transparent by 320 px — clearly
+             * visible when switching themes but never fights the content. */
+            background: `linear-gradient(180deg, ${themeConfig.accentColor}28 0px, ${themeConfig.accentColor}0f 140px, transparent 320px)`,
           }}
         >
           <div className="mx-auto w-full max-w-7xl">{children}</div>

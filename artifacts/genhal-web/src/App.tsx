@@ -7,6 +7,7 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Layout } from '@/components/layout';
 import { ClerkProvider, useAuth } from '@clerk/react';
+import { ThemeApplier } from '@/components/ThemeApplier';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -142,6 +143,8 @@ function App() {
   return (
     <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ?? ''}>
       <QueryClientProvider client={queryClient}>
+        {/* Stamps --theme-accent, --theme-card-radius, etc. onto <html> */}
+        <ThemeApplier />
         <TooltipProvider>
           <WouterRouter base={base}>
             <Router />

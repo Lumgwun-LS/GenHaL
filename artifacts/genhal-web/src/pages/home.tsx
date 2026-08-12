@@ -235,7 +235,10 @@ export default function Home() {
                 href={pillar.href}
                 className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div
+                  className="group relative h-full overflow-hidden border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                  style={{ borderRadius: 'var(--theme-card-radius, 16px)' }}
+                >
                   {/* Subtle top accent strip */}
                   <div
                     className="absolute inset-x-0 top-0 h-0.5 opacity-60"

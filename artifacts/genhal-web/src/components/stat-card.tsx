@@ -44,9 +44,10 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover',
+        'relative overflow-hidden border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover',
         className,
       )}
+      style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}
     >
       <div
         className={cn(
