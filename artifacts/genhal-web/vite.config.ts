@@ -52,17 +52,14 @@ export default defineConfig({
       : []),
   ],
   optimizeDeps: {
-    // country-state-city is a 7.7 MB CJS package — exclude it from
-    // pre-bundling so Vite serves it as-is at request time.
-    exclude: ['country-state-city'],
-    esbuildOptions: {
-      // esbuild 0.27.x crashes (goroutine deadlock / chan send block) when it
-      // tries to read external source-map files that are stored in pnpm's
-      // virtual zip store (zipFS). `ignoreAnnotations: true` prevents esbuild
-      // from following `//# sourceMappingURL` comments during dep
-      // optimisation, eliminating the crash entirely.
-      ignoreAnnotations: true,
-    },
+    // Disable automatic dep discovery. The Replit container runs many
+    // concurrent workflows and has a tight OS-thread limit (~25 total).
+    // esbuild's default parallel dep-optimisation spawns dozens of goroutines
+    // and crashes with EAGAIN / "failed to create new OS thread".
+    // noDiscovery + empty include shuts that scan down entirely.
+    // Vite still handles CJS→ESM on first request (just no startup pre-bundle).
+    noDiscovery: true,
+    include: [],
   },
   resolve: {
     alias: {
