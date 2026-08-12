@@ -52,12 +52,17 @@ export default defineConfig({
       : []),
   ],
   optimizeDeps: {
-    // country-state-city is a 7.7 MB CJS package. Pre-bundling it causes
-    // esbuild to crash (OOM / timeout) during dep optimisation, which in turn
-    // breaks any lazy-loaded page that transitively imports it (e.g. the
-    // families page via location-selector). Exclude it so Vite fetches the
-    // raw CJS file at request time instead — still cached by the browser.
+    // country-state-city is a 7.7 MB CJS package — exclude it from
+    // pre-bundling so Vite serves it as-is at request time.
     exclude: ['country-state-city'],
+    esbuildOptions: {
+      // esbuild 0.27.x crashes (goroutine deadlock / chan send block) when it
+      // tries to read external source-map files that are stored in pnpm's
+      // virtual zip store (zipFS). `ignoreAnnotations: true` prevents esbuild
+      // from following `//# sourceMappingURL` comments during dep
+      // optimisation, eliminating the crash entirely.
+      ignoreAnnotations: true,
+    },
   },
   resolve: {
     alias: {
