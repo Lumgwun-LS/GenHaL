@@ -52,21 +52,15 @@ export default defineConfig({
       : []),
   ],
   optimizeDeps: {
-    // Disable automatic dep discovery. The Replit container runs many
-    // concurrent workflows and has a tight OS-thread limit (~25 total).
-    // esbuild's default parallel dep-optimisation spawns dozens of goroutines
-    // and crashes with EAGAIN / "failed to create new OS thread".
-    // noDiscovery stops the full scan; include lists only the CJS packages
-    // that need ESM conversion — a tiny targeted job that stays within limits.
-    noDiscovery: true,
-    include: [
-      // zustand imports use-sync-external-store/shim which is CJS-only;
-      // without pre-bundling the browser can't find the named ESM exports.
-      'use-sync-external-store/shim',
-      'zustand',
-    ],
-    // country-state-city is 7.7 MB and lazy-loaded; skip it entirely.
+    // country-state-city is a 7.7 MB CJS package loaded only inside a lazy
+    // dialog; skip it from dep-optimisation entirely.
     exclude: ['country-state-city'],
+    esbuildOptions: {
+      // Prevent esbuild from trying to follow `//# sourceMappingURL` comments
+      // into pnpm's virtual zip store — those reads can deadlock under
+      // constrained file-descriptor limits.
+      ignoreAnnotations: true,
+    },
   },
   resolve: {
     alias: {
