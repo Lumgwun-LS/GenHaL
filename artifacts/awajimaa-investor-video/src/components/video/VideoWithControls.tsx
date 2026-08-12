@@ -173,24 +173,24 @@ export default function VideoWithControls() {
     <div className="relative w-full h-screen bg-black overflow-hidden">
       <VideoTemplate muted={muted} />
 
-      {/* ── Always-visible top bar ── */}
-      <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-4 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
-        <span className="text-white/50 text-xs font-medium">
-          Awajimaa — Africa's Digital Infrastructure
-        </span>
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Mute toggle */}
-          <button
-            onClick={() => setMuted((m) => !m)}
-            className="flex items-center gap-1.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white/70 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-            title={muted ? 'Unmute' : 'Mute'}
-          >
-            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-            {muted ? 'Unmuted' : 'Muted'}
-          </button>
+      {/* ── Always-visible top bar — hidden during recording so it isn't captured ── */}
+      {!isRecording && (
+        <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-4 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+          <span className="text-white/50 text-xs font-medium">
+            Awajimaa — Africa's Digital Infrastructure
+          </span>
+          <div className="flex items-center gap-2 pointer-events-auto">
+            {/* Mute toggle */}
+            <button
+              onClick={() => setMuted((m) => !m)}
+              className="flex items-center gap-1.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white/70 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
+              title={muted ? 'Unmute' : 'Mute'}
+            >
+              {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              {muted ? 'Unmuted' : 'Muted'}
+            </button>
 
-          {/* Download button — always visible */}
-          {!isRecording && (
+            {/* Download button — always visible */}
             <button
               onClick={() => setShowPanel(true)}
               className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-xs font-bold px-4 py-1.5 rounded-lg transition-colors shadow-lg"
@@ -198,14 +198,7 @@ export default function VideoWithControls() {
               <Download className="w-3.5 h-3.5" />
               Download Video
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Recording badge (top-right) ── */}
-      {isRecording && (
-        <div className="absolute top-4 right-5 z-50">
-          <RecordingBadge elapsedMs={recElapsedMs} onStop={handleManualStop} />
+          </div>
         </div>
       )}
 
