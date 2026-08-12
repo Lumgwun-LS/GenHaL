@@ -79,14 +79,14 @@ export default function FamiliesList() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
         <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23f59e0b' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E")` }} />
         <div className="relative">
-          <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
             <Home className="h-4 w-4" /> Family Registry
           </div>
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Family Accounts</h1>
           <p className="text-amber-100/75 text-lg max-w-2xl mb-6">
             Each family account has its own secure vault — store wills, land titles, birth records, family videos, and any document that matters. Members access documents based on their role.
           </p>
-          <Button onClick={() => setCreating(true)} className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg">
+          <Button onClick={() => setCreating(true)} className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg">
             <Plus className="mr-2 h-4 w-4" /> Create Family Account
           </Button>
         </div>
@@ -139,7 +139,7 @@ export default function FamiliesList() {
                   {!f.isPublic && <div className="absolute top-2 right-2 text-[10px] bg-stone-800/80 text-white px-2 py-0.5 rounded-full">Private</div>}
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{f.name}</h3>
+                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-primary transition-colors">{f.name}</h3>
                   {f.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{f.localName}</p>}
                   {(f.district || f.region || f.country) && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
@@ -197,7 +197,7 @@ export default function FamiliesList() {
               </div>
             </div>
 
-            <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={create} disabled={saving || !form.name}>
+            <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={create} disabled={saving || !form.name}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Home className="mr-2 h-4 w-4" />}
               {saving ? 'Creating…' : 'Create Family Account'}
             </Button>

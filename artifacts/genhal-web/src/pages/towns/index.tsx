@@ -80,7 +80,7 @@ export default function TownsList() {
           <p className="text-amber-100/80 text-lg max-w-xl mb-6">
             Record the governance, compounds, families, and living heritage of every town — kings who ruled, chiefs who led, and the traditions that endure.
           </p>
-          <Button onClick={() => setCreating(true)} className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold">
+          <Button onClick={() => setCreating(true)} className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
             <Plus className="mr-2 h-4 w-4" /> Add a Town
           </Button>
         </div>
@@ -157,7 +157,7 @@ export default function TownsList() {
               <Label>Description</Label>
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief overview of the town's significance, origin, or character…" rows={3} className="rounded-lg" />
             </div>
-            <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={create} disabled={saving || !form.name}>
+            <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={create} disabled={saving || !form.name}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crown className="mr-2 h-4 w-4" />}
               {saving ? 'Creating…' : 'Create Town'}
             </Button>
@@ -185,7 +185,7 @@ function TownCard({ town }: { town: Town }) {
           )}
         </div>
         <CardContent className="p-5">
-          <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{town.name}</h3>
+          <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-primary transition-colors">{town.name}</h3>
           {town.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{town.localName}</p>}
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
             <MapPin className="h-3 w-3" />

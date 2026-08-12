@@ -151,7 +151,7 @@ export default function LanguageCorpus() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
         <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
         <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
-        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+        <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
           <Brain className="h-4 w-4" />
           AI Training Data
         </div>
@@ -163,7 +163,7 @@ export default function LanguageCorpus() {
           <Button variant="outline" size="sm" className="rounded-full border-white/30 text-white hover:bg-white/10 hover:text-white" onClick={load}>
             <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
           </Button>
-          <Button size="sm" className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold" onClick={() => setTab('upload')}>
+          <Button size="sm" className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={() => setTab('upload')}>
             <Upload className="mr-1.5 h-4 w-4" /> Upload Material
           </Button>
         </div>
@@ -175,19 +175,19 @@ export default function LanguageCorpus() {
           <StatCard label="Materials" value={stats.totalMaterials} icon={<BookOpen className="h-5 w-5 text-primary" />} />
           <StatCard label="Approved for Training" value={stats.approvedMaterials} icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-300" />} />
           <StatCard label="Training Runs" value={stats.totalRuns} icon={<Brain className="h-5 w-5 text-purple-600 dark:text-purple-300" />} />
-          <StatCard label="Models Trained" value={stats.completedRuns} icon={<Zap className="h-5 w-5 text-amber-600 dark:text-amber-300" />} />
+          <StatCard label="Models Trained" value={stats.completedRuns} icon={<Zap className="h-5 w-5 text-primary" />} />
         </div>
       )}
 
       {/* Vertex AI status banner */}
       {stats && !stats.vertexConfigured && (
-        <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+        <div className="flex items-start gap-3 p-4 rounded-xl border border-primary/20 bg-primary/5 text-primary text-sm dark:border-primary/30 dark:bg-primary/10">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Vertex AI not configured</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
-              Set <code className="bg-amber-100 px-1 rounded dark:bg-amber-500/15">GOOGLE_CLOUD_PROJECT</code> and optionally{' '}
-              <code className="bg-amber-100 px-1 rounded dark:bg-amber-500/15">VERTEX_AI_REGION</code> (default: us-central1) to enable automatic job submission.
+            <p className="mt-0.5 text-primary">
+              Set <code className="bg-primary/10 px-1 rounded">GOOGLE_CLOUD_PROJECT</code> and optionally{' '}
+              <code className="bg-primary/10 px-1 rounded">VERTEX_AI_REGION</code> (default: us-central1) to enable automatic job submission.
               You can still upload materials and build your dataset now — training jobs will be queued until configured.
             </p>
           </div>

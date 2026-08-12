@@ -49,7 +49,7 @@ export default function AiStudio() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
         <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
         <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
-        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+        <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
           <Sparkles className="h-4 w-4" />
           AI Studio
         </div>

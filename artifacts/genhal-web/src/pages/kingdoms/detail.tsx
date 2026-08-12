@@ -196,7 +196,7 @@ export default function KingdomDetail() {
               </Card>
             )}
             <div className="grid md:grid-cols-3 gap-4">
-              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600 dark:text-amber-300"/>} label={`Current ${kingdom.rulerTitle}`} value={currentRuler ? `${currentRuler.title} ${currentRuler.name}` : 'Not recorded'}/>
+              <InfoCard icon={<Crown className="h-5 w-5 text-primary"/>} label={`Current ${kingdom.rulerTitle}`} value={currentRuler ? `${currentRuler.title} ${currentRuler.name}` : 'Not recorded'}/>
               <InfoCard icon={<Users className="h-5 w-5 text-purple-600 dark:text-purple-300"/>} label="Council of Chiefs" value={`${kingdom.council.filter(c=>c.isCurrent).length} active members`}/>
               <InfoCard icon={<Vote className="h-5 w-5 text-blue-600 dark:text-blue-300"/>} label="Active CDC" value={kingdomCdc.find(c=>c.isCurrent) ? 'Yes' : 'None recorded'}/>
             </div>
@@ -286,7 +286,7 @@ export default function KingdomDetail() {
             {/* Towns */}
             {kingdom.towns.length > 0 && (
               <div>
-                <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2"><Home className="h-5 w-5 text-amber-600 dark:text-amber-300"/> Towns ({kingdom.towns.length})</h3>
+                <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2"><Home className="h-5 w-5 text-primary"/> Towns ({kingdom.towns.length})</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   {kingdom.towns.map(town=>(
                     <Card key={town.id} className="border shadow-sm">
@@ -735,7 +735,7 @@ function CompoundCard({ compound:c, kingdomId, base, onAddChief, onDelete, onChi
         {open && c.chiefs.length>0 && (
           <div className="pt-1 space-y-2 border-t">
             {c.chiefs.map(ch=>(
-              <div key={ch.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm ${ch.isCurrent?'bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30':'bg-muted/30'}`}>
+              <div key={ch.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm ${ch.isCurrent?'bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30':'bg-muted/30'}`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${ch.isCurrent?'bg-amber-500 text-white':'bg-stone-200 text-stone-600 dark:bg-white/[0.14] dark:text-muted-foreground'}`}>
                   {ch.isCurrent?'★':'○'}
                 </div>
@@ -1126,7 +1126,7 @@ function RecordDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(RECORD_TYPES).map(([key,m])=>(
               <button key={key} onClick={()=>set({type:key})}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all ${form.type===key?'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10':'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all ${form.type===key?'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10':'border-border hover:border-primary/50 dark:hover:border-primary/30'}`}>
                 <span className={`p-1.5 rounded-lg ${m.color}`}>{m.icon}</span>{m.label}
               </button>
             ))}
@@ -1365,7 +1365,7 @@ function Field({ label, children, span=1 }: { label:string; children:React.React
 }
 function SaveBtn({ saving, disabled, onClick, label, icon }: any) {
   return (
-    <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={onClick} disabled={saving||disabled}>
+    <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onClick} disabled={saving||disabled}>
       {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : icon}
       {saving ? 'Saving…' : label}
     </Button>
@@ -1385,7 +1385,7 @@ function SectionHeader({ title, sub, btnLabel, onAdd }: { title:string; sub:stri
   return (
     <div className="flex items-start justify-between gap-4">
       <div><h2 className="font-serif text-2xl font-bold">{title}</h2><p className="text-muted-foreground text-sm mt-0.5">{sub}</p></div>
-      <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white shrink-0" onClick={onAdd}>
+      <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" onClick={onAdd}>
         <Plus className="mr-1.5 h-4 w-4"/>{btnLabel}
       </Button>
     </div>

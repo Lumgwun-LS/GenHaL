@@ -317,9 +317,9 @@ export default function SecretAccountsTab({ unitType, unitId, unitName }: Secret
       </div>
 
       {/* Security notice */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
-        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0 dark:text-amber-300" />
-        <div className="text-sm text-amber-800 dark:text-amber-300">
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30">
+        <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+        <div className="text-sm text-primary dark:text-primary">
           <p className="font-semibold mb-0.5">These are confidential account details</p>
           <p className="text-xs">Account numbers are masked by default. Only authorised members with the right role should reveal or share these details.</p>
         </div>

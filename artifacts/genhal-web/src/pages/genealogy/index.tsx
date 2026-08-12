@@ -43,7 +43,7 @@ export default function GenealogyList() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
         <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
         <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
-        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+        <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
           <Network className="h-4 w-4" />
           Ancestry Archive
         </div>
@@ -53,7 +53,7 @@ export default function GenealogyList() {
         </p>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg">
+            <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg">
               <Plus className="h-4 w-4 mr-2" />
               Create tree
             </Button>
@@ -75,7 +75,7 @@ export default function GenealogyList() {
             { icon: <MapPin className="h-3.5 w-3.5" />, text: 'Map family origins' },
             { icon: <Network className="h-3.5 w-3.5" />, text: 'Connect relatives' },
           ].map((p, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs bg-amber-50/10 border border-amber-300/30 text-amber-200 px-3 py-1.5 rounded-full font-medium">
+            <div key={i} className="flex items-center gap-1.5 text-xs bg-primary/10 border-primary/30 text-primary/80 px-3 py-1.5 rounded-full font-medium">
               {p.icon}&nbsp;{p.text}
             </div>
           ))}

@@ -104,14 +104,14 @@ export default function KingdomsList() {
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f59e0b' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
         <div className="relative">
-          <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+          <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
             <Landmark className="h-4 w-4" /> Civic Heritage
           </div>
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3">Kingdoms & Realms</h1>
           <p className="text-amber-100/75 text-lg max-w-2xl mb-6">
             Record any political structure — kingdoms, emirates, chiefdoms, clans — with its rulers, council of chiefs, compounds, towns, villages, CDC, and living heritage. Every ethnic group can define its own governance model.
           </p>
-          <Button onClick={() => setCreating(true)} className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg">
+          <Button onClick={() => setCreating(true)} className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg">
             <Plus className="mr-2 h-4 w-4" /> Add a Kingdom
           </Button>
         </div>
@@ -157,7 +157,7 @@ export default function KingdomsList() {
                   </div>
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{k.name}</h3>
+                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-primary transition-colors">{k.name}</h3>
                   {k.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{k.localName}</p>}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
                     <MapPin className="h-3 w-3" />
@@ -193,7 +193,7 @@ export default function KingdomsList() {
                 {UNIT_TYPES.map(u => (
                   <button key={u.value} onClick={() => handleUnitTypeChange(u.value)}
                     className={`p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.unitType === u.value ? 'border-amber-500 bg-amber-50 font-semibold dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
+                      ${form.unitType === u.value ? 'border-amber-500 bg-amber-50 font-semibold dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-primary/50 dark:hover:border-primary/30'}`}>
                     {u.label}
                   </button>
                 ))}
@@ -240,7 +240,7 @@ export default function KingdomsList() {
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Brief history, origin story, or significance…" rows={3} className="rounded-lg" />
             </div>
-            <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={create} disabled={saving || !form.name}>
+            <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={create} disabled={saving || !form.name}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
               {saving ? 'Creating…' : `Create ${UNIT_TYPES.find(u=>u.value===form.unitType)?.label ?? 'Kingdom'}`}
             </Button>

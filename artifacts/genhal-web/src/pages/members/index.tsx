@@ -150,14 +150,14 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
           </p>
         </div>
         {isAdmin && (
-          <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white shrink-0" onClick={() => { setForm({ clerkUserId:'', role:'member', customTitle:'', status:'active', notes:'' }); setDlg('add'); }}>
+          <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" onClick={() => { setForm({ clerkUserId:'', role:'member', customTitle:'', status:'active', notes:'' }); setDlg('add'); }}>
             <Plus className="mr-1.5 h-4 w-4" /> Add Member
           </Button>
         )}
       </div>
 
       {pending.length > 0 && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30">
           <p className="text-sm text-amber-800 font-medium dark:text-amber-300">{pending.length} pending member{pending.length!==1?'s':''} awaiting approval</p>
           <div className="flex gap-2 mt-2 flex-wrap">
             {pending.map(m => (
@@ -237,7 +237,7 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
                 {roles.map(r => (
                   <button key={r.value} onClick={() => setForm(f => ({ ...f, role: r.value }))}
                     className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.role === r.value ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
+                      ${form.role === r.value ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-primary/50 dark:hover:border-primary/30'}`}>
                     <span>{r.label}</span>
                   </button>
                 ))}
@@ -259,7 +259,7 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
               <Label className="text-xs">Notes</Label>
               <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Internal notes" className="rounded-lg" />
             </div>
-            <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={dlg === 'add' ? addMember : updateMember} disabled={saving || (dlg === 'add' && !form.clerkUserId)}>
+            <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={dlg === 'add' ? addMember : updateMember} disabled={saving || (dlg === 'add' && !form.clerkUserId)}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
               {saving ? 'Saving…' : dlg === 'add' ? 'Add Member' : 'Update Member'}
             </Button>

@@ -138,7 +138,7 @@ export default function WillsTab({ familyId }: { familyId: number }) {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-serif text-lg font-bold flex items-center gap-2">
-              <Lock className="h-4 w-4 text-amber-600 dark:text-amber-300" /> My Will
+              <Lock className="h-4 w-4 text-primary" /> My Will
             </h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditWill(myWill)}>Edit</Button>
@@ -160,7 +160,7 @@ export default function WillsTab({ familyId }: { familyId: number }) {
           <p className="text-sm text-amber-700 max-w-sm mx-auto dark:text-amber-300">
             Register your last will &amp; testament so your wishes are preserved for your family.
           </p>
-          <Button onClick={() => setAddDlg(true)} className="rounded-full bg-amber-600 hover:bg-amber-700 text-white mt-2">
+          <Button onClick={() => setAddDlg(true)} className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground mt-2">
             <Plus className="mr-2 h-4 w-4" /> Register My Will
           </Button>
         </section>
@@ -388,7 +388,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-            <Shield className="h-5 w-5 text-amber-600 dark:text-amber-300" /> Register Your Will
+            <Shield className="h-5 w-5 text-primary" /> Register Your Will
           </DialogTitle>
         </DialogHeader>
 
@@ -435,7 +435,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
                 <Input value={form.summary} onChange={e => set({ summary: e.target.value })} className="rounded-lg"
                   placeholder="e.g. Covers property, savings, and guardianship of children" />
               </Field>
-              <Button className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+              <Button className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
                 disabled={!form.content.trim()} onClick={() => setStep(2)}>
                 Next: Set Passphrase →
               </Button>
@@ -476,7 +476,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
               </Field>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep(1)}>← Back</Button>
-                <Button className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                <Button className="flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={!form.passphrase || form.passphrase.length < 8 || form.passphrase !== form.passphraseConfirm}
                   onClick={() => setStep(3)}>
                   Next: Name Executors →
@@ -555,7 +555,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep(2)}>← Back</Button>
-                <Button className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setStep(4)}>
+                <Button className="flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setStep(4)}>
                   Next: Persons & Accounts →
                 </Button>
               </div>
@@ -612,7 +612,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep(3)}>← Back</Button>
-                <Button className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                <Button className="flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={saving} onClick={submit}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
                   {saving ? 'Encrypting & Saving…' : 'Save Will Securely'}
@@ -648,7 +648,7 @@ function RecoveryCodeModal({ open, recoveryCode, executors, onConfirmed }: {
       <DialogContent className="sm:max-w-[540px]" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
-            <Key className="h-5 w-5 text-amber-600 dark:text-amber-300" /> Save Your Recovery Code
+            <Key className="h-5 w-5 text-primary" /> Save Your Recovery Code
           </DialogTitle>
         </DialogHeader>
 
@@ -702,7 +702,7 @@ function RecoveryCodeModal({ open, recoveryCode, executors, onConfirmed }: {
             </span>
           </label>
 
-          <Button className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+          <Button className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
             disabled={!confirmed} onClick={onConfirmed}>
             <CheckCircle2 className="mr-2 h-4 w-4" /> I've saved the code — continue
           </Button>
@@ -834,7 +834,7 @@ function EditWillDialog({ open, will, familyId, onClose, onSuccess }: {
 
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white" disabled={saving} onClick={submit}>
+            <Button className="flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground" disabled={saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
@@ -864,7 +864,7 @@ function AccessWillDialog({ open, will, familyId, onClose }: {
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
-            <Unlock className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+            <Unlock className="h-5 w-5 text-primary" />
             {result ? 'Will Content' : 'Access Will'}
           </DialogTitle>
         </DialogHeader>
@@ -974,7 +974,7 @@ function PassphraseAccessForm({ base, will, familyId, onResult }: {
           </button>
         </div>
       </Field>
-      <Button className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+      <Button className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
         disabled={!passphrase || loading} onClick={submit}>
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unlock className="mr-2 h-4 w-4" />}
         {loading ? 'Decrypting…' : 'Decrypt & Read Will'}

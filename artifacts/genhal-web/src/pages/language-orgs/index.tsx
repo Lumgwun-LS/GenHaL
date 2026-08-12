@@ -62,7 +62,7 @@ export default function LanguageOrgsPage() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-800 to-amber-950 text-white p-8 md:p-12">
         <div className="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full bg-white/5" />
         <div className="pointer-events-none absolute -bottom-10 right-16 h-32 w-32 rounded-full bg-white/5" />
-        <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mb-3">
+        <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
           <Globe2 className="h-4 w-4" />
           Language Governance
         </div>
@@ -71,14 +71,14 @@ export default function LanguageOrgsPage() {
           Official custodians of African languages — reviewing corpus data before it trains AI models.
         </p>
         <Button
-          className="rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 font-semibold shadow-lg"
+          className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg"
           onClick={() => navigate("/language-orgs/register")}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Register Your Organisation
         </Button>
         <div className="flex flex-wrap gap-2 mt-4">
           {['Approved reviewers', 'AI training oversight', 'Community governance'].map((t) => (
-            <div key={t} className="flex items-center gap-1.5 text-xs bg-amber-50/10 border border-amber-300/30 text-amber-200 px-3 py-1.5 rounded-full font-medium">
+            <div key={t} className="flex items-center gap-1.5 text-xs bg-primary/10 border-primary/30 text-primary/80 px-3 py-1.5 rounded-full font-medium">
               {t}
             </div>
           ))}
@@ -121,7 +121,7 @@ export default function LanguageOrgsPage() {
 
       {/* Info banner */}
       <div className="rounded-xl border bg-amber-50 border-amber-200 p-5 flex gap-4 dark:bg-amber-500/10 dark:border-amber-500/30">
-        <CheckCircle2 className="h-5 w-5 text-amber-700 shrink-0 mt-0.5 dark:text-amber-300" />
+        <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
         <div className="text-sm text-amber-900 space-y-1 dark:text-amber-300">
           <p className="font-semibold">How the approval system works</p>
           <p className="text-amber-800 leading-relaxed dark:text-amber-300">
@@ -140,7 +140,7 @@ function OrgCard({ org, onClick }: { org: LanguageOrg; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-2xl border bg-white hover:border-amber-400 hover:shadow-md transition-all p-5 space-y-3 group dark:bg-card dark:hover:border-amber-500/50"
+      className="text-left rounded-2xl border bg-white hover:border-primary/60 hover:shadow-md transition-all p-5 space-y-3 group dark:bg-card dark:hover:border-amber-500/50"
       style={{ borderRadius: 'var(--theme-card-radius, 16px)' }}
     >
       <div className="flex items-start gap-3">

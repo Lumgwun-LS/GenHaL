@@ -44,7 +44,7 @@ const PLAN_COLORS: Record<string, string> = {
 const PLAN_BTN: Record<string, string> = {
   free:    'bg-stone-600 hover:bg-stone-500 text-white',
   starter: 'bg-blue-600 hover:bg-blue-500 text-white',
-  pro:     'bg-amber-600 hover:bg-amber-500 text-white',
+  pro:     'bg-primary hover:bg-primary/90 text-primary-foreground',
   royal:   'bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white',
 };
 

@@ -225,16 +225,16 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
             Securely store documents, images, videos, and recordings. Role-based access control keeps sensitive files protected.
           </p>
         </div>
-        <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white shrink-0" onClick={() => setDlg('upload')}>
+        <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" onClick={() => setDlg('upload')}>
           <Upload className="mr-1.5 h-4 w-4" /> Add to Vault
         </Button>
       </div>
 
       {/* Wills banner */}
       {wills.length > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30">
           <Scroll className="h-5 w-5 text-amber-700 shrink-0 dark:text-amber-300" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
+          <p className="text-sm text-primary dark:text-primary">
             <span className="font-semibold">{wills.length} will{wills.length !== 1 ? 's' : ''}</span> stored in this vault.{' '}
             {wills.map(w => w.title).join(', ')}
           </p>
@@ -266,7 +266,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
             <p className="font-serif text-xl font-bold">Vault is empty</p>
             <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">Add documents, images, videos, wills, land titles, royal decrees — anything that matters.</p>
           </div>
-          <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={() => setDlg('upload')}>
+          <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setDlg('upload')}>
             <Upload className="mr-1.5 h-4 w-4" /> Upload first document
           </Button>
         </div>
@@ -373,7 +373,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
                 {Object.entries(ACCESS_LABELS).map(([v, l]) => (
                   <button key={v} onClick={() => setForm(f => ({ ...f, accessLevel: v }))}
                     className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.accessLevel === v ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
+                      ${form.accessLevel === v ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-primary/50 dark:hover:border-primary/30'}`}>
                     <span className="text-muted-foreground">{ACCESS_ICONS[v]}</span> {l}
                   </button>
                 ))}
@@ -401,7 +401,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
               <Input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="land, 1982, Lagos" className="rounded-lg text-sm" />
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30">
               <Switch checked={form.isWill} onCheckedChange={v => setForm(f => ({ ...f, isWill: v }))} />
               <div>
                 <p className="text-sm font-medium">Mark as Will / Testament</p>
@@ -409,7 +409,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
               </div>
             </div>
 
-            <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={upload} disabled={uploading || !form.title}>
+            <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={upload} disabled={uploading || !form.title}>
               {uploading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading…</> : <><Upload className="mr-2 h-4 w-4" />Save to Vault</>}
             </Button>
           </div>
@@ -457,7 +457,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
                 <div className="flex gap-2 pt-2">
                   {viewDoc.downloadUrl && (
                     <a href={viewDoc.downloadUrl} target="_blank" rel="noreferrer" className="flex-1">
-                      <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white">
+                      <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground">
                         <Download className="mr-1.5 h-4 w-4" /> Download
                       </Button>
                     </a>

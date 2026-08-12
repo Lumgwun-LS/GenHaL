@@ -275,7 +275,7 @@ export default function OrgDetailPage() {
             {/* Languages card */}
             <div className="bg-white rounded-2xl border p-5 space-y-3 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Languages managed
+                <Globe2 className="h-4 w-4 text-primary" /> Languages managed
               </h3>
               {languages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No languages assigned yet.</p>
@@ -305,7 +305,7 @@ export default function OrgDetailPage() {
             {/* Members card */}
             <div className="bg-white rounded-2xl border p-5 space-y-3 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Users className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Team ({members.length})
+                <Users className="h-4 w-4 text-primary" /> Team ({members.length})
               </h3>
               <div className="space-y-2">
                 {members.slice(0, 6).map((m) => {
@@ -340,7 +340,7 @@ export default function OrgDetailPage() {
             {canManage && (
               <div className="bg-white rounded-2xl border p-5 space-y-4 dark:bg-card">
                 <h3 className="font-semibold flex items-center gap-2">
-                  <UserPlus className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Invite team member
+                  <UserPlus className="h-4 w-4 text-primary" /> Invite team member
                 </h3>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1">
@@ -434,7 +434,7 @@ export default function OrgDetailPage() {
                     <span className="text-xs text-muted-foreground">Require approval</span>
                     <button
                       onClick={() => toggleApproval(l.languageCode, l.requiresApproval)}
-                      className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-300"
+                      className="text-amber-700 hover:text-primary dark:hover:text-amber-300"
                       title={l.requiresApproval ? "Disable approval requirement" : "Enable approval requirement"}
                     >
                       {l.requiresApproval
@@ -449,7 +449,7 @@ export default function OrgDetailPage() {
             {/* Add language */}
             <div className="bg-white rounded-2xl border p-5 space-y-4 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Add a language
+                <Globe2 className="h-4 w-4 text-primary" /> Add a language
               </h3>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -555,7 +555,7 @@ function DatasetReviewCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="h-9 w-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 dark:bg-amber-500/10 dark:border-amber-500/30">
-            <FileText className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+            <FileText className="h-4 w-4 text-primary" />
           </div>
           <div>
             <p className="font-medium">{d.title}</p>

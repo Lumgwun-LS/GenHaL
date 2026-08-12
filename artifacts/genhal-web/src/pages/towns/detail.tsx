@@ -169,7 +169,7 @@ export default function TownDetail() {
               </Card>
             )}
             <div className="grid md:grid-cols-3 gap-4">
-              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600 dark:text-amber-300" />} label={`Current ${town.rulerTitle}`}
+              <InfoCard icon={<Crown className="h-5 w-5 text-primary" />} label={`Current ${town.rulerTitle}`}
                 value={town.rulers.find(r=>r.isCurrent)?.name ?? '—'} />
               <InfoCard icon={<Building2 className="h-5 w-5 text-stone-600 dark:text-muted-foreground" />} label="Compounds"
                 value={`${town.compounds.length} recorded`} />
@@ -197,7 +197,7 @@ export default function TownDetail() {
                 <h2 className="font-serif text-2xl font-bold">{town.rulerTitle} Lineage</h2>
                 <p className="text-muted-foreground text-sm mt-0.5">Succession timeline from earliest to present</p>
               </div>
-              <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={() => setRulerDialog(true)}>
+              <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setRulerDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add {town.rulerTitle}
               </Button>
             </div>
@@ -270,7 +270,7 @@ export default function TownDetail() {
                 <h2 className="font-serif text-2xl font-bold">Compounds</h2>
                 <p className="text-muted-foreground text-sm mt-0.5">Family quarters and their {town.chiefTitle.toLowerCase()} lineages</p>
               </div>
-              <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={() => setCompoundDialog(true)}>
+              <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setCompoundDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Compound
               </Button>
             </div>
@@ -309,7 +309,7 @@ export default function TownDetail() {
                 <h2 className="font-serif text-2xl font-bold">Heritage & Culture</h2>
                 <p className="text-muted-foreground text-sm">History, traditions, festivals, and ceremonies</p>
               </div>
-              <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={() => setRecordDialog(true)}>
+              <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setRecordDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Record
               </Button>
             </div>
@@ -341,7 +341,7 @@ export default function TownDetail() {
                 <h2 className="font-serif text-2xl font-bold">Resources & Economy</h2>
                 <p className="text-muted-foreground text-sm">Natural wealth and economic life of {town.name}</p>
               </div>
-              <Button className="rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={() => setRecordDialog(true)}>
+              <Button className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setRecordDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Record
               </Button>
             </div>
@@ -441,7 +441,7 @@ function CompoundCard({ compound, defaultChiefTitle, townId, base, onAddChief, o
           <div className="pt-1 space-y-2 border-t">
             {compound.chiefs.map(chief => (
               <div key={chief.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm
-                ${chief.isCurrent ? 'bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30' : 'bg-muted/30'}`}>
+                ${chief.isCurrent ? 'bg-primary/5 border border-primary/20 dark:bg-primary/10 dark:border-primary/30' : 'bg-muted/30'}`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold
                   ${chief.isCurrent ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600 dark:bg-white/[0.14] dark:text-muted-foreground'}`}>
                   {chief.isCurrent ? '★' : '○'}
@@ -570,7 +570,7 @@ function AddRulerDialog({ open, onOpenChange, townId, rulerTitle, base, onSucces
             <Label>Succession notes</Label>
             <Input value={form.successionNotes} onChange={e=>setForm(f=>({...f,successionNotes:e.target.value}))} placeholder="How they came to power…" className="rounded-lg" />
           </div>
-          <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={submit} disabled={saving||!form.name}>
+          <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={submit} disabled={saving||!form.name}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crown className="mr-2 h-4 w-4" />}
             {saving ? 'Saving…' : `Add ${rulerTitle}`}
           </Button>
@@ -619,7 +619,7 @@ function AddCompoundDialog({ open, onOpenChange, townId, chiefTitle, base, onSuc
             <Label>Description</Label>
             <Textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={2} className="rounded-lg" />
           </div>
-          <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={submit} disabled={saving||!form.name}>
+          <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={submit} disabled={saving||!form.name}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Building2 className="mr-2 h-4 w-4" />}
             {saving ? 'Saving…' : 'Add Compound'}
           </Button>
@@ -689,7 +689,7 @@ function AddChiefDialog({ open, onOpenChange, compoundId, compound, townId, chie
             <Label>Succession notes</Label>
             <Input value={form.successionNotes} onChange={e=>setForm(f=>({...f,successionNotes:e.target.value}))} className="rounded-lg" />
           </div>
-          <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={submit} disabled={saving||!form.name}>
+          <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={submit} disabled={saving||!form.name}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {saving ? 'Saving…' : `Add ${chiefTitle}`}
           </Button>
@@ -728,7 +728,7 @@ function AddRecordDialog({ open, onOpenChange, townId, base, onSuccess }: {
               {Object.entries(RECORD_TYPES).map(([key, m]) => (
                 <button key={key} onClick={()=>setForm(f=>({...f,type:key}))}
                   className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                    ${form.type===key ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
+                    ${form.type===key ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-primary/50 dark:hover:border-primary/30'}`}>
                   <span className={`p-1.5 rounded-lg ${m.color}`}>{m.icon}</span>
                   {m.label}
                 </button>
@@ -747,7 +747,7 @@ function AddRecordDialog({ open, onOpenChange, townId, base, onSuccess }: {
             <Label>Description</Label>
             <Textarea value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} placeholder="Detailed description of this heritage record…" rows={4} className="rounded-lg" />
           </div>
-          <Button className="w-full rounded-full bg-amber-600 hover:bg-amber-500 text-white" onClick={submit} disabled={saving||!form.title}>
+          <Button className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={submit} disabled={saving||!form.title}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {saving ? 'Saving…' : 'Add Record'}
           </Button>
