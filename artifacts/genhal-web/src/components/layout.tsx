@@ -536,7 +536,10 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 shadow-sm md:px-6">
+        <header
+          className="flex h-16 shrink-0 items-center justify-between bg-card px-4 shadow-sm md:px-6"
+          style={{ borderBottom: `1px solid ${themeConfig.sidebarBorderColor}` }}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
@@ -576,7 +579,16 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main
+          className="flex-1 overflow-y-auto p-4 md:p-6"
+          style={{
+            /* Subtle accent tint at the top of the content area so each
+             * theme visually "bleeds" from the sidebar into the canvas.
+             * The 08 / 06 hex suffix is ~3-4 % opacity — barely perceptible
+             * but enough for the eye to detect a colour shift on switch. */
+            background: `linear-gradient(180deg, ${themeConfig.accentColor}08 0px, transparent 200px)`,
+          }}
+        >
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
