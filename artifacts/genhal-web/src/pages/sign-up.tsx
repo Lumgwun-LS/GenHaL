@@ -27,12 +27,7 @@ export default function SignUpPage() {
           forceRedirectUrl={base || "/"}
           appearance={{
             variables: {
-              colorPrimary: "hsl(var(--primary))",
-              colorBackground: "hsl(var(--card))",
-              colorText: "hsl(var(--card-foreground))",
-              colorTextSecondary: "hsl(var(--muted-foreground))",
-              colorInputBackground: "hsl(var(--background))",
-              colorInputText: "hsl(var(--foreground))",
+              colorPrimary: "hsl(15 80% 41%)",
               borderRadius: "0.75rem",
             },
           }}

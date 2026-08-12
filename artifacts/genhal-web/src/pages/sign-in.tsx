@@ -30,12 +30,14 @@ export default function SignInPage() {
           forceRedirectUrl={base || "/"}
           appearance={{
             variables: {
-              colorPrimary: "hsl(var(--primary))",
-              colorBackground: "hsl(var(--card))",
-              colorText: "hsl(var(--card-foreground))",
-              colorTextSecondary: "hsl(var(--muted-foreground))",
-              colorInputBackground: "hsl(var(--background))",
-              colorInputText: "hsl(var(--foreground))",
+              /* Keep primary brand colour only. Do NOT set colorBackground /
+               * colorText here — Clerk's internal component styles (card
+               * heading, subtitle, divider, labels) use their own theming and
+               * ignore those variables, so setting a dark background while
+               * leaving Clerk's text dark makes the form unreadable in dark
+               * mode. Auth forms stay light universally (Google, GitHub, etc.
+               * do the same). */
+              colorPrimary: "hsl(15 80% 41%)",
               borderRadius: "0.75rem",
             },
           }}

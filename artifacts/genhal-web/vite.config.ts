@@ -51,6 +51,14 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    // country-state-city is a 7.7 MB CJS package. Pre-bundling it causes
+    // esbuild to crash (OOM / timeout) during dep optimisation, which in turn
+    // breaks any lazy-loaded page that transitively imports it (e.g. the
+    // families page via location-selector). Exclude it so Vite fetches the
+    // raw CJS file at request time instead — still cached by the browser.
+    exclude: ['country-state-city'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
