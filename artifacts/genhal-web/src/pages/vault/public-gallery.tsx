@@ -35,11 +35,11 @@ interface PublicDoc {
 }
 
 const FILE_TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; gradient: string }> = {
-  image:    { icon: <ImageIcon className="h-6 w-6" />, color: "text-violet-600", bg: "bg-violet-100", gradient: "from-violet-500 to-purple-600" },
-  video:    { icon: <Video className="h-6 w-6" />,     color: "text-blue-600",   bg: "bg-blue-100",   gradient: "from-blue-500 to-cyan-600" },
-  audio:    { icon: <Music className="h-6 w-6" />,     color: "text-pink-600",   bg: "bg-pink-100",   gradient: "from-pink-500 to-rose-600" },
-  document: { icon: <FileText className="h-6 w-6" />,  color: "text-amber-600",  bg: "bg-amber-100",  gradient: "from-amber-500 to-orange-600" },
-  other:    { icon: <Archive className="h-6 w-6" />,   color: "text-slate-600",  bg: "bg-slate-100",  gradient: "from-slate-500 to-gray-600" },
+  image:    { icon: <ImageIcon className="h-6 w-6" />, color: "text-violet-600 dark:text-violet-300", bg: "bg-violet-100 dark:bg-violet-500/15", gradient: "from-violet-500 to-purple-600" },
+  video:    { icon: <Video className="h-6 w-6" />,     color: "text-blue-600 dark:text-blue-300",   bg: "bg-blue-100 dark:bg-blue-500/15",   gradient: "from-blue-500 to-cyan-600" },
+  audio:    { icon: <Music className="h-6 w-6" />,     color: "text-pink-600 dark:text-pink-300",   bg: "bg-pink-100 dark:bg-pink-500/15",   gradient: "from-pink-500 to-rose-600" },
+  document: { icon: <FileText className="h-6 w-6" />,  color: "text-amber-600 dark:text-amber-300",  bg: "bg-amber-100 dark:bg-amber-500/15",  gradient: "from-amber-500 to-orange-600" },
+  other:    { icon: <Archive className="h-6 w-6" />,   color: "text-slate-600 dark:text-muted-foreground",  bg: "bg-slate-100 dark:bg-white/10",  gradient: "from-slate-500 to-gray-600" },
 };
 
 const FILTER_OPTIONS = [

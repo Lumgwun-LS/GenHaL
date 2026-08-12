@@ -179,13 +179,13 @@ function TownCard({ town }: { town: Town }) {
             <Crown className="h-12 w-12 text-amber-300/60" />
           )}
           {town.emblemImageUrl && (
-            <div className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-white shadow-lg overflow-hidden border-2 border-amber-300">
+            <div className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-white shadow-lg overflow-hidden border-2 border-amber-300 dark:bg-card dark:border-amber-500/30">
               <img src={town.emblemImageUrl} alt="emblem" className="w-full h-full object-contain p-0.5" />
             </div>
           )}
         </div>
         <CardContent className="p-5">
-          <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors">{town.name}</h3>
+          <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{town.name}</h3>
           {town.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{town.localName}</p>}
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
             <MapPin className="h-3 w-3" />
@@ -196,7 +196,7 @@ function TownCard({ town }: { town: Town }) {
               <span className="flex items-center gap-1"><Crown className="h-3 w-3" />{town.rulerTitle}</span>
               <span className="flex items-center gap-1"><Users className="h-3 w-3" />{town.chiefTitle}</span>
             </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors dark:group-hover:text-amber-300" />
           </div>
         </CardContent>
       </Card>

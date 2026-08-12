@@ -72,38 +72,38 @@ export default function VerifyAlivePage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-4 py-16">
+    <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-4 py-16 dark:bg-white/5">
       {/* Header */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center gap-2 mb-3">
           <img src="/genhal-logo.webp" alt="GenHaL" className="h-9 w-9 rounded-xl" onError={e => { (e.target as HTMLImageElement).src = '/genhal-logo.png'; }} />
-          <span className="text-2xl font-bold text-amber-800 tracking-tight">GenHaL</span>
+          <span className="text-2xl font-bold text-amber-800 tracking-tight dark:text-amber-300">GenHaL</span>
         </div>
-        <p className="text-sm text-stone-500">Genealogy · Heritage · Language</p>
+        <p className="text-sm text-stone-500 dark:text-muted-foreground">Genealogy · Heritage · Language</p>
       </div>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden dark:bg-card dark:border-white/10">
 
         {/* ── Verifying (auto-submit in progress) ── */}
         {status === "loading" && (
           <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <Loader2 className="h-10 w-10 text-amber-600 animate-spin" />
-            <h2 className="text-lg font-semibold text-stone-800">Confirming your check-in…</h2>
-            <p className="text-sm text-stone-500">Just a moment.</p>
+            <Loader2 className="h-10 w-10 text-amber-600 animate-spin dark:text-amber-300" />
+            <h2 className="text-lg font-semibold text-stone-800 dark:text-foreground">Confirming your check-in…</h2>
+            <p className="text-sm text-stone-500 dark:text-muted-foreground">Just a moment.</p>
           </div>
         )}
 
         {/* ── Success ── */}
         {(status === "success" || status === "already_verified") && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center dark:bg-emerald-500/15">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-stone-800 mb-1">
+              <h2 className="text-xl font-bold text-stone-800 mb-1 dark:text-foreground">
                 {status === "already_verified" ? "Already confirmed" : "You're confirmed!"}
               </h2>
-              <p className="text-sm text-stone-500 leading-relaxed">
+              <p className="text-sm text-stone-500 leading-relaxed dark:text-muted-foreground">
                 {status === "already_verified"
                   ? "This check-in was already recorded. Your family records are active."
                   : "Your quarterly check-in has been recorded. Thank you for keeping your family heritage records active."}
@@ -119,31 +119,31 @@ export default function VerifyAlivePage() {
                 <>
                   <a
                     href={`/families/${familyId}`}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left"
+                    className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left dark:border-white/10 dark:hover:bg-white/5"
                   >
-                    <User className="h-4 w-4 text-amber-600 shrink-0" />
+                    <User className="h-4 w-4 text-amber-600 shrink-0 dark:text-amber-300" />
                     <div>
-                      <p className="text-sm font-medium text-stone-700">Update family profile</p>
-                      <p className="text-xs text-stone-500">Review and refresh your family details</p>
+                      <p className="text-sm font-medium text-stone-700 dark:text-foreground">Update family profile</p>
+                      <p className="text-xs text-stone-500 dark:text-muted-foreground">Review and refresh your family details</p>
                     </div>
                   </a>
                   <a
                     href={`/families/${familyId}?tab=wills`}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left"
+                    className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left dark:border-white/10 dark:hover:bg-white/5"
                   >
-                    <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                    <FileText className="h-4 w-4 text-amber-600 shrink-0 dark:text-amber-300" />
                     <div>
-                      <p className="text-sm font-medium text-stone-700">Review will documents</p>
-                      <p className="text-xs text-stone-500">Check your registered wills are up to date</p>
+                      <p className="text-sm font-medium text-stone-700 dark:text-foreground">Review will documents</p>
+                      <p className="text-xs text-stone-500 dark:text-muted-foreground">Check your registered wills are up to date</p>
                     </div>
                   </a>
                 </>
               )}
               <a
                 href="/"
-                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left"
+                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 transition-colors text-left dark:border-white/10 dark:hover:bg-white/5"
               >
-                <span className="text-sm text-stone-600">Go to dashboard →</span>
+                <span className="text-sm text-stone-600 dark:text-muted-foreground">Go to dashboard →</span>
               </a>
             </div>
           </div>
@@ -152,26 +152,26 @@ export default function VerifyAlivePage() {
         {/* ── Expired ── */}
         {status === "expired" && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
-              <Clock className="h-8 w-8 text-orange-500" />
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center dark:bg-orange-500/15">
+              <Clock className="h-8 w-8 text-orange-500 dark:text-orange-300" />
             </div>
-            <h2 className="text-xl font-bold text-stone-800">Code has expired</h2>
-            <p className="text-sm text-stone-500 leading-relaxed">
+            <h2 className="text-xl font-bold text-stone-800 dark:text-foreground">Code has expired</h2>
+            <p className="text-sm text-stone-500 leading-relaxed dark:text-muted-foreground">
               This check-in code is more than 90 days old. A new reminder will be sent to your
               registered email at the next quarterly interval.
             </p>
-            <a href="/" className="text-sm text-amber-700 hover:underline">Go to dashboard</a>
+            <a href="/" className="text-sm text-amber-700 hover:underline dark:text-amber-300">Go to dashboard</a>
           </div>
         )}
 
         {/* ── Invalid ── */}
         {status === "invalid" && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-              <XCircle className="h-8 w-8 text-red-500" />
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center dark:bg-red-500/15">
+              <XCircle className="h-8 w-8 text-red-500 dark:text-red-300" />
             </div>
-            <h2 className="text-xl font-bold text-stone-800">Code not recognised</h2>
-            <p className="text-sm text-stone-500 leading-relaxed">
+            <h2 className="text-xl font-bold text-stone-800 dark:text-foreground">Code not recognised</h2>
+            <p className="text-sm text-stone-500 leading-relaxed dark:text-muted-foreground">
               We couldn't find a check-in matching that code. Double-check the email and try again.
             </p>
             <Button
@@ -188,11 +188,11 @@ export default function VerifyAlivePage() {
         {/* ── Error ── */}
         {status === "error" && (
           <div className="p-8 flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-              <XCircle className="h-8 w-8 text-red-500" />
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center dark:bg-red-500/15">
+              <XCircle className="h-8 w-8 text-red-500 dark:text-red-300" />
             </div>
-            <h2 className="text-xl font-bold text-stone-800">Something went wrong</h2>
-            <p className="text-sm text-stone-500">Please try again in a moment.</p>
+            <h2 className="text-xl font-bold text-stone-800 dark:text-foreground">Something went wrong</h2>
+            <p className="text-sm text-stone-500 dark:text-muted-foreground">Please try again in a moment.</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setStatus("idle")}>
               Try again
             </Button>
@@ -203,12 +203,12 @@ export default function VerifyAlivePage() {
         {status === "idle" && (
           <div className="p-8 space-y-6">
             <div className="flex flex-col items-center gap-3 text-center">
-              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
-                <KeyRound className="h-7 w-7 text-amber-700" />
+              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center dark:bg-amber-500/15">
+                <KeyRound className="h-7 w-7 text-amber-700 dark:text-amber-300" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-stone-800">Quarterly check-in</h2>
-                <p className="text-sm text-stone-500 mt-1 leading-relaxed">
+                <h2 className="text-xl font-bold text-stone-800 dark:text-foreground">Quarterly check-in</h2>
+                <p className="text-sm text-stone-500 mt-1 leading-relaxed dark:text-muted-foreground">
                   Enter the 8-character code from your reminder email to confirm you're reachable and
                   keep your family records active.
                 </p>

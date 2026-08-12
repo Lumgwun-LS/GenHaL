@@ -14,6 +14,12 @@ import {
   Sun,
   UserCircle2,
   Palette,
+  Upload,
+  Users,
+  Crown,
+  Landmark,
+  Building2,
+  Library,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemePicker } from '@/components/ui/ThemePicker';
@@ -37,8 +43,10 @@ interface NavGroup {
  */
 const PALETTE = [
   { dot: '#F2906A', bg: 'rgba(242,144,106,0.16)' }, // terracotta
+  { dot: '#8FBFE0', bg: 'rgba(143,191,224,0.16)' }, // sky
   { dot: '#93C795', bg: 'rgba(147,199,149,0.16)' }, // forest
   { dot: '#EFC65E', bg: 'rgba(239,198,94,0.16)' }, // gold
+  { dot: '#D5A6E0', bg: 'rgba(213,166,224,0.16)' }, // mauve
 ] as const;
 
 const NAV_GROUPS: NavGroup[] = [
@@ -49,6 +57,16 @@ const NAV_GROUPS: NavGroup[] = [
         label: 'Dashboard',
         href: '/',
         icon: <LayoutDashboard className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    group: 'Contribute',
+    items: [
+      {
+        label: 'Collect',
+        href: '/collect',
+        icon: <Upload className="h-4 w-4" />,
       },
     ],
   },
@@ -66,9 +84,39 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <BookOpen className="h-4 w-4" />,
       },
       {
+        label: 'Families',
+        href: '/families',
+        icon: <Users className="h-4 w-4" />,
+      },
+      {
+        label: 'Kingdoms',
+        href: '/kingdoms',
+        icon: <Crown className="h-4 w-4" />,
+      },
+      {
+        label: 'Towns',
+        href: '/towns',
+        icon: <Landmark className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    group: 'Language',
+    items: [
+      {
         label: 'Language',
         href: '/language',
         icon: <Globe2 className="h-4 w-4" />,
+      },
+      {
+        label: 'Organisations',
+        href: '/language-orgs',
+        icon: <Building2 className="h-4 w-4" />,
+      },
+      {
+        label: 'Corpus',
+        href: '/corpus',
+        icon: <Library className="h-4 w-4" />,
       },
     ],
   },
@@ -84,34 +132,63 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const PAGE_TITLES: Array<{ match: (path: string) => boolean; title: string }> =
-  [
-    { match: (p) => p === '/', title: 'Dashboard' },
-    { match: (p) => p.startsWith('/genealogy'), title: 'Genealogy' },
-    { match: (p) => p.startsWith('/heritage'), title: 'Heritage' },
-    { match: (p) => p.startsWith('/language'), title: 'Language' },
-    { match: (p) => p.startsWith('/ai'), title: 'AI Studio' },
-  ];
+/*
+ * Matched top-to-bottom, so the longer prefix has to be listed first:
+ * `/language-orgs` would otherwise be claimed by `/language`. Each entry uses
+ * the same segment-boundary test as the nav highlight, so the topbar title and
+ * the highlighted nav row can never disagree about which section you are in.
+ */
+const PAGE_TITLES: Array<{ prefix: string; title: string }> = [
+  { prefix: '/', title: 'Dashboard' },
+  { prefix: '/collect', title: 'Heritage Collector' },
+  { prefix: '/genealogy', title: 'Genealogy' },
+  { prefix: '/heritage', title: 'Heritage' },
+  { prefix: '/families', title: 'Families' },
+  { prefix: '/kingdoms', title: 'Kingdoms' },
+  { prefix: '/towns', title: 'Towns' },
+  { prefix: '/language-orgs', title: 'Language Organisations' },
+  { prefix: '/language', title: 'Language' },
+  { prefix: '/corpus', title: 'Language Corpus' },
+  { prefix: '/ai', title: 'AI Studio' },
+];
 
 const THEME_KEY = 'genhal:theme';
 
+function resolveInitialTheme() {
+  if (typeof window === 'undefined') return false;
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function useDarkMode() {
-  const [isDark, setIsDark] = useState(false);
+  /*
+   * Resolved in the state initialiser rather than in an effect: reading it
+   * after mount meant the first paint was always light, so a dark-mode visitor
+   * got a full-page white flash on every load. The class is applied before
+   * paint by the inline script in index.html; this keeps React's copy of the
+   * flag in step with it.
+   */
+  const [isDark, setIsDark] = useState(resolveInitialTheme);
 
   useEffect(() => {
-    const stored = localStorage.getItem(THEME_KEY);
-    const prefersDark =
-      stored === 'dark' ||
-      (stored === null &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches);
-    setIsDark(prefersDark);
-    document.documentElement.classList.toggle('dark', prefersDark);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
+  // Follow the OS only while the visitor hasn't expressed a preference.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+      if (localStorage.getItem(THEME_KEY) === null) setIsDark(e.matches);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
   }, []);
 
   const toggle = () => {
     setIsDark((prev) => {
       const next = !prev;
-      document.documentElement.classList.toggle('dark', next);
       localStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
       return next;
     });
@@ -120,6 +197,13 @@ function useDarkMode() {
   return { isDark, toggle };
 }
 
+/**
+ * Section matching is done on whole path segments, never on raw string
+ * prefixes. A bare `location.startsWith(href)` lights up Language *and*
+ * Language Organisations at the same time, because "/language-orgs" starts
+ * with "/language" — the trailing slash is what makes "/language-orgs" fail
+ * against "/language/" while "/language/yor" still passes.
+ */
 function isActivePath(location: string, href: string) {
   if (href === '/') return location === '/';
   return location === href || location.startsWith(href + '/');
@@ -150,7 +234,8 @@ export function Layout({ children }: { children: ReactNode }) {
   }, [searchOpen]);
 
   const title =
-    PAGE_TITLES.find((entry) => entry.match(location))?.title ?? 'GenHaL';
+    PAGE_TITLES.find((entry) => isActivePath(location, entry.prefix))?.title ??
+    'GenHaL';
 
   const groups = query
     ? NAV_GROUPS.map((group) => ({
@@ -273,7 +358,10 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
 
       {/* Nav */}
-      <nav className="scrollbar-slim flex-1 overflow-y-auto py-3">
+      {/* min-h-0 lets this shrink below its content height inside the flex
+          column, so overflow scrolls *here* instead of pushing the account
+          block off the bottom of the panel. */}
+      <nav className="scrollbar-slim min-h-0 flex-1 overflow-y-auto py-3">
         {groups.map((group, gi) => {
           const pal = PALETTE[gi % PALETTE.length];
 
@@ -408,14 +496,27 @@ export function Layout({ children }: { children: ReactNode }) {
      * the sidebar and topbar pinned while only the content column scrolls.
      */}
     <div className="flex h-dvh overflow-hidden bg-background">
-      {/* Desktop sidebar — sticky is belt-and-braces behind the fixed shell */}
-      <aside
-        className="sticky top-0 hidden h-dvh shrink-0 flex-col md:flex"
+      {/*
+       * The sidebar is pinned to the viewport, not laid out in the scrolling
+       * flow: `fixed inset-y-0` means its height is the window's, so it can
+       * never be stretched to the height of a long page (which is what left
+       * that tall band of empty dark space below the nav on Dashboard and
+       * Collect, and made the whole bar scroll away with the content). The
+       * spacer beside it reserves the column width in the flex row.
+       */}
+      <div
+        aria-hidden="true"
+        className="hidden shrink-0 md:block"
         style={{
           width: collapsed ? '64px' : '260px',
-          minWidth: collapsed ? '64px' : '260px',
-          transition:
-            'width 0.25s cubic-bezier(0.4,0,0.2,1), min-width 0.25s cubic-bezier(0.4,0,0.2,1)',
+          transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
+        }}
+      />
+      <aside
+        className="fixed inset-y-0 left-0 z-40 hidden flex-col md:flex"
+        style={{
+          width: collapsed ? '64px' : '260px',
+          transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
         {renderPanel(collapsed)}

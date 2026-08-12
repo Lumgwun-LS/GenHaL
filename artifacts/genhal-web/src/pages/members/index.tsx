@@ -46,10 +46,10 @@ const FAMILY_ROLES = [
 ];
 
 const STATUS_BADGES: Record<string, string> = {
-  active:    'bg-green-100 text-green-700 border-green-200',
-  pending:   'bg-amber-100 text-amber-700 border-amber-200',
-  suspended: 'bg-red-100 text-red-700 border-red-200',
-  removed:   'bg-stone-100 text-stone-600 border-stone-200',
+  active:    'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30',
+  pending:   'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30',
+  suspended: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30',
+  removed:   'bg-stone-100 text-stone-600 border-stone-200 dark:bg-white/10 dark:text-muted-foreground dark:border-white/10',
 };
 
 const KINGDOM_ROLE_RANK: Record<string, number> = Object.fromEntries(KINGDOM_ROLES.map(r => [r.value, r.rank]));
@@ -157,13 +157,13 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
       </div>
 
       {pending.length > 0 && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-          <p className="text-sm text-amber-800 font-medium">{pending.length} pending member{pending.length!==1?'s':''} awaiting approval</p>
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+          <p className="text-sm text-amber-800 font-medium dark:text-amber-300">{pending.length} pending member{pending.length!==1?'s':''} awaiting approval</p>
           <div className="flex gap-2 mt-2 flex-wrap">
             {pending.map(m => (
-              <div key={m.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-xs">
+              <div key={m.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-xs dark:bg-card dark:border-amber-500/30">
                 <span className="font-mono text-muted-foreground">{m.clerkUserId.slice(0,12)}…</span>
-                <Button variant="ghost" size="sm" className="h-5 px-1.5 text-green-600" onClick={() => { setEditTarget(m); setForm({...form, role:m.role, status:'active'}); updateMember(); }}>
+                <Button variant="ghost" size="sm" className="h-5 px-1.5 text-green-600 dark:text-green-300" onClick={() => { setEditTarget(m); setForm({...form, role:m.role, status:'active'}); updateMember(); }}>
                   <UserCheck className="h-3 w-3" />
                 </Button>
                 <Button variant="ghost" size="sm" className="h-5 px-1.5 text-destructive" onClick={() => removeMember(m)}>
@@ -200,7 +200,7 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate font-mono">{m.clerkUserId.slice(0, 16)}…</p>
-                        {m.customTitle && <p className="text-xs text-amber-700 italic">{m.customTitle}</p>}
+                        {m.customTitle && <p className="text-xs text-amber-700 italic dark:text-amber-300">{m.customTitle}</p>}
                         <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded-full border font-medium mt-0.5 ${STATUS_BADGES[m.status] ?? STATUS_BADGES.active}`}>{m.status}</span>
                       </div>
                       {isAdmin && (
@@ -237,7 +237,7 @@ export default function MembersTab({ unitType, unitId, rulerTitle = 'King', user
                 {roles.map(r => (
                   <button key={r.value} onClick={() => setForm(f => ({ ...f, role: r.value }))}
                     className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.role === r.value ? 'border-amber-500 bg-amber-50 font-medium' : 'border-border hover:border-amber-300'}`}>
+                      ${form.role === r.value ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
                     <span>{r.label}</span>
                   </button>
                 ))}

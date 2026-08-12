@@ -16,6 +16,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script>
+      // Applied before first paint so a dark-mode visitor never sees a white
+      // flash while the bundle loads. Kept in sync with useDarkMode()'s
+      // resolveInitialTheme() in src/components/layout.tsx.
+      (function () {
+        try {
+          var stored = localStorage.getItem('genhal:theme');
+          var dark =
+            stored === 'dark' ||
+            (stored === null &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

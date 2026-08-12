@@ -45,8 +45,8 @@ function Spinner({
           className={[
             'w-full appearance-none rounded-xl border border-input bg-background',
             'px-3 py-2.5 pr-9 text-sm shadow-sm outline-none transition-colors',
-            'focus:border-amber-500 focus:ring-1 focus:ring-amber-400',
-            disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-400',
+            'focus:border-amber-500 focus:ring-1 focus:ring-amber-400 dark:focus:border-amber-500/50',
+            disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-400 dark:hover:border-amber-500/50',
           ].join(' ')}
         >
           <option value="">{loading ? 'Loading…' : (placeholder ?? `Select ${label}`)}</option>
@@ -127,8 +127,8 @@ export default function LocationSelector({ value, onChange, required }: Props) {
   const hasCities = cityOptions.length > 0;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">
+    <div className="space-y-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1 dark:text-amber-300">
         <MapPin className="h-3.5 w-3.5" /> Location
         {required && <span className="text-destructive ml-1">*</span>}
       </div>
@@ -175,7 +175,7 @@ export default function LocationSelector({ value, onChange, required }: Props) {
             value={value.district}
             onChange={e => onChange({ ...value, district: e.target.value })}
             placeholder={`Enter ${cityLabel}…`}
-            className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-400"
+            className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-400 dark:focus:border-amber-500/50"
           />
         </div>
       )}
@@ -184,7 +184,7 @@ export default function LocationSelector({ value, onChange, required }: Props) {
       {(value.country || value.region || value.district) && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {[value.district, value.region, value.country].filter(Boolean).map((part, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-800 border border-amber-200 rounded-full px-2.5 py-0.5 font-medium">
+            <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-800 border border-amber-200 rounded-full px-2.5 py-0.5 font-medium dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
               {part}
             </span>
           ))}

@@ -49,12 +49,12 @@ interface Town {
 
 // ─── Record type meta ─────────────────────────────────────────────────────────
 const RECORD_TYPES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  history:           { label: 'History',           icon: <BookOpen className="h-4 w-4" />,    color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  tradition:         { label: 'Tradition',         icon: <Globe2 className="h-4 w-4" />,      color: 'bg-purple-100 text-purple-700 border-purple-200' },
-  festival:          { label: 'Festival',          icon: <Flame className="h-4 w-4" />,       color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  ceremony:          { label: 'Ceremony',          icon: <Star className="h-4 w-4" />,        color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  natural_resource:  { label: 'Natural Resource',  icon: <Sprout className="h-4 w-4" />,      color: 'bg-green-100 text-green-700 border-green-200' },
-  economic_activity: { label: 'Economic Activity', icon: <TrendingUp className="h-4 w-4" />,  color: 'bg-teal-100 text-teal-700 border-teal-200' },
+  history:           { label: 'History',           icon: <BookOpen className="h-4 w-4" />,    color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30' },
+  tradition:         { label: 'Tradition',         icon: <Globe2 className="h-4 w-4" />,      color: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30' },
+  festival:          { label: 'Festival',          icon: <Flame className="h-4 w-4" />,       color: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30' },
+  ceremony:          { label: 'Ceremony',          icon: <Star className="h-4 w-4" />,        color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' },
+  natural_resource:  { label: 'Natural Resource',  icon: <Sprout className="h-4 w-4" />,      color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30' },
+  economic_activity: { label: 'Economic Activity', icon: <TrendingUp className="h-4 w-4" />,  color: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30' },
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ export default function TownDetail() {
           </button>
           <div className="flex items-end gap-4">
             {town.emblemImageUrl && (
-              <div className="w-16 h-16 rounded-xl bg-white shadow-xl overflow-hidden border-2 border-amber-300 shrink-0">
+              <div className="w-16 h-16 rounded-xl bg-white shadow-xl overflow-hidden border-2 border-amber-300 shrink-0 dark:bg-card dark:border-amber-500/30">
                 <img src={town.emblemImageUrl} alt="emblem" className="w-full h-full object-contain p-1" />
               </div>
             )}
@@ -131,15 +131,15 @@ export default function TownDetail() {
       </div>
 
       {/* stat ribbon */}
-      <div className="bg-amber-50 border-y border-amber-200 px-6 md:px-10 py-3 flex gap-6 text-sm overflow-x-auto">
+      <div className="bg-amber-50 border-y border-amber-200 px-6 md:px-10 py-3 flex gap-6 text-sm overflow-x-auto dark:bg-amber-500/10 dark:border-amber-500/30">
         {[
           { label: `${town.rulerTitle}s`, value: town.rulers.length, icon: <Crown className="h-3.5 w-3.5" /> },
           { label: 'Compounds', value: town.compounds.length, icon: <Building2 className="h-3.5 w-3.5" /> },
           { label: 'Heritage Records', value: town.records.filter(r=>heritageTypes.includes(r.type)).length, icon: <BookOpen className="h-3.5 w-3.5" /> },
           { label: 'Resources', value: town.records.filter(r=>resourceTypes.includes(r.type)).length, icon: <Sprout className="h-3.5 w-3.5" /> },
         ].map(s => (
-          <div key={s.label} className="flex items-center gap-1.5 text-amber-800 shrink-0">
-            {s.icon}<span className="font-bold">{s.value}</span><span className="text-amber-700">{s.label}</span>
+          <div key={s.label} className="flex items-center gap-1.5 text-amber-800 shrink-0 dark:text-amber-300">
+            {s.icon}<span className="font-bold">{s.value}</span><span className="text-amber-700 dark:text-amber-300">{s.label}</span>
           </div>
         ))}
       </div>
@@ -162,18 +162,18 @@ export default function TownDetail() {
           {/* ── OVERVIEW ── */}
           <TabsContent value="overview" className="space-y-6">
             {town.description && (
-              <Card className="border-0 bg-amber-50/50 shadow-sm">
+              <Card className="border-0 bg-amber-50/50 shadow-sm dark:bg-amber-500/10">
                 <CardContent className="p-6">
                   <p className="text-foreground/80 leading-relaxed text-lg">{town.description}</p>
                 </CardContent>
               </Card>
             )}
             <div className="grid md:grid-cols-3 gap-4">
-              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600" />} label={`Current ${town.rulerTitle}`}
+              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600 dark:text-amber-300" />} label={`Current ${town.rulerTitle}`}
                 value={town.rulers.find(r=>r.isCurrent)?.name ?? '—'} />
-              <InfoCard icon={<Building2 className="h-5 w-5 text-stone-600" />} label="Compounds"
+              <InfoCard icon={<Building2 className="h-5 w-5 text-stone-600 dark:text-muted-foreground" />} label="Compounds"
                 value={`${town.compounds.length} recorded`} />
-              <InfoCard icon={<Globe2 className="h-5 w-5 text-blue-600" />} label="Language"
+              <InfoCard icon={<Globe2 className="h-5 w-5 text-blue-600 dark:text-blue-300" />} label="Language"
                 value={town.languageCode?.toUpperCase() ?? '—'} />
             </div>
             {/* quick-add buttons */}
@@ -208,18 +208,18 @@ export default function TownDetail() {
             ) : (
               <div className="relative">
                 {/* timeline spine */}
-                <div className="absolute left-7 top-0 bottom-0 w-0.5 bg-amber-200" />
+                <div className="absolute left-7 top-0 bottom-0 w-0.5 bg-amber-200 dark:bg-amber-500/20" />
                 <div className="space-y-4">
                   {town.rulers.map((ruler, i) => (
                     <div key={ruler.id} className="relative flex gap-5 pl-3">
                       {/* dot */}
                       <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow
-                        ${ruler.isCurrent ? 'bg-amber-500 text-white' : 'bg-white border-2 border-amber-300 text-amber-600'}`}>
+                        ${ruler.isCurrent ? 'bg-amber-500 text-white' : 'bg-white border-2 border-amber-300 text-amber-600 dark:bg-card dark:border-amber-500/30 dark:text-amber-300'}`}>
                         {ruler.imageUrl
                           ? <img src={ruler.imageUrl} alt={ruler.name} className="w-full h-full rounded-full object-cover" />
                           : <Crown className="h-4 w-4" />}
                       </div>
-                      <Card className={`flex-1 border shadow-sm ${ruler.isCurrent ? 'border-amber-300 bg-amber-50/60' : ''}`}>
+                      <Card className={`flex-1 border shadow-sm ${ruler.isCurrent ? 'border-amber-300 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10' : ''}`}>
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
@@ -421,14 +421,14 @@ function CompoundCard({ compound, defaultChiefTitle, townId, base, onAddChief, o
         {compound.description && <p className="text-sm text-muted-foreground line-clamp-2">{compound.description}</p>}
         {/* current chief */}
         <div className="flex items-center gap-2 text-sm">
-          <Crown className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+          <Crown className="h-3.5 w-3.5 text-amber-600 shrink-0 dark:text-amber-300" />
           {current
             ? <span><span className="font-medium">{current.title} {current.name}</span> <span className="text-muted-foreground">(current {chiefTitle.toLowerCase()})</span></span>
             : <span className="text-muted-foreground">No current {chiefTitle.toLowerCase()} recorded</span>}
         </div>
         {/* chief count */}
         <div className="flex items-center justify-between">
-          <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-600 font-medium">
+          <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-600 font-medium dark:text-amber-300 dark:hover:text-amber-300">
             {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             {compound.chiefs.length} {chiefTitle.toLowerCase()}{compound.chiefs.length !== 1 ? 's' : ''} in lineage
           </button>
@@ -441,9 +441,9 @@ function CompoundCard({ compound, defaultChiefTitle, townId, base, onAddChief, o
           <div className="pt-1 space-y-2 border-t">
             {compound.chiefs.map(chief => (
               <div key={chief.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm
-                ${chief.isCurrent ? 'bg-amber-50 border border-amber-200' : 'bg-muted/30'}`}>
+                ${chief.isCurrent ? 'bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30' : 'bg-muted/30'}`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold
-                  ${chief.isCurrent ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600'}`}>
+                  ${chief.isCurrent ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600 dark:bg-white/[0.14] dark:text-muted-foreground'}`}>
                   {chief.isCurrent ? '★' : '○'}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -483,7 +483,7 @@ function RecordCard({ record, townId, base, onDelete }: {
               <p className={`text-sm text-muted-foreground mt-1.5 ${expanded ? '' : 'line-clamp-3'}`}>{record.content}</p>
             )}
             {record.content && record.content.length > 180 && (
-              <button onClick={() => setExpanded(e => !e)} className="text-xs text-amber-700 hover:text-amber-600 mt-1 font-medium">
+              <button onClick={() => setExpanded(e => !e)} className="text-xs text-amber-700 hover:text-amber-600 mt-1 font-medium dark:text-amber-300 dark:hover:text-amber-300">
                 {expanded ? 'Show less' : 'Read more'}
               </button>
             )}
@@ -728,7 +728,7 @@ function AddRecordDialog({ open, onOpenChange, townId, base, onSuccess }: {
               {Object.entries(RECORD_TYPES).map(([key, m]) => (
                 <button key={key} onClick={()=>setForm(f=>({...f,type:key}))}
                   className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                    ${form.type===key ? 'border-amber-500 bg-amber-50 font-medium' : 'border-border hover:border-amber-300'}`}>
+                    ${form.type===key ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
                   <span className={`p-1.5 rounded-lg ${m.color}`}>{m.icon}</span>
                   {m.label}
                 </button>
@@ -762,7 +762,7 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <Card className="border shadow-sm">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100">{icon}</div>
+        <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/30">{icon}</div>
         <div>
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className="font-semibold text-foreground">{value}</p>

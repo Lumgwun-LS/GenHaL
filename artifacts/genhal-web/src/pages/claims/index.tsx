@@ -50,10 +50,10 @@ interface Claim {
 }
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  pending:      { icon: <Clock className="h-3.5 w-3.5" />,        color: "bg-yellow-100 text-yellow-800 border-yellow-200",  label: "Pending Review" },
-  under_review: { icon: <Eye className="h-3.5 w-3.5" />,          color: "bg-blue-100 text-blue-800 border-blue-200",        label: "Under Review" },
-  approved:     { icon: <CheckCircle2 className="h-3.5 w-3.5" />, color: "bg-green-100 text-green-800 border-green-200",     label: "Approved" },
-  rejected:     { icon: <XCircle className="h-3.5 w-3.5" />,      color: "bg-red-100 text-red-800 border-red-200",           label: "Rejected" },
+  pending:      { icon: <Clock className="h-3.5 w-3.5" />,        color: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-300 dark:border-yellow-500/30",  label: "Pending Review" },
+  under_review: { icon: <Eye className="h-3.5 w-3.5" />,          color: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30",        label: "Under Review" },
+  approved:     { icon: <CheckCircle2 className="h-3.5 w-3.5" />, color: "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30",     label: "Approved" },
+  rejected:     { icon: <XCircle className="h-3.5 w-3.5" />,      color: "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30",           label: "Rejected" },
 };
 
 const POSITIONS = [
@@ -62,9 +62,9 @@ const POSITIONS = [
 ];
 
 function EvidenceTypeIcon({ type }: { type: string }) {
-  if (type === "image") return <ImageIcon className="h-4 w-4 text-purple-500" />;
-  if (type === "video") return <Video className="h-4 w-4 text-blue-500" />;
-  return <FileText className="h-4 w-4 text-amber-600" />;
+  if (type === "image") return <ImageIcon className="h-4 w-4 text-purple-500 dark:text-purple-300" />;
+  if (type === "video") return <Video className="h-4 w-4 text-blue-500 dark:text-blue-300" />;
+  return <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -175,7 +175,7 @@ function FileClaimDialog({
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 pt-2">
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
                 <p className="font-semibold mb-0.5">How this works</p>
                 <p className="text-xs">Submit your claim with supporting legal documents, photographs, and videos. Our team will review the evidence and, if satisfied, transfer ownership and control to the rightful holder.</p>
               </div>
@@ -186,7 +186,7 @@ function FileClaimDialog({
                 <div className="grid grid-cols-2 gap-1.5">
                   {POSITIONS.map(p => (
                     <button key={p} onClick={() => setForm(f => ({ ...f, position: p }))}
-                      className={`text-xs px-3 py-2 rounded-lg border text-left transition-all ${form.position === p ? "border-amber-600 bg-amber-50 text-amber-800 font-medium" : "border-border hover:border-amber-300"}`}>
+                      className={`text-xs px-3 py-2 rounded-lg border text-left transition-all ${form.position === p ? "border-amber-600 bg-amber-50 text-amber-800 font-medium dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-300" : "border-border hover:border-amber-300 dark:hover:border-amber-500/30"}`}>
                       {p}
                     </button>
                   ))}
@@ -228,23 +228,23 @@ function FileClaimDialog({
 
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 pt-2">
-              <div className="p-3.5 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800">
+              <div className="p-3.5 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-300">
                 <p className="font-semibold mb-0.5 flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" />Claim filed (Ref #{claimId})</p>
                 <p className="text-xs">Now upload your supporting evidence — court documents, birth certificates, photographs, video testimonies. The more thorough, the better.</p>
               </div>
 
               {/* Upload area */}
               <div
-                className="border-2 border-dashed border-amber-300 rounded-2xl p-8 text-center cursor-pointer hover:border-amber-500 hover:bg-amber-50/30 transition-colors"
+                className="border-2 border-dashed border-amber-300 rounded-2xl p-8 text-center cursor-pointer hover:border-amber-500 hover:bg-amber-50/30 transition-colors dark:border-amber-500/30 dark:hover:border-amber-500/50 dark:hover:bg-amber-500/10"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <input ref={fileInputRef} type="file" multiple className="hidden"
                   accept="image/*,video/*,.pdf,.doc,.docx,.jpg,.jpeg,.png"
                   onChange={e => e.target.files && uploadEvidence(e.target.files)} />
                 {uploading
-                  ? <><Loader2 className="h-8 w-8 animate-spin text-amber-600 mx-auto mb-2" /><p className="text-sm text-amber-700">Uploading…</p></>
+                  ? <><Loader2 className="h-8 w-8 animate-spin text-amber-600 mx-auto mb-2 dark:text-amber-300" /><p className="text-sm text-amber-700 dark:text-amber-300">Uploading…</p></>
                   : <>
-                    <Upload className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                    <Upload className="h-8 w-8 text-amber-500 mx-auto mb-2 dark:text-amber-300" />
                     <p className="font-semibold text-sm">Click to upload evidence</p>
                     <p className="text-xs text-muted-foreground mt-1">Documents, images, or videos · Max 200 MB per file</p>
                     <div className="flex justify-center gap-4 mt-3 text-xs text-muted-foreground">
@@ -259,12 +259,12 @@ function FileClaimDialog({
               {uploadedFiles.length > 0 && (
                 <div className="space-y-1.5">
                   {uploadedFiles.map((f, i) => (
-                    <div key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${f.status === "complete" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                    <div key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${f.status === "complete" ? "bg-green-50 border-green-200 dark:bg-green-500/10 dark:border-green-500/30" : "bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-500/30"}`}>
                       <EvidenceTypeIcon type={f.type} />
                       <span className="flex-1 text-xs font-medium truncate">{f.name}</span>
                       {f.status === "complete"
-                        ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                        : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                        ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 dark:text-green-300" />
+                        : <XCircle className="h-4 w-4 text-red-500 shrink-0 dark:text-red-300" />}
                     </div>
                   ))}
                 </div>
@@ -316,8 +316,8 @@ function ClaimCard({ claim, base, onRefresh }: { claim: Claim; base: string; onR
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Gavel className="h-4 w-4 text-amber-700" />
-                <p className="font-semibold text-sm">Claim for: <span className="text-amber-800">{claim.position}</span></p>
+                <Gavel className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                <p className="font-semibold text-sm">Claim for: <span className="text-amber-800 dark:text-amber-300">{claim.position}</span></p>
               </div>
               <p className="text-xs text-muted-foreground">By {claim.claimantName} · {new Date(claim.createdAt).toLocaleDateString()}</p>
             </div>
@@ -337,9 +337,9 @@ function ClaimCard({ claim, base, onRefresh }: { claim: Claim; base: string; onR
             >
               <div className="border-t px-4 py-3 space-y-3 bg-muted/20">
                 {claim.adminNotes && (
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <p className="text-xs font-semibold text-blue-800 mb-0.5">Admin response</p>
-                    <p className="text-xs text-blue-700">{claim.adminNotes}</p>
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30">
+                    <p className="text-xs font-semibold text-blue-800 mb-0.5 dark:text-blue-300">Admin response</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300">{claim.adminNotes}</p>
                   </div>
                 )}
 
@@ -353,7 +353,7 @@ function ClaimCard({ claim, base, onRefresh }: { claim: Claim; base: string; onR
                           <p className="text-xs font-medium truncate">{ev.fileName}</p>
                           {ev.description && <p className="text-[10px] text-muted-foreground">{ev.description}</p>}
                         </div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${ev.uploadStatus === "complete" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${ev.uploadStatus === "complete" ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"}`}>
                           {ev.uploadStatus}
                         </span>
                       </div>
@@ -404,9 +404,9 @@ export default function ClaimsTab({ unitType, unitId, unitName, isOwner }: Claim
         </Button>
       </div>
 
-      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex gap-3">
-        <AlertCircle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-800">
+      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex gap-3 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <AlertCircle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5 dark:text-amber-300" />
+        <div className="text-sm text-amber-800 dark:text-amber-300">
           <p className="font-semibold mb-0.5">How ownership transfer works</p>
           <p className="text-xs">File a claim with your legal basis and supporting evidence. Our team reviews documentation and, if satisfied, transfers control of the kingdom or family account to the verified rightful holder. Frivolous claims may result in account suspension.</p>
         </div>
