@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { trackPageView } from "@/lib/analytics";
 import { useUser } from "@clerk/react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from '@clerk/react';
@@ -15,81 +15,82 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 import { Layout } from "@/components/layout";
 
-import LandingPage from "@/pages/landing";
-import VendorStorefront from "@/pages/store";
-import ShopLinkPage from "@/pages/shop";
-import Dashboard from "@/pages/dashboard";
-import Vendors from "@/pages/vendors";
-import VendorDetail from "@/pages/vendors/detail";
-import Social from "@/pages/social";
-import CreatePost from "@/pages/social/create";
-import AiStudio from "@/pages/ai-studio";
-import Products from "@/pages/products";
-import Inventory from "@/pages/inventory";
-import Orders from "@/pages/orders";
-import OrderDetail from "@/pages/orders/detail";
-import Customers from "@/pages/customers";
-import CustomerDetail from "@/pages/customers/detail";
-import Leads from "@/pages/leads";
-import EmailCampaigns from "@/pages/email-campaigns";
-import EmailCampaignEditor from "@/pages/email-campaigns/detail";
-import SmsCampaigns from "@/pages/sms-campaigns";
-import Payments from "@/pages/payments";
-import AdminPanel from "@/pages/admin";
-import Analytics from "@/pages/analytics";
-import Account from "@/pages/account";
-import Onboarding from "@/pages/onboarding";
-import VoiceCampaigns from "@/pages/voice-campaigns/index";
-import VoiceCampaignDetail from "@/pages/voice-campaigns/detail";
-import Sales from "@/pages/sales/index";
-import Expenses from "@/pages/expenses/index";
-import Investments from "@/pages/investments/index";
-import FinanceAnalytics from "@/pages/finance-analytics/index";
-import Branches from "@/pages/branches/index";
-import Workers from "@/pages/workers/index";
-import Tasks from "@/pages/tasks/index";
-import AdsPage from "@/pages/ads/index";
-import ContactPage from "@/pages/contact";
-import PricingPage from "@/pages/pricing";
-import WebsitePage from "@/pages/website/index";
-import PublicSitePage from "@/pages/site/index";
-import DataAnalysisPage from "@/pages/data-analysis/index";
-import InvoicesPage from "@/pages/invoices/index";
-import InvoicePublicPage from "@/pages/invoice-public/index";
-import RealEstatePage from "@/pages/real-estate/index";
-import PublicPropertyListings from "@/pages/real-estate/public";
-import ArchitectPage from "@/pages/architect/index";
-import DevelopersPage from "@/pages/developers";
-import MarketplacePage from "@/pages/marketplace";
-import DocsPage from "@/pages/docs";
-import BecomeAConnectedBusinessPage from "@/pages/become-a-connected-business";
-import PartnerToolkitPage from "@/pages/partner-toolkit";
-import ConnectedBusinessPage from "@/pages/connected-business";
-import OAuthConsent from "@/pages/oauth-consent";
-import CustomerDashboard from "@/pages/customer/dashboard";
-import CustomerOrders from "@/pages/customer/orders";
-import CustomerOrderDetail from "@/pages/customer/order-detail";
-import CustomerVendors from "@/pages/customer/vendors";
-import CustomerInbox from "@/pages/customer/inbox";
-import CustomerAIDashboard from "@/pages/customer/ai-dashboard";
-import CustomerProfile from "@/pages/customer/profile";
-import MessagesPage from "@/pages/messages/index";
-import WalletPage from "@/pages/wallet/index";
-import InterswitchPage from "@/pages/interswitch/index";
-import MobileAppPage from "@/pages/mobile-app";
-import BlogManagement from "@/pages/blog/index";
-import BlogEditor from "@/pages/blog/editor";
-import PublicBlogIndex from "@/pages/public-blog/index";
-import PublicBlogPost from "@/pages/public-blog/post";
-import VendorBlogPage from "@/pages/vendor-blog/index";
-import MyActivityPage from "@/pages/my-activity/index";
-import PublicSupportPage from "@/pages/help/index";
-import TicketViewPage from "@/pages/ticket-view/index";
-import SupportPage from "@/pages/support/index";
-import TicketDetailPage from "@/pages/support/ticket";
-import ConfirmReceiptPage from "@/pages/confirm-receipt";
-import ProductPublicPage from "@/pages/product-public";
-import SsoLoginPage from "@/pages/sso-login";
+// Pages — lazy loaded so only the current route's code downloads on first paint
+const LandingPage = lazy(() => import("@/pages/landing"));
+const VendorStorefront = lazy(() => import("@/pages/store"));
+const ShopLinkPage = lazy(() => import("@/pages/shop"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const Vendors = lazy(() => import("@/pages/vendors"));
+const VendorDetail = lazy(() => import("@/pages/vendors/detail"));
+const Social = lazy(() => import("@/pages/social"));
+const CreatePost = lazy(() => import("@/pages/social/create"));
+const AiStudio = lazy(() => import("@/pages/ai-studio"));
+const Products = lazy(() => import("@/pages/products"));
+const Inventory = lazy(() => import("@/pages/inventory"));
+const Orders = lazy(() => import("@/pages/orders"));
+const OrderDetail = lazy(() => import("@/pages/orders/detail"));
+const Customers = lazy(() => import("@/pages/customers"));
+const CustomerDetail = lazy(() => import("@/pages/customers/detail"));
+const Leads = lazy(() => import("@/pages/leads"));
+const EmailCampaigns = lazy(() => import("@/pages/email-campaigns"));
+const EmailCampaignEditor = lazy(() => import("@/pages/email-campaigns/detail"));
+const SmsCampaigns = lazy(() => import("@/pages/sms-campaigns"));
+const Payments = lazy(() => import("@/pages/payments"));
+const AdminPanel = lazy(() => import("@/pages/admin"));
+const Analytics = lazy(() => import("@/pages/analytics"));
+const Account = lazy(() => import("@/pages/account"));
+const Onboarding = lazy(() => import("@/pages/onboarding"));
+const VoiceCampaigns = lazy(() => import("@/pages/voice-campaigns/index"));
+const VoiceCampaignDetail = lazy(() => import("@/pages/voice-campaigns/detail"));
+const Sales = lazy(() => import("@/pages/sales/index"));
+const Expenses = lazy(() => import("@/pages/expenses/index"));
+const Investments = lazy(() => import("@/pages/investments/index"));
+const FinanceAnalytics = lazy(() => import("@/pages/finance-analytics/index"));
+const Branches = lazy(() => import("@/pages/branches/index"));
+const Workers = lazy(() => import("@/pages/workers/index"));
+const Tasks = lazy(() => import("@/pages/tasks/index"));
+const AdsPage = lazy(() => import("@/pages/ads/index"));
+const ContactPage = lazy(() => import("@/pages/contact"));
+const PricingPage = lazy(() => import("@/pages/pricing"));
+const WebsitePage = lazy(() => import("@/pages/website/index"));
+const PublicSitePage = lazy(() => import("@/pages/site/index"));
+const DataAnalysisPage = lazy(() => import("@/pages/data-analysis/index"));
+const InvoicesPage = lazy(() => import("@/pages/invoices/index"));
+const InvoicePublicPage = lazy(() => import("@/pages/invoice-public/index"));
+const RealEstatePage = lazy(() => import("@/pages/real-estate/index"));
+const PublicPropertyListings = lazy(() => import("@/pages/real-estate/public"));
+const ArchitectPage = lazy(() => import("@/pages/architect/index"));
+const DevelopersPage = lazy(() => import("@/pages/developers"));
+const MarketplacePage = lazy(() => import("@/pages/marketplace"));
+const DocsPage = lazy(() => import("@/pages/docs"));
+const BecomeAConnectedBusinessPage = lazy(() => import("@/pages/become-a-connected-business"));
+const PartnerToolkitPage = lazy(() => import("@/pages/partner-toolkit"));
+const ConnectedBusinessPage = lazy(() => import("@/pages/connected-business"));
+const OAuthConsent = lazy(() => import("@/pages/oauth-consent"));
+const CustomerDashboard = lazy(() => import("@/pages/customer/dashboard"));
+const CustomerOrders = lazy(() => import("@/pages/customer/orders"));
+const CustomerOrderDetail = lazy(() => import("@/pages/customer/order-detail"));
+const CustomerVendors = lazy(() => import("@/pages/customer/vendors"));
+const CustomerInbox = lazy(() => import("@/pages/customer/inbox"));
+const CustomerAIDashboard = lazy(() => import("@/pages/customer/ai-dashboard"));
+const CustomerProfile = lazy(() => import("@/pages/customer/profile"));
+const MessagesPage = lazy(() => import("@/pages/messages/index"));
+const WalletPage = lazy(() => import("@/pages/wallet/index"));
+const InterswitchPage = lazy(() => import("@/pages/interswitch/index"));
+const MobileAppPage = lazy(() => import("@/pages/mobile-app"));
+const BlogManagement = lazy(() => import("@/pages/blog/index"));
+const BlogEditor = lazy(() => import("@/pages/blog/editor"));
+const PublicBlogIndex = lazy(() => import("@/pages/public-blog/index"));
+const PublicBlogPost = lazy(() => import("@/pages/public-blog/post"));
+const VendorBlogPage = lazy(() => import("@/pages/vendor-blog/index"));
+const MyActivityPage = lazy(() => import("@/pages/my-activity/index"));
+const PublicSupportPage = lazy(() => import("@/pages/help/index"));
+const TicketViewPage = lazy(() => import("@/pages/ticket-view/index"));
+const SupportPage = lazy(() => import("@/pages/support/index"));
+const TicketDetailPage = lazy(() => import("@/pages/support/ticket"));
+const ConfirmReceiptPage = lazy(() => import("@/pages/confirm-receipt"));
+const ProductPublicPage = lazy(() => import("@/pages/product-public"));
+const SsoLoginPage = lazy(() => import("@/pages/sso-login"));
 
 declare const __CF_PAGES__: boolean;
 
@@ -384,6 +385,7 @@ function ClerkProviderWithRoutes() {
         <ClerkQueryClientCacheInvalidator />
         <PageViewTracker />
         <LoginTracker />
+        <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>}>
         <Switch>
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />
@@ -481,6 +483,7 @@ function ClerkProviderWithRoutes() {
             </div>
           </Route>
         </Switch>
+        </Suspense>
       </QueryClientProvider>
     </ClerkProvider>
   );

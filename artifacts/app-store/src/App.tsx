@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { useEffect, useRef, useState, Component, type ReactNode, type ErrorInfo } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, Component, type ReactNode, type ErrorInfo } from "react";
 import { trackPageView } from "./lib/analytics";
 import { ClerkProvider, useUser, SignIn, SignUp } from "@clerk/react";
 import { dark } from "@clerk/themes";
@@ -30,17 +30,18 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
     return this.props.children;
   }
 }
-import Home from "./pages/home";
-import Search from "./pages/search";
-import AppDetail from "./pages/app-detail";
-import DeveloperPortal from "./pages/developer-portal";
-import DeveloperSignup from "./pages/developer-signup";
-import Admin from "./pages/admin";
-import AppPublicLanding from "./pages/app-public-landing";
-import MyApps from "./pages/my-apps";
-import NotFound from "./pages/not-found";
-import DownloadRedirect from "./pages/download-redirect";
-import Unsubscribe from "./pages/unsubscribe";
+// Pages — lazy loaded so only the current route's code downloads on first paint
+const Home = lazy(() => import("./pages/home"));
+const Search = lazy(() => import("./pages/search"));
+const AppDetail = lazy(() => import("./pages/app-detail"));
+const DeveloperPortal = lazy(() => import("./pages/developer-portal"));
+const DeveloperSignup = lazy(() => import("./pages/developer-signup"));
+const Admin = lazy(() => import("./pages/admin"));
+const AppPublicLanding = lazy(() => import("./pages/app-public-landing"));
+const MyApps = lazy(() => import("./pages/my-apps"));
+const NotFound = lazy(() => import("./pages/not-found"));
+const DownloadRedirect = lazy(() => import("./pages/download-redirect"));
+const Unsubscribe = lazy(() => import("./pages/unsubscribe"));
 
 function PageViewTracker() {
   const [location] = useLocation();
@@ -217,6 +218,7 @@ function AppRoutes() {
         <UserTracker />
         <Nav />
         <ErrorBoundary>
+          <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}><div style={{ width: 32, height: 32, border: "3px solid #00c853", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /></div>}>
           <Switch>
             <Route path="/" component={Home} />
             <Route path="/search" component={Search} />
@@ -233,6 +235,7 @@ function AppRoutes() {
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route component={NotFound} />
           </Switch>
+          </Suspense>
         </ErrorBoundary>
         <Footer />
       </div>
