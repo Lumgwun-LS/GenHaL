@@ -13,8 +13,11 @@ import {
   Moon,
   Sun,
   UserCircle2,
+  Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemePicker } from '@/components/ui/ThemePicker';
+import { useThemeStore } from '@/store/themeStore';
 
 interface NavItem {
   label: string;
@@ -128,8 +131,10 @@ export function Layout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { isDark, toggle } = useDarkMode();
+  const { config: themeConfig } = useThemeStore();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -160,8 +165,8 @@ export function Layout({ children }: { children: ReactNode }) {
     <div
       className="flex h-full flex-col overflow-hidden"
       style={{
-        background: 'var(--sidebar-gradient)',
-        borderRight: '1px solid var(--sidebar-border-color)',
+        background: themeConfig.sidebarGradient,
+        borderRight: `1px solid ${themeConfig.sidebarBorderColor}`,
       }}
     >
       {/* Brand */}
@@ -396,11 +401,12 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 
   return (
-    /*
+    <>
+    {/*
      * h-dvh (not h-screen) so mobile browser chrome retracting doesn't leave a
      * gap; overflow-hidden on the shell plus overflow-y-auto on <main> keeps
      * the sidebar and topbar pinned while only the content column scrolls.
-     */
+     */}
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* Desktop sidebar — sticky is belt-and-braces behind the fixed shell */}
       <aside
@@ -444,6 +450,16 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Theme picker */}
+            <button
+              onClick={() => setThemePickerOpen(true)}
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Change dashboard theme"
+              aria-label="Dashboard themes"
+            >
+              <Palette className="h-5 w-5" />
+            </button>
+            {/* Light / dark mode toggle */}
             <button
               onClick={toggle}
               className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -464,5 +480,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
       </div>
     </div>
+    <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
+    </>
   );
 }
