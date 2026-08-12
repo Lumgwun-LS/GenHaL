@@ -130,7 +130,7 @@ export default function FamiliesList() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map(f => (
             <Link key={f.id} href={`/families/${f.id}`}>
-              <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+              <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden" style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}>
                 <div className="h-28 relative bg-gradient-to-br from-stone-800 to-amber-900 flex items-center justify-center">
                   {f.coverImageUrl
                     ? <img src={f.coverImageUrl} alt={f.name} className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-500" />

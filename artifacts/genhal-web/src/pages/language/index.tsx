@@ -100,7 +100,7 @@ export default function LanguageCenter() {
                   href={`/language/${lang.code}`}
                   className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <div className="group flex h-full flex-col rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
+                  <div className="group flex h-full flex-col rounded-xl border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover" style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}>
                     <div className="flex flex-1 items-start gap-3 p-5">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-foreground dark:text-accent">
                         <Globe2 className="h-5 w-5" />

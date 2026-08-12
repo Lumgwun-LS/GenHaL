@@ -171,7 +171,7 @@ export default function TownsList() {
 function TownCard({ town }: { town: Town }) {
   return (
     <Link href={`/towns/${town.id}`}>
-      <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+      <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden" style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}>
         <div className="h-36 bg-gradient-to-br from-amber-800 to-stone-700 relative flex items-center justify-center overflow-hidden">
           {town.coverImageUrl ? (
             <img src={town.coverImageUrl} alt={town.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />

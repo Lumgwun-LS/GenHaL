@@ -141,7 +141,7 @@ export default function KingdomsList() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map(k => (
             <Link key={k.id} href={`/kingdoms/${k.id}`}>
-              <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+              <Card className="group cursor-pointer border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden" style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}>
                 <div className="h-36 relative bg-gradient-to-br from-amber-900 to-stone-800 flex items-center justify-center overflow-hidden">
                   {k.coverImageUrl
                     ? <img src={k.coverImageUrl} alt={k.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80" />

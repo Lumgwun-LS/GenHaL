@@ -320,7 +320,7 @@ function MaterialCard({ dataset: d, onToggleApproval, onDelete }: {
 }) {
   const meta = TYPE_META[d.type as MaterialType] ?? TYPE_META.text;
   return (
-    <Card className="border shadow-sm hover:shadow-md transition-all group">
+    <Card className="border shadow-sm hover:shadow-md transition-all group" style={{ borderRadius: 'var(--theme-card-radius, 12px)' }}>
       <CardContent className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-2">
           <div className={`p-2 rounded-lg border ${meta.color}`}>{meta.icon}</div>

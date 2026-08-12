@@ -401,3 +401,77 @@
     border-radius: 99px;
   }
 }
+
+/* ── Dashboard theme colour overrides ────────────────────────────────────────
+ * ThemeApplier stamps `theme-{name}` on <html>. The selectors below override
+ * --primary and --ring so every text-primary / bg-primary / border-primary
+ * Tailwind utility responds to the active theme. Dark-mode variants are
+ * combined because .dark is also on <html>.
+ *
+ * HSL values computed from each theme's accentColor hex:
+ *   Unyeada  #818CF8  → 234 90% 74%
+ *   Ekede    #F97316  → 25  95% 53%
+ *   Okoroete #10B981  → 160 84% 39%
+ *   Otuo     #A855F7  → 271 91% 65%
+ *   Ibotirem #DC2626  → 0   72% 51%
+ */
+
+/* Unyeada — Electric indigo */
+html.theme-unyeada {
+  --primary: 234 90% 74%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 234 90% 74%;
+}
+html.theme-unyeada.dark {
+  --primary: 234 85% 80%;
+  --primary-foreground: 234 45% 10%;
+  --ring: 234 85% 80%;
+}
+
+/* Ekede — Harvest orange */
+html.theme-ekede {
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 25 95% 53%;
+}
+html.theme-ekede.dark {
+  --primary: 25 90% 68%;
+  --primary-foreground: 25 45% 10%;
+  --ring: 25 90% 68%;
+}
+
+/* Okoroete — Glass emerald */
+html.theme-okoroete {
+  --primary: 160 84% 39%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 160 84% 39%;
+}
+html.theme-okoroete.dark {
+  --primary: 160 70% 60%;
+  --primary-foreground: 160 45% 8%;
+  --ring: 160 70% 60%;
+}
+
+/* Otuo — Royal purple */
+html.theme-otuo {
+  --primary: 271 91% 65%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 271 91% 65%;
+}
+html.theme-otuo.dark {
+  --primary: 271 85% 78%;
+  --primary-foreground: 271 45% 10%;
+  --ring: 271 85% 78%;
+}
+
+/* Ibotirem — Ember red */
+html.theme-ibotirem {
+  --primary: 0 72% 51%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 0 72% 51%;
+}
+html.theme-ibotirem.dark {
+  --primary: 0 75% 68%;
+  --primary-foreground: 0 45% 10%;
+  --ring: 0 75% 68%;
+}

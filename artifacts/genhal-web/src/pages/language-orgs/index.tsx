@@ -141,6 +141,7 @@ function OrgCard({ org, onClick }: { org: LanguageOrg; onClick: () => void }) {
     <button
       onClick={onClick}
       className="text-left rounded-2xl border bg-white hover:border-amber-400 hover:shadow-md transition-all p-5 space-y-3 group dark:bg-card dark:hover:border-amber-500/50"
+      style={{ borderRadius: 'var(--theme-card-radius, 16px)' }}
     >
       <div className="flex items-start gap-3">
         {org.logoUrl ? (
