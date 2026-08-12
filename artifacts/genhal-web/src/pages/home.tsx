@@ -1,5 +1,6 @@
 import { useGetGenhalDashboard } from '@workspace/api-client-react';
 import { Link } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import {
   Network,
   BookOpen,
@@ -8,6 +9,7 @@ import {
   Users,
   ChevronRight,
   MessageSquare,
+  PlayCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -45,8 +47,22 @@ const PILLARS = [
   },
 ];
 
+function useExplainerVideoUrl() {
+  return useQuery({
+    queryKey: ['genhal-explainer-video-url'],
+    queryFn: async () => {
+      const res = await fetch('/api/genhal/public/video-url');
+      if (!res.ok) return '';
+      const data = await res.json();
+      return (data.url as string) ?? '';
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export default function Home() {
   const { data: dashboard, isLoading, error } = useGetGenhalDashboard();
+  const { data: videoUrl } = useExplainerVideoUrl();
 
   return (
     <div className="space-y-6">
@@ -99,6 +115,27 @@ export default function Home() {
           </div>
         </section>
       </Reveal>
+
+      {/* Explainer video — shown when an R2-hosted video URL is configured */}
+      {videoUrl && (
+        <Reveal animation="fade-up">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+            <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+              <PlayCircle className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Watch our story</h3>
+            </div>
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <video
+                src={videoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="absolute inset-0 h-full w-full bg-black object-contain"
+              />
+            </div>
+          </section>
+        </Reveal>
+      )}
 
       {/* Stats */}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">

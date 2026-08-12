@@ -240,6 +240,10 @@ export const DEFAULT_SITE_CONTENT = {
     usdToNgnRate:    1650,
     platformFeeRate: 0.025,
   },
+  // GenHaL explainer video hosted on Cloudflare R2.
+  // Set to the full public R2 URL of the uploaded .mp4/.webm file.
+  // Empty string means the section is hidden on the GenHaL homepage.
+  "genhal.explainerVideoUrl": "",
 } as const;
 
 export type SiteContentKey = keyof typeof DEFAULT_SITE_CONTENT;
@@ -436,6 +440,7 @@ const SITE_CONTENT_SCHEMAS: Record<SiteContentKey, z.ZodType> = {
   "admin.socialHealthSettings": socialHealthSettingsSchema,
   "billing.deductionLadder": deductionLadderSchema,
   "wallet.settings": z.object({ usdToNgnRate: z.number().min(1), platformFeeRate: z.number().min(0).max(1) }),
+  "genhal.explainerVideoUrl": z.string().max(2048),
 };
 
 /** Validates and normalizes a raw value for `key`. Throws a ZodError on failure. */

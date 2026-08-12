@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth, getAuth } from "@clerk/express";
 import { z } from "zod";
+import { getSiteContentBlock, setSiteContentBlock } from "../lib/site-content";
 import { db } from "@workspace/db";
 import {
   genhalTreesTable,
@@ -756,6 +757,37 @@ router.delete("/genhal/collect/:id", requireAuth(), async (req, res): Promise<vo
   } catch (err) {
     logger.error(err, "deleteGenhalCollect error");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Explainer video URL (R2-hosted) ──────────────────────────────────────────
+
+// GET /genhal/public/video-url — no auth, returns the configured R2 video URL
+router.get("/genhal/public/video-url", async (_req, res): Promise<void> => {
+  try {
+    const url = await getSiteContentBlock("genhal.explainerVideoUrl");
+    res.json({ url: url || "" });
+  } catch (err) {
+    logger.error(err, "genhal getVideoUrl error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /genhal/admin/video-url — admin-only, sets the R2-hosted video URL
+router.post("/genhal/admin/video-url", requireAuth(), async (req, res): Promise<void> => {
+  const { userId } = getAuth(req);
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(userId ?? "")) {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+  try {
+    const { url } = z.object({ url: z.string().max(2048) }).parse(req.body);
+    await setSiteContentBlock("genhal.explainerVideoUrl", url, userId!, null);
+    res.json({ ok: true, url });
+  } catch (err) {
+    logger.error(err, "genhal setVideoUrl error");
+    res.status(400).json({ error: "Invalid request" });
   }
 });
 
