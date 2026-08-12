@@ -95,6 +95,7 @@ import genhalVaultPublicRouter from "./genhal-vault-public";
 import genhalWillsRouter from "./genhal-wills";
 import { genhalLifeChecksRouter } from "./genhal-life-checks";
 import genhalLanguageOrgsRouter from "./genhal-language-orgs";
+import genhalPublicRouter from "./genhal-public";
 import aiGatewayRouter from "./ai-gateway";
 import publicBlogRouter from "./public-blog";
 import supportPublicRouter from "./support-public";
@@ -194,6 +195,9 @@ router.use(emailTrackingRouter);
 
 // Awajimaa Unified SSO bridge — public (check-email + exchange); admin (backfill-notify)
 router.use("/sso", ssoRouter);
+
+// GenHaL public routes (no auth)
+router.use(genhalPublicRouter);
 
 // All internal business routes require an authenticated Clerk session
 router.use(requireAuth);

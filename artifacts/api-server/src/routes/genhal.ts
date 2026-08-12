@@ -761,17 +761,7 @@ router.delete("/genhal/collect/:id", requireAuth(), async (req, res): Promise<vo
 });
 
 // ── Explainer video URL (R2-hosted) ──────────────────────────────────────────
-
-// GET /genhal/public/video-url — no auth, returns the configured R2 video URL
-router.get("/genhal/public/video-url", async (_req, res): Promise<void> => {
-  try {
-    const url = await getSiteContentBlock("genhal.explainerVideoUrl");
-    res.json({ url: url || "" });
-  } catch (err) {
-    logger.error(err, "genhal getVideoUrl error");
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+// GET /genhal/public/video-url is served by genhal-public.ts (before requireAuth)
 
 // POST /genhal/admin/video-url — admin-only, sets the R2-hosted video URL
 router.post("/genhal/admin/video-url", requireAuth(), async (req, res): Promise<void> => {
