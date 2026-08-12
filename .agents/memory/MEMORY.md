@@ -1,3 +1,5 @@
+- [Clerk appearance dark mode](clerk-appearance-dark-mode.md) — never pass colorBackground/colorText to Clerk appearance; CSS var() refs don't resolve in Clerk's JS system; keep form always light.
+- [GenHaL Vite dep-optimisation crash](genhal-vite-dep-optimisation.md) — esbuild hits OS thread limit when all 18 workflows run; cache must be built with fewer workflows; ignoreAnnotations + country-state-city exclude are permanent safeguards.
 - [GenHaL Family Wills system](genhal-family-wills.md) — AES-256-GCM encrypted wills; passphrase verified via scrypt, never stored; access model, API, and frontend pattern documented.
 - [GenHaL Proof-of-Life system](genhal-proof-of-life.md) — 90-day token reminders to family head; 4 missed = NOK email; verify page at /verify; scheduler in genhal-life-check-scheduler.ts.
 - [GenHaL Web auth pattern](genhal-web-auth-pattern.md) — Clerk v6 shared with vendor-hub/app-store; ProtectedPage HOC uses useAuth(); no SignedIn/SignedOut exports in v6.
