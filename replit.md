@@ -17,6 +17,16 @@ pnpm --filter @workspace/api-spec run codegen        # Regenerate API hooks + Zo
 pnpm --filter @workspace/db run push                 # Push DB schema changes (dev only — use push-force to bypass TTY prompt)
 ```
 
+### ⚠️ Before publishing: rebuild genhal-web
+
+`genhal-web` is a **static artifact** — Replit serves its pre-built `dist/public` directly without re-running Vite. Any source changes to `artifacts/genhal-web/src/**` are invisible in production until you rebuild:
+
+```bash
+pnpm build:genhal   # rebuilds artifacts/genhal-web/dist/public
+```
+
+Run this once, then publish. The `PORT` and `BASE_PATH` env vars are baked into the build script — no flags needed.
+
 Required secrets: `DATABASE_URL`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `SESSION_SECRET`.  
 Payment secrets: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYSTACK_SECRET_KEY`, `PAYSTACK_WEBHOOK_SECRET`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`.  
 Voice/SMS: `TWILIO_AUTH_TOKEN` (separate from the Twilio connector — needed for webhook signature validation).  

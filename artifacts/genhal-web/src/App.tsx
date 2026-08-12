@@ -21,6 +21,7 @@ const Dictionary    = lazy(() => import('@/pages/language/dictionary'));
 const AiStudio      = lazy(() => import('@/pages/ai/index'));
 const SignInPage    = lazy(() => import('@/pages/sign-in'));
 const SignUpPage    = lazy(() => import('@/pages/sign-up'));
+const VerifyPage    = lazy(() => import('@/pages/verify'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,8 @@ function Router() {
         <Route path="/sign-in/:rest*" component={SignInPage} />
         <Route path="/sign-up"      component={SignUpPage} />
         <Route path="/sign-up/:rest*" component={SignUpPage} />
+        {/* Proof-of-life verification — accessed via email link, no auth required */}
+        <Route path="/verify"       component={VerifyPage} />
 
         {/* All other routes require a signed-in Clerk session */}
         <Route>
