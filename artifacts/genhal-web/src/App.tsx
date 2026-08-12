@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -7,15 +7,15 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Layout } from '@/components/layout';
 
-// Pages
-import Home from '@/pages/home';
-import GenealogyList from '@/pages/genealogy/index';
-import TreeDetail from '@/pages/genealogy/tree';
-import HeritageHub from '@/pages/heritage/index';
-import CommunityDetail from '@/pages/heritage/community';
-import LanguageCenter from '@/pages/language/index';
-import Dictionary from '@/pages/language/dictionary';
-import AiStudio from '@/pages/ai/index';
+// Pages — lazy loaded so only the current route's bundle downloads on first paint
+const Home = lazy(() => import('@/pages/home'));
+const GenealogyList = lazy(() => import('@/pages/genealogy/index'));
+const TreeDetail = lazy(() => import('@/pages/genealogy/tree'));
+const HeritageHub = lazy(() => import('@/pages/heritage/index'));
+const CommunityDetail = lazy(() => import('@/pages/heritage/community'));
+const LanguageCenter = lazy(() => import('@/pages/language/index'));
+const Dictionary = lazy(() => import('@/pages/language/dictionary'));
+const AiStudio = lazy(() => import('@/pages/ai/index'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +30,11 @@ function Router() {
   return (
     <Layout>
       <RoutedErrorBoundary>
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-screen">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500" />
+          </div>
+        }>
         <Switch>
           <Route path="/" component={Home} />
           
@@ -46,6 +51,7 @@ function Router() {
           
           <Route component={NotFound} />
         </Switch>
+        </Suspense>
       </RoutedErrorBoundary>
     </Layout>
   );

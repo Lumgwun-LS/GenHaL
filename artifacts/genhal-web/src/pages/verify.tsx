@@ -76,7 +76,7 @@ export default function VerifyAlivePage() {
       {/* Header */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center gap-2 mb-3">
-          <img src="/genhal-logo.png" alt="GenHaL" className="h-9 w-9 rounded-xl" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/genhal-logo.webp" alt="GenHaL" className="h-9 w-9 rounded-xl" onError={e => { (e.target as HTMLImageElement).src = '/genhal-logo.png'; }} />
           <span className="text-2xl font-bold text-amber-800 tracking-tight">GenHaL</span>
         </div>
         <p className="text-sm text-stone-500">Genealogy · Heritage · Language</p>

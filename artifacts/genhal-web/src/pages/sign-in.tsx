@@ -11,7 +11,8 @@ export default function SignInPage() {
         {/* Branding */}
         <div className="text-center space-y-2">
           <img
-            src={`${base}/genhal-logo.png`}
+            src={`${base}/genhal-logo.webp`}
+            onError={(e) => { (e.target as HTMLImageElement).src = `${base}/genhal-logo.png`; }}
             alt="GenHaL"
             className="h-20 w-auto mx-auto object-contain drop-shadow-md"
           />
