@@ -335,8 +335,24 @@ export default function VideoWithControls() {
 
   const barVisible = !collapsed || hovering || tapPinned;
 
-  // Export path: no props, clean recording
-  if (!isIframed) return <VideoTemplate />;
+  // When inside an iframe (e.g. Replit preview), getDisplayMedia is blocked by
+  // the sandbox. Show the video cleanly with a prompt to open in a real tab.
+  if (isIframed) {
+    return (
+      <div className="relative w-full h-screen">
+        <VideoTemplate />
+        <a
+          href={window.location.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-6 right-6 z-50 flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold px-5 py-2.5 rounded-xl shadow-lg transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Open to Download
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-screen">
