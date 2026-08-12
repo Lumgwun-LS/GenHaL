@@ -80,7 +80,7 @@ export default function Home() {
             <div className="flex shrink-0 flex-wrap gap-2">
               <Link
                 href="/genealogy"
-                className={cn(buttonVariants(), 'bg-white text-[#8F2A08]')}
+                className={cn(buttonVariants(), 'bg-white text-[#8F2A08] dark:bg-card')}
                 style={{ borderColor: 'transparent' }}
               >
                 Trace your lineage

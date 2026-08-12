@@ -44,11 +44,11 @@ const FILE_TYPE_ICONS: Record<string, React.ReactNode> = {
   other: <File className="h-5 w-5" />,
 };
 const FILE_TYPE_COLORS: Record<string, string> = {
-  document: 'bg-blue-100 text-blue-700',
-  image:    'bg-purple-100 text-purple-700',
-  video:    'bg-rose-100 text-rose-700',
-  audio:    'bg-amber-100 text-amber-700',
-  other:    'bg-stone-100 text-stone-700',
+  document: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  image:    'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
+  video:    'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  audio:    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  other:    'bg-stone-100 text-stone-700 dark:bg-white/10 dark:text-foreground',
 };
 const ACCESS_ICONS: Record<string, React.ReactNode> = {
   public:            <Globe className="h-3.5 w-3.5" />,
@@ -232,9 +232,9 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
 
       {/* Wills banner */}
       {wills.length > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-          <Scroll className="h-5 w-5 text-amber-700 shrink-0" />
-          <p className="text-sm text-amber-800">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+          <Scroll className="h-5 w-5 text-amber-700 shrink-0 dark:text-amber-300" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             <span className="font-semibold">{wills.length} will{wills.length !== 1 ? 's' : ''}</span> stored in this vault.{' '}
             {wills.map(w => w.title).join(', ')}
           </p>
@@ -249,7 +249,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
         </div>
         {['all','document','image','video','audio'].map(t => (
           <button key={t} onClick={() => setFilterType(t)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${filterType===t ? 'bg-amber-600 text-white border-amber-600' : 'border-border hover:border-amber-400'}`}>
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${filterType===t ? 'bg-amber-600 text-white border-amber-600 dark:border-amber-500/50' : 'border-border hover:border-amber-400 dark:hover:border-amber-500/50'}`}>
             {t === 'all' ? 'All' : t.charAt(0).toUpperCase()+t.slice(1)+'s'}
           </button>
         ))}
@@ -319,7 +319,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
             <div
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors
-                ${selectedFile ? 'border-amber-400 bg-amber-50/50' : 'border-border hover:border-amber-400 hover:bg-amber-50/30'}`}>
+                ${selectedFile ? 'border-amber-400 bg-amber-50/50 dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-400 hover:bg-amber-50/30 dark:hover:border-amber-500/50 dark:hover:bg-amber-500/10'}`}>
               {selectedFile ? (
                 <div className="flex items-center justify-center gap-3">
                   <div className={`p-2 rounded-lg ${FILE_TYPE_COLORS[form.fileType]}`}>{FILE_TYPE_ICONS[form.fileType]}</div>
@@ -373,7 +373,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
                 {Object.entries(ACCESS_LABELS).map(([v, l]) => (
                   <button key={v} onClick={() => setForm(f => ({ ...f, accessLevel: v }))}
                     className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.accessLevel === v ? 'border-amber-500 bg-amber-50 font-medium' : 'border-border hover:border-amber-300'}`}>
+                      ${form.accessLevel === v ? 'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
                     <span className="text-muted-foreground">{ACCESS_ICONS[v]}</span> {l}
                   </button>
                 ))}
@@ -382,7 +382,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {KINGDOM_ROLES.map(r => (
                     <button key={r} onClick={() => setForm(f => ({ ...f, allowedRoles: f.allowedRoles.includes(r) ? f.allowedRoles.filter(x=>x!==r) : [...f.allowedRoles, r] }))}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-all ${form.allowedRoles.includes(r) ? 'bg-amber-500 text-white border-amber-500' : 'border-border hover:border-amber-400'}`}>
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-all ${form.allowedRoles.includes(r) ? 'bg-amber-500 text-white border-amber-500 dark:border-amber-500/50' : 'border-border hover:border-amber-400 dark:hover:border-amber-500/50'}`}>
                       {r.replace(/_/g, ' ')}
                     </button>
                   ))}
@@ -401,7 +401,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
               <Input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="land, 1982, Lagos" className="rounded-lg text-sm" />
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
               <Switch checked={form.isWill} onCheckedChange={v => setForm(f => ({ ...f, isWill: v }))} />
               <div>
                 <p className="text-sm font-medium">Mark as Will / Testament</p>
@@ -442,7 +442,7 @@ export default function VaultTab({ unitType, unitId, userRole, kingdomId }: Vaul
                 </div>
 
                 {viewDoc.accessInstructions && (
-                  <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                     <div><p className="font-semibold text-xs uppercase tracking-wide mb-0.5">Access Instructions</p>{viewDoc.accessInstructions}</div>
                   </div>

@@ -36,10 +36,10 @@ const PLAN_ICONS: Record<string, React.ReactNode> = {
   royal:   <Crown className="h-5 w-5" />,
 };
 const PLAN_COLORS: Record<string, string> = {
-  free:    'border-stone-200 bg-stone-50/50',
-  starter: 'border-blue-200 bg-blue-50/50',
-  pro:     'border-amber-300 bg-amber-50/60',
-  royal:   'border-amber-500 bg-gradient-to-br from-amber-50 to-stone-50',
+  free:    'border-stone-200 bg-stone-50/50 dark:border-white/10 dark:bg-white/5',
+  starter: 'border-blue-200 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/10',
+  pro:     'border-amber-300 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10',
+  royal:   'border-amber-500 bg-gradient-to-br from-amber-50 to-stone-50 dark:border-amber-500/50 dark:from-amber-500/10 dark:to-white/5',
 };
 const PLAN_BTN: Record<string, string> = {
   free:    'bg-stone-600 hover:bg-stone-500 text-white',
@@ -213,7 +213,7 @@ export default function SubscriptionTab({ unitType, unitId, userRole }: Subscrip
                 </div>
                 <ul className="space-y-1.5 flex-1">
                   {plan.features.map(f => (
-                    <li key={f} className="flex items-start gap-1.5 text-xs"><Check className="h-3.5 w-3.5 text-green-600 shrink-0 mt-0.5" /><span>{f}</span></li>
+                    <li key={f} className="flex items-start gap-1.5 text-xs"><Check className="h-3.5 w-3.5 text-green-600 shrink-0 mt-0.5 dark:text-green-300" /><span>{f}</span></li>
                   ))}
                 </ul>
                 {isAdmin && !isCurrent && plan.id !== 'free' && (
@@ -232,7 +232,7 @@ export default function SubscriptionTab({ unitType, unitId, userRole }: Subscrip
 
       <div className="text-center text-xs text-muted-foreground space-y-1">
         <p>All plans include Cloudflare R2 storage • Files encrypted at rest • Cancel anytime</p>
-        <p>Payments processed via Stripe (USD) or Paystack (NGN). <a href="mailto:support@awajimaaai.com" className="underline text-amber-700">Contact us</a> for custom enterprise plans.</p>
+        <p>Payments processed via Stripe (USD) or Paystack (NGN). <a href="mailto:support@awajimaaai.com" className="underline text-amber-700 dark:text-amber-300">Contact us</a> for custom enterprise plans.</p>
       </div>
     </div>
   );

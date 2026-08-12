@@ -47,11 +47,11 @@ interface Dataset {
 interface Membership { role: string; status: string; }
 
 const ROLE_META: Record<string, { label: string; icon: React.FC<any>; color: string }> = {
-  owner:       { label: "Owner",       icon: Shield,    color: "text-amber-700" },
-  admin:       { label: "Admin",       icon: Settings,  color: "text-blue-700" },
-  reviewer:    { label: "Reviewer",    icon: Eye,       color: "text-purple-700" },
-  contributor: { label: "Contributor", icon: PenLine,   color: "text-green-700" },
-  viewer:      { label: "Viewer",      icon: UserCheck, color: "text-gray-600" },
+  owner:       { label: "Owner",       icon: Shield,    color: "text-amber-700 dark:text-amber-300" },
+  admin:       { label: "Admin",       icon: Settings,  color: "text-blue-700 dark:text-blue-300" },
+  reviewer:    { label: "Reviewer",    icon: Eye,       color: "text-purple-700 dark:text-purple-300" },
+  contributor: { label: "Contributor", icon: PenLine,   color: "text-green-700 dark:text-green-300" },
+  viewer:      { label: "Viewer",      icon: UserCheck, color: "text-gray-600 dark:text-muted-foreground" },
 };
 
 export default function OrgDetailPage() {
@@ -200,7 +200,7 @@ export default function OrgDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 className="h-6 w-6 animate-spin text-amber-700" />
+        <Loader2 className="h-6 w-6 animate-spin text-amber-700 dark:text-amber-300" />
       </div>
     );
   }
@@ -225,12 +225,12 @@ export default function OrgDetailPage() {
       </button>
 
       {/* Org header */}
-      <div className="flex items-start gap-5 bg-white rounded-2xl border p-6">
+      <div className="flex items-start gap-5 bg-white rounded-2xl border p-6 dark:bg-card">
         {org.logoUrl ? (
           <img src={org.logoUrl} alt={org.name} className="h-16 w-16 rounded-xl object-cover border shrink-0" />
         ) : (
-          <div className="h-16 w-16 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-            <BookOpen className="h-8 w-8 text-amber-700" />
+          <div className="h-16 w-16 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
+            <BookOpen className="h-8 w-8 text-amber-700 dark:text-amber-300" />
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -273,9 +273,9 @@ export default function OrgDetailPage() {
         <TabsContent value="overview" className="space-y-4 mt-4">
           <div className="grid sm:grid-cols-2 gap-4">
             {/* Languages card */}
-            <div className="bg-white rounded-2xl border p-5 space-y-3">
+            <div className="bg-white rounded-2xl border p-5 space-y-3 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-amber-700" /> Languages managed
+                <Globe2 className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Languages managed
               </h3>
               {languages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No languages assigned yet.</p>
@@ -288,11 +288,11 @@ export default function OrgDetailPage() {
                           {l.languageCode.toUpperCase()}
                         </Badge>
                         {l.isPrimaryOrg && (
-                          <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">Primary</Badge>
+                          <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">Primary</Badge>
                         )}
                       </div>
                       {l.requiresApproval ? (
-                        <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300">Approval required</Badge>
+                        <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30">Approval required</Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">Open submissions</span>
                       )}
@@ -303,9 +303,9 @@ export default function OrgDetailPage() {
             </div>
 
             {/* Members card */}
-            <div className="bg-white rounded-2xl border p-5 space-y-3">
+            <div className="bg-white rounded-2xl border p-5 space-y-3 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Users className="h-4 w-4 text-amber-700" /> Team ({members.length})
+                <Users className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Team ({members.length})
               </h3>
               <div className="space-y-2">
                 {members.slice(0, 6).map((m) => {
@@ -314,7 +314,7 @@ export default function OrgDetailPage() {
                   return (
                     <div key={m.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-stone-100 flex items-center justify-center">
+                        <div className="h-7 w-7 rounded-full bg-stone-100 flex items-center justify-center dark:bg-white/10">
                           <Icon className={`h-3.5 w-3.5 ${meta?.color ?? "text-muted-foreground"}`} />
                         </div>
                         <span className="text-xs text-muted-foreground font-mono">
@@ -338,9 +338,9 @@ export default function OrgDetailPage() {
           <TabsContent value="members" className="space-y-4 mt-4">
             {/* Invite form — admins only */}
             {canManage && (
-              <div className="bg-white rounded-2xl border p-5 space-y-4">
+              <div className="bg-white rounded-2xl border p-5 space-y-4 dark:bg-card">
                 <h3 className="font-semibold flex items-center gap-2">
-                  <UserPlus className="h-4 w-4 text-amber-700" /> Invite team member
+                  <UserPlus className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Invite team member
                 </h3>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1">
@@ -379,7 +379,7 @@ export default function OrgDetailPage() {
             )}
 
             {/* Member list */}
-            <div className="bg-white rounded-2xl border divide-y">
+            <div className="bg-white rounded-2xl border divide-y dark:bg-card">
               {members.length === 0 ? (
                 <p className="p-5 text-sm text-muted-foreground">No members yet.</p>
               ) : members.map((m) => {
@@ -388,7 +388,7 @@ export default function OrgDetailPage() {
                 return (
                   <div key={m.id} className="flex items-center justify-between px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-stone-100 flex items-center justify-center">
+                      <div className="h-8 w-8 rounded-full bg-stone-100 flex items-center justify-center dark:bg-white/10">
                         <Icon className={`h-4 w-4 ${meta?.color ?? "text-muted-foreground"}`} />
                       </div>
                       <div>
@@ -416,7 +416,7 @@ export default function OrgDetailPage() {
         {canManage && (
           <TabsContent value="languages" className="space-y-4 mt-4">
             {/* Managed languages */}
-            <div className="bg-white rounded-2xl border divide-y">
+            <div className="bg-white rounded-2xl border divide-y dark:bg-card">
               <div className="px-5 py-3 flex items-center justify-between bg-muted/30">
                 <h3 className="font-semibold text-sm">Managed languages</h3>
               </div>
@@ -427,14 +427,14 @@ export default function OrgDetailPage() {
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className="font-mono">{l.languageCode.toUpperCase()}</Badge>
                     {l.isPrimaryOrg && (
-                      <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">Primary org</Badge>
+                      <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">Primary org</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">Require approval</span>
                     <button
                       onClick={() => toggleApproval(l.languageCode, l.requiresApproval)}
-                      className="text-amber-700 hover:text-amber-800"
+                      className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-300"
                       title={l.requiresApproval ? "Disable approval requirement" : "Enable approval requirement"}
                     >
                       {l.requiresApproval
@@ -447,9 +447,9 @@ export default function OrgDetailPage() {
             </div>
 
             {/* Add language */}
-            <div className="bg-white rounded-2xl border p-5 space-y-4">
+            <div className="bg-white rounded-2xl border p-5 space-y-4 dark:bg-card">
               <h3 className="font-semibold flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-amber-700" /> Add a language
+                <Globe2 className="h-4 w-4 text-amber-700 dark:text-amber-300" /> Add a language
               </h3>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -490,9 +490,9 @@ export default function OrgDetailPage() {
             </div>
 
             {/* Info */}
-            <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
+            <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
               <p className="font-semibold mb-1">How approval works</p>
-              <p className="leading-relaxed text-blue-800">
+              <p className="leading-relaxed text-blue-800 dark:text-blue-300">
                 When <strong>Require approval</strong> is enabled for a language, all new corpus
                 datasets submitted by the community for that language are held as "pending" until
                 a reviewer on your team approves them.  Only approved datasets count toward AI
@@ -551,11 +551,11 @@ function DatasetReviewCard({
   };
 
   return (
-    <div className="bg-white rounded-2xl border p-5 space-y-4">
+    <div className="bg-white rounded-2xl border p-5 space-y-4 dark:bg-card">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="h-9 w-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-            <FileText className="h-4 w-4 text-amber-700" />
+          <div className="h-9 w-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 dark:bg-amber-500/10 dark:border-amber-500/30">
+            <FileText className="h-4 w-4 text-amber-700 dark:text-amber-300" />
           </div>
           <div>
             <p className="font-medium">{d.title}</p>
@@ -571,7 +571,7 @@ function DatasetReviewCard({
             </div>
           </div>
         </div>
-        <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] shrink-0">
+        <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] shrink-0 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
           <Clock className="h-3 w-3 mr-1" /> Pending
         </Badge>
       </div>
@@ -605,7 +605,7 @@ function DatasetReviewCard({
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl border-red-200 text-red-600 hover:bg-red-50"
+              className="rounded-xl border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"
               disabled={busy}
               onClick={() => setRejecting(true)}
             >
@@ -635,10 +635,10 @@ function DatasetReviewCard({
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    approved:  { label: "Approved",  className: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-    pending:   { label: "Pending",   className: "bg-amber-100 text-amber-800 border-amber-300" },
-    rejected:  { label: "Rejected",  className: "bg-red-100 text-red-700 border-red-200" },
-    suspended: { label: "Suspended", className: "bg-gray-100 text-gray-600 border-gray-300" },
+    approved:  { label: "Approved",  className: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30" },
+    pending:   { label: "Pending",   className: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30" },
+    rejected:  { label: "Rejected",  className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30" },
+    suspended: { label: "Suspended", className: "bg-gray-100 text-gray-600 border-gray-300 dark:bg-white/10 dark:text-muted-foreground dark:border-white/10" },
   };
   const cfg = map[status] ?? map.pending;
   return <Badge className={`text-[11px] ${cfg.className}`}>{cfg.label}</Badge>;

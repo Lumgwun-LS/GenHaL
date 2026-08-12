@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'wouter';
 import {
   Plus, MapPin, Users, ChevronRight, Search, Loader2, Home, Scroll, Crown,
@@ -12,7 +12,15 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getApiBaseUrl } from '@/lib/api';
-import LocationSelector, { type LocationValue } from '@/components/location-selector';
+import type { LocationValue } from '@/components/location-selector';
+
+/*
+ * country-state-city carries a 7.7 MB worldwide city table. Loading it
+ * statically put the whole dataset in the entry bundle for every visitor,
+ * including the ones who never open this dialog — so it is split out and
+ * fetched when the form actually mounts.
+ */
+const LocationSelector = lazy(() => import('@/components/location-selector'));
 
 interface Family {
   id: number; name: string; localName?: string; description?: string;
@@ -92,7 +100,7 @@ export default function FamiliesList() {
           { icon: <Users className="h-3.5 w-3.5" />, text: 'Invite family members' },
           { icon: <MapPin className="h-3.5 w-3.5" />, text: 'Track family homeland' },
         ].map((b, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-full font-medium">
+          <div key={i} className="flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-full font-medium dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
             {b.icon} {b.text}
           </div>
         ))}
@@ -131,7 +139,7 @@ export default function FamiliesList() {
                   {!f.isPublic && <div className="absolute top-2 right-2 text-[10px] bg-stone-800/80 text-white px-2 py-0.5 rounded-full">Private</div>}
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors">{f.name}</h3>
+                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{f.name}</h3>
                   {f.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{f.localName}</p>}
                   {(f.district || f.region || f.country) && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
@@ -141,7 +149,7 @@ export default function FamiliesList() {
                   )}
                   {f.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{f.description}</p>}
                   <div className="flex justify-end mt-3">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors dark:group-hover:text-amber-300" />
                   </div>
                 </CardContent>
               </Card>
@@ -171,9 +179,17 @@ export default function FamiliesList() {
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief history or background…" rows={2} className="rounded-lg" />
             </div>
 
-            <LocationSelector value={location} onChange={setLocation} />
+            <Suspense
+              fallback={
+                <div className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading locations…
+                </div>
+              }
+            >
+              <LocationSelector value={location} onChange={setLocation} />
+            </Suspense>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border dark:bg-white/5">
               <Switch checked={form.isPublic} onCheckedChange={v => setForm(f => ({ ...f, isPublic: v }))} />
               <div>
                 <p className="text-sm font-medium">Make family publicly discoverable</p>

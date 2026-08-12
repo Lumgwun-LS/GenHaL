@@ -37,6 +37,11 @@ export default function LanguageOrgsPage() {
         const res = await fetch(`${base}/genhal/language-orgs`);
         const data = await res.json();
         setOrgs(data.orgs ?? []);
+      } catch {
+        // An unreachable API used to reject here with nothing catching it —
+        // res.json() throws on an empty body. The directory simply shows its
+        // empty state instead, which is what the rest of these pages do.
+        setOrgs([]);
       } finally {
         setLoading(false);
       }
@@ -83,7 +88,7 @@ export default function LanguageOrgsPage() {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-700" />
+          <Loader2 className="h-6 w-6 animate-spin text-amber-700 dark:text-amber-300" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
@@ -104,11 +109,11 @@ export default function LanguageOrgsPage() {
       )}
 
       {/* Info banner */}
-      <div className="rounded-xl border bg-amber-50 border-amber-200 p-5 flex gap-4">
-        <CheckCircle2 className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-900 space-y-1">
+      <div className="rounded-xl border bg-amber-50 border-amber-200 p-5 flex gap-4 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <CheckCircle2 className="h-5 w-5 text-amber-700 shrink-0 mt-0.5 dark:text-amber-300" />
+        <div className="text-sm text-amber-900 space-y-1 dark:text-amber-300">
           <p className="font-semibold">How the approval system works</p>
-          <p className="text-amber-800 leading-relaxed">
+          <p className="text-amber-800 leading-relaxed dark:text-amber-300">
             When an organisation enables approval review for their language, all new corpus
             submissions are held in a pending queue.  A designated reviewer from the organisation
             inspects each submission and either approves it (making it eligible for AI training)
@@ -124,14 +129,14 @@ function OrgCard({ org, onClick }: { org: LanguageOrg; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-2xl border bg-white hover:border-amber-400 hover:shadow-md transition-all p-5 space-y-3 group"
+      className="text-left rounded-2xl border bg-white hover:border-amber-400 hover:shadow-md transition-all p-5 space-y-3 group dark:bg-card dark:hover:border-amber-500/50"
     >
       <div className="flex items-start gap-3">
         {org.logoUrl ? (
           <img src={org.logoUrl} alt={org.name} className="h-10 w-10 rounded-lg object-cover border shrink-0" />
         ) : (
-          <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-            <BookOpen className="h-5 w-5 text-amber-700" />
+          <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
+            <BookOpen className="h-5 w-5 text-amber-700 dark:text-amber-300" />
           </div>
         )}
         <div className="flex-1 min-w-0">

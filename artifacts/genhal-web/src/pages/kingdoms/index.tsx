@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'wouter';
 import {
   Plus, MapPin, Crown, Users, Building2, ChevronRight,
@@ -12,7 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getApiBaseUrl } from '@/lib/api';
-import LocationSelector, { type LocationValue } from '@/components/location-selector';
+import type { LocationValue } from '@/components/location-selector';
+
+// Split out for the same reason as in families/index.tsx — the city dataset
+// behind this selector is far too large to sit in the entry bundle.
+const LocationSelector = lazy(() => import('@/components/location-selector'));
 
 interface Kingdom {
   id: number; name: string; localName?: string; unitType: string; unitTypeLabel?: string;
@@ -144,7 +148,7 @@ export default function KingdomsList() {
                     : <Landmark className="h-12 w-12 text-amber-300/40" />}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   {k.emblemImageUrl && (
-                    <div className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-white shadow-lg overflow-hidden border-2 border-amber-300">
+                    <div className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-white shadow-lg overflow-hidden border-2 border-amber-300 dark:bg-card dark:border-amber-500/30">
                       <img src={k.emblemImageUrl} alt="emblem" className="w-full h-full object-contain p-0.5" />
                     </div>
                   )}
@@ -153,7 +157,7 @@ export default function KingdomsList() {
                   </div>
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors">{k.name}</h3>
+                  <h3 className="font-serif font-bold text-lg leading-tight group-hover:text-amber-700 transition-colors dark:group-hover:text-amber-300">{k.name}</h3>
                   {k.localName && <p className="text-xs text-muted-foreground italic mt-0.5">{k.localName}</p>}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
                     <MapPin className="h-3 w-3" />
@@ -165,7 +169,7 @@ export default function KingdomsList() {
                       <span>Ruled by a {k.rulerTitle}</span>
                       {k.foundedYear && <span>· Est. {k.foundedYear}</span>}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 transition-colors dark:group-hover:text-amber-300" />
                   </div>
                 </CardContent>
               </Card>
@@ -189,7 +193,7 @@ export default function KingdomsList() {
                 {UNIT_TYPES.map(u => (
                   <button key={u.value} onClick={() => handleUnitTypeChange(u.value)}
                     className={`p-2.5 rounded-xl border text-sm text-left transition-all
-                      ${form.unitType === u.value ? 'border-amber-500 bg-amber-50 font-semibold' : 'border-border hover:border-amber-300'}`}>
+                      ${form.unitType === u.value ? 'border-amber-500 bg-amber-50 font-semibold dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
                     {u.label}
                   </button>
                 ))}
@@ -222,7 +226,15 @@ export default function KingdomsList() {
                   placeholder="1440" className="rounded-lg" />
               </div>
             </div>
-            <LocationSelector value={location} onChange={setLocation} />
+            <Suspense
+              fallback={
+                <div className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading locations…
+                </div>
+              }
+            >
+              <LocationSelector value={location} onChange={setLocation} />
+            </Suspense>
             <div className="space-y-1.5">
               <Label>Description</Label>
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}

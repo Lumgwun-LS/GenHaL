@@ -46,10 +46,10 @@ interface SuccessionClaim {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-  pending:      { color: "bg-yellow-100 text-yellow-800 border-yellow-200", label: "Pending",      icon: <Clock className="h-3 w-3" /> },
-  under_review: { color: "bg-blue-100 text-blue-800 border-blue-200",       label: "Under Review", icon: <Eye className="h-3 w-3" /> },
-  approved:     { color: "bg-green-100 text-green-800 border-green-200",    label: "Approved",     icon: <CheckCircle2 className="h-3 w-3" /> },
-  rejected:     { color: "bg-red-100 text-red-800 border-red-200",          label: "Rejected",     icon: <XCircle className="h-3 w-3" /> },
+  pending:      { color: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-300 dark:border-yellow-500/30", label: "Pending",      icon: <Clock className="h-3 w-3" /> },
+  under_review: { color: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30",       label: "Under Review", icon: <Eye className="h-3 w-3" /> },
+  approved:     { color: "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30",    label: "Approved",     icon: <CheckCircle2 className="h-3 w-3" /> },
+  rejected:     { color: "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30",          label: "Rejected",     icon: <XCircle className="h-3 w-3" /> },
 };
 
 // ── Edit Next-of-Kin Dialog ───────────────────────────────────────────────────
@@ -226,7 +226,7 @@ function SuccessionClaimDialog({
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 pt-2">
-              <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-sm text-teal-800">
+              <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-sm text-teal-800 dark:bg-teal-500/10 dark:border-teal-500/30 dark:text-teal-300">
                 <p className="font-semibold mb-0.5">For next-of-kin or designated successors</p>
                 <p className="text-xs">If the account holder has passed away and named you as their successor, file this claim. You will be asked to upload a government-issued ID for verification.</p>
               </div>
@@ -272,7 +272,7 @@ function SuccessionClaimDialog({
 
           {step === 2 && (
             <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 pt-2">
-              <div className="p-3.5 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800">
+              <div className="p-3.5 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-300">
                 <p className="font-semibold flex items-center gap-1.5 mb-0.5"><CheckCircle2 className="h-4 w-4" />Claim submitted (Ref #{claimId})</p>
                 <p className="text-xs">Upload a government-issued photo ID (passport, national ID, driver's licence) to support your claim.</p>
               </div>
@@ -282,18 +282,18 @@ function SuccessionClaimDialog({
                 onChange={e => e.target.files?.[0] && uploadId(e.target.files[0])} />
 
               {idUploaded ? (
-                <div className="p-6 rounded-2xl border-2 border-green-300 bg-green-50 text-center space-y-2">
-                  <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto" />
-                  <p className="font-semibold text-green-800">ID uploaded successfully</p>
-                  <p className="text-xs text-green-700">Our team will review your claim and reach out to the contact details you provided.</p>
+                <div className="p-6 rounded-2xl border-2 border-green-300 bg-green-50 text-center space-y-2 dark:border-green-500/30 dark:bg-green-500/10">
+                  <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto dark:text-green-300" />
+                  <p className="font-semibold text-green-800 dark:text-green-300">ID uploaded successfully</p>
+                  <p className="text-xs text-green-700 dark:text-green-300">Our team will review your claim and reach out to the contact details you provided.</p>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-teal-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-500 hover:bg-teal-50/30 transition-colors"
+                <div className="border-2 border-dashed border-teal-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-500 hover:bg-teal-50/30 transition-colors dark:border-teal-500/30 dark:hover:border-teal-500/50 dark:hover:bg-teal-500/10"
                   onClick={() => fileInputRef.current?.click()}>
                   {uploading
-                    ? <><Loader2 className="h-8 w-8 animate-spin text-teal-600 mx-auto mb-2" /><p className="text-sm text-teal-700">Uploading…</p></>
+                    ? <><Loader2 className="h-8 w-8 animate-spin text-teal-600 mx-auto mb-2 dark:text-teal-300" /><p className="text-sm text-teal-700 dark:text-teal-300">Uploading…</p></>
                     : <>
-                      <Upload className="h-8 w-8 text-teal-500 mx-auto mb-2" />
+                      <Upload className="h-8 w-8 text-teal-500 mx-auto mb-2 dark:text-teal-300" />
                       <p className="font-semibold text-sm">Upload government-issued ID</p>
                       <p className="text-xs text-muted-foreground mt-1">Passport · National ID · Driver's Licence · PNG, JPG, or PDF</p>
                     </>}
@@ -358,7 +358,7 @@ export default function SuccessionTab({ familyId, isHead }: SuccessionTabProps) 
       ) : (
         <>
           {/* Next of kin card */}
-          <Card className={`border-2 ${hasKin ? "border-teal-200 bg-teal-50/30" : "border-dashed border-muted"}`}>
+          <Card className={`border-2 ${hasKin ? "border-teal-200 bg-teal-50/30 dark:border-teal-500/30 dark:bg-teal-500/10" : "border-dashed border-muted"}`}>
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -407,9 +407,9 @@ export default function SuccessionTab({ familyId, isHead }: SuccessionTabProps) 
           </Card>
 
           {/* How to claim */}
-          <div className="p-4 rounded-xl bg-slate-50 border flex gap-3">
-            <Info className="h-4 w-4 text-slate-600 mt-0.5 shrink-0" />
-            <div className="text-sm text-slate-700">
+          <div className="p-4 rounded-xl bg-slate-50 border flex gap-3 dark:bg-white/5">
+            <Info className="h-4 w-4 text-slate-600 mt-0.5 shrink-0 dark:text-muted-foreground" />
+            <div className="text-sm text-slate-700 dark:text-foreground">
               <p className="font-semibold mb-0.5">Are you the named successor?</p>
               <p className="text-xs">If the account holder has passed away, you can file a succession claim below. You will be required to upload a valid government-issued ID. Our team will review and transfer account ownership upon verification.</p>
             </div>
@@ -432,7 +432,7 @@ export default function SuccessionTab({ familyId, isHead }: SuccessionTabProps) 
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <UserCheck className="h-4 w-4 text-teal-700" />
+                            <UserCheck className="h-4 w-4 text-teal-700 dark:text-teal-300" />
                             <p className="font-semibold text-sm">{claim.claimerName}</p>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{claim.relationshipToOwner} · {new Date(claim.createdAt).toLocaleDateString()}</p>
@@ -443,13 +443,13 @@ export default function SuccessionTab({ familyId, isHead }: SuccessionTabProps) 
                       </div>
                       {claim.statement && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{claim.statement}</p>}
                       {claim.adminNotes && (
-                        <div className="mt-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-                          <p className="text-xs font-semibold text-blue-800">Admin response</p>
-                          <p className="text-xs text-blue-700">{claim.adminNotes}</p>
+                        <div className="mt-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30">
+                          <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Admin response</p>
+                          <p className="text-xs text-blue-700 dark:text-blue-300">{claim.adminNotes}</p>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${claim.idUploadStatus === "complete" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${claim.idUploadStatus === "complete" ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"}`}>
                           ID: {claim.idUploadStatus}
                         </span>
                       </div>

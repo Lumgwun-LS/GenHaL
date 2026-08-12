@@ -48,11 +48,11 @@ interface CorpusStats {
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const TYPE_META: Record<MaterialType, { label: string; icon: React.ReactNode; accept: string; color: string }> = {
-  bible:  { label: 'Scripture / Bible',  icon: <BookOpen className="h-5 w-5" />, accept: '.pdf,.epub,.txt,.docx', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  audio:  { label: 'Audio',             icon: <Music     className="h-5 w-5" />, accept: '.mp3,.wav,.ogg,.m4a,.flac', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  video:  { label: 'Video',             icon: <Video     className="h-5 w-5" />, accept: '.mp4,.mov,.avi,.mkv,.webm', color: 'bg-purple-100 text-purple-700 border-purple-200' },
-  text:   { label: 'Text / Dictionary', icon: <FileText  className="h-5 w-5" />, accept: '.txt,.csv,.tsv,.json,.docx', color: 'bg-green-100 text-green-700 border-green-200' },
-  image:  { label: 'Images / Manuscripts', icon: <Image className="h-5 w-5" />, accept: '.png,.jpg,.jpeg,.webp,.tiff,.pdf', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+  bible:  { label: 'Scripture / Bible',  icon: <BookOpen className="h-5 w-5" />, accept: '.pdf,.epub,.txt,.docx', color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' },
+  audio:  { label: 'Audio',             icon: <Music     className="h-5 w-5" />, accept: '.mp3,.wav,.ogg,.m4a,.flac', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30' },
+  video:  { label: 'Video',             icon: <Video     className="h-5 w-5" />, accept: '.mp4,.mov,.avi,.mkv,.webm', color: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30' },
+  text:   { label: 'Text / Dictionary', icon: <FileText  className="h-5 w-5" />, accept: '.txt,.csv,.tsv,.json,.docx', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30' },
+  image:  { label: 'Images / Manuscripts', icon: <Image className="h-5 w-5" />, accept: '.png,.jpg,.jpeg,.webp,.tiff,.pdf', color: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30' },
 };
 
 const MODEL_TYPES = [
@@ -71,15 +71,15 @@ function fmt(bytes?: number | null) {
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    ready: 'bg-blue-100 text-blue-700',
-    approved: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
-    queued: 'bg-yellow-100 text-yellow-700',
-    running: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-    cancelled: 'bg-gray-100 text-gray-600',
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300',
+    ready: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+    approved: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+    rejected: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+    queued: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300',
+    running: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+    completed: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+    cancelled: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-muted-foreground',
   };
   return map[status] ?? 'bg-muted text-muted-foreground';
 }
@@ -169,28 +169,28 @@ export default function LanguageCorpus() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Materials" value={stats.totalMaterials} icon={<BookOpen className="h-5 w-5 text-primary" />} />
-          <StatCard label="Approved for Training" value={stats.approvedMaterials} icon={<CheckCircle2 className="h-5 w-5 text-green-600" />} />
-          <StatCard label="Training Runs" value={stats.totalRuns} icon={<Brain className="h-5 w-5 text-purple-600" />} />
-          <StatCard label="Models Trained" value={stats.completedRuns} icon={<Zap className="h-5 w-5 text-amber-600" />} />
+          <StatCard label="Approved for Training" value={stats.approvedMaterials} icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-300" />} />
+          <StatCard label="Training Runs" value={stats.totalRuns} icon={<Brain className="h-5 w-5 text-purple-600 dark:text-purple-300" />} />
+          <StatCard label="Models Trained" value={stats.completedRuns} icon={<Zap className="h-5 w-5 text-amber-600 dark:text-amber-300" />} />
         </div>
       )}
 
       {/* Vertex AI status banner */}
       {stats && !stats.vertexConfigured && (
-        <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+        <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Vertex AI not configured</p>
-            <p className="mt-0.5 text-amber-700">
-              Set <code className="bg-amber-100 px-1 rounded">GOOGLE_CLOUD_PROJECT</code> and optionally{' '}
-              <code className="bg-amber-100 px-1 rounded">VERTEX_AI_REGION</code> (default: us-central1) to enable automatic job submission.
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+              Set <code className="bg-amber-100 px-1 rounded dark:bg-amber-500/15">GOOGLE_CLOUD_PROJECT</code> and optionally{' '}
+              <code className="bg-amber-100 px-1 rounded dark:bg-amber-500/15">VERTEX_AI_REGION</code> (default: us-central1) to enable automatic job submission.
               You can still upload materials and build your dataset now — training jobs will be queued until configured.
             </p>
           </div>
         </div>
       )}
       {stats?.vertexConfigured && (
-        <div className="flex items-center gap-3 p-3 rounded-xl border border-green-200 bg-green-50 text-green-800 text-sm">
+        <div className="flex items-center gap-3 p-3 rounded-xl border border-green-200 bg-green-50 text-green-800 text-sm dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>
             Connected to Google Vertex AI · Project: <strong>{stats.gcpProject}</strong> · Region: <strong>{stats.vertexRegion}</strong>
@@ -352,7 +352,7 @@ function MaterialCard({ dataset: d, onToggleApproval, onDelete }: {
               onCheckedChange={onToggleApproval}
               className="scale-75 origin-left"
             />
-            <span className={d.approvedForTraining ? 'text-green-700 font-medium' : 'text-muted-foreground'}>
+            <span className={d.approvedForTraining ? 'text-green-700 font-medium dark:text-green-300' : 'text-muted-foreground'}>
               {d.approvedForTraining ? 'Approved' : 'Not approved'}
             </span>
           </div>
@@ -433,8 +433,8 @@ function UploadWizard({ languages, onSuccess }: { languages: any[]; onSuccess: (
 
   if (step === 'done') return (
     <div className="flex flex-col items-center justify-center py-20 text-center gap-4 animate-in fade-in">
-      <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-        <CheckCircle2 className="h-10 w-10 text-green-600" />
+      <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center dark:bg-green-500/15">
+        <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-300" />
       </div>
       <div>
         <p className="font-serif text-2xl font-bold">Upload complete!</p>
@@ -585,10 +585,10 @@ function TrainingRunCard({ run, onCancel, onRefresh, base }: {
 }) {
   const isActive = ['queued', 'running'].includes(run.status);
   const statusIcon = {
-    queued: <Clock className="h-4 w-4 text-yellow-600" />,
-    running: <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />,
-    completed: <CheckCircle2 className="h-4 w-4 text-green-600" />,
-    failed: <XCircle className="h-4 w-4 text-red-600" />,
+    queued: <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />,
+    running: <Loader2 className="h-4 w-4 text-blue-600 animate-spin dark:text-blue-300" />,
+    completed: <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-300" />,
+    failed: <XCircle className="h-4 w-4 text-red-600 dark:text-red-300" />,
     cancelled: <XCircle className="h-4 w-4 text-gray-400" />,
   }[run.status] ?? <Clock className="h-4 w-4" />;
 
@@ -635,13 +635,13 @@ function TrainingRunCard({ run, onCancel, onRefresh, base }: {
         )}
 
         {run.errorMessage && (
-          <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+          <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
             {run.errorMessage}
           </div>
         )}
 
         {run.outputModelUri && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-green-700 font-medium">
+          <div className="mt-3 flex items-center gap-2 text-xs text-green-700 font-medium dark:text-green-300">
             <Download className="h-3.5 w-3.5" />
             Model output: <span className="font-mono truncate max-w-xs">{run.outputModelUri}</span>
           </div>

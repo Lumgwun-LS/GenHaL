@@ -36,48 +36,48 @@ const RECORDING_TYPES = [
     label: 'Record a Word',
     icon: '🔤',
     description: 'Pronounce a single word or phrase',
-    color: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-    activeColor: 'bg-emerald-600 border-emerald-600 text-white',
+    color: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300',
+    activeColor: 'bg-emerald-600 border-emerald-600 text-white dark:border-emerald-500/50',
   },
   {
     key: 'sentence' as RecordingType,
     label: 'Record a Sentence',
     icon: '📝',
     description: 'Speak a full sentence or proverb',
-    color: 'bg-blue-50 border-blue-200 text-blue-800',
-    activeColor: 'bg-blue-600 border-blue-600 text-white',
+    color: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300',
+    activeColor: 'bg-blue-600 border-blue-600 text-white dark:border-blue-500/50',
   },
   {
     key: 'story' as RecordingType,
     label: 'Tell a Story',
     icon: '📖',
     description: 'Share a folk tale, legend, or personal story',
-    color: 'bg-purple-50 border-purple-200 text-purple-800',
-    activeColor: 'bg-purple-600 border-purple-600 text-white',
+    color: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-500/10 dark:border-purple-500/30 dark:text-purple-300',
+    activeColor: 'bg-purple-600 border-purple-600 text-white dark:border-purple-500/50',
   },
   {
     key: 'interview' as RecordingType,
     label: 'Interview an Elder',
     icon: '🎥',
     description: 'Video record knowledge from community elders',
-    color: 'bg-amber-50 border-amber-200 text-amber-800',
-    activeColor: 'bg-amber-600 border-amber-600 text-white',
+    color: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300',
+    activeColor: 'bg-amber-600 border-amber-600 text-white dark:border-amber-500/50',
   },
   {
     key: 'artifact' as RecordingType,
     label: 'Photograph an Artifact',
     icon: '🏺',
     description: 'Document cultural objects, tools, or artworks',
-    color: 'bg-rose-50 border-rose-200 text-rose-800',
-    activeColor: 'bg-rose-600 border-rose-600 text-white',
+    color: 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/30 dark:text-rose-300',
+    activeColor: 'bg-rose-600 border-rose-600 text-white dark:border-rose-500/50',
   },
   {
     key: 'place' as RecordingType,
     label: 'Document a Place',
     icon: '📍',
     description: 'GPS-tagged photo + description of a heritage site',
-    color: 'bg-teal-50 border-teal-200 text-teal-800',
-    activeColor: 'bg-teal-600 border-teal-600 text-white',
+    color: 'bg-teal-50 border-teal-200 text-teal-800 dark:bg-teal-500/10 dark:border-teal-500/30 dark:text-teal-300',
+    activeColor: 'bg-teal-600 border-teal-600 text-white dark:border-teal-500/50',
   },
 ];
 
@@ -334,7 +334,7 @@ export default function HeritageCollector() {
           <div className="flex flex-wrap gap-2 items-center text-sm">
             {['Your Recording', 'Noise Removal', 'Transcription', 'Speaker ID', 'Dataset Store', 'Quality Review', 'Model Training', 'Language AI'].map((step, i, arr) => (
               <span key={step} className="flex items-center gap-2">
-                <span className="px-3 py-1.5 rounded-full bg-white border border-primary/20 font-medium text-foreground shadow-sm">{step}</span>
+                <span className="px-3 py-1.5 rounded-full bg-white border border-primary/20 font-medium text-foreground shadow-sm dark:bg-card">{step}</span>
                 {i < arr.length - 1 && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
               </span>
             ))}
@@ -470,7 +470,7 @@ export default function HeritageCollector() {
                         <>
                           <div className="flex items-center gap-3">
                             <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse" />
-                            <span className="text-2xl font-mono font-bold text-red-500">
+                            <span className="text-2xl font-mono font-bold text-red-500 dark:text-red-300">
                               {formatDuration(audio.duration)}
                             </span>
                             <span className="text-sm text-muted-foreground">Recording…</span>
@@ -489,7 +489,7 @@ export default function HeritageCollector() {
                             size="lg"
                             className="gap-2 rounded-full px-8 bg-red-500 hover:bg-red-600 text-white"
                           >
-                            <div className="w-3 h-3 rounded-full bg-white animate-pulse" />
+                            <div className="w-3 h-3 rounded-full bg-white animate-pulse dark:bg-card" />
                             {isVideoType ? 'Start Recording' : 'Start Recording'}
                           </Button>
                           <p className="text-sm text-muted-foreground">Click to begin — speak clearly and naturally</p>
@@ -499,8 +499,8 @@ export default function HeritageCollector() {
                   ) : (
                     <div className="space-y-3 p-4 border rounded-xl bg-muted/30">
                       <div className="flex items-center gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-green-700">Recording ready ({formatDuration(audio.duration)})</span>
+                        <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-300" />
+                        <span className="font-medium text-green-700 dark:text-green-300">Recording ready ({formatDuration(audio.duration)})</span>
                       </div>
                       {audio.audioUrl && (
                         <audio controls src={audio.audioUrl} className="w-full h-10" />
@@ -559,7 +559,7 @@ export default function HeritageCollector() {
                         <MapPin className="w-4 h-4" />
                         {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Capture GPS Location'}
                       </Button>
-                      {location && <CheckCircle2 className="w-5 h-5 text-green-600" />}
+                      {location && <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-300" />}
                     </div>
                   )}
                 </div>
@@ -615,7 +615,7 @@ export default function HeritageCollector() {
 
               {/* Success message */}
               {submitted && (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800">
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-300">
                   <CheckCircle2 className="w-5 h-5" />
                   <div>
                     <div className="font-semibold">Contribution saved!</div>
@@ -650,7 +650,7 @@ export default function HeritageCollector() {
               </h4>
               <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                 {['Language', 'Speaker', 'Community', 'Location', 'Date', 'Consent', 'Type', 'Quality'].map(tag => (
-                  <span key={tag} className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-accent/20 font-medium text-accent text-center">
+                  <span key={tag} className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-accent/20 font-medium text-accent text-center dark:bg-card">
                     {tag}
                   </span>
                 ))}

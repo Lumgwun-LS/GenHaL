@@ -149,8 +149,8 @@ export default function FamilyDetail() {
           <TabsContent value="overview" className="space-y-6 pb-10">
             <div className="grid md:grid-cols-2 gap-4">
               {family.description && (
-                <div className="col-span-2 p-5 rounded-2xl bg-amber-50/50 border border-amber-100">
-                  <p className="font-semibold text-sm mb-1.5 text-amber-900">About This Family</p>
+                <div className="col-span-2 p-5 rounded-2xl bg-amber-50/50 border border-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <p className="font-semibold text-sm mb-1.5 text-amber-900 dark:text-amber-300">About This Family</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">{family.description}</p>
                 </div>
               )}

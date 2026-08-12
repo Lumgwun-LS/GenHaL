@@ -35,7 +35,7 @@ function Field({
   return (
     <div className="space-y-1.5">
       <Label className="text-sm font-medium">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label} {required && <span className="text-red-500 dark:text-red-300">*</span>}
       </Label>
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -88,8 +88,8 @@ export default function RegisterOrgPage() {
   if (done) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 flex flex-col items-center gap-5 text-center">
-        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-          <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center dark:bg-emerald-500/15">
+          <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
         </div>
         <div>
           <h2 className="text-2xl font-bold font-serif">Registration submitted!</h2>
@@ -128,9 +128,9 @@ export default function RegisterOrgPage() {
       </div>
 
       {/* Form */}
-      <div className="bg-white rounded-2xl border p-6 space-y-5">
+      <div className="bg-white rounded-2xl border p-6 space-y-5 dark:bg-card">
         <div className="flex items-center gap-2 mb-2">
-          <Building2 className="h-5 w-5 text-amber-700" />
+          <Building2 className="h-5 w-5 text-amber-700 dark:text-amber-300" />
           <h2 className="font-semibold">Organisation details</h2>
         </div>
 
@@ -216,9 +216,9 @@ export default function RegisterOrgPage() {
       </div>
 
       {/* Info box */}
-      <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 space-y-1">
+      <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 space-y-1 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
         <p className="font-semibold">What happens after you register?</p>
-        <ul className="list-disc pl-5 space-y-1 text-blue-800 leading-relaxed">
+        <ul className="list-disc pl-5 space-y-1 text-blue-800 leading-relaxed dark:text-blue-300">
           <li>Your registration will be reviewed by the GenHaL admin team (typically within 3–5 business days).</li>
           <li>Once approved, you can add languages your organisation manages and invite team members.</li>
           <li>You can then enable approval review so all submissions for your language pass through your team before going to AI training.</li>

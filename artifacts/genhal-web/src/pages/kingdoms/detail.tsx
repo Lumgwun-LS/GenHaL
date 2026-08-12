@@ -51,12 +51,12 @@ interface Kingdom {
 }
 
 const RECORD_TYPES: Record<string, { label:string; icon:React.ReactNode; color:string }> = {
-  history:           { label:'History',           icon:<BookOpen className="h-4 w-4"/>,   color:'bg-blue-100 text-blue-700 border-blue-200' },
-  tradition:         { label:'Tradition',         icon:<Globe2 className="h-4 w-4"/>,     color:'bg-purple-100 text-purple-700 border-purple-200' },
-  festival:          { label:'Festival',          icon:<Flame className="h-4 w-4"/>,      color:'bg-orange-100 text-orange-700 border-orange-200' },
-  ceremony:          { label:'Ceremony',          icon:<Star className="h-4 w-4"/>,       color:'bg-amber-100 text-amber-700 border-amber-200' },
-  natural_resource:  { label:'Natural Resource',  icon:<Sprout className="h-4 w-4"/>,     color:'bg-green-100 text-green-700 border-green-200' },
-  economic_activity: { label:'Economic Activity', icon:<TrendingUp className="h-4 w-4"/>, color:'bg-teal-100 text-teal-700 border-teal-200' },
+  history:           { label:'History',           icon:<BookOpen className="h-4 w-4"/>,   color:'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30' },
+  tradition:         { label:'Tradition',         icon:<Globe2 className="h-4 w-4"/>,     color:'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30' },
+  festival:          { label:'Festival',          icon:<Flame className="h-4 w-4"/>,      color:'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30' },
+  ceremony:          { label:'Ceremony',          icon:<Star className="h-4 w-4"/>,       color:'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30' },
+  natural_resource:  { label:'Natural Resource',  icon:<Sprout className="h-4 w-4"/>,     color:'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30' },
+  economic_activity: { label:'Economic Activity', icon:<TrendingUp className="h-4 w-4"/>, color:'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30' },
 };
 
 function unitDisplayName(k: Kingdom) {
@@ -120,7 +120,7 @@ export default function KingdomDetail() {
           </button>
           <div className="flex items-end gap-4">
             {kingdom.emblemImageUrl && (
-              <div className="w-16 h-16 rounded-xl bg-white shadow-xl overflow-hidden border-2 border-amber-400 shrink-0">
+              <div className="w-16 h-16 rounded-xl bg-white shadow-xl overflow-hidden border-2 border-amber-400 shrink-0 dark:bg-card dark:border-amber-500/50">
                 <img src={kingdom.emblemImageUrl} alt="emblem" className="w-full h-full object-contain p-1"/>
               </div>
             )}
@@ -142,7 +142,7 @@ export default function KingdomDetail() {
       </div>
 
       {/* ── Stat ribbon ── */}
-      <div className="bg-amber-50/80 border-y border-amber-200 px-6 md:px-10 py-3 flex gap-6 overflow-x-auto text-sm">
+      <div className="bg-amber-50/80 border-y border-amber-200 px-6 md:px-10 py-3 flex gap-6 overflow-x-auto text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
         {[
           { label:`${kingdom.rulerTitle}s`, value:kingdom.rulers.length, icon:<Crown className="h-3.5 w-3.5"/> },
           { label:'Towns', value:kingdom.towns.length, icon:<Home className="h-3.5 w-3.5"/> },
@@ -155,8 +155,8 @@ export default function KingdomDetail() {
           { label:'Economy', value:(kingdom.economicActivities||[]).length, icon:<Briefcase className="h-3.5 w-3.5"/> },
           { label:'Churches', value:(kingdom.churches||[]).length, icon:<Church className="h-3.5 w-3.5"/> },
         ].map(s=>(
-          <div key={s.label} className="flex items-center gap-1.5 text-amber-800 shrink-0">
-            {s.icon}<span className="font-bold">{s.value}</span><span className="text-amber-700">{s.label}</span>
+          <div key={s.label} className="flex items-center gap-1.5 text-amber-800 shrink-0 dark:text-amber-300">
+            {s.icon}<span className="font-bold">{s.value}</span><span className="text-amber-700 dark:text-amber-300">{s.label}</span>
           </div>
         ))}
       </div>
@@ -191,14 +191,14 @@ export default function KingdomDetail() {
           {/* ── OVERVIEW ── */}
           <TabsContent value="overview" className="space-y-6">
             {kingdom.description && (
-              <Card className="border-0 bg-amber-50/50 shadow-sm">
+              <Card className="border-0 bg-amber-50/50 shadow-sm dark:bg-amber-500/10">
                 <CardContent className="p-6 text-foreground/80 leading-relaxed text-lg">{kingdom.description}</CardContent>
               </Card>
             )}
             <div className="grid md:grid-cols-3 gap-4">
-              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600"/>} label={`Current ${kingdom.rulerTitle}`} value={currentRuler ? `${currentRuler.title} ${currentRuler.name}` : 'Not recorded'}/>
-              <InfoCard icon={<Users className="h-5 w-5 text-purple-600"/>} label="Council of Chiefs" value={`${kingdom.council.filter(c=>c.isCurrent).length} active members`}/>
-              <InfoCard icon={<Vote className="h-5 w-5 text-blue-600"/>} label="Active CDC" value={kingdomCdc.find(c=>c.isCurrent) ? 'Yes' : 'None recorded'}/>
+              <InfoCard icon={<Crown className="h-5 w-5 text-amber-600 dark:text-amber-300"/>} label={`Current ${kingdom.rulerTitle}`} value={currentRuler ? `${currentRuler.title} ${currentRuler.name}` : 'Not recorded'}/>
+              <InfoCard icon={<Users className="h-5 w-5 text-purple-600 dark:text-purple-300"/>} label="Council of Chiefs" value={`${kingdom.council.filter(c=>c.isCurrent).length} active members`}/>
+              <InfoCard icon={<Vote className="h-5 w-5 text-blue-600 dark:text-blue-300"/>} label="Active CDC" value={kingdomCdc.find(c=>c.isCurrent) ? 'Yes' : 'None recorded'}/>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" className="rounded-full text-sm" onClick={()=>{setTab('rulers');setDlg('ruler')}}>
@@ -243,15 +243,15 @@ export default function KingdomDetail() {
               btnLabel={`Add ${kingdom.rulerTitle}`} onAdd={()=>setDlg('ruler')}/>
             {kingdom.rulers.length===0 ? <EmptyState icon={<Crown className="h-10 w-10"/>} label={`No ${kingdom.rulerTitle.toLowerCase()}s recorded`} onAdd={()=>setDlg('ruler')}/> : (
               <div className="relative">
-                <div className="absolute left-7 top-0 bottom-0 w-0.5 bg-amber-200"/>
+                <div className="absolute left-7 top-0 bottom-0 w-0.5 bg-amber-200 dark:bg-amber-500/20"/>
                 <div className="space-y-4">
                   {kingdom.rulers.map(ruler=>(
                     <div key={ruler.id} className="relative flex gap-5 pl-3">
                       <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow
-                        ${ruler.isCurrent ? 'bg-amber-500 text-white' : 'bg-white border-2 border-amber-300 text-amber-600'}`}>
+                        ${ruler.isCurrent ? 'bg-amber-500 text-white' : 'bg-white border-2 border-amber-300 text-amber-600 dark:bg-card dark:border-amber-500/30 dark:text-amber-300'}`}>
                         {ruler.imageUrl ? <img src={ruler.imageUrl} alt={ruler.name} className="w-full h-full rounded-full object-cover"/> : <Crown className="h-4 w-4"/>}
                       </div>
-                      <Card className={`flex-1 shadow-sm ${ruler.isCurrent ? 'border-amber-300 bg-amber-50/60':''}`}>
+                      <Card className={`flex-1 shadow-sm ${ruler.isCurrent ? 'border-amber-300 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10':''}`}>
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
                             <div>
@@ -286,7 +286,7 @@ export default function KingdomDetail() {
             {/* Towns */}
             {kingdom.towns.length > 0 && (
               <div>
-                <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2"><Home className="h-5 w-5 text-amber-600"/> Towns ({kingdom.towns.length})</h3>
+                <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2"><Home className="h-5 w-5 text-amber-600 dark:text-amber-300"/> Towns ({kingdom.towns.length})</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   {kingdom.towns.map(town=>(
                     <Card key={town.id} className="border shadow-sm">
@@ -306,12 +306,12 @@ export default function KingdomDetail() {
                           </div>
                         </div>
                         {town.villages.length > 0 && (
-                          <div className="pl-3 border-l-2 border-amber-200 space-y-1.5">
+                          <div className="pl-3 border-l-2 border-amber-200 space-y-1.5 dark:border-amber-500/30">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Villages</p>
                             {town.villages.map(v=>(
                               <div key={v.id} className="flex items-center justify-between gap-2 text-sm">
                                 <div className="flex items-center gap-1.5">
-                                  <Mountain className="h-3 w-3 text-amber-600 shrink-0"/>
+                                  <Mountain className="h-3 w-3 text-amber-600 shrink-0 dark:text-amber-300"/>
                                   <span>{v.name}</span>
                                   {v.localName && <span className="text-muted-foreground italic text-xs">({v.localName})</span>}
                                 </div>
@@ -330,7 +330,7 @@ export default function KingdomDetail() {
             {/* Direct villages (under kingdom, not under a town) */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-serif text-lg font-bold flex items-center gap-2"><Mountain className="h-5 w-5 text-stone-600"/> Direct Villages ({kingdom.directVillages.length})</h3>
+                <h3 className="font-serif text-lg font-bold flex items-center gap-2"><Mountain className="h-5 w-5 text-stone-600 dark:text-muted-foreground"/> Direct Villages ({kingdom.directVillages.length})</h3>
                 <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={()=>{ setSelectedCompound(null); setDlg('village'); }}>
                   <Plus className="mr-1 h-3 w-3"/> Add Village
                 </Button>
@@ -483,11 +483,11 @@ export default function KingdomDetail() {
             {(kingdom.languages||[]).length===0 ? <EmptyState icon={<Languages className="h-10 w-10"/>} label="No languages recorded yet" onAdd={()=>setDlg('language')}/> : (
               <div className="grid md:grid-cols-2 gap-4">
                 {(kingdom.languages||[]).map(lang=>(
-                  <Card key={lang.id} className={`border shadow-sm transition-all hover:shadow-md ${lang.isOfficial?'border-amber-300 bg-amber-50/30':''}`}>
+                  <Card key={lang.id} className={`border shadow-sm transition-all hover:shadow-md ${lang.isOfficial?'border-amber-300 bg-amber-50/30 dark:border-amber-500/30 dark:bg-amber-500/10':''}`}>
                     <CardContent className="p-4 flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
-                        <div className="p-2 bg-blue-50 rounded-xl border border-blue-100 shrink-0">
-                          <Languages className="h-5 w-5 text-blue-600"/>
+                        <div className="p-2 bg-blue-50 rounded-xl border border-blue-100 shrink-0 dark:bg-blue-500/10 dark:border-blue-500/30">
+                          <Languages className="h-5 w-5 text-blue-600 dark:text-blue-300"/>
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -519,8 +519,8 @@ export default function KingdomDetail() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-green-50 rounded-xl border border-green-100 shrink-0">
-                            <MapPin className="h-5 w-5 text-green-600"/>
+                          <div className="p-2 bg-green-50 rounded-xl border border-green-100 shrink-0 dark:bg-green-500/10 dark:border-green-500/30">
+                            <MapPin className="h-5 w-5 text-green-600 dark:text-green-300"/>
                           </div>
                           <div>
                             <p className="font-semibold">{pt.name}</p>
@@ -552,7 +552,7 @@ export default function KingdomDetail() {
                 {(kingdom.economicActivities||[]).filter(a=>a.isMain).length>0 && (
                   <div>
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <Star className="h-3.5 w-3.5 text-amber-500"/> Primary Activities
+                      <Star className="h-3.5 w-3.5 text-amber-500 dark:text-amber-300"/> Primary Activities
                     </p>
                     <div className="grid md:grid-cols-2 gap-4">
                       {(kingdom.economicActivities||[]).filter(a=>a.isMain).map(act=>(
@@ -588,8 +588,8 @@ export default function KingdomDetail() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-indigo-50 rounded-xl border border-indigo-100 shrink-0">
-                            <GraduationCap className="h-5 w-5 text-indigo-600"/>
+                          <div className="p-2 bg-indigo-50 rounded-xl border border-indigo-100 shrink-0 dark:bg-indigo-500/10 dark:border-indigo-500/30">
+                            <GraduationCap className="h-5 w-5 text-indigo-600 dark:text-indigo-300"/>
                           </div>
                           <div>
                             <p className="font-semibold">{school.name}</p>
@@ -600,7 +600,7 @@ export default function KingdomDetail() {
                               {school.founded && <span className="text-xs text-muted-foreground">Est. {school.founded}</span>}
                             </div>
                             {school.address && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-0.5"><MapPin className="h-3 w-3 shrink-0"/>{school.address}</p>}
-                            {school.website && <a href={school.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block">{school.website}</a>}
+                            {school.website && <a href={school.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block dark:text-blue-300">{school.website}</a>}
                             {school.notes && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{school.notes}</p>}
                           </div>
                         </div>
@@ -624,8 +624,8 @@ export default function KingdomDetail() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-purple-50 rounded-xl border border-purple-100 shrink-0">
-                            <Church className="h-5 w-5 text-purple-600"/>
+                          <div className="p-2 bg-purple-50 rounded-xl border border-purple-100 shrink-0 dark:bg-purple-500/10 dark:border-purple-500/30">
+                            <Church className="h-5 w-5 text-purple-600 dark:text-purple-300"/>
                           </div>
                           <div>
                             <p className="font-semibold">{ch.name}</p>
@@ -636,7 +636,7 @@ export default function KingdomDetail() {
                               {ch.founded && <span className="text-xs text-muted-foreground">Est. {ch.founded}</span>}
                             </div>
                             {ch.address && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-0.5"><MapPin className="h-3 w-3 shrink-0"/>{ch.address}</p>}
-                            {ch.website && <a href={ch.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block">{ch.website}</a>}
+                            {ch.website && <a href={ch.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block dark:text-blue-300">{ch.website}</a>}
                             {ch.notes && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{ch.notes}</p>}
                           </div>
                         </div>
@@ -719,12 +719,12 @@ function CompoundCard({ compound:c, kingdomId, base, onAddChief, onDelete, onChi
           <button onClick={onDelete} className="text-muted-foreground/30 hover:text-destructive"><Trash2 className="h-3.5 w-3.5"/></button>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <Crown className="h-3.5 w-3.5 text-amber-600 shrink-0"/>
+          <Crown className="h-3.5 w-3.5 text-amber-600 shrink-0 dark:text-amber-300"/>
           {current ? <span><span className="font-medium">{current.title} {current.name}</span> <span className="text-muted-foreground">(current {c.chiefTitle.toLowerCase()})</span></span>
             : <span className="text-muted-foreground">No current {c.chiefTitle.toLowerCase()} recorded</span>}
         </div>
         <div className="flex items-center justify-between">
-          <button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-600 font-medium">
+          <button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-600 font-medium dark:text-amber-300 dark:hover:text-amber-300">
             {open ? <ChevronUp className="h-3.5 w-3.5"/> : <ChevronDown className="h-3.5 w-3.5"/>}
             {c.chiefs.length} {c.chiefTitle.toLowerCase()}{c.chiefs.length!==1?'s':''} in lineage
           </button>
@@ -735,8 +735,8 @@ function CompoundCard({ compound:c, kingdomId, base, onAddChief, onDelete, onChi
         {open && c.chiefs.length>0 && (
           <div className="pt-1 space-y-2 border-t">
             {c.chiefs.map(ch=>(
-              <div key={ch.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm ${ch.isCurrent?'bg-amber-50 border border-amber-200':'bg-muted/30'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${ch.isCurrent?'bg-amber-500 text-white':'bg-stone-200 text-stone-600'}`}>
+              <div key={ch.id} className={`flex items-center gap-2.5 p-2 rounded-lg text-sm ${ch.isCurrent?'bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30':'bg-muted/30'}`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${ch.isCurrent?'bg-amber-500 text-white':'bg-stone-200 text-stone-600 dark:bg-white/[0.14] dark:text-muted-foreground'}`}>
                   {ch.isCurrent?'★':'○'}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -758,7 +758,7 @@ function CompoundCard({ compound:c, kingdomId, base, onAddChief, onDelete, onChi
 function CouncilCard({ member:m, compounds, onDelete }: { member:CouncilMember; compounds:Compound[]; onDelete:()=>void; }) {
   const compound = compounds.find(c=>c.id===m.compoundId);
   return (
-    <Card className={`border shadow-sm ${m.isCurrent?'border-amber-200 bg-amber-50/40':''}`}>
+    <Card className={`border shadow-sm ${m.isCurrent?'border-amber-200 bg-amber-50/40 dark:border-amber-500/30 dark:bg-amber-500/10':''}`}>
       <CardContent className="p-3 space-y-1.5">
         <div className="flex items-start justify-between">
           <div>
@@ -767,7 +767,7 @@ function CouncilCard({ member:m, compounds, onDelete }: { member:CouncilMember; 
           </div>
           <button onClick={onDelete} className="text-muted-foreground/30 hover:text-destructive"><X className="h-3.5 w-3.5"/></button>
         </div>
-        {compound && <p className="text-xs text-amber-700">{compound.name} Compound</p>}
+        {compound && <p className="text-xs text-amber-700 dark:text-amber-300">{compound.name} Compound</p>}
         {(m.joinedYear||m.leftYear) && <p className="text-xs text-muted-foreground">{m.joinedYear??'?'} – {m.leftYear??'present'}</p>}
       </CardContent>
     </Card>
@@ -780,7 +780,7 @@ function CdcCard({ committee:c, kingdomId, base, onAddMember, onDelete, onMember
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Card className={`border shadow-sm ${c.isCurrent?'border-blue-200 bg-blue-50/30':''}`}>
+    <Card className={`border shadow-sm ${c.isCurrent?'border-blue-200 bg-blue-50/30 dark:border-blue-500/30 dark:bg-blue-500/10':''}`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div>
@@ -797,7 +797,7 @@ function CdcCard({ committee:c, kingdomId, base, onAddMember, onDelete, onMember
           <button onClick={onDelete} className="text-muted-foreground/30 hover:text-destructive"><Trash2 className="h-3.5 w-3.5"/></button>
         </div>
         <div className="flex items-center justify-between">
-          <button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs text-blue-700 font-medium">
+          <button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs text-blue-700 font-medium dark:text-blue-300">
             {open?<ChevronUp className="h-3.5 w-3.5"/>:<ChevronDown className="h-3.5 w-3.5"/>}
             {c.members.length} member{c.members.length!==1?'s':''}
           </button>
@@ -809,7 +809,7 @@ function CdcCard({ committee:c, kingdomId, base, onAddMember, onDelete, onMember
           <div className="pt-1 border-t space-y-1.5">
             {c.members.map(m=>(
               <div key={m.id} className="flex items-center gap-2 text-sm p-1.5 rounded-lg bg-muted/30">
-                <UserCheck className="h-3.5 w-3.5 text-blue-600 shrink-0"/>
+                <UserCheck className="h-3.5 w-3.5 text-blue-600 shrink-0 dark:text-blue-300"/>
                 <div className="flex-1 min-w-0">
                   <span className="font-medium">{m.name}</span> <span className="text-muted-foreground">· {m.role}</span>
                   {m.electedYear && <span className="text-muted-foreground"> · {m.electedYear}</span>}
@@ -837,7 +837,7 @@ function RecordCard({ record:r, kingdomId, base, onDelete }: { record:CivicRecor
             </div>
             {r.content && <p className={`text-sm text-muted-foreground mt-1 ${expanded?'':'line-clamp-3'}`}>{r.content}</p>}
             {r.content && r.content.length>180 && (
-              <button onClick={()=>setExpanded(e=>!e)} className="text-xs text-amber-700 mt-1 font-medium">{expanded?'Show less':'Read more'}</button>
+              <button onClick={()=>setExpanded(e=>!e)} className="text-xs text-amber-700 mt-1 font-medium dark:text-amber-300">{expanded?'Show less':'Read more'}</button>
             )}
           </div>
           <button onClick={async()=>{ if(!confirm(`Delete "${r.title}"?`))return; await fetch(`${base}/genhal/kingdoms/${kingdomId}/records/${r.id}`,{method:'DELETE'}); onDelete(); }}
@@ -1049,7 +1049,7 @@ function CdcDialog({ open, onClose, kingdomId, towns, villages, base, onSuccess 
             <div className="grid grid-cols-3 gap-2">
               {[['kingdom','Kingdom'],['town','Town'],['village','Village']].map(([v,l])=>(
                 <button key={v} onClick={()=>set({unitType:v,unitId:v==='kingdom'?String(kingdomId):''})}
-                  className={`p-2.5 rounded-xl border text-sm transition-all ${form.unitType===v?'border-blue-500 bg-blue-50 font-semibold':'border-border hover:border-blue-300'}`}>{l}</button>
+                  className={`p-2.5 rounded-xl border text-sm transition-all ${form.unitType===v?'border-blue-500 bg-blue-50 font-semibold dark:border-blue-500/50 dark:bg-blue-500/10':'border-border hover:border-blue-300 dark:hover:border-blue-500/30'}`}>{l}</button>
               ))}
             </div>
           </div>
@@ -1126,7 +1126,7 @@ function RecordDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(RECORD_TYPES).map(([key,m])=>(
               <button key={key} onClick={()=>set({type:key})}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all ${form.type===key?'border-amber-500 bg-amber-50 font-medium':'border-border hover:border-amber-300'}`}>
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm text-left transition-all ${form.type===key?'border-amber-500 bg-amber-50 font-medium dark:border-amber-500/50 dark:bg-amber-500/10':'border-border hover:border-amber-300 dark:hover:border-amber-500/30'}`}>
                 <span className={`p-1.5 rounded-lg ${m.color}`}>{m.icon}</span>{m.label}
               </button>
             ))}
@@ -1143,21 +1143,21 @@ function RecordDialog({ open, onClose, kingdomId, base, onSuccess }: any) {
 
 function EconomyCard({ act, kingdomId, base, onDelete }: { act: KingdomEconomicActivity; kingdomId: number; base: string; onDelete: () => void; }) {
   const catColor: Record<string,string> = {
-    agriculture:'bg-green-50 text-green-700 border-green-200',
-    trade:'bg-blue-50 text-blue-700 border-blue-200',
-    crafts:'bg-amber-50 text-amber-700 border-amber-200',
-    fishing:'bg-cyan-50 text-cyan-700 border-cyan-200',
-    mining:'bg-stone-50 text-stone-700 border-stone-200',
-    services:'bg-purple-50 text-purple-700 border-purple-200',
-    industry:'bg-orange-50 text-orange-700 border-orange-200',
+    agriculture:'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-300 dark:border-green-500/30',
+    trade:'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30',
+    crafts:'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
+    fishing:'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30',
+    mining:'bg-stone-50 text-stone-700 border-stone-200 dark:bg-white/5 dark:text-foreground dark:border-white/10',
+    services:'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/30',
+    industry:'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/30',
   };
   return (
     <Card className="border shadow-sm group transition-all hover:shadow-md">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className="p-2 bg-teal-50 rounded-xl border border-teal-100 shrink-0">
-              <Briefcase className="h-5 w-5 text-teal-600"/>
+            <div className="p-2 bg-teal-50 rounded-xl border border-teal-100 shrink-0 dark:bg-teal-500/10 dark:border-teal-500/30">
+              <Briefcase className="h-5 w-5 text-teal-600 dark:text-teal-300"/>
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -1375,7 +1375,7 @@ function InfoCard({ icon, label, value }: { icon:React.ReactNode; label:string; 
   return (
     <Card className="border shadow-sm">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100">{icon}</div>
+        <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/30">{icon}</div>
         <div><p className="text-xs text-muted-foreground">{label}</p><p className="font-semibold">{value}</p></div>
       </CardContent>
     </Card>

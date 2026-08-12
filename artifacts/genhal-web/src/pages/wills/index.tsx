@@ -120,11 +120,11 @@ export default function WillsTab({ familyId }: { familyId: number }) {
       </div>
 
       {/* Encryption notice */}
-      <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-200 p-4">
-        <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-        <div className="text-sm text-blue-800">
+      <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-200 p-4 dark:bg-blue-500/10 dark:border-blue-500/30">
+        <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5 dark:text-blue-300" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
           <p className="font-semibold">End-to-end encrypted with three access layers</p>
-          <p className="text-blue-700 mt-0.5">
+          <p className="text-blue-700 mt-0.5 dark:text-blue-300">
             Will content is encrypted with AES-256-GCM. Your passphrase is never stored.
             If you name executors, each receives a one-time recovery code so they can
             access the will even if your passphrase is unknown. A platform admin escrow
@@ -138,7 +138,7 @@ export default function WillsTab({ familyId }: { familyId: number }) {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-serif text-lg font-bold flex items-center gap-2">
-              <Lock className="h-4 w-4 text-amber-600" /> My Will
+              <Lock className="h-4 w-4 text-amber-600 dark:text-amber-300" /> My Will
             </h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditWill(myWill)}>Edit</Button>
@@ -154,10 +154,10 @@ export default function WillsTab({ familyId }: { familyId: number }) {
           <WillCard will={myWill} isMine onAccess={() => setAccessWill(myWill)} />
         </section>
       ) : (
-        <section className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-8 text-center space-y-3">
+        <section className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-8 text-center space-y-3 dark:border-amber-500/30 dark:bg-amber-500/10">
           <FileText className="h-12 w-12 text-amber-300 mx-auto" />
-          <p className="font-semibold text-amber-900">You haven't registered a will yet</p>
-          <p className="text-sm text-amber-700 max-w-sm mx-auto">
+          <p className="font-semibold text-amber-900 dark:text-amber-300">You haven't registered a will yet</p>
+          <p className="text-sm text-amber-700 max-w-sm mx-auto dark:text-amber-300">
             Register your last will &amp; testament so your wishes are preserved for your family.
           </p>
           <Button onClick={() => setAddDlg(true)} className="rounded-full bg-amber-600 hover:bg-amber-700 text-white mt-2">
@@ -207,12 +207,12 @@ export default function WillsTab({ familyId }: { familyId: number }) {
 function WillCard({ will, isMine, onAccess }: { will: FamilyWill; isMine: boolean; onAccess: () => void }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card className={`border shadow-sm transition-all hover:shadow-md ${isMine ? 'border-amber-300 bg-amber-50/20' : ''}`}>
+    <Card className={`border shadow-sm transition-all hover:shadow-md ${isMine ? 'border-amber-300 bg-amber-50/20 dark:border-amber-500/30 dark:bg-amber-500/10' : ''}`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-xl border shrink-0 ${isMine ? 'bg-amber-50 border-amber-200' : 'bg-stone-50 border-stone-200'}`}>
-              <FileText className={`h-5 w-5 ${isMine ? 'text-amber-600' : 'text-stone-600'}`} />
+            <div className={`p-2 rounded-xl border shrink-0 ${isMine ? 'bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30' : 'bg-stone-50 border-stone-200 dark:bg-white/5 dark:border-white/10'}`}>
+              <FileText className={`h-5 w-5 ${isMine ? 'text-amber-600 dark:text-amber-300' : 'text-stone-600 dark:text-muted-foreground'}`} />
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-sm leading-tight">{will.title}</p>
@@ -224,17 +224,17 @@ function WillCard({ will, isMine, onAccess }: { will: FamilyWill; isMine: boolea
           </div>
           <div className="flex flex-col gap-1 items-end shrink-0">
             {will.hasRecovery && (
-              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">
+              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
                 <Key className="h-2.5 w-2.5 mr-1" /> Recovery enabled
               </Badge>
             )}
             {will.adminUnlockPending && (
-              <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+              <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
                 <Clock className="h-2.5 w-2.5 mr-1" /> Unlock pending
               </Badge>
             )}
             {will.adminUnlockGranted && (
-              <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300">
+              <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30">
                 <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Admin unlocked
               </Badge>
             )}
@@ -277,9 +277,9 @@ function WillCard({ will, isMine, onAccess }: { will: FamilyWill; isMine: boolea
         )}
 
         {will.linkedAccountCount > 0 && (
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
-            <CreditCard className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <p className="text-xs text-emerald-800">
+          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 dark:bg-emerald-500/10 dark:border-emerald-500/30">
+            <CreditCard className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-300" />
+            <p className="text-xs text-emerald-800 dark:text-emerald-300">
               <span className="font-semibold">{will.linkedAccountCount}</span> linked account{will.linkedAccountCount !== 1 ? 's' : ''} — revealed after decryption
             </p>
           </div>
@@ -388,7 +388,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-            <Shield className="h-5 w-5 text-amber-600" /> Register Your Will
+            <Shield className="h-5 w-5 text-amber-600 dark:text-amber-300" /> Register Your Will
           </DialogTitle>
         </DialogHeader>
 
@@ -412,7 +412,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
           {/* ── Step 1: Content ── */}
           {step === 1 && (
             <>
-              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
                 <p className="font-semibold mb-1">Your content will be encrypted</p>
                 <p>Write your will freely. It is encrypted with AES-256-GCM. No one can read it without the passphrase you set in the next step.</p>
               </div>
@@ -445,7 +445,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
           {/* ── Step 2: Passphrase ── */}
           {step === 2 && (
             <>
-              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
                 <p className="font-semibold mb-1">Choose a strong passphrase</p>
                 <p>This passphrase encrypts your will. <strong>It is never stored.</strong> If you name executors in the next step, they will receive a separate one-time recovery code so the will can be accessed even if your passphrase is unknown.</p>
               </div>
@@ -488,14 +488,14 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
           {/* ── Step 3: Executors ── */}
           {step === 3 && (
             <>
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-900 space-y-2">
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-900 space-y-2 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300">
                 <p className="font-semibold flex items-center gap-2"><Key className="h-4 w-4" /> Name your will executors</p>
-                <p className="text-emerald-800 leading-relaxed">
+                <p className="text-emerald-800 leading-relaxed dark:text-emerald-300">
                   Executors receive a <strong>one-time recovery code</strong> by email. If you pass away and
                   your passphrase is unknown, any living executor can use their code to decrypt the will.
                   <strong> This is the recommended path for ensuring your will can always be read.</strong>
                 </p>
-                <p className="text-emerald-700 text-xs">
+                <p className="text-emerald-700 text-xs dark:text-emerald-300">
                   Name up to 5 people. The more you name, the safer — if some are also deceased, others can still unlock.
                   Recovery codes are shown once and emailed to each executor. Platform staff cannot read them.
                 </p>
@@ -547,7 +547,7 @@ function AddWillDialog({ open, familyId, onClose, onSuccess }: {
               </div>
 
               {executors.length === 0 && (
-                <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <p>Proceeding without executors means this will can only be opened with your passphrase. You can still continue.</p>
                 </div>
@@ -648,16 +648,16 @@ function RecoveryCodeModal({ open, recoveryCode, executors, onConfirmed }: {
       <DialogContent className="sm:max-w-[540px]" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
-            <Key className="h-5 w-5 text-amber-600" /> Save Your Recovery Code
+            <Key className="h-5 w-5 text-amber-600 dark:text-amber-300" /> Save Your Recovery Code
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
-          <div className="flex items-start gap-3 rounded-xl bg-red-50 border border-red-200 p-4">
-            <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-            <div className="text-sm text-red-900">
+          <div className="flex items-start gap-3 rounded-xl bg-red-50 border border-red-200 p-4 dark:bg-red-500/10 dark:border-red-500/30">
+            <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5 dark:text-red-300" />
+            <div className="text-sm text-red-900 dark:text-red-300">
               <p className="font-bold">This code is shown ONCE and never stored.</p>
-              <p className="text-red-800 mt-1 leading-relaxed">
+              <p className="text-red-800 mt-1 leading-relaxed dark:text-red-300">
                 Copy it now and store it somewhere safe (password manager, printed document, sealed envelope).
                 Your named executors have also been sent this code by email.
               </p>
@@ -665,28 +665,28 @@ function RecoveryCodeModal({ open, recoveryCode, executors, onConfirmed }: {
           </div>
 
           {/* The code */}
-          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-center space-y-3">
-            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Will Recovery Code</p>
-            <p className="font-mono text-lg font-bold tracking-widest text-stone-900 break-all leading-relaxed">
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-center space-y-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider dark:text-amber-300">Will Recovery Code</p>
+            <p className="font-mono text-lg font-bold tracking-widest text-stone-900 break-all leading-relaxed dark:text-foreground">
               {formatted}
             </p>
             <Button variant="outline" size="sm" className="rounded-full" onClick={copy}>
-              {copied ? <><Check className="mr-1.5 h-3.5 w-3.5 text-green-600" /> Copied!</> : <><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy to clipboard</>}
+              {copied ? <><Check className="mr-1.5 h-3.5 w-3.5 text-green-600 dark:text-green-300" /> Copied!</> : <><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy to clipboard</>}
             </Button>
           </div>
 
           {/* Executor emails */}
           {executors.length > 0 && (
-            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm">
-              <p className="font-semibold text-emerald-900 flex items-center gap-2 mb-2">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm dark:bg-emerald-500/10 dark:border-emerald-500/30">
+              <p className="font-semibold text-emerald-900 flex items-center gap-2 mb-2 dark:text-emerald-300">
                 <Mail className="h-4 w-4" /> Code emailed to your executors:
               </p>
               <div className="space-y-1">
                 {executors.map((e, i) => (
-                  <div key={i} className="flex items-center gap-2 text-emerald-800">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <div key={i} className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 dark:text-emerald-300" />
                     <span className="font-medium">{e.name}</span>
-                    <span className="text-emerald-600">— {e.email}</span>
+                    <span className="text-emerald-600 dark:text-emerald-300">— {e.email}</span>
                   </div>
                 ))}
               </div>
@@ -827,7 +827,7 @@ function EditWillDialog({ open, will, familyId, onClose, onSuccess }: {
                     {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-amber-700 mt-1">⚠ Replaces the existing passphrase entirely. Old recovery codes are invalidated.</p>
+                <p className="text-xs text-amber-700 mt-1 dark:text-amber-300">⚠ Replaces the existing passphrase entirely. Old recovery codes are invalidated.</p>
               </Field>
             </>
           )}
@@ -864,7 +864,7 @@ function AccessWillDialog({ open, will, familyId, onClose }: {
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
-            <Unlock className="h-5 w-5 text-amber-600" />
+            <Unlock className="h-5 w-5 text-amber-600 dark:text-amber-300" />
             {result ? 'Will Content' : 'Access Will'}
           </DialogTitle>
         </DialogHeader>
@@ -874,11 +874,11 @@ function AccessWillDialog({ open, will, familyId, onClose }: {
         ) : (
           <>
             {/* Will info */}
-            <div className="rounded-xl bg-stone-50 border p-4 space-y-2 mt-2">
+            <div className="rounded-xl bg-stone-50 border p-4 space-y-2 mt-2 dark:bg-white/5">
               <p className="font-semibold text-sm">{will.title}</p>
               <p className="text-xs text-muted-foreground">By {will.authorName}</p>
               {will.accessCondition && (
-                <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg p-2 border border-amber-200">
+                <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg p-2 border border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/30">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   {will.accessCondition}
                 </div>
@@ -959,7 +959,7 @@ function PassphraseAccessForm({ base, will, familyId, onResult }: {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+      <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
         <p className="font-semibold mb-0.5">Owner's passphrase</p>
         <p>Enter the passphrase set by {will.authorName} when the will was created. The passphrase is never sent — only a hash is verified.</p>
       </div>
@@ -1007,14 +1007,14 @@ function RecoveryAccessForm({ base, will, familyId, onResult }: {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900 space-y-1">
+      <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900 space-y-1 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300">
         <p className="font-semibold flex items-center gap-2"><Key className="h-4 w-4" /> Executor recovery code</p>
-        <p className="text-emerald-800">
+        <p className="text-emerald-800 dark:text-emerald-300">
           This path is for named executors. Enter the recovery code that was emailed to you when
           {' '}{will.authorName} registered this will.
         </p>
         {will.executors.length > 0 && (
-          <p className="text-xs text-emerald-700">
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">
             Named executors: {will.executors.map(e => e.name).join(', ')}
           </p>
         )}
@@ -1073,11 +1073,11 @@ function EscrowAccessForm({ base, will, familyId, onResult }: {
   if (will.adminUnlockGranted) {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 space-y-1">
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 space-y-1 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300">
           <p className="font-semibold flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-blue-600" /> Admin unlock approved
+            <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-300" /> Admin unlock approved
           </p>
-          <p className="text-blue-800">
+          <p className="text-blue-800 dark:text-blue-300">
             A platform admin has verified the death certificate and granted access to this will.
             Click below to decrypt using the platform escrow key.
           </p>
@@ -1092,10 +1092,10 @@ function EscrowAccessForm({ base, will, familyId, onResult }: {
 
   if (will.adminUnlockPending || requested) {
     return (
-      <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 text-center space-y-3">
-        <Clock className="h-8 w-8 text-amber-600 mx-auto" />
-        <p className="font-semibold text-amber-900">Unlock request under review</p>
-        <p className="text-sm text-amber-800 leading-relaxed">
+      <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 text-center space-y-3 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <Clock className="h-8 w-8 text-amber-600 mx-auto dark:text-amber-300" />
+        <p className="font-semibold text-amber-900 dark:text-amber-300">Unlock request under review</p>
+        <p className="text-sm text-amber-800 leading-relaxed dark:text-amber-300">
           Your death certificate has been submitted and is awaiting admin review.
           Once approved, return here and use the "Admin Unlock" tab to decrypt the will.
         </p>
@@ -1105,11 +1105,11 @@ function EscrowAccessForm({ base, will, familyId, onResult }: {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-stone-50 border p-4 text-sm text-stone-800 space-y-2">
+      <div className="rounded-xl bg-stone-50 border p-4 text-sm text-stone-800 space-y-2 dark:bg-white/5 dark:text-foreground">
         <p className="font-semibold flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-stone-600" /> Last resort — Admin escrow unlock
+          <ShieldAlert className="h-4 w-4 text-stone-600 dark:text-muted-foreground" /> Last resort — Admin escrow unlock
         </p>
-        <p className="text-stone-700 leading-relaxed">
+        <p className="text-stone-700 leading-relaxed dark:text-foreground">
           Use this path only if all named executors are unavailable and the owner's passphrase is unknown.
           A platform admin will verify the death certificate before granting access. This typically takes
           1–3 business days.
@@ -1166,7 +1166,7 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
   return (
     <div className="space-y-4 pt-2">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5 text-green-700 font-semibold">
+        <span className="flex items-center gap-1.5 text-green-700 font-semibold dark:text-green-300">
           <CheckCircle2 className="h-3.5 w-3.5" /> Decrypted via {methodLabel}
         </span>
         <span className="flex items-center gap-1">
@@ -1175,8 +1175,8 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
         </span>
       </div>
 
-      <div className="rounded-xl border bg-stone-50 overflow-hidden">
-        <div className="bg-stone-200/50 px-4 py-3 border-b flex items-center justify-between">
+      <div className="rounded-xl border bg-stone-50 overflow-hidden dark:bg-white/5">
+        <div className="bg-stone-200/50 px-4 py-3 border-b flex items-center justify-between dark:bg-white/[0.14]">
           <div>
             <p className="font-serif font-bold text-lg">{result.title}</p>
             <p className="text-xs text-muted-foreground">By {result.authorName}</p>
@@ -1186,7 +1186,7 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
           </Button>
         </div>
         {result.accessCondition && (
-          <div className="px-4 py-2 bg-amber-50 border-b text-xs text-amber-800 flex items-start gap-2">
+          <div className="px-4 py-2 bg-amber-50 border-b text-xs text-amber-800 flex items-start gap-2 dark:bg-amber-500/10 dark:text-amber-300">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {result.accessCondition}
           </div>
         )}
@@ -1198,7 +1198,7 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
       {result.linkedAccounts?.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-semibold flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-emerald-600" />
+            <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
             Linked Bank Accounts ({result.linkedAccounts.length})
           </p>
           <div className="space-y-2">
@@ -1207,7 +1207,7 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
         </div>
       )}
 
-      <div className="flex items-start gap-2 rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-xs text-yellow-800">
+      <div className="flex items-start gap-2 rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-xs text-yellow-800 dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-300">
         <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
         <p>Content shown for this session only — not stored in your browser. Close when done.</p>
       </div>
@@ -1220,9 +1220,9 @@ function DecryptedView({ result, onBack }: { result: DecryptedWill; onBack: () =
 
 function LinkedAccountCard({ account: a }: { account: SecretAccount }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border bg-emerald-50/50 border-emerald-200 p-3">
-      <div className="p-1.5 rounded-lg bg-emerald-100 shrink-0">
-        <CreditCard className="h-4 w-4 text-emerald-700" />
+    <div className="flex items-start gap-3 rounded-xl border bg-emerald-50/50 border-emerald-200 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <div className="p-1.5 rounded-lg bg-emerald-100 shrink-0 dark:bg-emerald-500/15">
+        <CreditCard className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -1233,7 +1233,7 @@ function LinkedAccountCard({ account: a }: { account: SecretAccount }) {
           <Badge variant="outline" className="text-[10px]">{a.currency}</Badge>
         </div>
         <p className="text-xs text-muted-foreground">{a.provider}{a.bankName ? ` · ${a.bankName}` : ''}</p>
-        <p className="text-xs font-mono text-stone-700 mt-0.5">{a.accountNumber}</p>
+        <p className="text-xs font-mono text-stone-700 mt-0.5 dark:text-foreground">{a.accountNumber}</p>
         {a.routingNumber && <p className="text-xs text-muted-foreground">Routing: {a.routingNumber}</p>}
       </div>
     </div>
@@ -1307,7 +1307,7 @@ function AccountSelector({ familyId, selected, onChange }: {
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <Label className="text-sm font-semibold flex items-center gap-1.5">
-          <CreditCard className="h-4 w-4 text-emerald-600" /> Link Secret Accounts
+          <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-300" /> Link Secret Accounts
         </Label>
         {selected.length > 0 && <Badge className="bg-emerald-500 text-white text-[10px]">{selected.length} selected</Badge>}
       </div>

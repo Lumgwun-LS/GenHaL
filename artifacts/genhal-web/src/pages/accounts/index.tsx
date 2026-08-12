@@ -56,7 +56,7 @@ function CopyButton({ text }: { text: string }) {
   };
   return (
     <button onClick={copy} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-green-500 dark:text-green-300" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   );
 }
@@ -66,7 +66,7 @@ function AccountCard({ account, onDeactivate }: { account: SecretAccount; onDeac
   const isNGN = account.currency === "NGN";
 
   return (
-    <Card className={`border-2 ${isNGN ? "border-green-200 bg-gradient-to-br from-green-50 to-emerald-50/40" : "border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50/40"}`}>
+    <Card className={`border-2 ${isNGN ? "border-green-200 bg-gradient-to-br from-green-50 to-emerald-50/40 dark:border-green-500/30 dark:from-green-500/10 dark:to-emerald-500/10" : "border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50/40 dark:border-blue-500/30 dark:from-blue-500/10 dark:to-sky-500/10"}`}>
       <CardContent className="p-5 space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -79,7 +79,7 @@ function AccountCard({ account, onDeactivate }: { account: SecretAccount; onDeac
               <p className="text-xs text-muted-foreground capitalize">{account.provider} · {account.bankName ?? "Virtual Bank"}</p>
             </div>
           </div>
-          <div className={`text-xs font-bold px-2.5 py-1 rounded-full ${isNGN ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+          <div className={`text-xs font-bold px-2.5 py-1 rounded-full ${isNGN ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"}`}>
             {account.currency}
           </div>
         </div>
@@ -93,14 +93,14 @@ function AccountCard({ account, onDeactivate }: { account: SecretAccount; onDeac
         {/* Account Number — with reveal toggle */}
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Account Number</p>
-          <div className={`flex items-center gap-2 p-3 rounded-xl border ${isNGN ? "border-green-200 bg-green-50/50" : "border-blue-200 bg-blue-50/50"}`}>
+          <div className={`flex items-center gap-2 p-3 rounded-xl border ${isNGN ? "border-green-200 bg-green-50/50 dark:border-green-500/30 dark:bg-green-500/10" : "border-blue-200 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/10"}`}>
             <code className="flex-1 text-sm font-mono font-bold tracking-widest select-all">
               {revealed ? account.accountNumber : mask(account.accountNumber)}
             </code>
             {revealed && <CopyButton text={account.accountNumber} />}
             <button
               onClick={() => setRevealed(v => !v)}
-              className={`p-1.5 rounded-lg transition-colors ${isNGN ? "hover:bg-green-100 text-green-700" : "hover:bg-blue-100 text-blue-700"}`}
+              className={`p-1.5 rounded-lg transition-colors ${isNGN ? "hover:bg-green-100 text-green-700 dark:hover:bg-green-500/15 dark:text-green-300" : "hover:bg-blue-100 text-blue-700 dark:hover:bg-blue-500/15 dark:text-blue-300"}`}
               title={revealed ? "Hide account number" : "Reveal account number"}
             >
               {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -117,7 +117,7 @@ function AccountCard({ account, onDeactivate }: { account: SecretAccount; onDeac
         {!isNGN && account.routingNumber && (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Routing Number (ABA)</p>
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-blue-200 bg-blue-50/50">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-blue-200 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/10">
               <code className="flex-1 text-sm font-mono font-bold tracking-widest">
                 {revealed ? account.routingNumber : mask(account.routingNumber)}
               </code>
@@ -209,7 +209,7 @@ function ProvisionDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          <div className={`p-3 rounded-xl text-sm ${isNGN ? "bg-green-50 border border-green-200 text-green-800" : "bg-blue-50 border border-blue-200 text-blue-800"}`}>
+          <div className={`p-3 rounded-xl text-sm ${isNGN ? "bg-green-50 border border-green-200 text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-300" : "bg-blue-50 border border-blue-200 text-blue-800 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300"}`}>
             {isNGN
               ? "A permanent dedicated NGN bank account will be created for this unit. Payments sent to this account are tracked automatically."
               : "A USD virtual account (US bank account details) will be provisioned via Squad. Funds can be received from international senders."}
@@ -244,7 +244,7 @@ function ProvisionDialog({
                   <button
                     key={b.value}
                     onClick={() => setForm(f => ({ ...f, preferredBank: b.value }))}
-                    className={`p-3 rounded-xl border text-sm text-left transition-all font-medium ${form.preferredBank === b.value ? "border-green-500 bg-green-50 text-green-800" : "border-border hover:border-green-300"}`}
+                    className={`p-3 rounded-xl border text-sm text-left transition-all font-medium ${form.preferredBank === b.value ? "border-green-500 bg-green-50 text-green-800 dark:border-green-500/50 dark:bg-green-500/10 dark:text-green-300" : "border-border hover:border-green-300 dark:hover:border-green-500/30"}`}
                   >
                     <Building2 className="h-3.5 w-3.5 inline mr-2 opacity-60" />
                     {b.label}
@@ -317,9 +317,9 @@ export default function SecretAccountsTab({ unitType, unitId, unitName }: Secret
       </div>
 
       {/* Security notice */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-        <div className="text-sm text-amber-800">
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0 dark:text-amber-300" />
+        <div className="text-sm text-amber-800 dark:text-amber-300">
           <p className="font-semibold mb-0.5">These are confidential account details</p>
           <p className="text-xs">Account numbers are masked by default. Only authorised members with the right role should reveal or share these details.</p>
         </div>
@@ -353,17 +353,17 @@ export default function SecretAccountsTab({ unitType, unitId, unitName }: Secret
               <AccountCard account={ngnAccount} onDeactivate={() => deactivate(ngnAccount)} />
             ) : (
               <div
-                className="border-2 border-dashed border-green-200 rounded-2xl p-8 text-center space-y-3 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
+                className="border-2 border-dashed border-green-200 rounded-2xl p-8 text-center space-y-3 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors dark:border-green-500/30 dark:hover:border-green-500/50 dark:hover:bg-green-500/10"
                 onClick={() => setDlg("NGN")}
               >
-                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-                  <Landmark className="h-6 w-6 text-green-600" />
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto dark:bg-green-500/15">
+                  <Landmark className="h-6 w-6 text-green-600 dark:text-green-300" />
                 </div>
                 <div>
                   <p className="font-semibold text-sm">No NGN account yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Create a dedicated Naira account via Paystack to receive NGN payments</p>
                 </div>
-                <span className="inline-block text-xs text-green-700 font-medium border border-green-300 bg-green-50 px-3 py-1 rounded-full">
+                <span className="inline-block text-xs text-green-700 font-medium border border-green-300 bg-green-50 px-3 py-1 rounded-full dark:text-green-300 dark:border-green-500/30 dark:bg-green-500/10">
                   + Set Up NGN Account
                 </span>
               </div>
@@ -394,17 +394,17 @@ export default function SecretAccountsTab({ unitType, unitId, unitName }: Secret
               <AccountCard account={usdAccount} onDeactivate={() => deactivate(usdAccount)} />
             ) : (
               <div
-                className="border-2 border-dashed border-blue-200 rounded-2xl p-8 text-center space-y-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+                className="border-2 border-dashed border-blue-200 rounded-2xl p-8 text-center space-y-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors dark:border-blue-500/30 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10"
                 onClick={() => setDlg("USD")}
               >
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto">
-                  <DollarSign className="h-6 w-6 text-blue-600" />
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto dark:bg-blue-500/15">
+                  <DollarSign className="h-6 w-6 text-blue-600 dark:text-blue-300" />
                 </div>
                 <div>
                   <p className="font-semibold text-sm">No USD account yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Create a US virtual bank account via Squad to receive international USD payments</p>
                 </div>
-                <span className="inline-block text-xs text-blue-700 font-medium border border-blue-300 bg-blue-50 px-3 py-1 rounded-full">
+                <span className="inline-block text-xs text-blue-700 font-medium border border-blue-300 bg-blue-50 px-3 py-1 rounded-full dark:text-blue-300 dark:border-blue-500/30 dark:bg-blue-500/10">
                   + Set Up USD Account
                 </span>
               </div>
