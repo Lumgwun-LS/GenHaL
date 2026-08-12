@@ -49,10 +49,13 @@ import {
   Palette,
   Zap,
   TreePine,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { CrossAppBanner } from "./cross-app-banner";
 import { ThemePicker } from "@/components/ui/ThemePicker";
 import { useThemeStore, type SidebarVariant } from "@/store/themeStore";
+import { useTheme } from "@/components/theme-provider";
 import { NavProgressBar } from "@/components/NavProgressBar";
 import { useState, useCallback } from "react";
 import { trackEvent } from "@/lib/analytics";
@@ -665,18 +668,20 @@ function SidebarHeader({
    USER BAR — per variant
    ═══════════════════════════════════════════════════════════════════════════ */
 function UserBar({
-  variant, accentColor, borderColor, onThemeClick,
+  variant, accentColor, borderColor, onThemeClick, isDark, onModeToggle,
 }: {
   variant: SidebarVariant;
   accentColor: string;
   borderColor: string;
   onThemeClick: () => void;
+  isDark: boolean;
+  onModeToggle: () => void;
 }) {
-  const themeButtonClass = cn(
-    "p-1.5 rounded-lg transition-colors",
+  const btnClass = cn(
+    "p-1.5 rounded-lg transition-colors hover:bg-white/10",
     variant === "glass" ? "rounded-full" : "",
   );
-  const themeButtonStyle = { color: "rgba(255,255,255,0.45)" };
+  const btnStyle = { color: "rgba(255,255,255,0.45)" };
 
   return (
     <div
@@ -700,10 +705,19 @@ function UserBar({
           <p className="text-sm font-medium truncate text-white/70">My Account</p>
         )}
       </div>
+      {/* Light / dark mode toggle */}
+      <button
+        onClick={onModeToggle}
+        className={btnClass}
+        style={btnStyle}
+        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
       <button
         onClick={onThemeClick}
-        className={themeButtonClass}
-        style={themeButtonStyle}
+        className={btnClass}
+        style={btnStyle}
         title="Change dashboard theme"
       >
         <Palette className="w-4 h-4" />
@@ -724,6 +738,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const { config: themeConfig, theme } = useThemeStore();
+  const { theme: colorMode, setTheme: setColorMode } = useTheme();
+  const isDark = colorMode !== "light";
+  const handleModeToggle = useCallback(() => {
+    setColorMode(isDark ? "light" : "dark");
+  }, [isDark, setColorMode]);
   const isAdmin = useIsAdmin();
   const { vendor } = useCurrentVendor();
 
@@ -878,6 +897,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           accentColor={accentColor}
           borderColor={sidebarBorderColor}
           onThemeClick={() => setThemePickerOpen(true)}
+          isDark={isDark}
+          onModeToggle={handleModeToggle}
         />
       </aside>
 
