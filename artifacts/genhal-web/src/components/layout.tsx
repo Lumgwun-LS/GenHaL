@@ -573,20 +573,23 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Topbar */}
+        {/* Topbar — matches sidebar visual language */}
         <header
-          className="flex h-16 shrink-0 items-center justify-between bg-card px-4 shadow-sm md:px-6"
-          style={{ borderBottom: `1px solid ${themeConfig.sidebarBorderColor}` }}
+          className="flex h-16 shrink-0 items-center justify-between px-4 md:px-6"
+          style={{
+            background: themeConfig.sidebarGradient,
+            borderBottom: `1px solid ${themeConfig.sidebarBorderColor}`,
+          }}
         >
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+              className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white md:hidden"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="truncate text-base font-semibold text-foreground md:text-lg">
+            <h1 className="truncate text-base font-semibold text-white md:text-lg">
               {title}
             </h1>
           </div>
@@ -595,7 +598,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {/* Theme picker */}
             <button
               onClick={() => setThemePickerOpen(true)}
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
               title="Change dashboard theme"
               aria-label="Dashboard themes"
             >
@@ -604,7 +607,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {/* Light / dark mode toggle */}
             <button
               onClick={toggle}
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               aria-label="Toggle colour scheme"
             >
