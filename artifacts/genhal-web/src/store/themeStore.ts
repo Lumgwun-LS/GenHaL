@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type DashboardTheme = "unyeada" | "ekede" | "okoroete" | "otuo";
-export type SidebarVariant = "electric" | "harvest" | "glass" | "royal";
+export type DashboardTheme = "unyeada" | "ekede" | "okoroete" | "otuo" | "ibotirem";
+export type SidebarVariant = "electric" | "harvest" | "glass" | "royal" | "ember";
 
 export interface ThemeConfig {
   name: string;
@@ -85,6 +85,22 @@ export const THEMES: Record<DashboardTheme, ThemeConfig> = {
     cardRadius: "8px",
     entryAnimation: "awaFlipInX",
     palette: ["#A855F7","#FBBF24","#F87171","#60A5FA","#34D399","#FB923C"],
+  },
+  ibotirem: {
+    name: "Ibotirem",
+    tagline: "The Sacred Fire",
+    emoji: "🔥",
+    layoutLabel: "Ember",
+    layoutDescription: "Crimson glow · Clay earth · Ancestral warmth",
+    sidebarVariant: "ember",
+    sidebarClass: "theme-ibotirem",
+    sidebarGradient: "linear-gradient(170deg,#140100 0%,#230200 55%,#320500 100%)",
+    sidebarBorderColor: "rgba(220,38,38,0.24)",
+    accentColor: "#DC2626",
+    accentGradient: "linear-gradient(135deg,#DC2626 0%,#F97316 100%)",
+    cardRadius: "14px",
+    entryAnimation: "awaBounceInUp",
+    palette: ["#DC2626","#F97316","#FBBF24","#10B981","#818CF8","#FB7185"],
   },
 };
 
